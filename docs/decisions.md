@@ -2,6 +2,8 @@
 
 Updated October 3, 2026. "Current direction" means a choice stated or accepted during product exploration. It does not mean implemented, clinically reviewed, or fully approved as an engineering specification.
 
+**Latest instruction:** Solana and monetary completion rewards remain removed. Nathan is assigned the companion website + SpacetimeDB/routing lane; Matthew continues his Jarvis work. See [current direction](current-direction.md) and [Nathan's work order](nathan-plan.md), which supersede older proposals and the prior blanket wait for this lane.
+
 ## Current Direction
 
 | Topic | Current direction | Status / implication |
@@ -18,8 +20,8 @@ Updated October 3, 2026. "Current direction" means a choice stated or accepted d
 | First robotics output | Estimated motion retargeted to a simulated robot hand and replayed | No custom neural model needed as initial approach; no policy learned yet |
 | Hand type | An articulated robot hand is the requested concept | Wrist/pinch-to-gripper would be a scope simplification requiring agreement |
 | Robotics processing | Proposed first experiment runs offline on the Mac | Not a commitment to live low-latency teleoperation |
-| Funding | Sponsor-funded challenges with Solana Devnet rewards | Demonstration premise; no lab commitment or real-token business validated |
-| Data backend | Tiger Data may store timestamped sessions for retrieval/replay | Optional meaningful integration; analytics dashboard is not the product goal |
+| Payments / onchain | Removed from project scope | No Solana, wallets, payouts, or money for completing simulated surgeries |
+| Data backend | SpacetimeDB for shared state; private file/object storage for video and replay | Part of [Nathan's assigned implementation lane](nathan-plan.md); not configured or deployed yet |
 | First slice | One full exercise before expanding | Exact exercise, asset, rubric, robot model, and shared manipulation are still open |
 
 ## Important Corrections to Earlier Ideas
@@ -38,8 +40,8 @@ The original device setup logs also include earlier failures and pending install
 4. **Registration feasibility:** Can the selected pretrained body model detect reliable landmarks on the actual reclining person, with valid depth at the intended viewpoint? If not, which explicit tracking fallback is acceptable?
 5. **Content and assets:** Who authors and reviews the exercise? Which anatomy model is licensed for the intended use and performs well enough on Quest?
 6. **Contribution acceptance:** What checks make a clip useful? What happens when learning completes but reconstruction fails? Who operates the demo verifier?
-7. **Reward design:** Which challenge program/receipt and bounded test-token amount? Must challenge enrollment itself be onchain for the first slice, or can a smaller verified-payout milestone come first?
-8. **Team and logistics:** The [team plan](team-plan.md) proposes owners and folder boundaries for the four collaborators, based on Stephen having the headset. Teammate specialties, internal milestone times, development machines/accounts/endpoints, and remaining build budget still need confirmation. The working event submission deadline is noon Eastern on October 4; see [event constraints](sponsors.md#event-constraints-for-the-team) for the published deadline discrepancy.
+7. **Nathan's implementation choices:** The companion + SpacetimeDB lane is assigned. Choose module/client stack, tested composited-video transport, endpoint/storage arrangement, and worker/replay format with the respective owners. Removed payments are not an open implementation question.
+8. **Team and logistics:** See the updated [team plan](team-plan.md). Internal milestone times, development machines/accounts/endpoints, and remaining build budget still need coordination; Nathan's GitHub identity is not assumed. The working event submission deadline is noon Eastern on October 4; see [event constraints](sponsors.md#event-constraints-for-the-team) for the published deadline discrepancy.
 
 ## Claims Requiring Evidence
 

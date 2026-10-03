@@ -1,11 +1,11 @@
 # API Service
 
-Owner: Nakim.
+Owner: Nathan for the assigned companion/backend integration lane. Follow [Nathan's implementation plan](../../docs/nathan-plan.md); no GitHub identity mapping is assumed.
 
-Planned service for session/artifact references, wallet pairing, motion job/results, scoped voice authorization, versioned challenge acceptance, and idempotent Devnet rewards. This is not an initialized backend and no endpoints are implemented.
+Potential service responsibilities include authorized artifact upload/download, motion-worker integration, and scoped voice authorization. SpacetimeDB in `services/realtime/` is the proposed core shared-state backend. Solana, wallet pairing, challenge payouts, and monetary completion rewards have been removed. This is not an initialized backend and no endpoints are implemented. See [data and realtime proposal](../../docs/data-and-realtime.md) and [current direction](../../docs/current-direction.md) before older plans.
 
-Coordinate the exercise rubric with Matthew, capture manifest with Stephen, and reconstruction/retargeting outcomes with Silas. Define a small transport and schema before integration. The API owns service-side secrets and reward authority; keep learning results, contribution acceptance, and payment state separate.
+Connect Matthew's existing Jarvis context/actions, Stephen's Quest state/capture metadata, and Silas's replay results. Keep learning results and motion quality separate, and keep provider/storage secrets service-side. Nathan supplies routing and scoped authorization where needed; he does not build a second voice agent or take over the CV pipeline.
 
-Tiger Data is an optional recording/retrieval backend, not required for the first boundary test. Detailed clips and replay artifacts need a restricted artifact store/reference rather than public Git or onchain payloads.
+The latest recommendation uses one core state backend rather than adding Tiger Data alongside it. Detailed clips and replay artifacts need a restricted file/object store with stable references. A private R2 bucket is a researched candidate; local restricted artifact storage can serve the first test. No store or account is configured by this scaffold.
 
 See the [architecture](../../docs/architecture.md), [integration contracts](../../docs/integration-contracts.md), and [team plan](../../docs/team-plan.md).

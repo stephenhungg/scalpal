@@ -1,9 +1,5 @@
-# Solana Challenges
+# Retired Solana Scaffold
 
-Owner: Nakim.
+Solana, onchain challenges, payouts, and monetary completion rewards have been removed from project scope. This historical scaffold contains no initialized or deployed program. Do not implement it.
 
-Optional location for a custom Solana challenge program if the agreed onchain scope requires it. This is not an initialized or deployed program, and no framework has been selected.
-
-The proposed richer workflow includes funded challenge, participation, verifier-authorized contribution acceptance, unique claim, and payout. Establish the smallest useful Devnet loop through the API first; choose program state/authority/budget constraints deliberately before expanding it.
-
-The chain cannot inspect the educational or motion quality itself. Keep the offchain verifier trust boundary explicit, test duplicate claims, and never commit treasury keys or place camera footage onchain. See the [architecture](../../docs/architecture.md) and [team plan](../../docs/team-plan.md).
+Await Nathan's plan for the remaining architecture and ownership. See [current direction](../../docs/current-direction.md), which supersedes the older challenge proposal.
