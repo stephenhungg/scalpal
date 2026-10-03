@@ -1,0 +1,448 @@
+diff --git a/Assets/PassthroughCameraApiSamples/MultiObjectDetection/SentisInference/Scripts/SentisInferenceRunManager.cs b/Assets/PassthroughCameraApiSamples/MultiObjectDetection/SentisInference/Scripts/SentisInferenceRunManager.cs
+index 72d0415..21698bf 100644
+--- a/Assets/PassthroughCameraApiSamples/MultiObjectDetection/SentisInference/Scripts/SentisInferenceRunManager.cs
++++ b/Assets/PassthroughCameraApiSamples/MultiObjectDetection/SentisInference/Scripts/SentisInferenceRunManager.cs
+@@ -41,9 +41,19 @@ namespace PassthroughCameraSamples.MultiObjectDetection
+             var model = ModelLoader.Load(m_sentisModel);
+             var inputShape = model.inputs[0].shape;
+             m_inputSize = new Vector2Int(inputShape.Get(2), inputShape.Get(3));
++#if DEVELOPMENT_BUILD || UNITY_EDITOR
++            m_backend = QuestDetectionTelemetry.RequestedBackend ?? m_backend;
++#endif
+             m_engine = new Worker(model, m_backend);
++#if DEVELOPMENT_BUILD || UNITY_EDITOR
++            QuestDetectionTelemetry.Initialize(m_backend, m_inputSize, m_iouThreshold, m_scoreThreshold);
++#endif
+         }
+ 
++#if DEVELOPMENT_BUILD || UNITY_EDITOR
++        private void Update() => QuestDetectionTelemetry.Tick(m_uiMenuManager.IsPaused, m_cameraAccess.IsPlaying);
++#endif
++
+         private IEnumerator Start()
+         {
+             m_uiInference.SetLabels(m_labelsAsset);
+@@ -93,6 +103,9 @@ namespace PassthroughCameraSamples.MultiObjectDetection
+         {
+             if (!m_cameraAccess.IsPlaying)
+             {
++#if DEVELOPMENT_BUILD || UNITY_EDITOR
++                QuestDetectionTelemetry.Skip("camera_not_playing");
++#endif
+                 yield break;
+             }
+ 
+@@ -100,15 +113,33 @@ namespace PassthroughCameraSamples.MultiObjectDetection
+             static extern OVRPlugin.Result ovrp_GetNodePoseStateAtTime(double time, OVRPlugin.Node nodeId, out OVRPlugin.PoseStatef nodePoseState);
+             if (!ovrp_GetNodePoseStateAtTime(OVRPlugin.GetTimeInSeconds(), OVRPlugin.Node.Head, out _).IsSuccess())
+             {
++#if DEVELOPMENT_BUILD || UNITY_EDITOR
++                QuestDetectionTelemetry.Skip("head_pose_unreliable");
++#else
+                 Debug.Log("ovrp_GetNodePoseStateAtTime failed, which means 'm_cameraAccess.GetCameraPose()' is not reliable, skipping.");
++#endif
+                 yield break;
+             }
+ 
++#if DEVELOPMENT_BUILD || UNITY_EDITOR
++            var telemetryBeginMs = QuestDetectionTelemetry.NowMs;
++            var telemetryCaptureTicks = m_cameraAccess.Timestamp.Ticks;
++#endif
+             var cachedCameraPose = m_cameraAccess.GetCameraPose();
+ 
+             // Update Capture data
+             Texture targetTexture = m_cameraAccess.GetTexture();
+ 
++#if DEVELOPMENT_BUILD || UNITY_EDITOR
++            QuestDetectionTelemetry.Begin(telemetryBeginMs, telemetryCaptureTicks, cachedCameraPose,
++                m_cameraAccess.CameraPosition, m_cameraAccess.IsUpdatedThisFrame,
++                targetTexture.width, targetTexture.height);
++            var telemetryOutcome = "interrupted_or_exception";
++            var telemetryCompletedMs = 0.0;
++            try
++            {
++#endif
++
+             // Convert the texture to a Tensor and schedule the inference
+             var textureTransform = new TextureTransform().SetDimensions(targetTexture.width, targetTexture.height, 3);
+             using var input = new Tensor<float>(new TensorShape(1, 3, m_inputSize.x, m_inputSize.y));
+@@ -124,8 +155,15 @@ namespace PassthroughCameraSamples.MultiObjectDetection
+                 yield return null;
+             }
+             using var boxes = boxesAwaiter.GetResult();
++#if DEVELOPMENT_BUILD || UNITY_EDITOR
++            QuestDetectionTelemetry.Record.BoxCount = boxes.shape[0];
++#endif
+             if (boxes.shape[0] == 0)
+             {
++#if DEVELOPMENT_BUILD || UNITY_EDITOR
++                telemetryOutcome = "empty_boxes";
++                telemetryCompletedMs = QuestDetectionTelemetry.NowMs;
++#endif
+                 yield break;
+             }
+ 
+@@ -135,9 +173,17 @@ namespace PassthroughCameraSamples.MultiObjectDetection
+                 yield return null;
+             }
+             using var classIDs = classIDsAwaiter.GetResult();
++#if DEVELOPMENT_BUILD || UNITY_EDITOR
++            QuestDetectionTelemetry.Record.ClassIdCount = classIDs.shape[0];
++#endif
+             if (classIDs.shape[0] == 0)
+             {
++#if DEVELOPMENT_BUILD || UNITY_EDITOR
++                telemetryOutcome = "empty_class_ids";
++                telemetryCompletedMs = QuestDetectionTelemetry.NowMs;
++#else
+                 Debug.LogError("classIDs.shape[0] == 0");
++#endif
+                 yield break;
+             }
+ 
+@@ -147,22 +193,45 @@ namespace PassthroughCameraSamples.MultiObjectDetection
+                 yield return null;
+             }
+             using var scores = scoresAwaiter.GetResult();
++#if DEVELOPMENT_BUILD || UNITY_EDITOR
++            telemetryCompletedMs = QuestDetectionTelemetry.NowMs;
++            QuestDetectionTelemetry.Outputs(classIDs, scores, m_scoreThreshold);
++#endif
+             if (scores.shape[0] == 0)
+             {
++#if DEVELOPMENT_BUILD || UNITY_EDITOR
++                telemetryOutcome = "empty_scores";
++#else
+                 Debug.LogError("scores.shape[0] == 0");
++#endif
+                 yield break;
+             }
+ 
+             NonMaxSuppression(m_detections, boxes, classIDs, scores, m_iouThreshold, m_scoreThreshold);
++#if DEVELOPMENT_BUILD || UNITY_EDITOR
++            QuestDetectionTelemetry.Record.DetectionCount = m_detections.Count;
++#endif
+ 
+             // Checking if spatial anchor is tracked ensures bounding boxes are placed at correct world space positIons.
+             if (!m_cameraAccess.IsPlaying || m_detectionManager.m_spatialAnchor == null || !m_detectionManager.m_spatialAnchor.IsTracked)
+             {
++#if DEVELOPMENT_BUILD || UNITY_EDITOR
++                telemetryOutcome = !m_cameraAccess.IsPlaying ? "camera_stopped_after_inference"
++                    : m_detectionManager.m_spatialAnchor == null ? "anchor_absent" : "anchor_untracked";
++#endif
+                 yield break;
+             }
+ 
+             // Update UI.
+             m_uiInference.DrawUIBoxes(m_detections, m_inputSize, cachedCameraPose);
++#if DEVELOPMENT_BUILD || UNITY_EDITOR
++            telemetryOutcome = "drawn";
++            }
++            finally
++            {
++                QuestDetectionTelemetry.End(telemetryOutcome, telemetryCompletedMs);
++            }
++#endif
+         }
+ 
+         private static void NonMaxSuppression(List<(int classId, Vector4 boundingBox)> outDetections, Tensor<float> boxes, Tensor<int> classIDs, Tensor<float> scores, float iouThreshold, float scoreThreshold)
+@@ -199,6 +268,9 @@ namespace PassthroughCameraSamples.MultiObjectDetection
+ 
+                 // Add this detection to results
+                 outDetections.Add((classIDs[idx], GetBox(idx)));
++#if DEVELOPMENT_BUILD || UNITY_EDITOR
++                QuestDetectionTelemetry.Selected(classIDs[idx], scoresArray[idx]);
++#endif
+ 
+                 // Suppress overlapping boxes regardless of class
+                 for (int j = i + 1; j < filteredIndices.Count; j++)
+@@ -247,4 +319,192 @@ namespace PassthroughCameraSamples.MultiObjectDetection
+             return intersectionArea / unionArea;
+         }
+     }
++
++#if DEVELOPMENT_BUILD || UNITY_EDITOR
++    // Main-thread-only development telemetry. Persistent records; JSON allocates once per second.
++    internal static class QuestDetectionTelemetry
++    {
++        [System.Serializable]
++        internal sealed class InferenceRecord
++        {
++            public string Backend, CameraPosition, Outcome = "not_started";
++            public string GraphicsDeviceType, GraphicsDeviceName;
++            public bool SupportsComputeShaders;
++            public int InputWidth, InputHeight, TextureWidth, TextureHeight;
++            public float ScoreThreshold, IouThreshold;
++            public long Sequence, CaptureTimestampTicks, PreviousCaptureTimestampTicks;
++            public bool Paused, CameraPlaying, FreshTimestamp, UpdatedThisFrame, InFlight;
++            public Vector3 CachedPosePosition;
++            public Quaternion CachedPoseRotation;
++            public double BeginMs, CompleteMs, DurationMs, EndMs, TotalDurationMs, CompletedPerSecond;
++            public long LastCompletedSequence, LastCompletedCaptureTimestampTicks;
++            public string LastCompletedOutcome = "none";
++            public double LastCompletedBeginMs, LastCompletedMs, LastCompletedDurationMs;
++            public int LastCompletedDetectionCount = -1, LastCompletedBoxCount = -1;
++            public int LastCompletedClassIdCount = -1, LastCompletedScoreCount = -1;
++            public int LastCompletedBottleSelectedCount;
++            public float LastCompletedBottleMaxSelectedScore = -1, LastCompletedBottleMaxRawScore = -1;
++            public Vector3 LastCompletedCachedPosePosition;
++            public Quaternion LastCompletedCachedPoseRotation;
++            public int Started, Completed, NewTimestampInputs, RepeatedTimestampInputs;
++            public int CameraNotPlaying, HeadPoseUnreliable, EmptyOutputs, AnchorAbsent, AnchorUntracked;
++            public int CameraStoppedAfterInference, Drawn, Interrupted;
++            public int BoxCount = -1, ClassIdCount = -1, ScoreCount = -1, DetectionCount = -1;
++            public int AboveThresholdCount, BottleRawCount, BottleSelectedCount;
++            public float MaxRawScore = -1, BottleMaxRawScore = -1, BottleMaxSelectedScore = -1;
++        }
++
++        [System.Serializable]
++        internal sealed class PlacementRecord
++        {
++            public long InferenceSequence, CaptureTimestampTicks;
++            public long LastBottleHitSequence, LastBottleHitCaptureTimestampTicks;
++            public int DrawCalls, CenterRayHits, CenterRayMisses, BoxUpdates, RetainedBoxes;
++            public int BottleHits, BottleMisses;
++            public double LastDrawMs;
++            public float LastHitDistanceMeters = -1, LastBottleHitDistanceMeters = -1;
++            public Vector2 LastBottleNormalizedCenter;
++            public Vector3 LastBottleHitPoint;
++        }
++
++        [System.Serializable]
++        private sealed class Report
++        {
++            public string Type = "quest_detection_telemetry";
++            public double MonotonicMs, WindowSeconds;
++            public InferenceRecord Inference = new();
++            public PlacementRecord Placement = new();
++        }
++
++        private static Report s_report = new();
++        private static double s_windowStartMs;
++        private static long s_previousCaptureTicks;
++        internal static InferenceRecord Record => s_report.Inference;
++        internal static PlacementRecord Placement => s_report.Placement;
++        internal static double NowMs => System.Diagnostics.Stopwatch.GetTimestamp() * (1000.0 / System.Diagnostics.Stopwatch.Frequency);
++        internal static string LastReportJson { get; private set; }
++        internal static BackendType? RequestedBackend { get; set; }
++
++        internal static void Initialize(BackendType backend, Vector2Int inputSize, float iou, float score)
++        {
++            s_report = new Report();
++            LastReportJson = null;
++            s_previousCaptureTicks = 0;
++            s_windowStartMs = NowMs;
++            Record.Backend = backend.ToString();
++            Record.GraphicsDeviceType = SystemInfo.graphicsDeviceType.ToString();
++            Record.GraphicsDeviceName = SystemInfo.graphicsDeviceName;
++            Record.SupportsComputeShaders = SystemInfo.supportsComputeShaders;
++            Record.InputWidth = inputSize.x; Record.InputHeight = inputSize.y;
++            Record.IouThreshold = iou; Record.ScoreThreshold = score;
++        }
++
++        internal static void Skip(string reason)
++        {
++            Record.Outcome = reason;
++            if (reason == "camera_not_playing") Record.CameraNotPlaying++;
++            else Record.HeadPoseUnreliable++;
++        }
++
++        internal static void Begin(double beginMs, long captureTicks, Pose pose, PassthroughCameraAccess.CameraPositionType cameraPosition,
++            bool updatedThisFrame, int textureWidth, int textureHeight)
++        {
++            Record.Sequence++; Record.Started++; Record.InFlight = true;
++            Record.Outcome = "in_flight"; Record.BeginMs = beginMs; Record.CompleteMs = 0;
++            Record.DurationMs = 0; Record.EndMs = 0;
++            Record.PreviousCaptureTimestampTicks = s_previousCaptureTicks;
++            Record.CaptureTimestampTicks = captureTicks;
++            Record.FreshTimestamp = captureTicks != 0 && captureTicks != s_previousCaptureTicks;
++            if (Record.FreshTimestamp) Record.NewTimestampInputs++; else Record.RepeatedTimestampInputs++;
++            s_previousCaptureTicks = captureTicks;
++            Record.UpdatedThisFrame = updatedThisFrame;
++            Record.CameraPosition = cameraPosition == PassthroughCameraAccess.CameraPositionType.Left ? "Left" : "Right";
++            Record.TextureWidth = textureWidth; Record.TextureHeight = textureHeight;
++            Record.CachedPosePosition = pose.position; Record.CachedPoseRotation = pose.rotation;
++            Record.BoxCount = Record.ClassIdCount = Record.ScoreCount = Record.DetectionCount = -1;
++            Record.AboveThresholdCount = Record.BottleRawCount = Record.BottleSelectedCount = 0;
++            Record.MaxRawScore = Record.BottleMaxRawScore = Record.BottleMaxSelectedScore = -1;
++        }
++
++        internal static void Outputs(Tensor<int> classIDs, Tensor<float> scores, float threshold)
++        {
++            Record.ScoreCount = scores.shape[0];
++            var scoreArray = scores.AsReadOnlyNativeArray();
++            var classArray = classIDs.AsReadOnlyNativeArray();
++            for (int i = 0; i < scoreArray.Length; i++)
++            {
++                float score = scoreArray[i];
++                Record.MaxRawScore = Mathf.Max(Record.MaxRawScore, score);
++                if (score >= threshold) Record.AboveThresholdCount++;
++                if (i < classArray.Length && classArray[i] == 39)
++                {
++                    Record.BottleRawCount++;
++                    Record.BottleMaxRawScore = Mathf.Max(Record.BottleMaxRawScore, score);
++                }
++            }
++        }
++
++        internal static void Selected(int classId, float score)
++        {
++            if (classId != 39) return;
++            Record.BottleSelectedCount++;
++            Record.BottleMaxSelectedScore = Mathf.Max(Record.BottleMaxSelectedScore, score);
++        }
++
++        internal static void End(string outcome, double completeMs)
++        {
++            Record.InFlight = false; Record.Outcome = outcome; Record.EndMs = NowMs;
++            Record.CompleteMs = completeMs;
++            if (completeMs != 0)
++            {
++                Record.Completed++;
++                Record.DurationMs = completeMs - Record.BeginMs;
++                Record.TotalDurationMs += Record.DurationMs;
++                Record.LastCompletedSequence = Record.Sequence;
++                Record.LastCompletedCaptureTimestampTicks = Record.CaptureTimestampTicks;
++                Record.LastCompletedOutcome = outcome;
++                Record.LastCompletedBeginMs = Record.BeginMs;
++                Record.LastCompletedMs = completeMs;
++                Record.LastCompletedDurationMs = Record.DurationMs;
++                Record.LastCompletedDetectionCount = Record.DetectionCount;
++                Record.LastCompletedBoxCount = Record.BoxCount;
++                Record.LastCompletedClassIdCount = Record.ClassIdCount;
++                Record.LastCompletedScoreCount = Record.ScoreCount;
++                Record.LastCompletedBottleSelectedCount = Record.BottleSelectedCount;
++                Record.LastCompletedBottleMaxSelectedScore = Record.BottleMaxSelectedScore;
++                Record.LastCompletedBottleMaxRawScore = Record.BottleMaxRawScore;
++                Record.LastCompletedCachedPosePosition = Record.CachedPosePosition;
++                Record.LastCompletedCachedPoseRotation = Record.CachedPoseRotation;
++            }
++            switch (outcome)
++            {
++                case "empty_boxes": case "empty_class_ids": case "empty_scores": Record.EmptyOutputs++; break;
++                case "anchor_absent": Record.AnchorAbsent++; break;
++                case "anchor_untracked": Record.AnchorUntracked++; break;
++                case "camera_stopped_after_inference": Record.CameraStoppedAfterInference++; break;
++                case "drawn": Record.Drawn++; break;
++                case "interrupted_or_exception": Record.Interrupted++; break;
++            }
++        }
++
++        internal static void Tick(bool paused, bool cameraPlaying)
++        {
++            Record.Paused = paused; Record.CameraPlaying = cameraPlaying;
++            double now = NowMs;
++            if (now - s_windowStartMs < 1000) return;
++            s_report.MonotonicMs = now;
++            s_report.WindowSeconds = (now - s_windowStartMs) / 1000.0;
++            Record.CompletedPerSecond = Record.Completed / s_report.WindowSeconds;
++            LastReportJson = JsonUtility.ToJson(s_report);
++            Debug.Log("QuestDetectionTelemetry " + LastReportJson);
++            s_windowStartMs = now;
++            Record.Started = Record.Completed = Record.NewTimestampInputs = Record.RepeatedTimestampInputs = 0;
++            Record.CameraNotPlaying = Record.HeadPoseUnreliable = Record.EmptyOutputs = 0;
++            Record.AnchorAbsent = Record.AnchorUntracked = Record.CameraStoppedAfterInference = Record.Drawn = Record.Interrupted = 0;
++            Record.TotalDurationMs = 0;
++            Placement.DrawCalls = Placement.CenterRayHits = Placement.CenterRayMisses = Placement.BoxUpdates = 0;
++            Placement.BottleHits = Placement.BottleMisses = 0;
++        }
++    }
++#endif
+ }
+diff --git a/Assets/PassthroughCameraApiSamples/MultiObjectDetection/SentisInference/Scripts/SentisInferenceUiManager.cs b/Assets/PassthroughCameraApiSamples/MultiObjectDetection/SentisInference/Scripts/SentisInferenceUiManager.cs
+index fce5ee5..4bd7e38 100644
+--- a/Assets/PassthroughCameraApiSamples/MultiObjectDetection/SentisInference/Scripts/SentisInferenceUiManager.cs
++++ b/Assets/PassthroughCameraApiSamples/MultiObjectDetection/SentisInference/Scripts/SentisInferenceUiManager.cs
+@@ -47,6 +47,9 @@ namespace PassthroughCameraSamples.MultiObjectDetection
+                     m_boxDrawn.RemoveAt(i);
+                 }
+             }
++#if DEVELOPMENT_BUILD || UNITY_EDITOR
++            QuestDetectionTelemetry.Placement.RetainedBoxes = m_boxDrawn.Count;
++#endif
+         }
+ 
+         public void SetLabels(TextAsset labelsAsset)
+@@ -58,6 +61,13 @@ namespace PassthroughCameraSamples.MultiObjectDetection
+         public void DrawUIBoxes(List<(int classId, Vector4 boundingBox)> detections, Vector2 inputSize, Pose cameraPose)
+         {
+             Vector2 currentResolution = m_cameraAccess.CurrentResolution;
++#if DEVELOPMENT_BUILD || UNITY_EDITOR
++            var placement = QuestDetectionTelemetry.Placement;
++            placement.DrawCalls++;
++            placement.InferenceSequence = QuestDetectionTelemetry.Record.Sequence;
++            placement.CaptureTimestampTicks = QuestDetectionTelemetry.Record.CaptureTimestampTicks;
++            placement.LastDrawMs = QuestDetectionTelemetry.NowMs;
++#endif
+ 
+             if (detections.Count == 0)
+             {
+@@ -89,7 +99,16 @@ namespace PassthroughCameraSamples.MultiObjectDetection
+                 var worldPos = m_environmentRaycast.Raycast(ray);
+                 if (!worldPos.HasValue)
+                 {
++#if DEVELOPMENT_BUILD || UNITY_EDITOR
++                    placement.CenterRayMisses++;
++                    if (detection.classId == 39)
++                    {
++                        placement.BottleMisses++;
++                        placement.LastBottleNormalizedCenter = normalizedCenter;
++                    }
++#else
+                     Debug.Log($"RaycastManager failed, ray:{ray}, cameraPose:{cameraPose}");
++#endif
+                     continue;
+                 }
+                 var normRect = new Rect(
+@@ -101,6 +120,19 @@ namespace PassthroughCameraSamples.MultiObjectDetection
+ 
+                 // Calculate distance and center point first
+                 float distance = Vector3.Distance(cameraPose.position, worldPos.Value);
++#if DEVELOPMENT_BUILD || UNITY_EDITOR
++                placement.CenterRayHits++;
++                placement.LastHitDistanceMeters = distance;
++                if (detection.classId == 39)
++                {
++                    placement.BottleHits++;
++                    placement.LastBottleHitDistanceMeters = distance;
++                    placement.LastBottleHitSequence = placement.InferenceSequence;
++                    placement.LastBottleHitCaptureTimestampTicks = placement.CaptureTimestampTicks;
++                    placement.LastBottleNormalizedCenter = normalizedCenter;
++                    placement.LastBottleHitPoint = worldPos.Value;
++                }
++#endif
+                 var worldSpaceCenter = m_cameraAccess.ViewportPointToRay(normRect.center, cameraPose).GetPoint(distance);
+                 var normal = (worldSpaceCenter - cameraPose.position).normalized;
+ 
+@@ -126,6 +158,10 @@ namespace PassthroughCameraSamples.MultiObjectDetection
+                 boxRectTransform.SetPositionAndRotation(worldSpaceCenter, Quaternion.LookRotation(normal));
+                 boxRectTransform.sizeDelta = size;
+                 boxData.lastUpdateTime = Time.time;
++#if DEVELOPMENT_BUILD || UNITY_EDITOR
++                placement.BoxUpdates++;
++                placement.RetainedBoxes = m_boxDrawn.Count;
++#endif
+             }
+         }
+ 
+diff --git a/ProjectSettings/ProjectSettings.asset b/ProjectSettings/ProjectSettings.asset
+index bab1549..c719785 100644
+--- a/ProjectSettings/ProjectSettings.asset
++++ b/ProjectSettings/ProjectSettings.asset
+@@ -176,7 +176,7 @@ PlayerSettings:
+   overrideDefaultApplicationIdentifier: 0
+   AndroidBundleVersionCode: 1
+   AndroidMinSdkVersion: 32
+-  AndroidTargetSdkVersion: 32
++  AndroidTargetSdkVersion: 34
+   AndroidPreferredInstallLocation: 0
+   aotOptions: 
+   stripEngineCode: 1
+@@ -885,6 +885,6 @@ PlayerSettings:
+   hmiLoadingImage: {fileID: 0}
+   platformRequiresReadableAssets: 0
+   virtualTexturingSupportEnabled: 0
+-  insecureHttpOption: 0
++  insecureHttpOption: 1
+   androidVulkanDenyFilterList: []
+   androidVulkanAllowFilterList: []

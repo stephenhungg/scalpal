@@ -1,0 +1,2 @@
+# Unified-diff context retains required leading spaces and upstream whitespace.
+sample-changes.patch whitespace=-blank-at-eol
