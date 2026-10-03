@@ -23,7 +23,7 @@ Updated October 3, 2026. "Current direction" means a choice stated or accepted d
 | Robotics processing | Proposed first experiment runs offline on the Mac | Not a commitment to live low-latency teleoperation |
 | Payments / onchain | Removed from project scope | No Solana, wallets, payouts, or money for completing simulated surgeries |
 | Data backend | SpacetimeDB for shared state; private file/object storage for video and replay | Part of [Nathan's assigned implementation lane](nathan-plan.md); not configured or deployed yet |
-| First slice | One full exercise before expanding | Exact exercise, asset, rubric, robot model, and shared manipulation are still open |
+| First slice | Appendectomy first (`lap_appendectomy`), then gallbladder and sigmoid colectomy | Anatomy interaction targets and code wiring are implemented; physical validation, robot model, and shared manipulation remain open. See [anatomy integration](anatomy-integration.md) |
 
 ## Important Corrections to Earlier Ideas
 
@@ -35,7 +35,7 @@ The original device setup logs also include earlier failures and pending install
 
 ## Decisions Needed Before Broad Implementation
 
-1. **Shared exercise:** Which single exercise supplies both a useful educational interaction and a feasible movement sequence for the selected robot? What observable actions and mistakes define its rubric?
+1. **Robot demonstration segment:** Appendectomy is the selected educational demo with authored interaction checks. Which supported movement from it supplies a feasible demonstration for the selected robot?
 2. **Robot model and simulator:** Which articulated hand, optionally attached to an arm, and which simulation environment? What movement will we reproduce first? A render-only animated mesh and a physics simulation are different deliverables.
 3. **Capture and intended use:** Which raw camera recording route, metadata, participant disclosures, storage, retention, and platform permissions support the exact in-app replay, export, sharing, or training use? The video correction changes the relevant SDK restriction but does not establish lab dataset rights.
 4. **Registration feasibility:** Can the selected pretrained body model detect reliable landmarks on the actual reclining person, with valid depth at the intended viewpoint? If not, which explicit tracking fallback is acceptable?

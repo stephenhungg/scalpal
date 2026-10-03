@@ -18,3 +18,4 @@ __pycache__/
 /apps/quest/Logs/
 /apps/quest/UserSettings/
 /apps/quest/Builds/
+.gstack/
