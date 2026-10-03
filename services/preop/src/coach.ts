@@ -306,7 +306,9 @@ export class CoachSession {
     const step = this.engine.current;
     if (step && structureId && this.dangersOf(step).includes(structureId) && !this.warnedFocus.has(structureId)) {
       this.warnedFocus.add(structureId);
-      alerts.push(this.alert("danger_focus", "normal", `Careful, that's the ${this.name(structureId).toLowerCase()}. ${STRUCTURE_FACTS[structureId]?.why ?? ""}`.trim(), [structureId]));
+      // The step's own mistake feedback is the relevant warning; the general fact is the fallback.
+      const reason = step.mistakes.find((m) => m.structure === structureId)?.feedback ?? STRUCTURE_FACTS[structureId]?.why ?? "";
+      alerts.push(this.alert("danger_focus", "normal", `Careful, that's the ${this.name(structureId).toLowerCase()}. ${reason}`.trim(), [structureId]));
     }
     this.changed(alerts);
     return { accepted: true, reason: "", alerts };
