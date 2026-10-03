@@ -235,6 +235,14 @@ describe("coach routes", () => {
     expect((await call("GET", `/coach/sessions/${sid}`)).json.context).toMatch(/LIVE SURGERY STATE/);
   });
 
+  it("lets the headset adopt the newest session for its patient", async () => {
+    const a = (await call("POST", "/coach/sessions", { patientId: "patient-demo-001" })).json.sessionId;
+    const b = (await call("POST", "/coach/sessions", { patientId: "patient-demo-pediatric-asthma" })).json.sessionId;
+    expect((await call("GET", "/coach/current?patientId=patient-demo-001")).json.sessionId).toBe(a);
+    expect((await call("GET", "/coach/current")).json.sessionId).toBe(b);
+    expect((await call("GET", "/coach/current?patientId=patient-demo-sparse")).status).toBe(404);
+  });
+
   it("rejects unknown patients, unavailable cases, and unknown sessions with a way onward", async () => {
     expect((await call("POST", "/coach/sessions", { patientId: "nobody-here" })).status).toBe(404);
     expect((await call("POST", "/coach/sessions", { patientId: "patient-demo-consent-revoked" })).status).toBe(409);

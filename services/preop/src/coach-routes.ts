@@ -94,6 +94,15 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
     );
   });
 
+  // The headset adopts the newest live session (the laptop Jarvis page creates it). Single-room demo
+  // shortcut; SpacetimeDB session membership replaces it.
+  app.get("/coach/current", (c) => {
+    const patientId = c.req.query("patientId") ?? "";
+    const latest = [...sessions.values()].reverse().find((s) => !patientId || s.kase.patientId === patientId || s.kase.scenarioId === patientId);
+    if (!latest) return bad(c, 404, "no_live_session", "No live coach session yet. Start one from the Jarvis page.", [{ id: "choose_patient", label: "Choose a patient", method: "GET", route: "/patients" }]);
+    return c.json({ sessionId: latest.id, patientId: latest.kase.patientId, procedureId: latest.kase.procedureId, actions: coachActions(latest.id) });
+  });
+
   app.get("/coach/sessions/:sid", (c) => {
     const s = getSession(c);
     if (!s) return missing(c);
