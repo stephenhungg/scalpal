@@ -10,10 +10,15 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <!-- Unity suppresses CS0649 for [SerializeField] fields the inspector assigns. -->
     <NoWarn>CS0649</NoWarn>
+    <!-- Compile what ships to the Quest: Android player code, editor-only branches excluded. -->
+    <DefineConstants>UNITY_ANDROID;UNITY_5_3_OR_NEWER</DefineConstants>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../../apps/quest/Assets/Scalpal/Exercises/**/*.cs" />
+    <!-- Anatomy runtime compiles here against the real CoachRelay; its editor tooling has its own check in scripts/anatomy/runtime-check. -->
+    <Compile Include="../../../apps/quest/Assets/Scalpal/Anatomy/Runtime/*.cs" />
+    <Compile Include="../../../apps/quest/Assets/Scalpal/Experience/**/*.cs" />
     <Compile Include="UnityEngineStubs.cs" />
     <Compile Include="Program.cs" />
   </ItemGroup>
