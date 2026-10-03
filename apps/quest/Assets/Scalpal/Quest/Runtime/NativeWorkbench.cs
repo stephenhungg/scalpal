@@ -17,6 +17,9 @@ namespace Scalpal.Quest
         public TrainingTarget[] targets;
         public TextMesh status;
         public Vector3 initialHeadFloorPosition = new Vector3(0, 0, -0.5f);
+        public bool externalSessionControls;
+        public bool IsReady { get; private set; }
+        public event Action ResetRequested;
 
         readonly List<XRInputSubsystem> inputSystems = new List<XRInputSubsystem>();
         readonly List<XRDisplaySubsystem> displays = new List<XRDisplaySubsystem>();
@@ -108,7 +111,11 @@ namespace Scalpal.Quest
             Gate(valid);
             var right = InputDevices.GetDeviceAtXRNode(XRNode.RightHand);
             right.TryGetFeatureValue(CommonUsages.primaryButton, out bool reset);
-            if (valid && reset && !resetPressed) ResetWorkbench();
+            if (valid && reset && !resetPressed)
+            {
+                if (externalSessionControls) ResetRequested?.Invoke();
+                else ResetWorkbench();
+            }
             resetPressed = reset;
             frames++;
             if (Time.unscaledTime >= nextStatus)
@@ -116,7 +123,7 @@ namespace Scalpal.Quest
                 float seconds = Mathf.Max(0.001f, Time.unscaledTime - sampleStart);
                 string state = $"xr={running} head={headTracked} floor={floor} focus={focused && !paused} aligned={aligned} left={Hand(0)} right={Hand(1)} effects={effects} updateHz={frames / seconds:F1}";
                 Debug.Log("SCALPAL_NATIVE_STATUS " + state);
-                if (status) status.text = "SCALPAL | NATIVE TOOL TEST\nGrip: pick up / release   Trigger: use tool\nA: reset tools and practice patch\n" + (valid ? "Tracking ready" : "Paused: waiting for valid XR tracking") + "   Effects: " + effects;
+                if (status && !externalSessionControls) status.text = "SCALPAL | NATIVE TOOL TEST\nGrip: pick up / release   Trigger: use tool\nA: reset tools and practice patch\n" + (valid ? "Tracking ready" : "Paused: waiting for valid XR tracking") + "   Effects: " + effects;
                 frames = 0; sampleStart = Time.unscaledTime; nextStatus = Time.unscaledTime + 2;
             }
         }
@@ -143,6 +150,7 @@ namespace Scalpal.Quest
 
         void Gate(bool valid)
         {
+            IsReady = valid;
             if (targets != null) foreach (var target in targets) if (target) target.SetRegistrationValid(valid);
             if (inputs == null) return;
             foreach (var input in inputs)
