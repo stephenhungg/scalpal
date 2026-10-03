@@ -21,7 +21,7 @@ Updated October 3, 2026. "Current direction" means a choice stated or accepted d
 | Hand type | An articulated robot hand is the requested concept | Wrist/pinch-to-gripper would be a scope simplification requiring agreement |
 | Robotics processing | Proposed first experiment runs offline on the Mac | Not a commitment to live low-latency teleoperation |
 | Payments / onchain | Removed from project scope | No Solana, wallets, payouts, or money for completing simulated surgeries |
-| Data backend | Tiger Data may store timestamped sessions for retrieval/replay | Optional meaningful integration; analytics dashboard is not the product goal |
+| Data backend | SpacetimeDB proposed for shared state; private file/object storage for video and replay | Latest [storage/realtime proposal](data-and-realtime.md) supersedes Tiger Data as the primary candidate; not configured or fully adopted yet |
 | First slice | One full exercise before expanding | Exact exercise, asset, rubric, robot model, and shared manipulation are still open |
 
 ## Important Corrections to Earlier Ideas

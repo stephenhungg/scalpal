@@ -14,6 +14,6 @@ The working experience is: open the Quest app → discuss an exercise with Jarvi
 
 ## Work Status
 
-The user asked to wait for Nathan's plan. Hold application implementation, new assignments, and further architecture expansion until that plan arrives. The previous four-person ownership split is provisional; do not replace the removed Solana lane with a new assignment by assumption.
+The user asked to wait for Nathan's plan, then explicitly requested research/planning for data storage and SpacetimeDB realtime coordination, suggesting Nathan own routing. See [data and realtime proposal](data-and-realtime.md). This proposed backend lane is now part of the planning discussion; application implementation and the final work split still await Nathan's plan. No GitHub identity mapping for Nathan is assumed.
 
 The repo still contains documentation and folder scaffolds, not an implemented Scalpal application. Earlier measured native camera and bottle-overlay results remain valid infrastructure evidence. Recording/reconstruction rights, torso registration, the selected exercise, robot hand, and educational content still require resolution.

@@ -8,6 +8,8 @@ The long-term thesis is that human learning can supply useful robot demonstratio
 
 **Latest direction: Solana and monetary completion rewards are removed. Wait for Nathan's plan before application implementation or reassignment.** Read [current direction](docs/current-direction.md) first; it supersedes earlier payout/challenge references and provisional work orders below.
 
+The latest backend proposal is [SpacetimeDB for shared state plus private file storage for video](docs/data-and-realtime.md), with Nathan owning routing and Silas owning motion processing. This is researched planning, not a deployed service or finalized work assignment.
+
 ## Start Here
 
 This repository currently contains documentation, not an implemented Scalpal application. It is a portable handoff for teammates and their agents. Read these in order:
@@ -21,6 +23,7 @@ This repository currently contains documentation, not an implemented Scalpal app
 7. [Integration contracts](docs/integration-contracts.md): Proposed shared identifiers and records so parallel components can connect.
 8. [Research](docs/research/README.md) and [sponsor alignment](docs/sponsors.md): Primary sources and conditional event integrations.
 9. [Folder structure and team split](docs/team-plan.md): Proposed ownership for Stephen, Matthew, Silas, and Nakim, parallel checkpoints, and copyable agent briefs.
+10. [Data storage and realtime](docs/data-and-realtime.md): Latest proposed storage split, Nathan's backend lane, and the distinction between session sync and video processing.
 
 ## Status
 
