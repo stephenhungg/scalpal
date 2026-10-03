@@ -13,6 +13,8 @@ Offline pipeline on the Mac: decode a short permitted passthrough clip, estimate
 | Real Quest passthrough clip | **Not run yet.** No clip exists | — |
 | Real-time / headset display | Out of scope for this slice | — |
 
+| Real moving hand, dex-retargeting's 20 s sample webcam clip (MIT) | 621/621 frames tracked; robot finger bend follows the estimate at r = 0.93 to 0.97 (fingers) and 0.86 (thumb); spread hits Shadow's ±20° abduction limits (flagged) | Real video, not headset |
+| Nathan's gateway worker (`gateway-worker`) | Claim, heartbeat, 4 uploads, and complete against a stand-in gateway built to worker-api v1; no-hand fails without retry; a stale run is dropped; trajectory validates against his schema | Local test, real gateway not run |
 | Worker job/result boundary (`process`, HTTP `serve`) | Success, no-hand, missing input, bad job, and duplicate run_id paths exercised; a duplicate run never overwrites an existing result; HTTP auth, job, and replay download checked locally | Local test, no gateway yet |
 
 `uv run pytest` covers the round trip, gap reporting, joint naming, fixed wrist, joint limits, and the job failure paths.
@@ -32,9 +34,28 @@ uv run scalpal-motion run clip.mp4 --hand Right --smooth 0.3
 
 `run` writes `hand_track.json`, `motion.json`, and `replay.mp4` (H.264, plays in browsers when ffmpeg is installed) (source clip with landmarks next to the robot). Inputs are assumed unmirrored, like Quest passthrough. Pass `--mirrored` for selfie footage, since MediaPipe's handedness label assumes a mirrored image. Smoothing is off by default. With `--smooth`, the low-pass filter resets after every tracking gap. `out/` and `models/` are gitignored. Keep participant clips outside the repo.
 
-## Worker Boundary for Nathan's Gateway
+## Nathan's Gateway (integration path)
 
-The processor is a job-in, result-out worker. Transport and storage stay Nathan's call; both entry points below share the same code.
+Nathan's gateway (`nathan/companion-realtime`, `packages/contracts/worker-api.md`) is pull-based. This worker implements it:
+
+```sh
+GATEWAY_URL=https://<gateway> WORKER_TOKEN=<token> uv run scalpal-motion gateway-worker
+#   --once to handle one job; --mirrored only for selfie/webcam test clips
+```
+
+For each job it claims, downloads the clip from the signed URL, runs inference, retargeting, and rendering, and heartbeats every lease/3. It then uploads four outputs and completes with the contract's `quality` fields:
+- `robot_trajectory` in `scalpal.robot_trajectory.v1`, the format the companion replay view reads
+- `replay_video`
+- `hand_estimates`
+- `quality_report`
+
+When no hand is found or the clip won't decode, it fails without retry. Download and processor errors fail with retry. A `409` at any point drops the run without completing.
+
+Tested against a stand-in gateway that follows the written contract (`tests/test_gateway_worker.py`), including a 20 s real hand clip end to end, plus validation against Nathan's trajectory schema. **Not yet run against the real gateway**, which needs a local `spacetime start` or a deployed instance.
+
+## Local Worker Boundary (standalone)
+
+For runs without the gateway, the same pipeline is available as a job-in, result-out command and a small HTTP server.
 
 ```sh
 uv run scalpal-motion process examples/job.example.json       # one job file -> out/runs/<run_id>/

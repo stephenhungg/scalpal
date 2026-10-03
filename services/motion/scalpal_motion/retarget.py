@@ -118,6 +118,42 @@ def bone_length_scales(frames: list[dict], retargeting: SeqRetargeting, cfg: dic
     return robot_len / human_len
 
 
+BEND_CHAINS = {"TH": [0, 1, 2, 3, 4], "FF": [0, 5, 6, 7, 8], "MF": [0, 9, 10, 11, 12], "RF": [0, 13, 14, 15, 16], "LF": [0, 17, 18, 19, 20]}
+ROBOT_BEND_JOINTS = {"TH": ["THJ4", "THJ2", "THJ1"], **{f: [f"{f}J3", f"{f}J2", f"{f}J1"] for f in ("FF", "MF", "RF", "LF")}}
+
+
+def human_bend(points: np.ndarray, finger: str) -> float:
+    """Total bend (rad) along one MediaPipe finger chain, wrist to tip."""
+    total = 0.0
+    chain = BEND_CHAINS[finger]
+    for a, b, c in zip(chain, chain[1:], chain[2:]):
+        u, v = points[b] - points[a], points[c] - points[b]
+        total += float(np.arccos(np.clip(u @ v / (np.linalg.norm(u) * np.linalg.norm(v)), -1.0, 1.0)))
+    return total
+
+
+def bend_correlation(frames: list[dict], names: list[str], track_frames: list[dict]) -> dict:
+    """Per-finger Pearson correlation between human bend and summed robot flexion over valid frames.
+
+    Both sides come from the same MediaPipe estimate, so this checks that the robot follows the
+    estimate, not that the estimate matches the real hand. None when the clip has too little motion.
+    """
+    world = {f["frame"]: np.asarray(f["world"]) for f in track_frames if f.get("valid")}
+    idx = {n: i for i, n in enumerate(names)}
+    out = {}
+    for finger, joints in ROBOT_BEND_JOINTS.items():
+        h, r = [], []
+        for f in frames:
+            if f["valid"] and f["frame"] in world:
+                h.append(human_bend(world[f["frame"]], finger))
+                r.append(sum(f["qpos"][idx[j]] for j in joints))
+        if len(h) < 10 or np.std(h) < 0.05 or np.std(r) < 0.05:
+            out[finger] = None
+        else:
+            out[finger] = round(float(np.corrcoef(h, r)[0, 1]), 3)
+    return out
+
+
 def retarget_frames(
     frames: list[dict],
     hand: str = "Right",
@@ -200,7 +236,10 @@ def retarget_frames(
         "joint_limits": [[float(lo), float(hi)] for lo, hi in limits],
         "control_mode": "kinematic joint targets (applied = optimizer output after limits and filter)",
         "frames": out,
-        "summary": summarize(out),
+        "summary": {
+            **summarize(out),
+            "finger_bend_correlation": None if keypoint_frame == "mano" else bend_correlation(out, names, frames),
+        },
     }
 
 

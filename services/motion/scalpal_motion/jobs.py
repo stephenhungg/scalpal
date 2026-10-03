@@ -73,6 +73,7 @@ def _quality(motion: dict) -> dict:
         "longest_valid_segment_s": longest,
         "vector_error_m_median": s["vector_error_m_median"],
         "vector_error_m_p95": s["vector_error_m_p95"],
+        "finger_bend_correlation": s.get("finger_bend_correlation"),
         "segments": s["segments"],
         "note": "vector error is fit to the estimated human hand, not reconstruction accuracy",
     }
