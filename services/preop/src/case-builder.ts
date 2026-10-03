@@ -8,6 +8,7 @@ import type {
   Action,
   CaseConsideration,
   ChecklistOption,
+  DataGap,
   FlagType,
   HealthRecord,
   PreopBrief,
@@ -82,8 +83,14 @@ export function checklistFor(patientId: string, present: FlagType[]): ChecklistO
 }
 
 // planSubject lets a sandbox subject (u_...) use the authored plan of the demo patient its scenario mirrors.
-export function buildCase(record: HealthRecord, scenarioId: string, now: Date = new Date(), planSubject = record.id): SurgicalCase {
-  const brief = buildBrief(record, now);
+export function buildCase(
+  record: HealthRecord,
+  scenarioId: string,
+  now: Date = new Date(),
+  planSubject = record.id,
+  extraGaps: DataGap[] = [],
+): SurgicalCase {
+  const brief = buildBrief(record, now, extraGaps);
   const plan = CASE_PLANS[planSubject] ?? CASE_PLANS[record.id] ?? fallbackPlan(brief.patient.age);
   const procedure = PROCEDURES_BY_ID.get(plan.procedureId);
   if (!procedure) throw new Error(`Case plan for ${record.id} references missing procedure ${plan.procedureId}`);
