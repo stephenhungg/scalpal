@@ -24,6 +24,7 @@ namespace Scalpal.Exercises.Preop
         ScalpalBundle offlineBundle;
 
         public bool IsOffline { get; private set; }
+        public string BaseUrl => baseUrl;
 
         public event Action<ServiceIndex> IndexLoaded;
         public event Action<PatientList> PatientsLoaded;

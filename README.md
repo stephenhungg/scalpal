@@ -32,7 +32,9 @@ As of October 3, 2026, native camera acquisition, Unity sample deployment, deskt
 
 ## Anatomy and Blender Files
 
-**[Open the anatomy asset guide](assets/anatomy/README.md)** for teammate setup, the editable Blender workspace, original full-resolution models, Unity exports, and preview. On branch `codex/anatomy-atlas`, run `git lfs install` and `git lfs pull` to download the original models and `.blend` workspace. Runtime FBXs and Unity `.meta` files are also committed. The Blender workspace has 4,020 prepared parts in four scenes; the 11 original FBX/GLB files are included separately. Geometry checks passed; actual Unity import and Quest performance remain unverified.
+**First demo: appendectomy.** [Case wiring, repo map, and Unity demo setup](docs/anatomy-integration.md) covers anatomy contacts, case selection, registration gates, and Jarvis synchronization. All interaction targets for the three authored procedures now have mapped anatomy.
+
+**[Open the anatomy asset guide](assets/anatomy/README.md)** for teammate setup, the editable Blender workspace, original full-resolution models, Unity exports, and preview. On branch `codex/anatomy-atlas`, run `git lfs install` and `git lfs pull` to download the original models and `.blend` workspace. Runtime FBXs and Unity `.meta` files are also committed. The Blender workspace has 4,031 prepared parts in four scenes; the 11 original FBX/GLB files are included separately. Geometry checks passed; actual Unity import and Quest performance remain unverified.
 
 ![Prepared full-body anatomy, rendered in Blender](assets/anatomy/preview.png)
 

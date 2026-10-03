@@ -180,6 +180,12 @@ static class Program
         binding.Rebind();
         relay.Emit("clear_highlight", null);
         Check(relay.acks.Count == 6, "rebind does not duplicate event handlers");
+        controller.SetPreviewMode(true);
+        Check(controller.SetExerciseParts(new[] { "heart" }), "known exercise filter accepted");
+        Check(!controller.Isolate("artery"), "isolation cannot bypass exercise context");
+        Check(!controller.SetExerciseParts(new[] { "missing-target" }), "invalid case filter rejected atomically");
+        Check(heart.IsVisible && !artery.IsVisible, "invalid filter preserves prior visibility");
+        Check(controller.SetExerciseParts(null), "case context can be cleared");
         Call(binding, "OnDisable");
         relay.Emit("highlight", "heart");
         Check(relay.acks.Count == 6, "disabled binding unsubscribes");

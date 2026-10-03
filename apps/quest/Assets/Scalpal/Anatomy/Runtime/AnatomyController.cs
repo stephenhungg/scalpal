@@ -20,6 +20,7 @@ namespace Scalpal.Anatomy
         readonly HashSet<string> hiddenSystems = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         AnatomyPart[] parts = Array.Empty<AnatomyPart>();
         string isolatedId;
+        HashSet<string> exerciseParts;
         bool registrationValid;
         bool initialFiltersApplied;
 
@@ -111,7 +112,7 @@ namespace Scalpal.Anatomy
         // Isolation temporarily overrides system filters. RestoreVisibility brings those filters back.
         public bool Isolate(string id)
         {
-            if (!CanDisplay || !TryGetPart(id, out _)) return false;
+            if (!CanDisplay || !TryGetPart(id, out _) || (exerciseParts != null && !exerciseParts.Contains(id))) return false;
             isolatedId = id;
             RefreshVisibility();
             return true;
@@ -127,6 +128,26 @@ namespace Scalpal.Anatomy
         {
             hiddenSystems.Clear();
             RestoreVisibility();
+        }
+
+        // Case context is independent of temporary isolation and layer visibility.
+        // Unknown/ambiguous IDs reject the entire update instead of hiding required targets.
+        public bool SetExerciseParts(IEnumerable<string> ids)
+        {
+            HashSet<string> next = null;
+            if (ids != null)
+            {
+                next = new HashSet<string>(StringComparer.Ordinal);
+                foreach (var id in ids)
+                {
+                    if (!TryGetPart(id, out _)) return false;
+                    next.Add(id);
+                }
+            }
+            exerciseParts = next;
+            isolatedId = null;
+            RefreshVisibility();
+            return true;
         }
 
         public bool Highlight(string id)
@@ -162,7 +183,8 @@ namespace Scalpal.Anatomy
             foreach (var part in parts)
             {
                 if (part == null) continue;
-                var selected = isolatedId != null ? part.stableId == isolatedId : !hiddenSystems.Contains(part.system ?? "");
+                var inCase = exerciseParts == null || exerciseParts.Contains(part.stableId);
+                var selected = inCase && (isolatedId != null ? part.stableId == isolatedId : !hiddenSystems.Contains(part.system ?? ""));
                 part.SetVisible(CanDisplay && selected);
             }
         }

@@ -1,5 +1,7 @@
 # Unity and Blender Handoff
 
+> October 3 anatomy update: appendectomy is the first demo. The atlas and supplemental target exports are implemented. Use [anatomy integration](anatomy-integration.md) for current case/coach wiring, target coverage, and desktop scene generation. The older full-catalog, umbilicus-origin rig specifications below are integration goals, not properties of the current upright source atlas.
+
 Updated October 3, 2026. Living checklist for Stephen (Unity project, scene, registration, settings) and whoever builds the 3D assets in Blender. The exercise code, generated ids, and offline case bundle already exist in `apps/quest/Assets/Scalpal/Exercises/` on branch `matthew/preop-finchnode`. The exact list of required objects is generated in [unity-asset-manifest.md](unity-asset-manifest.md). Treat that file as authoritative over any list here.
 
 Repo rule from matt: **everything must render and run in Unity on the Quest, and no button or route may be a dead end.**

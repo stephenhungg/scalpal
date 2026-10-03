@@ -13,6 +13,7 @@ Read `README.md` and `docs/current-direction.md` first, then the thesis, decisio
 User direction takes precedence over older proposals. In particular:
 
 - Use a real reclining participant and a generic teaching anatomy overlay.
+- The first educational demo is `lap_appendectomy`, followed by gallbladder and sigmoid colectomy. Use `docs/anatomy-integration.md` for current atlas/case/coach wiring; older full-catalog torso assumptions do not describe the upright source atlas.
 - Selection is conversational, with a rotating 3D anatomy preview during selection.
 - The robotics input proposal is recorded passthrough video, not Meta SDK hand-joint telemetry.
 - First demonstrate video-derived hand motion retargeting and replay in simulation. Do not describe replay as a learned autonomous policy.

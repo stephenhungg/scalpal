@@ -2,6 +2,10 @@
 
 Updated October 3, 2026 after the user removed the monetary/onchain component. This page takes precedence over older architecture, flow, research, and team-plan documents where they disagree.
 
+## First Demo
+
+The first case is **lap_appendectomy**. The atlas now includes `cecum` and `terminal_ileum`, followed by the requested gallbladder and colectomy targets. See [anatomy integration](anatomy-integration.md) for implemented wiring and the remaining headset/service boundaries. The adult synthetic demo fixture is `patient-demo-multi-source`. This selects the educational case, not a robot model or validated hardware flow.
+
 ## Scope Change
 
 Solana, wallets, onchain challenge programs, Devnet payouts, and money for completing simulated surgeries are removed from the project. They are not required integrations, acceptance checks, or assigned work. Earlier references to these features are historical context, not instructions to implement them.
@@ -18,4 +22,4 @@ The user previously asked to wait for Nathan's plan, then requested storage/real
 
 The companion website is a live observer view, not another voice agent. It combines shared session/coach/processing state with a separately transported composited headset video feed. The existing Mac mirror is a proposed video source to validate, not the final companion website or a verified network stream.
 
-The repo now contains anatomy assets, Unity anatomy/exercise code, and preop service components alongside the planning documents. See the [anatomy asset guide](../assets/anatomy/README.md) for the committed Blender workspace, source models, Unity exports, and teammate setup. This is not evidence of a working end-to-end application or validated Quest anatomy rendering. Earlier measured native camera and bottle-overlay results remain valid infrastructure evidence. Recording/reconstruction rights, torso registration, the selected exercise, robot hand, and educational content still require resolution.
+The repo now contains anatomy assets, Unity anatomy/exercise code, and preop service components alongside the planning documents. See the [anatomy asset guide](../assets/anatomy/README.md) for the committed Blender workspace, source models, Unity exports, and teammate setup. This is not evidence of a working end-to-end application or validated Quest anatomy rendering. Earlier measured native camera and bottle-overlay results remain valid infrastructure evidence. Recording/reconstruction rights, torso registration, robot hand and educational content validation still require resolution.

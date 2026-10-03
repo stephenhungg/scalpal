@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework><LangVersion>9.0</LangVersion>
+    <Nullable>disable</Nullable><ImplicitUsings>disable</ImplicitUsings><TreatWarningsAsErrors>true</TreatWarningsAsErrors><NoWarn>CS0649</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../runtime-check/UnityEngineStubs.cs" />
+    <Compile Include="../runtime-check/PreopServiceStubs.cs" />
+    <Compile Include="../../../apps/quest/Assets/Scalpal/Anatomy/Runtime/AnatomyCaseSource.cs" />
+    <Compile Include="../../../apps/quest/Assets/Scalpal/Anatomy/Runtime/AnatomyPart.cs" />
+    <Compile Include="../../../apps/quest/Assets/Scalpal/Anatomy/Runtime/AnatomyController.cs" />
+    <Compile Include="../../../apps/quest/Assets/Scalpal/Anatomy/Runtime/AnatomyExerciseBinding.cs" />
+    <Compile Include="../../../apps/quest/Assets/Scalpal/Anatomy/Runtime/AnatomyInstrumentTip.cs" />
+    <Compile Include="../../../apps/quest/Assets/Scalpal/Exercises/Data/ScalpalCaseData.cs" />
+    <Compile Include="../../../apps/quest/Assets/Scalpal/Exercises/Engine/CaseRunner.cs" />
+  </ItemGroup>
+</Project>
