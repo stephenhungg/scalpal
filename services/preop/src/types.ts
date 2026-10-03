@@ -270,6 +270,8 @@ export type { SandboxSession } from "./finchnode.js";
 export interface AdmissionStatus {
   sessionId: string;
   scenarioId: string;
+  // FinchNode's hosted consent page. Open it on the laptop, pick the scenario's health system, approve.
+  connectUrl: string;
   state: "connecting" | "completed" | "failed" | "unavailable";
   sessionStatus: string;
   syncStatus: string;

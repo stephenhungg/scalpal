@@ -32,6 +32,8 @@ export interface ConnectSession {
 // Authenticated sandbox Connect session (api/v1). Only the fields Scalpal reads.
 export interface SandboxSession {
   id: string;
+  // Hosted Connect page for the patient. Present on the create response.
+  url?: string | null;
   status: string;
   subject: string | null;
   organization: string | null;
@@ -46,9 +48,18 @@ export interface FinchNodeClient {
   createConnectSession(scenario: string): Promise<ConnectSession>;
   // Sandbox Connect: present only when a ck_test_ key is configured.
   sandbox?: {
-    admit(scenario: string): Promise<SandboxSession>;
+    // Creates a Connect session. With simulate, a synthetic patient completes it via the sandbox
+    // shortcut; otherwise the patient (or operator) opens session.url and approves sharing.
+    admit(scenario: string, options?: { simulate?: boolean }): Promise<SandboxSession>;
     getSession(sessionId: string): Promise<SandboxSession>;
+    listUsers(): Promise<SandboxUser[]>;
   };
+}
+
+export interface SandboxUser {
+  id: string;
+  sources?: { system: string; organization: string }[];
+  consentedAt?: string | null;
 }
 
 export interface ClientOptions {
@@ -132,7 +143,7 @@ export function createFinchNodeClient(options: ClientOptions = {}): FinchNodeCli
 
   if (apiKey) {
     client.sandbox = {
-      async admit(scenario) {
+      async admit(scenario, admitOptions = {}) {
         const session = await request<SandboxSession>(
           `${sandboxBase}/connect/sessions`,
           {
@@ -148,12 +159,26 @@ export function createFinchNodeClient(options: ClientOptions = {}): FinchNodeCli
           undefined,
           true,
         );
-        return request<SandboxSession>(
+        if (!admitOptions.simulate) return session;
+        const simulated = await request<SandboxSession>(
           `${sandboxBase}/connect/sessions/${encodeURIComponent(session.id)}/simulate`,
           { method: "POST", body: JSON.stringify({ scenario }) },
           undefined,
           true,
         );
+        return { ...simulated, url: session.url ?? null };
+      },
+      async listUsers() {
+        const users: SandboxUser[] = [];
+        let cursor: string | null = null;
+        for (let page = 0; page < 20; page++) {
+          const query: string = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
+          const res: { data: SandboxUser[]; hasMore: boolean; nextCursor: string | null } = await request(`${sandboxBase}/users${query}`, undefined, undefined, true);
+          users.push(...res.data);
+          if (!res.hasMore || !res.nextCursor) break;
+          cursor = res.nextCursor;
+        }
+        return users;
       },
       getSession: (sessionId) => request<SandboxSession>(`${sandboxBase}/connect/sessions/${encodeURIComponent(sessionId)}`, undefined, undefined, true),
     };

@@ -21,10 +21,18 @@ export function fixtureClient(options: { sandbox?: boolean } = {}): FinchNodeCli
   const sandboxRecord = (subject: string): HealthRecord | null => {
     const scenario = scenarios.find((s) => sandboxSubject(s.id) === subject);
     if (!scenario?.subject || !existsSync(join(FIXTURES, `${scenario.subject}.json`))) return null;
-    return { ...fixture(scenario.subject), id: subject, environment: "sandbox", consent: { status: "active", receiptIds: ["rcpt_test_0001"] } };
+    // Mirrors a real api/v1 read: no environment field, and the source label carries the scenario title.
+    const { environment: _demoOnly, ...record } = fixture(scenario.subject);
+    return {
+      ...record,
+      id: subject,
+      sources: [{ system: "synthetic-test@o_test", organization: `Northstar Health System (Synthetic) \u00b7 ${scenario.title}` }],
+      consent: { status: "active", receiptIds: ["rcpt_test_0001"] },
+    };
   };
   const session = (scenario: string, completed: boolean): SandboxSession => ({
     id: `cs_test${scenario.replace(/[^a-z0-9]/g, "")}`,
+    url: `https://finchnode.com/connect/cs_test${scenario.replace(/[^a-z0-9]/g, "")}`,
     status: completed ? "completed" : "system-selected",
     subject: completed ? sandboxSubject(scenario) : null,
     organization: "Northstar Health System (Synthetic)",
@@ -64,6 +72,10 @@ export function fixtureClient(options: { sandbox?: boolean } = {}): FinchNodeCli
         if (!scenario) throw new FinchNodeError(404, "not_found", "No such session.");
         return session(scenario.id, true);
       },
+      // One patient who consented through the hosted page outside any admission this server made.
+      listUsers: async () => [
+        { id: "u_test_messy_coding", sources: [{ system: "synthetic-test@o_test", organization: "Northstar Health System (Synthetic) \u00b7 Messy coding, age 63" }], consentedAt: "2026-10-03T20:34:39Z" },
+      ],
     };
   }
   return client;
