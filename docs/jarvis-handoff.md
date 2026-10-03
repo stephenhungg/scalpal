@@ -185,7 +185,7 @@ Updated after reviewing the relay rewrite on `codex/anatomy-atlas` (6057689). Th
 
 ## Native Quest voice: wiring the full harness (for Stephen)
 
-Reviewed `codex/headset-session-integration` (c41372a). `QuestJarvisVoice` is a solid native transport, and the session build already allows development HTTP. As wired, though, the headset Jarvis loses most of its coaching. The coach server now exposes everything the headset needs, so the fixes are small C# changes in `NativeCaseSession`:
+Reviewed `codex/headset-session-integration` (c41372a, still current at 6ca92b5). That branch vendors an older copy of `services/preop` from before these endpoints existed: take `services/preop` from `matthew/jarvis` (b1fc5ed or later) before wiring the C# below, or `/tools`, `/alerts`, and `contextKey` will be missing. `QuestJarvisVoice` is a solid native transport, and the session build already allows development HTTP. As wired, though, the headset Jarvis loses most of its coaching. The coach server now exposes everything the headset needs, so the fixes are small C# changes in `NativeCaseSession`:
 
 **1. Tools (today every tool returns "unavailable").** Forward each tool call to the coach, which implements all six tools for every client:
 
