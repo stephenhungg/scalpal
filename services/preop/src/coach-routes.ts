@@ -136,9 +136,11 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
     }
     const snapshot = s.snapshot();
     return c.json({
-      // accepted: well formed and received. applied: it reached scoring (false while tracking is lost or
+      // accepted: a delivered event for this step, including safe duplicate retries.
+      // Desynchronized steps are rejected so the native relay fails closed.
+      // applied: it reached scoring (false while tracking is lost or
       // after the case is complete, matching what CaseRunner does on the headset).
-      results: results.map((r) => ({ accepted: !r.reason.startsWith("invalid: "), applied: r.accepted, reason: r.reason })),
+      results: results.map((r) => ({ accepted: !r.reason.startsWith("invalid: ") && r.reason !== "step_desynchronized", applied: r.accepted, reason: r.reason })),
       // duplicate (same eventId seen before) is accepted but not applied, so a relay can retry safely.
       alerts: results.flatMap((r) => r.alerts),
       snapshot,

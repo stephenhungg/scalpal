@@ -294,13 +294,7 @@ namespace Scalpal.Quest.Editor
                 throw new InvalidOperationException("SCALPAL_QUEST_APK must be an absolute output path.");
             NativeQuestBuild.Configure();
             ApplySessionSettings();
-            Validate();
-            Scalpal.Instruments.Editor.InstrumentRuntimeValidation.Run();
-            NativeProcedureInputValidation.Run();
-            NativeAppendectomyValidation.Run();
-            NativeSessionBoundaryValidation.Run();
-            // Fixtures must not leave temporary poses, offline gates or substituted bindings in the player.
-            Validate();
+            Verify();
             Directory.CreateDirectory(Path.GetDirectoryName(output));
             EditorUserBuildSettings.buildAppBundle = false;
             var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions {
@@ -308,6 +302,19 @@ namespace Scalpal.Quest.Editor
             });
             if (report.summary.result != BuildResult.Succeeded) throw new InvalidOperationException("Native session build failed: " + report.summary.result);
             Debug.Log("SCALPAL_NATIVE_SESSION_BUILD_OK bytes=" + report.summary.totalSize);
+        }
+
+        public static void Verify()
+        {
+            Validate();
+            Scalpal.Instruments.Editor.InstrumentRuntimeValidation.Run();
+            NativeProcedureInputValidation.Run();
+            NativeAppendectomyValidation.Run();
+            NativeSessionBoundaryValidation.Run();
+            NativeCoachRelayValidation.Run();
+            // Fixtures must not leave temporary poses, offline gates or substituted bindings in the player.
+            Validate();
+            Debug.Log("SCALPAL_NATIVE_SESSION_VERIFY_OK");
         }
     }
 }

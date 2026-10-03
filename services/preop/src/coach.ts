@@ -163,7 +163,7 @@ export class CoachSession {
   private tier = 0; // hint tier already delivered on this step
   private hintsUsed = 0;
   private inputCount = 0; // exercise inputs that reached the engine; 0 means an untouched attempt
-  private seenEventIds = new Set<string>();
+  private seenEventIds = new Map<string, string>();
   private headsetStepId = "";
   private desynced = false;
   private resyncCount = 0;
@@ -263,11 +263,20 @@ export class CoachSession {
   // stepId is the step the headset's own CaseRunner was on, which is the authority for progression.
   receive(event: CoachEvent, meta: { eventId?: string; stepId?: string } = {}): EventOutcome {
     if (meta.eventId) {
-      if (this.seenEventIds.has(meta.eventId)) return { accepted: false, reason: "duplicate", alerts: [] };
-      this.seenEventIds.add(meta.eventId);
-      if (this.seenEventIds.size > 10000) this.seenEventIds.delete(this.seenEventIds.values().next().value!);
+      if (this.seenEventIds.has(meta.eventId)) return { accepted: false, reason: this.seenEventIds.get(meta.eventId) || "duplicate", alerts: [] };
+      this.seenEventIds.set(meta.eventId, "");
+      if (this.seenEventIds.size > 10000) this.seenEventIds.delete(this.seenEventIds.keys().next().value!);
     }
-    if (meta.stepId && event.type !== "focus" && event.type !== "tracking") this.reconcile(meta.stepId);
+    if (meta.stepId && event.type !== "focus" && event.type !== "tracking") {
+      this.reconcile(meta.stepId);
+      if (this.desynced) {
+        // Preserve rejection across a lost HTTP response; retrying this event must
+        // not turn a desynchronized action into an accepted duplicate receipt.
+        if (meta.eventId) this.seenEventIds.set(meta.eventId, "step_desynchronized");
+        this.changed([]);
+        return { accepted: false, reason: "step_desynchronized", alerts: [] };
+      }
+    }
     return this.handle(event);
   }
 
@@ -515,6 +524,9 @@ export class CoachSession {
   ackCommand(commandId: string, status: "applied" | "rejected", reason = ""): CoachCommand | null {
     const command = this.commands.find((c) => c.commandId === commandId);
     if (!command) return null;
+    // The first scene outcome is final. A lost response can cause an identical retry,
+    // and a delayed contradictory acknowledgement must not rewrite that outcome.
+    if (command.status !== "pending") return command;
     command.status = status;
     command.reason = reason;
     this.changed([]);

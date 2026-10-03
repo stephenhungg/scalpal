@@ -658,6 +658,14 @@ describe('grants, attempts and signaling', () => {
 
   test('a new attempt supersedes pending commands; results stay separate per attempt', async () => {
     const r = await sessionWithRoles();
+    await r.headset.conn.reducers.publishExerciseState(stateArgs(r, {
+      mode: 'Practicing', selectedStructureId: 'appendix', highlightedStructureId: 'cecum',
+      previewRotating: true, registration: 'valid', registrationReason: 'fixture fit',
+    }));
+    const previousState = await eventually(() => {
+      const value = stateOf(r.headset, r.sessionId);
+      return value?.mode === 'Practicing' ? value : null;
+    }, 'practice before retry');
     const commandId = uid('cmd');
     await r.coach.conn.reducers.requestCommand({
       commandId,
@@ -666,7 +674,7 @@ describe('grants, attempts and signaling', () => {
       targetId: undefined,
       argBool: undefined,
       argNumber: undefined,
-      expectedStepVersion: 1n,
+      expectedStepVersion: previousState.stepVersion,
     });
     await r.headset.conn.reducers.setAttemptResult({
       attemptId: r.attemptId,
@@ -683,6 +691,12 @@ describe('grants, attempts and signaling', () => {
       return s?.attemptId === `${r.sessionId}-a2` ? s : null;
     }, 'new attempt state');
     assert.equal(st.mode, 'Selecting');
+    assert.equal(st.selectedStructureId, undefined);
+    assert.equal(st.highlightedStructureId, undefined);
+    assert.equal(st.stepCount, 0);
+    assert.equal(st.previewRotating, false);
+    assert.equal(st.registration, 'unaligned');
+    assert.equal(st.registrationReason, undefined);
     const attempts = [...r.viewer.conn.db.sessionAttempts.iter()].filter(a => a.sessionId === r.sessionId);
     assert.equal(attempts.length, 2);
     assert.equal(attempts.find(a => a.ordinal === 1)?.practiceStatus, 'completed');
@@ -692,6 +706,15 @@ describe('grants, attempts and signaling', () => {
     );
     // The headset can no longer publish against the old attempt.
     await rejects(r.headset.conn.reducers.publishExerciseState(stateArgs(r)), /stale attempt/);
+    const event = { sessionId: r.sessionId, attemptId: r.attemptId, kind: 'touch',
+      stepId: 'inspect', structureId: 'appendix', message: 'late fixture contact', deviceTimeMs: 10 };
+    await rejects(r.headset.conn.reducers.appendExerciseEvent(event), /stale attempt/);
+    const otherSessionId = uid('other_attempt_session');
+    await r.operator.conn.reducers.createSession({ sessionId: otherSessionId, label: 'isolated foreign attempt',
+      exerciseId: 'lap_appendectomy', exerciseVersion: '0.1.0', displayName: 'fixture operator' });
+    await rejects(r.headset.conn.reducers.appendExerciseEvent({ ...event, attemptId: `${otherSessionId}-a1` }),
+      /attempt belongs to another session/);
+    await r.operator.conn.reducers.endSession({ sessionId: otherSessionId });
     r.closeAll();
   });
 
