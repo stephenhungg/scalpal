@@ -1,6 +1,6 @@
 # Quest Application
 
-Owner: Stephen for runtime, capture, registration, bootstrap and Unity configuration; Matthew for anatomy experience, voice client and exercise assets. See the [team plan](../../docs/team-plan.md).
+Owner: Stephen for runtime, capture, registration, bootstrap and Unity configuration; Matthew for anatomy experience, voice client and exercise assets. See the [team plan](../../docs/team-plan.md) and [system integration map](../../docs/system-integration.md) for actual teammate branches, required shared scene bindings and routing checks.
 
 ## Open the Current 3D Environment
 

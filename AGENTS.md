@@ -8,7 +8,7 @@
 
 ## Read Before Working
 
-Read `README.md` and `docs/current-direction.md` first, then the thesis, decisions, team plan, and your component document. Current direction supersedes older removed-feature proposals. Check the repository before editing: this repository contains documentation, an openable Unity instrument workbench and other component scaffolds. The hardware results come from a separate official Meta sample, with its pinned source and local changes preserved in `experiments/quest-camera-baseline/`. The instrument project has no configured native XR loader or complete surgery environment. The latest user assigned Nathan the companion website + SpacetimeDB/routing lane; follow `docs/nathan-plan.md` for that implementation work order. Matthew is already working on Jarvis. The earlier blanket wait is superseded for Nathan's assigned lane; do not imply the remaining open product decisions or unbuilt integrations are resolved.
+Read `README.md`, `docs/current-direction.md` and `docs/system-integration.md` first, then the thesis, decisions, team plan, and your component document. Current direction supersedes older removed-feature proposals. Check the repository before editing: this repository contains documentation, an openable Unity instrument workbench and other component scaffolds. The hardware results come from a separate official Meta sample, with its pinned source and local changes preserved in `experiments/quest-camera-baseline/`. The instrument project has no configured native XR loader or complete surgery environment. The latest user assigned Nathan the companion website + SpacetimeDB/routing lane; follow `docs/nathan-plan.md` for that implementation work order. Matthew is already working on Jarvis. The earlier blanket wait is superseded for Nathan's assigned lane; do not imply the remaining open product decisions or unbuilt integrations are resolved.
 
 User direction takes precedence over older proposals. In particular:
 
@@ -24,7 +24,7 @@ User direction takes precedence over older proposals. In particular:
 - Identify what result would demonstrate success before implementing a component.
 - Build the simplest complete slice for one exercise. Avoid speculative catalogs, custom neural models, dashboards, and multiple competing databases.
 - Delegate bounded independent work when useful, with explicit file ownership. Avoid overlapping edits.
-- Coordinate shared schemas and state transitions through `docs/integration-contracts.md`; proposed contracts are not existing APIs.
+- Coordinate shared schemas and state transitions through `docs/integration-contracts.md` and the audited routes in `docs/system-integration.md`. Nathan's branch has implemented proposals; they are not yet an agreed end-to-end contract. Compare actual producer/consumer code before adding an adapter.
 - Preserve unrelated work and inspect the final diff. Choose verification based on behavior and risk, and never claim a check passed unless it ran.
 - State whether a result is measured on the headset, reported by a participant, simulated, or merely proposed.
 - Keep camera-image coordinates, camera-relative estimates, Unity world coordinates, and robot coordinates explicit. Do not conceal missing depth, clock synchronization, or registration behind smoothing.
@@ -38,5 +38,13 @@ User direction takes precedence over older proposals. In particular:
 Commit and push verified milestones as work progresses; the user has authorized this ongoing workflow. Fetch teammate commits at integration checkpoints and before publishing. Use focused branches and pull requests, preserve unrelated local changes, and report verification and remaining limitations with each handoff.
 
 The repository/context and team-layout requests authorize this handoff and scaffold, not implementation of every proposed component. Follow subsequent user-assigned scope. Before a broad build, reconcile the expanded architecture and unresolved decisions with the owner; do not treat the prior pre-robotics draft review as approval of the current specification.
+
+For every shipping milestone:
+
+- Fetch teammate branches and inspect changes to affected callers, consumers, catalogs, settings and contracts. Record the audited commits in `docs/system-integration.md`; a branch name alone is not a fixed source snapshot.
+- Trace the changed route through real producer and consumer code. Check IDs/versions, coordinates/clocks, required scene bindings, validity gates and reset/retry behavior. Do not claim an adapter exists because a contract or generated SDK binding exists.
+- Keep one shared tool/anatomy/exercise/coach core across MR and full VR. Presentation mode and lifecycle phase are separate. Use one scored event path and a deliberately chosen step authority; do not add duplicate progression engines.
+- Run the component checks and the affected boundary exchange. State explicitly when a physical-headset or complete-session test has not run. Standalone art, synthetic workers and browser headset substitutes remain component evidence.
+- Update the map, component documentation and required follow-up when behavior or routing changes, then commit/push the verified milestone through a focused PR.
 
 For completed work, report changed files, relevant checks, measured limitations, and the next blocked interface or decision. Update the relevant document when evidence changes a premise. Do not add a tracking file for every small task.
