@@ -1,0 +1,18 @@
+{
+  "roomTriangles": 12168,
+  "roomRenderMeshes": 8,
+  "patientTriangles": 1578,
+  "patientSizeMetresBlenderXYZ": [
+    0.5227108597755432,
+    1.75,
+    0.3318694531917572
+  ],
+  "patientBodyAxisBlender": "+Y",
+  "patientFaceAxisBlender": "+Z",
+  "previewPatientBackHeightMetres": 0.98,
+  "runtimeExports": [
+    "apps/quest/Assets/Scalpal/Environment/Models/OperatingTheatre.fbx",
+    "apps/quest/Assets/Scalpal/Environment/Models/SupinePatient.fbx"
+  ],
+  "status": "Static scenery only; no native XR, organs, clinical fidelity, MR registration or surgical behavior."
+}

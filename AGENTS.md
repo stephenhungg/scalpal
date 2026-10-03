@@ -12,7 +12,7 @@ Read `README.md` and `docs/current-direction.md` first, then the thesis, decisio
 
 User direction takes precedence over older proposals. In particular:
 
-- Use a real reclining participant and a generic teaching anatomy overlay.
+- Support mixed reality with a real reclining participant and generic teaching anatomy, plus a full-VR virtual patient/operating room. Share the coach/tool/exercise core. A static room preview does not prove body registration or a native VR app. See `docs/environment-modes.md`.
 - Selection is conversational, with a rotating 3D anatomy preview during selection.
 - The robotics input proposal is recorded passthrough video, not Meta SDK hand-joint telemetry.
 - First demonstrate video-derived hand motion retargeting and replay in simulation. Do not describe replay as a learned autonomous policy.

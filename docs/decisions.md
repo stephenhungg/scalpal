@@ -11,7 +11,8 @@ Updated October 3, 2026. "Current direction" means a choice stated or accepted d
 | Name | `scalpal` | User-requested repository name; preserve this spelling |
 | Platform | Meta Quest 3S, native Unity client | Native camera/immersive sample baseline demonstrated; application not built |
 | Thesis | Human learning plus useful robot demonstrations, with later robot learning | Preserve both goals rather than forcing an education-versus-robotics choice |
-| Participant | A real reclining person | Supersedes fixed prop/mannequin premise; overlay is generic anatomy |
+| Presentation modes | Mixed reality on a real reclining person, plus full VR with a virtual patient/room | Explicit user direction; shared core proposed, static VR art prepared, registration and mode switching pending |
+| Participant | A real reclining person in MR; virtual mannequin in VR | Generic teaching anatomy in either mode |
 | Selection | Voice conversation with Jarvis | Supersedes Tinder-style surgery swiping |
 | Selection visuals | Rotating 3D Blender anatomy, controlled by supported voice actions | Explicitly during selection, before participant fitting |
 | Body registration | Pretrained visible body landmarks plus custom torso alignment | MediaPipe is a candidate, not verified on our reclining viewpoint |

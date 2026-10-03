@@ -9,3 +9,5 @@ Choose one permitted model of each type for the first slice. Geometry does not i
 No participant imagery belongs here. See [research](../docs/research/README.md) and the [team plan](../docs/team-plan.md).
 
 The [instrument kit](instruments/README.md) supplies the fourteen existing case tool IDs plus a scalpel, with editable Blender sources, optimized FBX exports, renders and MIT-licensed source geometry attribution. These are generic simulator assets with an authored virtual practice runtime, not patient-specific anatomy or a completed Quest app.
+
+See [environment assets](environments/README.md) for the CC0 operating-room/patient sources, Blender preview and Unity exports.

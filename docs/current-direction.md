@@ -12,6 +12,12 @@ AI guides people through mixed-reality learning and practice. Recorded passthrou
 
 The working experience is: open the Quest app → discuss an exercise with Jarvis → explore a rotating 3D anatomy preview → confirm the exercise and fit generic anatomy to a real reclining participant → practice with simulated tools → receive feedback → process/replay the recorded motion → recap or retry. The exact final flow and task remain subject to Nathan's plan.
 
+## Two Presentation Modes
+
+The user now explicitly wants both **mixed reality with a real reclining participant and virtual organs** and **full VR with a virtual patient and operating room**. Both use one coach, tool system and authored exercise flow. Surface detection, body landmarks and validated anatomy registration are separate jobs; a table/person box does not determine organ placement. See [mode engineering](environment-modes.md) and [environment-source research](research/surgery-environments.md).
+
+A static CC0 room/patient preview is prepared in `apps/quest/Assets/Scalpal/Environment/`. It does not implement the two-mode switch, organs, native XR or body registration. The real-person direction remains the MR mode rather than being replaced by VR.
+
 ## Work Status
 
 The user previously asked to wait for Nathan's plan, then requested storage/realtime planning and explicitly assigned the updated implementation lane: **Nathan owns the companion website plus SpacetimeDB and routing; Matthew continues to own Jarvis**. See [Nathan's implementation plan](nathan-plan.md) and [data/storage design](data-and-realtime.md). The earlier blanket wait does not block this assigned lane. The latest request updates the work order; no application implementation is performed by this documentation change. The exact shared exercise, robot model, and other unresolved decisions remain open. No GitHub identity mapping for Nathan is assumed.
