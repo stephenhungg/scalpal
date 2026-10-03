@@ -35,6 +35,8 @@ User direction takes precedence over older proposals. In particular:
 
 ## Status and Handoff
 
+Commit and push verified milestones as work progresses; the user has authorized this ongoing workflow. Fetch teammate commits at integration checkpoints and before publishing. Use focused branches and pull requests, preserve unrelated local changes, and report verification and remaining limitations with each handoff.
+
 The repository/context and team-layout requests authorize this handoff and scaffold, not implementation of every proposed component. Follow subsequent user-assigned scope. Before a broad build, reconcile the expanded architecture and unresolved decisions with the owner; do not treat the prior pre-robotics draft review as approval of the current specification.
 
 For completed work, report changed files, relevant checks, measured limitations, and the next blocked interface or decision. Update the relevant document when evidence changes a premise. Do not add a tracking file for every small task.

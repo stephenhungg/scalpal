@@ -12,7 +12,7 @@ The backend design uses [SpacetimeDB for shared state plus private file storage 
 
 ## Start Here
 
-This repository currently contains documentation, not an implemented Scalpal application. It is a portable handoff for teammates and their agents. Read these in order:
+This repository contains documentation and a standalone instrument prototype, not a complete Scalpal application. It is a portable handoff for teammates and their agents. Read these in order:
 
 1. [Thesis and scope](docs/thesis.md): What we are building, for whom, and what the demo must establish.
 2. [End-to-end experience](docs/demo-flow.md): Earlier proposed journey; its reward phase has been removed and awaits reconciliation with Nathan's plan.
@@ -37,3 +37,7 @@ The conversational selection experience was accepted during product exploration.
 Follow [AGENTS.md](AGENTS.md) and the [team plan](docs/team-plan.md). Major component folders contain onboarding READMEs; they are scaffolds, not initialized applications. Agree on one supported exercise, one robot-hand model, and component contracts before overlapping implementation. Work on one measurable technical question at a time. Update the docs when a decision or measured result changes; distinguish a proposal from a verified result.
 
 Keep credentials, participant footage, device identifiers, and raw datasets out of Git. This is an illustrative simulator, not clinical guidance or evidence of surgical competence. Actual recording, processing, sharing, and training rights must be established for each data source and use.
+
+## Instrument Prototype
+
+The [instrument kit](assets/instruments/README.md) now contains fourteen catalog tools plus a scalpel: Blender sources, previews, optimized runtime FBX models, Unity pickup/action prefabs and an authored practice sandbox. It is a standalone component, not the complete application described above. Matthew's current feature branch also contains case/coach code and a Unity relay; those are not merged into main by this asset work. Read [runtime integration](docs/instrument-runtime.md) before connecting actions to scoring or Jarvis.

@@ -1,0 +1,413 @@
+{
+  "schemaVersion": 1,
+  "blender": "4.5.7 LTS",
+  "units": "meters",
+  "instruments": [
+    {
+      "id": "trocar_5mm",
+      "prefab": "inst_trocar_5mm",
+      "sourceTriangles": 7248,
+      "runtimeTriangles": 1898,
+      "meshAssemblies": 2,
+      "sourceBoundsMeters": [
+        0.053999992087483406,
+        0.07197835855185986,
+        0.17213739454746246
+      ],
+      "parts": [
+        "inst_trocar_5mm",
+        "ActionPoint",
+        "CutEnd",
+        "CutStart",
+        "GripAnchor",
+        "GripCollider",
+        "Obturator",
+        "Tip"
+      ],
+      "source": "source/inst_trocar_5mm.blend",
+      "fbx": "../../apps/quest/Assets/Scalpal/Instruments/Models/inst_trocar_5mm.fbx",
+      "glb": "exports/inst_trocar_5mm.glb",
+      "preview": "previews/inst_trocar_5mm.png"
+    },
+    {
+      "id": "trocar_12mm",
+      "prefab": "inst_trocar_12mm",
+      "sourceTriangles": 7248,
+      "runtimeTriangles": 1898,
+      "meshAssemblies": 2,
+      "sourceBoundsMeters": [
+        0.053999992087483406,
+        0.07197974808514118,
+        0.17212307453155518
+      ],
+      "parts": [
+        "inst_trocar_12mm",
+        "ActionPoint",
+        "CutEnd",
+        "CutStart",
+        "GripAnchor",
+        "GripCollider",
+        "Obturator",
+        "Tip"
+      ],
+      "source": "source/inst_trocar_12mm.blend",
+      "fbx": "../../apps/quest/Assets/Scalpal/Instruments/Models/inst_trocar_12mm.fbx",
+      "glb": "exports/inst_trocar_12mm.glb",
+      "preview": "previews/inst_trocar_12mm.png"
+    },
+    {
+      "id": "laparoscope_30",
+      "prefab": "inst_laparoscope_30",
+      "sourceTriangles": 2404,
+      "runtimeTriangles": 1900,
+      "meshAssemblies": 1,
+      "sourceBoundsMeters": [
+        0.031880248337984085,
+        0.056742431595921516,
+        0.35368776659015566
+      ],
+      "parts": [
+        "inst_laparoscope_30",
+        "ActionPoint",
+        "CutEnd",
+        "CutStart",
+        "GripAnchor",
+        "GripCollider",
+        "OpticDirection",
+        "Tip"
+      ],
+      "source": "source/inst_laparoscope_30.blend",
+      "fbx": "../../apps/quest/Assets/Scalpal/Instruments/Models/inst_laparoscope_30.fbx",
+      "glb": "exports/inst_laparoscope_30.glb",
+      "preview": "previews/inst_laparoscope_30.png"
+    },
+    {
+      "id": "atraumatic_grasper",
+      "prefab": "inst_atraumatic_grasper",
+      "sourceTriangles": 6148,
+      "runtimeTriangles": 1897,
+      "meshAssemblies": 4,
+      "sourceBoundsMeters": [
+        0.023978947661817074,
+        0.08885052613914013,
+        0.4897429943084717
+      ],
+      "parts": [
+        "inst_atraumatic_grasper",
+        "ActionPoint",
+        "CutEnd",
+        "CutStart",
+        "GripAnchor",
+        "GripCollider",
+        "JawLower",
+        "JawUpper",
+        "Tip",
+        "Trigger"
+      ],
+      "source": "source/inst_atraumatic_grasper.blend",
+      "fbx": "../../apps/quest/Assets/Scalpal/Instruments/Models/inst_atraumatic_grasper.fbx",
+      "glb": "exports/inst_atraumatic_grasper.glb",
+      "preview": "previews/inst_atraumatic_grasper.png"
+    },
+    {
+      "id": "maryland_dissector",
+      "prefab": "inst_maryland_dissector",
+      "sourceTriangles": 7096,
+      "runtimeTriangles": 1896,
+      "meshAssemblies": 4,
+      "sourceBoundsMeters": [
+        0.023963439278304577,
+        0.08877493347972631,
+        0.4981710910797119
+      ],
+      "parts": [
+        "inst_maryland_dissector",
+        "ActionPoint",
+        "CutEnd",
+        "CutStart",
+        "GripAnchor",
+        "GripCollider",
+        "JawLower",
+        "JawUpper",
+        "Tip",
+        "Trigger"
+      ],
+      "source": "source/inst_maryland_dissector.blend",
+      "fbx": "../../apps/quest/Assets/Scalpal/Instruments/Models/inst_maryland_dissector.fbx",
+      "glb": "exports/inst_maryland_dissector.glb",
+      "preview": "previews/inst_maryland_dissector.png"
+    },
+    {
+      "id": "hook_cautery",
+      "prefab": "inst_hook_cautery",
+      "sourceTriangles": 4834,
+      "runtimeTriangles": 1898,
+      "meshAssemblies": 2,
+      "sourceBoundsMeters": [
+        0.03763459622859955,
+        0.1247631125152111,
+        0.47043392062187195
+      ],
+      "parts": [
+        "inst_hook_cautery",
+        "ActionPoint",
+        "CutEnd",
+        "CutStart",
+        "GripAnchor",
+        "GripCollider",
+        "Tip",
+        "Trigger"
+      ],
+      "source": "source/inst_hook_cautery.blend",
+      "fbx": "../../apps/quest/Assets/Scalpal/Instruments/Models/inst_hook_cautery.fbx",
+      "glb": "exports/inst_hook_cautery.glb",
+      "preview": "previews/inst_hook_cautery.png"
+    },
+    {
+      "id": "vessel_sealer",
+      "prefab": "inst_vessel_sealer",
+      "sourceTriangles": 8318,
+      "runtimeTriangles": 1898,
+      "meshAssemblies": 4,
+      "sourceBoundsMeters": [
+        0.0374548714607954,
+        0.12590041011571884,
+        0.5365215241909027
+      ],
+      "parts": [
+        "inst_vessel_sealer",
+        "ActionPoint",
+        "CutEnd",
+        "CutStart",
+        "GripAnchor",
+        "GripCollider",
+        "JawLower",
+        "JawUpper",
+        "Tip",
+        "Trigger"
+      ],
+      "source": "source/inst_vessel_sealer.blend",
+      "fbx": "../../apps/quest/Assets/Scalpal/Instruments/Models/inst_vessel_sealer.fbx",
+      "glb": "exports/inst_vessel_sealer.glb",
+      "preview": "previews/inst_vessel_sealer.png"
+    },
+    {
+      "id": "clip_applier",
+      "prefab": "inst_clip_applier",
+      "sourceTriangles": 8694,
+      "runtimeTriangles": 1896,
+      "meshAssemblies": 4,
+      "sourceBoundsMeters": [
+        0.037788402289152145,
+        0.12590041011571884,
+        0.48852893710136414
+      ],
+      "parts": [
+        "inst_clip_applier",
+        "ActionPoint",
+        "CutEnd",
+        "CutStart",
+        "GripAnchor",
+        "GripCollider",
+        "JawLower",
+        "JawUpper",
+        "Tip",
+        "Trigger"
+      ],
+      "source": "source/inst_clip_applier.blend",
+      "fbx": "../../apps/quest/Assets/Scalpal/Instruments/Models/inst_clip_applier.fbx",
+      "glb": "exports/inst_clip_applier.glb",
+      "preview": "previews/inst_clip_applier.png"
+    },
+    {
+      "id": "lap_scissors",
+      "prefab": "inst_lap_scissors",
+      "sourceTriangles": 5334,
+      "runtimeTriangles": 1896,
+      "meshAssemblies": 4,
+      "sourceBoundsMeters": [
+        0.02397786546498537,
+        0.0888854768127203,
+        0.4868992865085602
+      ],
+      "parts": [
+        "inst_lap_scissors",
+        "ActionPoint",
+        "CutEnd",
+        "CutStart",
+        "GripAnchor",
+        "GripCollider",
+        "JawLower",
+        "JawUpper",
+        "Tip",
+        "Trigger"
+      ],
+      "source": "source/inst_lap_scissors.blend",
+      "fbx": "../../apps/quest/Assets/Scalpal/Instruments/Models/inst_lap_scissors.fbx",
+      "glb": "exports/inst_lap_scissors.glb",
+      "preview": "previews/inst_lap_scissors.png"
+    },
+    {
+      "id": "endo_stapler",
+      "prefab": "inst_endo_stapler",
+      "sourceTriangles": 19222,
+      "runtimeTriangles": 1896,
+      "meshAssemblies": 4,
+      "sourceBoundsMeters": [
+        0.038998160511255264,
+        0.12592772394418716,
+        0.3409140035510063
+      ],
+      "parts": [
+        "inst_endo_stapler",
+        "ActionPoint",
+        "CutEnd",
+        "CutStart",
+        "GripAnchor",
+        "GripCollider",
+        "JawLower",
+        "JawUpper",
+        "Tip",
+        "Trigger"
+      ],
+      "source": "source/inst_endo_stapler.blend",
+      "fbx": "../../apps/quest/Assets/Scalpal/Instruments/Models/inst_endo_stapler.fbx",
+      "glb": "exports/inst_endo_stapler.glb",
+      "preview": "previews/inst_endo_stapler.png"
+    },
+    {
+      "id": "circular_stapler",
+      "prefab": "inst_circular_stapler",
+      "sourceTriangles": 10094,
+      "runtimeTriangles": 1898,
+      "meshAssemblies": 3,
+      "sourceBoundsMeters": [
+        0.0374548714607954,
+        0.12589270621538162,
+        0.3764456510543823
+      ],
+      "parts": [
+        "inst_circular_stapler",
+        "ActionPoint",
+        "Anvil",
+        "CutEnd",
+        "CutStart",
+        "GripAnchor",
+        "GripCollider",
+        "Tip",
+        "Trigger"
+      ],
+      "source": "source/inst_circular_stapler.blend",
+      "fbx": "../../apps/quest/Assets/Scalpal/Instruments/Models/inst_circular_stapler.fbx",
+      "glb": "exports/inst_circular_stapler.glb",
+      "preview": "previews/inst_circular_stapler.png"
+    },
+    {
+      "id": "suction_irrigator",
+      "prefab": "inst_suction_irrigator",
+      "sourceTriangles": 5156,
+      "runtimeTriangles": 1896,
+      "meshAssemblies": 3,
+      "sourceBoundsMeters": [
+        0.03200000151991844,
+        0.08300377242267132,
+        0.3760917205363512
+      ],
+      "parts": [
+        "inst_suction_irrigator",
+        "ActionPoint",
+        "CutEnd",
+        "CutStart",
+        "GripAnchor",
+        "GripCollider",
+        "IrrigationButton",
+        "Tip",
+        "Trigger"
+      ],
+      "source": "source/inst_suction_irrigator.blend",
+      "fbx": "../../apps/quest/Assets/Scalpal/Instruments/Models/inst_suction_irrigator.fbx",
+      "glb": "exports/inst_suction_irrigator.glb",
+      "preview": "previews/inst_suction_irrigator.png"
+    },
+    {
+      "id": "retrieval_bag",
+      "prefab": "inst_retrieval_bag",
+      "sourceTriangles": 2932,
+      "runtimeTriangles": 1896,
+      "meshAssemblies": 3,
+      "sourceBoundsMeters": [
+        0.08080000430345535,
+        0.054944004863500595,
+        0.36602429673075676
+      ],
+      "parts": [
+        "inst_retrieval_bag",
+        "ActionPoint",
+        "Bag",
+        "BagFolded",
+        "CutEnd",
+        "CutStart",
+        "GripAnchor",
+        "GripCollider",
+        "Tip"
+      ],
+      "source": "source/inst_retrieval_bag.blend",
+      "fbx": "../../apps/quest/Assets/Scalpal/Instruments/Models/inst_retrieval_bag.fbx",
+      "glb": "exports/inst_retrieval_bag.glb",
+      "preview": "previews/inst_retrieval_bag.png"
+    },
+    {
+      "id": "fascial_closure",
+      "prefab": "inst_fascial_closure",
+      "sourceTriangles": 2652,
+      "runtimeTriangles": 1898,
+      "meshAssemblies": 3,
+      "sourceBoundsMeters": [
+        0.06499999761581421,
+        0.02999999839812517,
+        0.25400034338235855
+      ],
+      "parts": [
+        "inst_fascial_closure",
+        "ActionPoint",
+        "CutEnd",
+        "CutStart",
+        "GripAnchor",
+        "GripCollider",
+        "JawUpper",
+        "Tip",
+        "Trigger"
+      ],
+      "source": "source/inst_fascial_closure.blend",
+      "fbx": "../../apps/quest/Assets/Scalpal/Instruments/Models/inst_fascial_closure.fbx",
+      "glb": "exports/inst_fascial_closure.glb",
+      "preview": "previews/inst_fascial_closure.png"
+    },
+    {
+      "id": "scalpel",
+      "prefab": "inst_scalpel",
+      "sourceTriangles": 10268,
+      "runtimeTriangles": 1898,
+      "meshAssemblies": 2,
+      "sourceBoundsMeters": [
+        0.014974211808294058,
+        0.004951449576765299,
+        0.16192848980426788
+      ],
+      "parts": [
+        "inst_scalpel",
+        "ActionPoint",
+        "Blade",
+        "CutEnd",
+        "CutStart",
+        "GripAnchor",
+        "GripCollider",
+        "Tip"
+      ],
+      "source": "source/inst_scalpel.blend",
+      "fbx": "../../apps/quest/Assets/Scalpal/Instruments/Models/inst_scalpel.fbx",
+      "glb": "exports/inst_scalpel.glb",
+      "preview": "previews/inst_scalpel.png"
+    }
+  ]
+}
