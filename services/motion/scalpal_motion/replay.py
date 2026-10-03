@@ -18,7 +18,7 @@ import numpy as np
 
 from .paths import ROBOTS_DIR
 
-VIEWS = {  # (azimuth, elevation) for the right Shadow hand
+VIEWS = {  # (azimuth, elevation); the same presets face the left Shadow hand correctly
     "palm": (180.0, -10.0),  # palm toward the viewer, like a webcam/selfie clip
     "back": (0.0, -10.0),  # back of the hand, like a first-person headset view
 }

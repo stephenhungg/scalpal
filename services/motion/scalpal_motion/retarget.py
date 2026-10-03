@@ -48,7 +48,9 @@ ROBOTS = {
         }
     }
 }
-RETARGET_CONFIG_VERSION = "shadow_right_vector/2 (knuckle-origin fingers, per-vector bone-length scale, wrist fixed at 0)"
+# The left URDF uses the same link and joint names, so only the file differs.
+ROBOTS["shadow"]["Left"] = {**ROBOTS["shadow"]["Right"], "urdf_path": "shadow_hand/shadow_hand_left.urdf"}
+RETARGET_CONFIG_VERSION = "shadow_vector/2 (knuckle-origin fingers, per-vector bone-length scale, wrist fixed at 0)"
 LIMIT_EPS = 1e-3
 
 
@@ -57,7 +59,7 @@ def build_retargeter(
 ) -> tuple[SeqRetargeting, dict]:
     """low_pass_alpha=None applies no smoothing (alpha 1.0 passes values through)."""
     if hand not in ROBOTS.get(robot, {}):
-        raise ValueError(f"no {hand} {robot} hand configured (only the right Shadow hand is vendored)")
+        raise ValueError(f"no {hand} {robot} hand configured")
     cfg = dict(ROBOTS[robot][hand], low_pass_alpha=1.0 if low_pass_alpha is None else low_pass_alpha)
     if unit_scale:
         cfg["scaling_factor"] = 1.0

@@ -107,7 +107,7 @@ def _upload(gateway: Gateway, outputs_path: str, kind: str, path: Path, content_
     return out["artifactId"]
 
 
-def process_claim(gateway: Gateway, claim: dict, mirrored: bool = False, log=print) -> str:
+def process_claim(gateway: Gateway, claim: dict, mirrored: bool = False, hand: str = "Right", log=print) -> str:
     """Handle one claimed job. Returns "completed", "failed", or "stale"."""
     from .perception import track_hand
     from .replay import render_replay
@@ -142,18 +142,18 @@ def process_claim(gateway: Gateway, claim: dict, mirrored: bool = False, log=pri
 
             hb.update(0.15, "hand inference")
             try:
-                track = track_hand(clip, hand="Right", mirrored=mirrored)
+                track = track_hand(clip, hand=hand, mirrored=mirrored)
             except FileNotFoundError as e:
                 return fail(f"could not decode input clip: {e}", retryable=False)
             if track["summary"]["frames"] == 0:
                 return fail("no frames could be decoded from the clip", retryable=False)
             if track["summary"]["valid_frames"] == 0:
-                return fail(f"no right hand detected in any of {track['summary']['frames']} frames", retryable=False)
+                return fail(f"no {hand.lower()} hand detected in any of {track['summary']['frames']} frames", retryable=False)
 
             hb.update(0.6, "retargeting")
-            motion = retarget_frames(track["frames"], hand="Right")
+            motion = retarget_frames(track["frames"], hand=hand)
             motion["input"] = {"artifact_id": clip_in.get("artifactId"), "model": track["model"]}
-            trajectory = to_robot_trajectory(motion, clip_in.get("artifactId"))
+            trajectory = to_robot_trajectory(motion, clip_in.get("artifactId"), hand=hand)
 
             hb.update(0.75, "rendering replay")
             files = {
@@ -207,7 +207,7 @@ def process_claim(gateway: Gateway, claim: dict, mirrored: bool = False, log=pri
 
 
 def run_worker(url: str, token: str, lease_ms: int = 120_000, mirrored: bool = False, once: bool = False,
-               poll_s: float = 2.0, log=print) -> None:
+               poll_s: float = 2.0, hand: str = "Right", log=print) -> None:
     gateway = Gateway(url, token)
     log(f"polling {gateway.url} for motion jobs")
     while True:
@@ -218,7 +218,7 @@ def run_worker(url: str, token: str, lease_ms: int = 120_000, mirrored: bool = F
             status, claim = 0, None
         if status == 200 and claim:
             log(f"claimed {claim['job']['jobId']} run {claim['job']['run']}")
-            process_claim(gateway, claim, mirrored=mirrored, log=log)
+            process_claim(gateway, claim, mirrored=mirrored, hand=hand, log=log)
             if once:
                 return
             continue

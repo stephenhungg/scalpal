@@ -104,7 +104,7 @@ def cmd_gateway_worker(args: argparse.Namespace) -> None:
     token = os.environ.get("WORKER_TOKEN")
     if not token:
         raise SystemExit("set WORKER_TOKEN (and GATEWAY_URL) for Nathan's gateway")
-    run_worker(args.gateway, token, lease_ms=args.lease_ms, mirrored=args.mirrored, once=args.once)
+    run_worker(args.gateway, token, lease_ms=args.lease_ms, mirrored=args.mirrored, once=args.once, hand=args.hand)
 
 
 def main() -> None:
@@ -152,6 +152,7 @@ def main() -> None:
     p = sub.add_parser("gateway-worker", help="pull jobs from Nathan's gateway (worker-api v1)")
     p.add_argument("--gateway", default=os.environ.get("GATEWAY_URL", "http://localhost:8787"))
     p.add_argument("--lease-ms", type=int, default=120_000)
+    p.add_argument("--hand", choices=["Right", "Left"], default="Right")
     p.add_argument("--mirrored", action="store_true", help="treat clips as mirrored (selfie/webcam test footage)")
     p.add_argument("--once", action="store_true", help="handle at most one job, then exit")
     p.set_defaults(func=cmd_gateway_worker)

@@ -34,3 +34,10 @@ def test_joints_are_named_and_wrist_fixed():
     lo, hi = np.array(motion["joint_limits"]).T
     q = np.array([f["qpos"] for f in motion["frames"]])
     assert np.all(q >= lo - 1e-6) and np.all(q <= hi + 1e-6)
+
+
+def test_left_hand_round_trip():
+    frames, _ = make_synthetic(n_frames=30, gap=None, hand="Left")
+    motion = retarget_frames(frames, hand="Left", keypoint_frame="mano", scaling="config")
+    assert motion["robot"]["name"] == "shadow_hand_left"
+    assert motion["summary"]["vector_error_m_median"] < 0.005

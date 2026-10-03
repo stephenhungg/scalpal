@@ -88,8 +88,8 @@ def validate_job(job: dict) -> dict:
     if not job["input"].get("source"):
         raise JobError("bad_job", "missing input.source")
     config = {**DEFAULT_CONFIG, **job.get("config", {})}
-    if config["hand"] != "Right":
-        raise JobError("unsupported_config", "only the right hand is configured")
+    if config["hand"] not in ("Right", "Left"):
+        raise JobError("unsupported_config", "hand must be Right or Left")
     return config
 
 

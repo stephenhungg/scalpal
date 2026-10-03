@@ -101,5 +101,5 @@ These are proposals for the capture and replay boundaries in [integration contra
 
 - No real headset clip yet, so accuracy on occluded first-person footage is unmeasured.
 - Monocular estimates: metric depth, wrist position, and wrist orientation are not reconstructed. Finger poses inherit MediaPipe's 3D errors, which are clearly visible on foreshortened, palm-facing hands.
-- Only the right hand. A left Shadow hand exists in dex-urdf and would need a mirrored config.
+- One hand per job (`--hand Right|Left`, right by default). Both Shadow hands are vendored, and the left was checked on a mirrored copy of the sample clip (finger bend r 0.87 to 0.98).
 - No physics, object contact, or task outcome. This is joint-target playback, not a learned policy.
