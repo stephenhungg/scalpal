@@ -13,7 +13,9 @@ ROOT = Path(__file__).resolve().parents[2]
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--blender", default="blender", help="Blender executable, including full app-bundle path on macOS")
-    parser.add_argument("--skip-build", action="store_true", help="Verify existing exports and fill missing metadata")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--skip-build", action="store_true", help="Verify existing exports and fill missing metadata")
+    mode.add_argument("--targets-only", action="store_true", help="Rebuild authored targets using existing verified source exports")
     args = parser.parse_args()
     # Blender locates its bundled Python resources relative to its executable.
     # Resolve shell symlinks rather than invoking a detached binary alias.
@@ -21,10 +23,14 @@ def main():
     if not found:
         parser.error("Blender executable not found: " + args.blender)
     blender = str(Path(found).resolve())
-    if not args.skip_build:
+    if not args.skip_build and not args.targets_only:
         subprocess.run([sys.executable, "scripts/anatomy/fetch.py"], cwd=ROOT, check=True)
         subprocess.run([blender, "--background", "--factory-startup", "--python-exit-code", "1",
                         "--python", "scripts/anatomy/build.py"], cwd=ROOT, check=True)
+    if not args.skip_build:
+        subprocess.run([blender, "--background", "--factory-startup", "--python-exit-code", "1",
+                        "--python", "scripts/anatomy/build_targets.py"], cwd=ROOT, check=True)
+        subprocess.run([sys.executable, "scripts/anatomy/merge_targets.py"], cwd=ROOT, check=True)
     subprocess.run([blender, "--background", "--factory-startup", "--python-exit-code", "1",
                     "--python", "scripts/anatomy/verify.py"], cwd=ROOT, check=True)
     atlas = ROOT / "apps/quest/Assets/Scalpal/Anatomy"
@@ -40,6 +46,9 @@ def main():
             text += "folderAsset: yes\nDefaultImporter:\n  externalObjects: {}\n  userData:\n  assetBundleName:\n  assetBundleVariant:\n"
         meta.write_text(text)
     print("Atlas verified; Unity asset GUIDs preserved/generated.")
+    if not args.skip_build:
+        subprocess.run([blender, "--background", "--factory-startup", "--python-exit-code", "1",
+                        "--python", "scripts/anatomy/create_workspace.py"], cwd=ROOT, check=True)
 
 
 if __name__ == "__main__":

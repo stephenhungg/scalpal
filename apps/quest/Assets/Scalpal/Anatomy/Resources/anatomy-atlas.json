@@ -253,6 +253,33 @@
         ]
       ],
       "sha256": "e44c988274049cd49db7023968122523b9ea6581bfca1bb381e7b1384c211917"
+    },
+    {
+      "id": "exercise-targets",
+      "group": "body",
+      "assetPath": "Assets/Scalpal/Anatomy/Models/exercise-targets.fbx",
+      "sourceTriangles": 9833,
+      "triangles": 9833,
+      "meshCount": 11,
+      "sourceBoundsBlenderXYZ": [
+        [
+          -0.11380050331354141,
+          0.0997864380478859
+        ],
+        [
+          -0.08118411153554916,
+          0.07706049829721451
+        ],
+        [
+          0.7280486822128296,
+          1.1820178031921387
+        ]
+      ],
+      "sha256": "ff50883cfbab8f1444a7e1198ef557bc11fff98f17c08f3ce5d9d0c1f5d8c3fb",
+      "inputHashes": {
+        "visceral": "ccc78359e6c5de7cdb18d6ffd4b72d111a14527a6cea5ac711df3c6892e4824e",
+        "cardiovascular": "d2c86b393002c868979eb6f7f241d60a204b7555fdf8221a9fdff8720e28b6fd"
+      }
     }
   ],
   "parts": [
@@ -40455,6 +40482,476 @@
       "sourceTriangles": 11221,
       "triangles": 4040,
       "reflectionCorrected": false
+    },
+    {
+      "stableId": "cecum",
+      "catalogId": "cecum",
+      "displayName": "Cecum",
+      "objectName": "anat_cecum",
+      "system": "exercise-targets",
+      "sourceTriangles": 1216,
+      "triangles": 1216,
+      "reflectionCorrected": false,
+      "provenance": "authored schematic teaching geometry",
+      "sourceLandmarks": [
+        "atlas_visceral__ascending_colon",
+        "anat_appendix"
+      ],
+      "sourceBoundsBlenderXYZ": [
+        [
+          -0.11380050331354141,
+          -0.061800532042980194
+        ],
+        [
+          -0.03998974710702896,
+          0.010010208003222942
+        ],
+        [
+          0.9071163535118103,
+          0.9731163382530212
+        ]
+      ],
+      "colliderRadiusMeters": 0,
+      "anatomicalValidation": "unreviewed generic teaching approximation; not patient anatomy"
+    },
+    {
+      "stableId": "terminal_ileum",
+      "catalogId": "terminal_ileum",
+      "displayName": "Terminal Ileum",
+      "objectName": "anat_terminal_ileum",
+      "system": "exercise-targets",
+      "sourceTriangles": 496,
+      "triangles": 496,
+      "reflectionCorrected": false,
+      "provenance": "authored schematic teaching geometry",
+      "sourceLandmarks": [
+        "atlas_visceral__ascending_colon",
+        "anat_appendix"
+      ],
+      "sourceBoundsBlenderXYZ": [
+        [
+          -0.08316690474748611,
+          -0.006109996698796749
+        ],
+        [
+          -0.03394736722111702,
+          -0.0050835516303777695
+        ],
+        [
+          0.9374749064445496,
+          1.0066064596176147
+        ]
+      ],
+      "colliderRadiusMeters": 0.01,
+      "anatomicalValidation": "unreviewed generic teaching approximation; not patient anatomy",
+      "centerlineBlenderXYZ": [
+        [
+          -0.08180052787065506,
+          -0.0149897625669837,
+          0.9491163492202759
+        ],
+        [
+          -0.05280052497982979,
+          -0.018989762291312218,
+          0.9481163620948792
+        ],
+        [
+          -0.020800523459911346,
+          -0.023989763110876083,
+          0.9681163430213928
+        ],
+        [
+          -0.01580052822828293,
+          -0.020989762619137764,
+          1.00511634349823
+        ]
+      ]
+    },
+    {
+      "stableId": "cystic_duct",
+      "catalogId": "cystic_duct",
+      "displayName": "Cystic Duct",
+      "objectName": "anat_cystic_duct",
+      "system": "exercise-targets",
+      "sourceTriangles": 336,
+      "triangles": 336,
+      "reflectionCorrected": false,
+      "provenance": "authored schematic teaching path; 12 mm diameter intentionally enlarged for touch",
+      "sourceLandmarks": [
+        "anat_gallbladder",
+        "atlas_visceral__bile_duct",
+        "atlas_cardiovascular__proper_hepatic_artery"
+      ],
+      "sourceBoundsBlenderXYZ": [
+        [
+          -0.04101880267262459,
+          -0.02384033426642418
+        ],
+        [
+          -0.04170447587966919,
+          -0.028467290103435516
+        ],
+        [
+          1.1331413984298706,
+          1.15383780002594
+        ]
+      ],
+      "colliderRadiusMeters": 0.006,
+      "anatomicalValidation": "unreviewed generic teaching approximation; not patient anatomy",
+      "centerlineBlenderXYZ": [
+        [
+          -0.03204544261097908,
+          -0.03612580522894859,
+          1.1488699913024902
+        ],
+        [
+          -0.029902823269367218,
+          -0.03527749329805374,
+          1.147321343421936
+        ],
+        [
+          -0.03576020896434784,
+          -0.03442917764186859,
+          1.1357728242874146
+        ]
+      ]
+    },
+    {
+      "stableId": "cystic_artery",
+      "catalogId": "cystic_artery",
+      "displayName": "Cystic Artery",
+      "objectName": "anat_cystic_artery",
+      "system": "exercise-targets",
+      "sourceTriangles": 336,
+      "triangles": 336,
+      "reflectionCorrected": false,
+      "provenance": "authored schematic teaching path; 12 mm diameter intentionally enlarged for touch",
+      "sourceLandmarks": [
+        "anat_gallbladder",
+        "atlas_visceral__bile_duct",
+        "atlas_cardiovascular__proper_hepatic_artery"
+      ],
+      "sourceBoundsBlenderXYZ": [
+        [
+          -0.06055720895528793,
+          -0.03186728432774544
+        ],
+        [
+          -0.049371376633644104,
+          -0.015341175720095634
+        ],
+        [
+          1.1329292058944702,
+          1.1699790954589844
+        ]
+      ],
+      "colliderRadiusMeters": 0.006,
+      "anatomicalValidation": "unreviewed generic teaching approximation; not patient anatomy",
+      "centerlineBlenderXYZ": [
+        [
+          -0.05676020681858063,
+          -0.020429177209734917,
+          1.164772868156433
+        ],
+        [
+          -0.03804544359445572,
+          -0.0321258045732975,
+          1.1548700332641602
+        ],
+        [
+          -0.0500454418361187,
+          -0.04412580654025078,
+          1.13687002658844
+        ]
+      ]
+    },
+    {
+      "stableId": "common_bile_duct",
+      "catalogId": "common_bile_duct",
+      "displayName": "Common Bile Duct",
+      "objectName": "anat_common_bile_duct",
+      "system": "exercise-targets",
+      "sourceTriangles": 336,
+      "triangles": 336,
+      "reflectionCorrected": false,
+      "provenance": "authored schematic teaching path; 12 mm diameter intentionally enlarged for touch",
+      "sourceLandmarks": [
+        "anat_gallbladder",
+        "atlas_visceral__bile_duct",
+        "atlas_cardiovascular__proper_hepatic_artery"
+      ],
+      "sourceBoundsBlenderXYZ": [
+        [
+          -0.04080769419670105,
+          -0.012405343353748322
+        ],
+        [
+          -0.0443156473338604,
+          -0.028513118624687195
+        ],
+        [
+          1.0964446067810059,
+          1.1388498544692993
+        ]
+      ],
+      "colliderRadiusMeters": 0.006,
+      "anatomicalValidation": "unreviewed generic teaching approximation; not patient anatomy",
+      "centerlineBlenderXYZ": [
+        [
+          -0.03576020896434784,
+          -0.03442917764186859,
+          1.1357728242874146
+        ],
+        [
+          -0.02392946183681488,
+          -0.03642917796969414,
+          1.1170332431793213
+        ],
+        [
+          -0.01809871569275856,
+          -0.038429178297519684,
+          1.0982937812805176
+        ]
+      ]
+    },
+    {
+      "stableId": "common_hepatic_duct",
+      "catalogId": "common_hepatic_duct",
+      "displayName": "Common Hepatic Duct",
+      "objectName": "anat_common_hepatic_duct",
+      "system": "exercise-targets",
+      "sourceTriangles": 336,
+      "triangles": 336,
+      "reflectionCorrected": false,
+      "provenance": "authored schematic teaching path; 12 mm diameter intentionally enlarged for touch",
+      "sourceLandmarks": [
+        "anat_gallbladder",
+        "atlas_visceral__bile_duct",
+        "atlas_cardiovascular__proper_hepatic_artery"
+      ],
+      "sourceBoundsBlenderXYZ": [
+        [
+          -0.04849303513765335,
+          -0.03002738021314144
+        ],
+        [
+          -0.04034346714615822,
+          -0.02451488748192787
+        ],
+        [
+          1.1344184875488281,
+          1.1701271533966064
+        ]
+      ],
+      "colliderRadiusMeters": 0.006,
+      "anatomicalValidation": "unreviewed generic teaching approximation; not patient anatomy",
+      "centerlineBlenderXYZ": [
+        [
+          -0.03576020896434784,
+          -0.03442917764186859,
+          1.1357728242874146
+        ],
+        [
+          -0.03926020860671997,
+          -0.032429177314043045,
+          1.1522728204727173
+        ],
+        [
+          -0.0427602082490921,
+          -0.0304291769862175,
+          1.16877281665802
+        ]
+      ]
+    },
+    {
+      "stableId": "right_hepatic_artery",
+      "catalogId": "right_hepatic_artery",
+      "displayName": "Right Hepatic Artery",
+      "objectName": "anat_right_hepatic_artery",
+      "system": "exercise-targets",
+      "sourceTriangles": 336,
+      "triangles": 336,
+      "reflectionCorrected": false,
+      "provenance": "authored schematic teaching path; 12 mm diameter intentionally enlarged for touch",
+      "sourceLandmarks": [
+        "anat_gallbladder",
+        "atlas_visceral__bile_duct",
+        "atlas_cardiovascular__proper_hepatic_artery"
+      ],
+      "sourceBoundsBlenderXYZ": [
+        [
+          -0.087008036673069,
+          -0.029082057997584343
+        ],
+        [
+          -0.026429178193211555,
+          -0.014429175294935703
+        ],
+        [
+          1.151318907737732,
+          1.1820178031921387
+        ]
+      ],
+      "colliderRadiusMeters": 0.006,
+      "anatomicalValidation": "unreviewed generic teaching approximation; not patient anatomy",
+      "centerlineBlenderXYZ": [
+        [
+          -0.030760208144783974,
+          -0.020429177209734917,
+          1.1567728519439697
+        ],
+        [
+          -0.05676020681858063,
+          -0.020429177209734917,
+          1.164772868156433
+        ],
+        [
+          -0.08476020395755768,
+          -0.020429177209734917,
+          1.1767728328704834
+        ]
+      ]
+    },
+    {
+      "stableId": "rectum",
+      "catalogId": "rectum",
+      "displayName": "Rectum",
+      "objectName": "anat_rectum",
+      "system": "exercise-targets",
+      "sourceTriangles": 336,
+      "triangles": 336,
+      "reflectionCorrected": false,
+      "provenance": "authored schematic teaching geometry",
+      "sourceLandmarks": [
+        "anat_sigmoid_colon",
+        "anat_urinary_bladder"
+      ],
+      "sourceBoundsBlenderXYZ": [
+        [
+          -0.013117685914039612,
+          0.018937358632683754
+        ],
+        [
+          0.03361548110842705,
+          0.07237128168344498
+        ],
+        [
+          0.763899028301239,
+          0.824350893497467
+        ]
+      ],
+      "colliderRadiusMeters": 0.015,
+      "anatomicalValidation": "unreviewed generic teaching approximation; not patient anatomy",
+      "centerlineBlenderXYZ": [
+        [
+          0.004569963552057743,
+          0.04706050828099251,
+          0.8177492618560791
+        ],
+        [
+          0.001569963525980711,
+          0.05706050992012024,
+          0.7977492809295654
+        ],
+        [
+          0.001569963525980711,
+          0.0510605089366436,
+          0.7667492628097534
+        ]
+      ]
+    },
+    {
+      "stableId": "sigmoid_mesocolon",
+      "catalogId": "sigmoid_mesocolon",
+      "displayName": "Sigmoid Mesocolon",
+      "objectName": "anat_sigmoid_mesocolon",
+      "system": "exercise-targets",
+      "sourceTriangles": 1216,
+      "triangles": 1216,
+      "reflectionCorrected": false,
+      "provenance": "authored schematic flattened mesenteric sheet; not extracted from generic mesocolon",
+      "sourceLandmarks": [
+        "anat_sigmoid_colon"
+      ],
+      "sourceBoundsBlenderXYZ": [
+        [
+          -0.02142999693751335,
+          0.05456995218992233
+        ],
+        [
+          0.06306050717830658,
+          0.07706049829721451
+        ],
+        [
+          0.8280642628669739,
+          0.9140642285346985
+        ]
+      ],
+      "colliderRadiusMeters": 0,
+      "anatomicalValidation": "unreviewed generic teaching approximation; not patient anatomy"
+    },
+    {
+      "stableId": "left_gonadal_vessels",
+      "catalogId": "left_gonadal_vessels",
+      "displayName": "Left Gonadal Vessels",
+      "objectName": "anat_left_gonadal_vessels",
+      "system": "exercise-targets",
+      "sourceTriangles": 290,
+      "triangles": 290,
+      "reflectionCorrected": false,
+      "provenance": "source-derived grouped male left testicular artery and vein; source duplicates retained",
+      "sourceLandmarks": [
+        "atlas_cardiovascular__left_testicular_artery",
+        "atlas_cardiovascular__left_testicular_vein"
+      ],
+      "sourceBoundsBlenderXYZ": [
+        [
+          0.009840787388384342,
+          0.06924048811197281
+        ],
+        [
+          -0.05097941309213638,
+          0.018369169905781746
+        ],
+        [
+          0.7280486822128296,
+          1.1048986911773682
+        ]
+      ],
+      "colliderRadiusMeters": 0,
+      "anatomicalValidation": "unreviewed generic teaching approximation; not patient anatomy"
+    },
+    {
+      "stableId": "small_bowel",
+      "catalogId": "small_bowel",
+      "displayName": "Small Bowel",
+      "objectName": "anat_small_bowel",
+      "system": "exercise-targets",
+      "sourceTriangles": 4599,
+      "triangles": 4599,
+      "reflectionCorrected": false,
+      "provenance": "source-derived representative aggregate: duodenum and jejunum plus authored terminal ileum; not a complete traced small bowel",
+      "sourceLandmarks": [
+        "anat_duodenum",
+        "atlas_visceral__jejunum",
+        "anat_terminal_ileum"
+      ],
+      "sourceBoundsBlenderXYZ": [
+        [
+          -0.08316690474748611,
+          0.0997864380478859
+        ],
+        [
+          -0.08118411153554916,
+          -0.0050835516303777695
+        ],
+        [
+          0.8815877437591553,
+          1.1432597637176514
+        ]
+      ],
+      "colliderRadiusMeters": 0,
+      "anatomicalValidation": "unreviewed generic teaching approximation; not patient anatomy"
     }
   ],
   "excludedGuides": [
@@ -47468,19 +47965,51 @@
   },
   "unmappedCatalogIds": [
     "abdominal_wall",
-    "cecum",
-    "common_bile_duct",
-    "common_hepatic_duct",
-    "cystic_artery",
-    "cystic_duct",
     "heart",
-    "left_gonadal_vessels",
     "lungs",
-    "rectum",
-    "right_hepatic_artery",
-    "sigmoid_mesocolon",
-    "small_bowel",
-    "terminal_ileum",
     "umbilicus"
+  ],
+  "exerciseCoverage": [
+    {
+      "procedureId": "lap_cholecystectomy",
+      "interactionTargets": [
+        "common_bile_duct",
+        "common_hepatic_duct",
+        "cystic_artery",
+        "cystic_duct",
+        "gallbladder",
+        "liver",
+        "right_hepatic_artery"
+      ],
+      "missingTargets": []
+    },
+    {
+      "procedureId": "lap_appendectomy",
+      "interactionTargets": [
+        "appendicular_artery",
+        "appendix",
+        "cecum",
+        "mesoappendix",
+        "terminal_ileum",
+        "urinary_bladder"
+      ],
+      "missingTargets": []
+    },
+    {
+      "procedureId": "lap_sigmoid_colectomy",
+      "interactionTargets": [
+        "descending_colon",
+        "greater_omentum",
+        "inferior_mesenteric_artery",
+        "left_gonadal_vessels",
+        "left_ureter",
+        "rectum",
+        "sigmoid_colon",
+        "sigmoid_mesocolon",
+        "small_bowel",
+        "urinary_bladder"
+      ],
+      "missingTargets": []
+    }
   ]
 }

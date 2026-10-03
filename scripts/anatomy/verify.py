@@ -13,6 +13,8 @@ assert len(ids) == len(set(ids)), "Duplicate stable IDs"
 for system in doc["systems"]:
     path = ASSETS / system["assetPath"]
     assert hashlib.sha256(path.read_bytes()).hexdigest() == system["sha256"], path
+    for source, sha256 in system.get("inputHashes", {}).items():
+        assert hashlib.sha256((path.parent / (source + ".fbx")).read_bytes()).hexdigest() == sha256, f"Stale supplemental landmarks: {source}"
     bpy.ops.object.select_all(action="SELECT")
     bpy.ops.object.delete(use_global=False)
     bpy.ops.import_scene.fbx(filepath=str(path))

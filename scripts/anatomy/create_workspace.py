@@ -36,6 +36,9 @@ for system in atlas["systems"]:
         part = parts[obj.name]
         for field in ("stableId", "displayName", "system", "catalogId"):
             obj[field] = part[field]
+        for field in ("provenance", "anatomicalValidation"):
+            if field in part:
+                obj[field] = part[field]
         obj.color = palette.get(system["id"], (0.65, 0.28, 0.23, 1))
         if "vein" in part["displayName"].lower():
             obj.color = (0.10, 0.27, 0.7, 1)
@@ -78,6 +81,8 @@ notes.write("Scalpal editable display anatomy. Full body systems are Outliner co
             "because their source coordinates differ. Mesh custom properties preserve source labels "
             "and stable IDs. Full-resolution originals are in ../originals. This workspace contains "
             "the prepared display meshes, not tissue physics or participant registration. "
+            "The exercise-targets collection includes schematic authored additions and enlarged tubes; "
+            "read object provenance properties before interpreting their anatomy. "
             "Re-running create_workspace.py overwrites this generated workspace; commit edits first.")
 output = ROOT / "assets/anatomy/blender"
 output.mkdir(exist_ok=True)
