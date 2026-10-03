@@ -1,5 +1,7 @@
 # End-to-End Demo Flow
 
+> Scope update: Solana, wallets, payouts, and monetary completion rewards have been removed. The remaining design and assignments await Nathan's plan. This earlier proposal contains superseded reward/challenge references and work orders; read [current direction](current-direction.md) first and do not implement those removed features.
+
 This is the proposed experience from startup through completion. Most components are not implemented yet; see [hardware baseline](hardware-baseline.md). The chosen exercise, recording route, robot model, and acceptance rule remain unresolved.
 
 ## Before the Learner Arrives

@@ -1,10 +1,10 @@
 # API Service
 
-Owner: Nakim.
+Previous proposed owner: Nakim. Await Nathan's plan before implementation or reassignment.
 
-Planned service for session/artifact references, wallet pairing, motion job/results, scoped voice authorization, versioned challenge acceptance, and idempotent Devnet rewards. This is not an initialized backend and no endpoints are implemented.
+Potential service responsibilities include session/artifact references, motion job/results, and scoped voice authorization. Solana, wallet pairing, challenge payouts, and monetary completion rewards have been removed. This is not an initialized backend and no endpoints are implemented. See [current direction](../../docs/current-direction.md) before older plans.
 
-Coordinate the exercise rubric with Matthew, capture manifest with Stephen, and reconstruction/retargeting outcomes with Silas. Define a small transport and schema before integration. The API owns service-side secrets and reward authority; keep learning results, contribution acceptance, and payment state separate.
+The earlier ownership plan connected exercise content with Matthew, capture metadata with Stephen, and replay results with Silas. These assignments remain provisional pending Nathan's plan. Keep learning results and motion quality separate, and keep provider secrets service-side.
 
 Tiger Data is an optional recording/retrieval backend, not required for the first boundary test. Detailed clips and replay artifacts need a restricted artifact store/reference rather than public Git or onchain payloads.
 

@@ -1,5 +1,7 @@
 # Thesis and Product Scope
 
+> Scope update: Solana, wallets, payouts, and monetary completion rewards have been removed. The remaining design and assignments await Nathan's plan. This earlier proposal contains superseded reward/challenge references and work orders; read [current direction](current-direction.md) first and do not implement those removed features.
+
 Updated October 3, 2026. This is the current product direction for an MHacks demo, not a validated medical product or robotics dataset business.
 
 ## Grand Thesis

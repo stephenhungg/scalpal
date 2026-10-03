@@ -1,5 +1,7 @@
 # MHacks Sponsor Alignment and Submission Context
 
+> Scope update: Solana, wallets, payouts, and monetary completion rewards have been removed. The remaining design and assignments await Nathan's plan. This earlier proposal contains superseded reward/challenge references and work orders; read [current direction](current-direction.md) first and do not implement those removed features.
+
 Snapshot: October 3, 2026. Event categories below were read from the live [MHacks 2026 Devpost](https://mhacks-2026.devpost.com/) and official linked resources. Availability and requirements can change; verify before submitting.
 
 This page separates **listed hackathon awards**, **proposed product integrations**, and **future sponsors who might fund challenges**. A listed prize does not mean a sponsor has funded Scalpal or agreed to purchase recordings.

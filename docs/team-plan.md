@@ -1,5 +1,7 @@
 # Repository Structure and Four-Person Work Split
 
+> Scope update: Solana, wallets, payouts, and monetary completion rewards have been removed. The remaining design and assignments await Nathan's plan. This earlier proposal contains superseded reward/challenge references and work orders; read [current direction](current-direction.md) first and do not implement those removed features.
+
 Updated October 3, 2026. This is a proposed ownership plan and a folder scaffold, not a running application. Assignments assume Stephen is the hardware/integration owner because the Quest is connected to his machine. Teammate specialties are not known; swap whole ownership lanes if another arrangement fits better.
 
 ## First Shared Outcome

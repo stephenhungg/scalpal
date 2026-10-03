@@ -1,5 +1,7 @@
 # Proposed Integration Contracts
 
+> Scope update: Solana, wallets, payouts, and monetary completion rewards have been removed. The remaining design and assignments await Nathan's plan. This earlier proposal contains superseded reward/challenge references and work orders; read [current direction](current-direction.md) first and do not implement those removed features.
+
 These are conceptual agreements for team coordination, not implemented APIs or final schemas. Choose transport, storage, serialization, robot environment, and versioned field definitions before coding across components. Use the smallest fields necessary for the first exercise.
 
 ## Shared Identity

@@ -1,5 +1,7 @@
 # Scalpal Architecture
 
+> Scope update: Solana, wallets, payouts, and monetary completion rewards have been removed. The remaining design and assignments await Nathan's plan. This earlier proposal contains superseded reward/challenge references and work orders; read [current direction](current-direction.md) first and do not implement those removed features.
+
 Updated October 3, 2026. This document describes the current proposed application, not an implemented system or an approved clinical specification. The earlier office-hours design was reviewed before the robotics extension; that review does not establish feasibility of the current combined scope.
 
 ## Product and First Slice

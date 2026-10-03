@@ -1,5 +1,7 @@
 # Research and Evidence
 
+> Scope update: Solana, wallets, payouts, and monetary completion rewards have been removed. The remaining design and assignments await Nathan's plan. This earlier proposal contains superseded reward/challenge references and work orders; read [current direction](../current-direction.md) first and do not implement those removed features.
+
 Research snapshot: October 3, 2026. This page consolidates the sources relevant to Scalpal's current direction. It distinguishes documented capabilities, prior hardware observations, proposed integrations, and unanswered questions. It is not a clinical operating manual or a claim that the product has been implemented.
 
 Start with the [repository overview](../../README.md) for the thesis and product scope. See [sponsor alignment](../sponsors.md) for event eligibility. Sources below support decisions; they do not automatically validate Scalpal's educational effectiveness or robotics results.
