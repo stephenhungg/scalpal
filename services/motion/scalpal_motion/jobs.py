@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import tempfile
 import time
 import urllib.request
@@ -22,6 +23,12 @@ from . import ROBOT_MOTION_SCHEMA
 JOB_SCHEMA = "scalpal.motion_job/0"
 RESULT_SCHEMA = "scalpal.motion_result/0"
 DEFAULT_CONFIG = {"hand": "Right", "mirrored": False, "smooth": None}
+RUN_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}")
+
+
+def valid_run_id(value: object) -> bool:
+    """Run IDs are literal directory names; reject rather than sanitize aliases."""
+    return isinstance(value, str) and RUN_ID.fullmatch(value) is not None
 
 
 class JobError(Exception):
@@ -79,13 +86,23 @@ def _quality(motion: dict) -> dict:
 
 
 def validate_job(job: dict) -> dict:
+    if not isinstance(job, dict):
+        raise JobError("bad_job", "job must be an object")
     if job.get("schema") != JOB_SCHEMA:
         raise JobError("bad_job", f"expected schema {JOB_SCHEMA}")
     for key in ("job_id", "run_id", "input"):
         if not job.get(key):
             raise JobError("bad_job", f"missing {key}")
-    if not job["input"].get("source"):
+    if not isinstance(job["job_id"], str):
+        raise JobError("bad_job", "job_id must be a string")
+    if not valid_run_id(job["run_id"]):
+        raise JobError("bad_job", "run_id must start with an ASCII letter or digit and contain only letters, digits, -, _, or . (maximum 128 characters)")
+    if not isinstance(job["input"], dict):
+        raise JobError("bad_job", "input must be an object")
+    if not isinstance(job["input"].get("source"), str) or not job["input"]["source"]:
         raise JobError("bad_job", "missing input.source")
+    if not isinstance(job.get("config", {}), dict):
+        raise JobError("bad_job", "config must be an object")
     config = {**DEFAULT_CONFIG, **job.get("config", {})}
     if config["hand"] != "Right":
         raise JobError("unsupported_config", "only the right hand is configured")
@@ -95,12 +112,14 @@ def validate_job(job: dict) -> dict:
 def run_job(job: dict, output_root: str | Path) -> dict:
     """Process one job. Always returns a result dict; never raises for job-level failures."""
     started = time.perf_counter()
+    fields = job if isinstance(job, dict) else {}
+    input_fields = fields.get("input") if isinstance(fields.get("input"), dict) else {}
     result = {
         "schema": RESULT_SCHEMA,
-        "job_id": job.get("job_id"),
-        "run_id": job.get("run_id"),
-        "attempt_id": job.get("attempt_id"),
-        "input_artifact_id": (job.get("input") or {}).get("artifact_id"),
+        "job_id": fields.get("job_id"),
+        "run_id": fields.get("run_id"),
+        "attempt_id": fields.get("attempt_id"),
+        "input_artifact_id": input_fields.get("artifact_id"),
         "status": "failed",
         "processor": {
             "name": "scalpal-motion",
@@ -112,8 +131,7 @@ def run_job(job: dict, output_root: str | Path) -> dict:
     try:
         config = validate_job(job)
         result["config"] = config
-        safe_run = "".join(c for c in str(job["run_id"]) if c.isalnum() or c in "-_.")
-        run_dir = Path(output_root) / safe_run
+        run_dir = Path(output_root) / job["run_id"]
         try:
             run_dir.mkdir(parents=True)
         except FileExistsError:

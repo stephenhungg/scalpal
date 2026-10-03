@@ -140,8 +140,8 @@ namespace Scalpal.Quest.Editor
         static void ApplySessionSettings()
         {
             PlayerSettings.productName = "Scalpal Surgical Session";
-            PlayerSettings.bundleVersion = "0.2.0-session";
-            PlayerSettings.Android.bundleVersionCode = 3;
+            PlayerSettings.bundleVersion = "0.2.1-main";
+            PlayerSettings.Android.bundleVersionCode = 4;
             // The integration harness uses LAN HTTP only in this development player.
             PlayerSettings.insecureHttpOption = InsecureHttpOption.DevelopmentOnly;
         }

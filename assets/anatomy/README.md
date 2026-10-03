@@ -1,6 +1,6 @@
 # Anatomy atlas assets
 
-This integration branch includes the three runtime FBXs needed by the native appendectomy scene, the full manifest, attribution, and export scripts. The complete editable atlas/source library described below remains on `codex/anatomy-atlas` at `6057689`. The native builder instantiates only nine selected meshes; see [native session](../../docs/native-session.md) for the assembled scope and verification.
+Main includes all twelve prepared runtime FBXs, the complete editable atlas/source library from `6057689`, the manifest, attribution and export scripts. The native builder still instantiates only nine selected meshes; unused regions are not loaded into its patient scene. See [native session](../../docs/native-session.md) for assembled scope and verification.
 
 Full-body Z-Anatomy layers and separate high-detail Human Reference Atlas organs for Scalpal's Unity experience. These are generic anatomical models, not participant-specific anatomy or tissue simulation.
 
@@ -10,13 +10,13 @@ Install Git LFS and Blender 4.5 LTS, then:
 
 ```sh
 git lfs install
-git clone --branch codex/anatomy-atlas https://github.com/stephenhungg/scalpal.git
+git clone --branch main https://github.com/stephenhungg/scalpal.git
 cd scalpal
 git lfs pull
 git lfs fsck
 ```
 
-For an existing clone, run `git fetch origin`, `git switch codex/anatomy-atlas`, `git pull --ff-only`, and `git lfs pull`. Preserve any unrelated local work before switching branches. Repository access is required; this does not change collaborator permissions.
+For an existing clone, run `git fetch origin`, `git switch main`, `git pull --ff-only`, and `git lfs pull`. Preserve unrelated local work before switching branches. Repository access is required; this does not change collaborator permissions.
 
 Open **[blender/atlas.blend](blender/atlas.blend)** directly in Blender. It contains all 4,031 prepared meshes, organized into system collections, plus separate heart, liver, and vasculature scenes. Covering layers start hidden; enable their collections in the Outliner. Source labels and stable IDs are embedded as mesh-object custom properties. There are no linked external Blender libraries.
 
@@ -72,7 +72,7 @@ Verification reimports all exported FBXs in Blender and checks exact mesh-name c
 
 ## Unity integration
 
-1. Use Stephen's Unity 6 URP Quest project. Do not replace its bootstrap scene, packages, or XR rig with the upstream desktop application.
+1. Use the committed Unity 6000.0.66f2 Quest project, which preserves its working built-in renderer. The integrated atlas builder supports that renderer; do not switch to URP or replace the bootstrap/packages/XR rig for an upstream desktop preview.
 2. Run **Scalpal > Anatomy > Build Atlas Prefab**. It creates `Anatomy/Prefabs/AnatomyAtlas.prefab` and separate `detail-*.prefab` assets. Build fails on missing or ambiguous mesh mappings. Materials are shared, and only catalog-mapped targets receive static mesh colliders.
 3. The atlas prefab starts in preview mode, with the outer surface hidden and a rotating root. Use it on the selection pedestal. All body systems retain a shared source frame; the origin is **not** the umbilicus. Imported anatomy still needs measured fitting into the torso frame in `docs/unity-handoff.md`.
 4. For participant practice, call `SetPreviewMode(false)` before displaying it and drive `SetRegistrationValid(valid)` from Stephen's tracker. Invalid registration hides managed renderers and colliders. Use `AnatomyExerciseBinding` for all input so case scoring is gated as well.

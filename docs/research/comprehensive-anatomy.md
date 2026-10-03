@@ -12,7 +12,7 @@ The immediate milestone remains the physical Quest appendectomy rehearsal. Expan
 
 The inspected [atlas manifest](../../apps/quest/Assets/Scalpal/Anatomy/Resources/anatomy-atlas.json) contains **4,031 parts** across 12 asset systems: 3,874 full-body Z-Anatomy parts, 11 supplemental exercise targets and 146 parts in three independent HRA detail models. The full-body systems include 982 skeletal, 683 muscular and 676 cardiovascular parts. These are mesh subdivisions and source identities, not a count of distinct organs or a demonstration of comprehensive anatomy. The manifest separately lists 1,400 excluded source guides.
 
-The [asset documentation](../../assets/anatomy/README.md) places the complete editable source/workspace on the anatomy branch. The integration checkout carries the manifest and the runtime assets needed by the native slice. A catalog entry does not establish that its mesh is present in the APK, loaded, visible or interactive.
+The [asset documentation](../../assets/anatomy/README.md) now places the complete editable source/workspace and all twelve runtime FBXs on main after the team consolidation. The native scene still loads only its procedure subset. A catalog entry does not establish that its mesh is present in the APK, loaded, visible or interactive.
 
 | Layer | Inspected evidence | Practical limit |
 | --- | --- | --- |

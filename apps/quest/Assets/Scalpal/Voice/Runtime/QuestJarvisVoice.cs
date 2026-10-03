@@ -355,62 +355,24 @@ namespace Scalpal.Voice
 
         IEnumerator ExecuteTool(ToolCall tool, int epoch, string rawParameters)
         {
-            Reply reply = null;
-            string result = "";
-            bool error = false;
-            string structure = tool.parameters?.structure ?? "";
             switch (tool.tool_name)
             {
                 case "get_surgery_state":
-                    yield return Http("GET", SessionPath, null, r => reply = r);
-                    result = reply?.context ?? "No live coach state.";
-                    break;
                 case "get_hint":
-                    yield return Http("POST", SessionPath + "/hint", "{}", r => reply = r);
-                    result = reply?.say ?? "Hint unavailable.";
-                    if (reply?.highlight != null && reply.highlight.Length > 0)
-                    {
-                        Reply command = null;
-                        yield return Http("POST", SessionPath + "/commands", JsonUtility.ToJson(new CommandBody { action = "highlight", structure = reply.highlight[0] }), r => command = r);
-                        // The hint may request a highlight, but never pretends it was applied.
-                    }
-                    break;
                 case "explain_structure":
-                    yield return Http("POST", SessionPath + "/explain", JsonUtility.ToJson(new StructureBody { structure = structure }), r => reply = r);
-                    result = reply?.say ?? "Explanation unavailable.";
-                    break;
                 case "highlight_structure":
-                    yield return Http("POST", SessionPath + "/commands", JsonUtility.ToJson(new CommandBody { action = "highlight", structure = structure }), r => reply = r);
-                    if (reply?.ok == true && reply.command != null)
-                    {
-                        string commandId = reply.command.commandId;
-                        result = "Highlight requested; the headset has not confirmed yet.";
-                        for (int i = 0; i < 8 && epoch == generation; i++)
-                        {
-                            Reply state = null;
-                            yield return Http("GET", SessionPath, null, r => state = r);
-                            var commands = state?.snapshot?.commands ?? Array.Empty<Command>();
-                            foreach (var command in commands)
-                            {
-                                if (command.commandId != commandId || command.status == "pending") continue;
-                                result = command.status == "applied" ? "Highlighted " + structure + " in the headset." : "Headset rejected highlight: " + command.reason;
-                                i = 8;
-                                break;
-                            }
-                            if (i < 8) yield return new WaitForSeconds(0.25f);
-                        }
-                    }
-                    break;
                 case "get_patient_brief":
-                    if (string.IsNullOrEmpty(patientId)) { error = true; result = "No patient is bound to this coach session."; break; }
-                    yield return Http("GET", "/patients/" + Uri.EscapeDataString(patientId) + "/brief", null, r => reply = r);
-                    result = reply?.say ?? "Brief unavailable.";
-                    break;
                 case "check_preop":
-                    if (string.IsNullOrEmpty(patientId)) { error = true; result = "No patient is bound to this coach session."; break; }
-                    yield return Http("POST", "/patients/" + Uri.EscapeDataString(patientId) + "/preop-check", JsonUtility.ToJson(new CheckBody { selected = tool.parameters?.selected ?? Array.Empty<string>() }), r => reply = r);
-                    result = reply?.say ?? "Pre-op check unavailable.";
-                    break;
+                    // Use Matthew's single shared implementation, preserving the full JSON
+                    // parameters. The server reports a highlight only after the scene ACK.
+                    Reply reply = null;
+                    string path = SessionPath + "/tools/" + Uri.EscapeDataString(tool.tool_name);
+                    yield return Http("POST", path, string.IsNullOrEmpty(rawParameters) ? "{}" : rawParameters, r => reply = r);
+                    if (epoch != generation) yield break;
+                    bool error = reply?.ok != true || reply.result == null;
+                    ResolveClientTool(new ToolRequest { ToolCallId = tool.tool_call_id, ConnectionGeneration = epoch },
+                        error ? "Coach service could not complete this tool request." : reply.result, error);
+                    yield break;
                 default:
                     var external = new ToolRequest { ToolCallId = tool.tool_call_id, ToolName = tool.tool_name, ParametersJson = rawParameters, ConnectionGeneration = epoch };
                     if (ClientToolRequested != null)
@@ -423,9 +385,6 @@ namespace Scalpal.Voice
                     else ResolveClientTool(external, "This client tool is not supported by the headset.", true);
                     yield break;
             }
-            if (epoch != generation) yield break;
-            error |= reply != null && !reply.ok;
-            ResolveClientTool(new ToolRequest { ToolCallId = tool.tool_call_id, ConnectionGeneration = epoch }, error ? "Coach service could not complete this tool request." : result, error);
         }
 
         string SessionPath => "/coach/sessions/" + Uri.EscapeDataString(CoachSessionId);
@@ -560,17 +519,13 @@ namespace Scalpal.Voice
         [Serializable, UnityEngine.Scripting.Preserve] sealed class AgentEvent { public string agent_response; }
         [Serializable, UnityEngine.Scripting.Preserve] sealed class ToolCall { public string tool_name, tool_call_id; public bool expects_response; public ToolParameters parameters; }
         [Serializable, UnityEngine.Scripting.Preserve] sealed class ToolParameters { public string structure; public string[] selected; }
-        [Serializable, UnityEngine.Scripting.Preserve] sealed class Reply { public bool ok; public string signedUrl, agentId, mode, context, say; public Snapshot snapshot; public Command command; public string[] highlight; public ServiceError error; }
+        [Serializable, UnityEngine.Scripting.Preserve] sealed class Reply { public bool ok; public string signedUrl, agentId, mode, context, result; public Snapshot snapshot; public ServiceError error; }
         [Serializable, UnityEngine.Scripting.Preserve] sealed class ServiceError { public string code; }
-        [Serializable, UnityEngine.Scripting.Preserve] sealed class Snapshot { public string sessionId, patientId, mode; public Command[] commands; }
-        [Serializable, UnityEngine.Scripting.Preserve] sealed class Command { public string commandId, status, reason; }
+        [Serializable, UnityEngine.Scripting.Preserve] sealed class Snapshot { public string sessionId, patientId, mode; }
         [Serializable, UnityEngine.Scripting.Preserve] sealed class AudioInput { public string user_audio_chunk; }
         [Serializable, UnityEngine.Scripting.Preserve] sealed class Pong { public string type = "pong"; public int event_id; }
         [Serializable, UnityEngine.Scripting.Preserve] sealed class TextMessage { public string type, text; }
         [Serializable, UnityEngine.Scripting.Preserve] sealed class ToolResult { public string type = "client_tool_result", tool_call_id, result; public bool is_error; }
-        [Serializable, UnityEngine.Scripting.Preserve] sealed class StructureBody { public string structure; }
-        [Serializable, UnityEngine.Scripting.Preserve] sealed class CommandBody { public string action, structure; }
-        [Serializable, UnityEngine.Scripting.Preserve] sealed class CheckBody { public string[] selected; }
         [Serializable, UnityEngine.Scripting.Preserve] sealed class DynamicVariables { public string coach_session_id, session_id, patient_id, mode, context; }
         [Serializable, UnityEngine.Scripting.Preserve] sealed class BasicInitiation { public string type = "conversation_initiation_client_data"; public DynamicVariables dynamic_variables; }
         [Serializable, UnityEngine.Scripting.Preserve] sealed class Initiation { public string type = "conversation_initiation_client_data"; public Overrides conversation_config_override; public DynamicVariables dynamic_variables; }

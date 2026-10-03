@@ -16,7 +16,7 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from .jobs import run_job
+from .jobs import run_job, valid_run_id
 
 SERVED_FILES = {
     "hand_track.json": "application/json",
@@ -53,9 +53,11 @@ def make_handler(output_root: Path, token: str | None):
             if parts == ["health"]:
                 return self._json(200, {"ok": True})
             if len(parts) == 3 and parts[0] == "runs" and parts[2] in SERVED_FILES:
-                run = "".join(c for c in parts[1] if c.isalnum() or c in "-_.")
-                path = output_root / run / parts[2]
-                if run and path.is_file():
+                run = parts[1]
+                if not valid_run_id(run):
+                    return self._json(404, {"error": "not_found"})
+                path = (output_root / run / parts[2]).resolve()
+                if path.is_relative_to(output_root.resolve()) and path.is_file():
                     return self._send(200, path.read_bytes(), SERVED_FILES[parts[2]])
             self._json(404, {"error": "not_found"})
 

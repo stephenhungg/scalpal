@@ -2,6 +2,7 @@ import json
 
 import cv2
 import numpy as np
+import pytest
 
 from scalpal_motion.jobs import JOB_SCHEMA, run_job
 
@@ -21,6 +22,20 @@ def _blank_clip(path, frames=10):
 
 def test_bad_job_is_rejected_without_outputs(tmp_path):
     result = run_job({"schema": "nope"}, tmp_path)
+    assert result["status"] == "failed" and result["error"]["code"] == "bad_job"
+    assert not any(tmp_path.iterdir())
+
+
+@pytest.mark.parametrize("run_id", ["..", ".", "../escape", "run/alias", "run%2Falias", "", "a" * 129, 12])
+def test_unsafe_run_id_is_rejected_without_outputs(tmp_path, run_id):
+    result = run_job(_job("unused.mp4", run_id), tmp_path)
+    assert result["status"] == "failed" and result["error"]["code"] == "bad_job"
+    assert not any(tmp_path.iterdir())
+
+
+@pytest.mark.parametrize("job", [None, [], "text", {"schema": JOB_SCHEMA, "job_id": "job", "run_id": "run", "input": "path"}])
+def test_wrong_job_shape_reports_bad_job(tmp_path, job):
+    result = run_job(job, tmp_path)
     assert result["status"] == "failed" and result["error"]["code"] == "bad_job"
     assert not any(tmp_path.iterdir())
 

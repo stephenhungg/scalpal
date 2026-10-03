@@ -45,6 +45,7 @@ namespace Scalpal.Quest
         bool SharedMatches => sharedAttemptReady && realtime.Paired && realtime.SessionId == boundSharedSession && realtime.AttemptId == boundSharedAttempt;
         int generation, completedSteps, mistakes;
         float nextUi, nextContext;
+        string lastVoiceContextKey = "";
 
         [Serializable] public class DevelopmentConfig
         {
@@ -56,7 +57,7 @@ namespace Scalpal.Quest
             public string sessionId, context, systemPrompt, firstMessage;
             public CoachSnapshotState snapshot;
         }
-        [Serializable] class ContextReply { public string context; public CoachSnapshotState snapshot; }
+        [Serializable] class ContextReply { public string context, contextKey; public CoachSnapshotState snapshot; }
 
         void Start()
         {
@@ -314,7 +315,7 @@ namespace Scalpal.Quest
             if (voice.Connected || voice.Status == "connecting") { voiceRequested = false; voice.Disconnect(); }
             else { voiceRequested = true; if (!string.IsNullOrEmpty(coachSessionId)) ConnectVoice(); else Message = "Voice enabled for the next confirmed practice session"; }
         }
-        void ConnectVoice() { voice.ConfigureConversation(voicePrompt, voiceGreeting, voiceContext); voice.Connect(coachSessionId); }
+        void ConnectVoice() { lastVoiceContextKey = ""; voice.ConfigureConversation(voicePrompt, voiceGreeting, voiceContext); voice.Connect(coachSessionId); }
         void VoiceTool(QuestJarvisVoice.ToolRequest request)
         {
             voice.ResolveClientTool(request, "This action is unavailable in the native exercise", true);
@@ -331,7 +332,12 @@ namespace Scalpal.Quest
             if (epoch != generation || coach.SessionId != sid) yield break;
             ContextReply reply = null;
             try { if (json != null) reply = JsonUtility.FromJson<ContextReply>(json); } catch (ArgumentException) { }
-            if (reply?.snapshot?.sessionId == sid) voice.SendContext(reply.context);
+            if (reply?.snapshot?.sessionId == sid && voice.Connected
+                && !string.IsNullOrEmpty(reply.contextKey) && reply.contextKey != lastVoiceContextKey)
+            {
+                lastVoiceContextKey = reply.contextKey;
+                voice.SendContext(reply.context);
+            }
         }
 
         void Publish()

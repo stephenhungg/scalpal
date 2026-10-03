@@ -8,11 +8,11 @@ The long-term thesis is that human learning can supply useful robot demonstratio
 
 **Latest direction: Solana and monetary completion rewards are removed. Nathan owns the companion website + SpacetimeDB/routing lane; Matthew continues to own Jarvis.** Read [current direction](docs/current-direction.md) and the [system integration map](docs/system-integration.md) first. They supersede older payout work and the prior blanket wait instruction for this assigned lane.
 
-The backend uses [SpacetimeDB for shared state plus private file storage for video](docs/data-and-realtime.md). The native session branch assembles coach/anatomy and shared-state adapters; physical end-to-end verification is pending. Live headset video and Silas's motion processor still need their capture/worker adapters. The integration map records exact source snapshots and routing gaps.
+The backend uses [SpacetimeDB for shared state plus private file storage for video](docs/data-and-realtime.md). Main now includes the native session, full anatomy sources, Jarvis service, companion/realtime/gateway and video-motion processor. Physical end-to-end verification is pending. Live headset video and motion processing still need capture/worker adapters. The integration map records exact source snapshots and routing gaps.
 
 ## Start Here
 
-This branch contains documentation, a native Quest tool workbench and an assembled single-case full-VR session. Open `apps/quest` in Unity 6000.0.66f2; see [project setup](apps/quest/README.md). Start with the [system integration map](docs/system-integration.md): actual branch contents, routes, shared scene bindings and shipping checks. Then read these:
+Main contains documentation, the complete source atlas and team services, a native Quest tool workbench and an assembled single-case full-VR session. Open `apps/quest` in Unity 6000.0.66f2; see [project setup](apps/quest/README.md). Start with the [system integration map](docs/system-integration.md): actual contents, routes, shared scene bindings and shipping checks. Then read these:
 
 1. [Thesis and scope](docs/thesis.md): What we are building, for whom, and what the demo must establish.
 2. [End-to-end experience](docs/demo-flow.md): Current target journey in MR and full VR, with live observing and video-derived replay.
@@ -42,7 +42,7 @@ Keep credentials, participant footage, device identifiers, and raw datasets out 
 
 ## Instrument Prototype
 
-The [Unity project](apps/quest/README.md) includes committed scenes, assets, package configuration and project settings. The [instrument kit](assets/instruments/README.md) contains fourteen catalog tools plus a scalpel: Blender sources, previews, optimized runtime FBX models, Unity pickup/action prefabs and an authored practice sandbox. It is a standalone component, not the complete application described above. Matthew's current feature branch also contains case/coach code and a Unity relay; those are not merged into main by this asset work. Read [runtime integration](docs/instrument-runtime.md) before connecting actions to scoring or Jarvis.
+The [Unity project](apps/quest/README.md) includes committed scenes, assets, package configuration and project settings. The [instrument kit](assets/instruments/README.md) contains fourteen catalog tools plus a scalpel: Blender sources, previews, optimized runtime FBX models, Unity pickup/action prefabs and an authored practice sandbox. The native session connects the selected case/coach and anatomy bindings. Read [runtime integration](docs/instrument-runtime.md) before adding action or scoring adapters.
 
 Our earlier physical camera experiment is preserved as [pinned upstream source plus local changes](experiments/quest-camera-baseline/README.md). Unity caches, captured footage and build outputs are excluded; all authored instrument environment source is committed. Run the [repeatable session gate](scripts/README.md) after changes to the affected boundaries.
 

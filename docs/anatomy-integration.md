@@ -16,7 +16,7 @@ Updated October 3, 2026. The first demo is **lap_appendectomy**, using the adult
 | `assets/anatomy/` | LFS originals and editable Blender workspace; source/teaching previews and provenance |
 | `scripts/anatomy/` | Reproducible geometry pipeline and C# behavior/integration checks |
 
-`apps/companion`, `services/api`, `services/realtime`, `services/motion`, `packages/contracts`, and robot directories remain scaffolds. This checkout has no Unity `ProjectSettings`, `Packages`, bootstrap, XR rig, torso tracker, video recorder, or robot replay implementation. Those are not silently simulated by the anatomy code. Stephen still owns the actual Unity project and headset scene.
+Main now contains the complete Unity project and native XR session, companion, API/realtime services, motion processor and robot assets. The [native session](native-session.md) is the current headset assembly and verification source. Torso registration and native video recording remain absent. The desktop anatomy components described below are alternate authoring/testing components, not additional active scorers in that scene.
 
 The live catalog is TypeScript. C# DTOs and generated IDs consume its JSON; the packaged bundle provides offline cases. Tests now compare packaged procedure/anatomy/instrument catalogs with the live definitions and require collider-addressable atlas IDs for every interactive success and mistake target.
 
@@ -39,7 +39,7 @@ Case selection displays only required targets and available procedure context. T
 ## Try the connected desktop slice
 
 1. Follow the [asset setup](../assets/anatomy/README.md), including `git lfs pull`.
-2. In the team's Unity URP project, run **Scalpal > Anatomy > Build Appendectomy Demo Scene**. Open generated `Assets/Scalpal/Anatomy/Scenes/AppendectomyDemo.unity`, then Play.
+2. In `apps/quest`, which uses built-in rendering, run **Scalpal > Anatomy > Build Appendectomy Demo Scene**. Open generated `Assets/Scalpal/Anatomy/Scenes/AppendectomyDemo.unity`, then Play.
 3. The scene generator assigns the atlas, `AnatomyExerciseBinding`, `AnatomyCaseSource`, `ScalpalPreopService`, `CoachRelay`, `AnatomyCoachBinding`, and the desktop panel. The panel offers appendectomy first and explicit review acknowledgement for review-required synthetic fixtures.
 4. Local buttons use the packaged case bundle. Enable **simulated** registration, choose tools, identify structures, simulate collider contacts, place ports, and confirm steps. These inputs all pass through the same guarded binding. Tracking loss stops scoring. This desktop panel is excluded from Android players.
 5. To exercise the service path, run `npm run dev` in `services/preop` and choose the service-load button. `AnatomyCaseSource` consumes `CaseLoaded`, stops the old attempt during loading/failure, and requires review acknowledgement where appropriate. The relay uses the same configured endpoint as the case client.
@@ -47,7 +47,9 @@ Case selection displays only required targets and available procedure context. T
 
 Opening a generated desktop scene is not a Quest test. Scene generation, Unity physics, shaders and rendering still require a real Unity editor run; the local checks use doubles.
 
-## Production scene boundaries
+## Alternate Desktop Scene Boundaries
+
+The native scene instead uses `NativeProcedureInput` and its single coordinator. Its relay includes event identities, rejection-preserving retries and immutable terminal command acknowledgements; the older desktop flow below is not the current native transport contract.
 
 All tool contacts go through `AnatomyInstrumentTip` and `AnatomyExerciseBinding.TouchCollider`. A tip needs a trigger collider and an appropriate kinematic Rigidbody; configure Anatomy/Instrument physics layers. Set its exact instrument ID and assign the exercise binding. Call `SelectInstrument` from tool selection. Trigger entry handles one contact; for clip/stapler activation use `activateOnEntry = false` and call `ActivateContact` once per deliberate action. Do not also dispatch the same contact elsewhere.
 

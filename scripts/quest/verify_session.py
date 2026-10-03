@@ -17,7 +17,7 @@ UNITY_DEFAULT = "/Applications/Unity/Hub/Editor/6000.0.66f2/Unity.app/Contents/M
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--suite", choices=("all", "services", "unity", "voice"), default="all")
+    parser.add_argument("--suite", choices=("all", "services", "unity", "voice", "motion"), default="all")
     parser.add_argument("--headset", action="store_true", help="Also check the installed player over USB.")
     parser.add_argument("--config", type=Path, help="Private development pairing JSON for --headset.")
     args = parser.parse_args()
@@ -78,6 +78,22 @@ def main():
 
     if args.suite in {"all", "voice"}:
         check("native voice PCM/protocol", [sys.executable, str(REPO / "scripts/quest/voice-check/run.py")])
+        service = REPO / "services/preop"
+        if not (service / "node_modules").is_dir():
+            check("voice tool fixture dependencies", ["npm", "ci"], service)
+        voice_log = Path(tempfile.gettempdir()) / ("scalpal-voice-tools-" + uuid.uuid4().hex + ".log")
+        unity = environment.get("SCALPAL_UNITY", UNITY_DEFAULT)
+        passed = check("actual native voice tool coroutines + isolated coach HTTP", [unity,
+                       "-batchmode", "-nographics", "-projectPath", str(REPO / "apps/quest"),
+                       "-buildTarget", "Android", "-executeMethod",
+                       "Scalpal.Quest.Editor.NativeVoiceToolsValidation.Run", "-quit", "-logFile", str(voice_log)], timeout=180)
+        output = voice_log.read_text(errors="replace") if voice_log.exists() else ""
+        if passed and "SCALPAL_NATIVE_VOICE_TOOLS_VALIDATION_OK" not in output:
+            failures.append("native voice tool verification marker absent")
+        for line in output.splitlines():
+            if line.startswith("SCALPAL_") or "error CS" in line:
+                print(line)
+        print("Native voice tool diagnostic log:", voice_log)
 
     if args.suite in {"all", "unity"}:
         check("production native bridge failure boundaries",
@@ -98,6 +114,14 @@ def main():
             if line.startswith("SCALPAL_") or "error CS" in line:
                 print(line)
         print("Unity diagnostic log:", log)
+
+    if args.suite in {"all", "motion"}:
+        if not shutil.which("uv"):
+            parser.error("motion requires uv with Python 3.11 support")
+        folder = REPO / "services/motion"
+        if check("motion frozen dependencies", ["uv", "sync", "--frozen"], folder, timeout=600):
+            check("motion reconstruction/retargeting/job/read-path regressions",
+                  ["uv", "run", "--frozen", "pytest", "-q"], folder, timeout=180)
 
     if args.headset:
         if args.config:

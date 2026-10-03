@@ -183,11 +183,17 @@ Updated after reviewing the relay rewrite on `codex/anatomy-atlas` (6057689). Th
 - **Retries.** Add an `eventId` (unique per event, well-formed id) to each event. A repeat returns `{accepted: true, applied: false, reason: "duplicate"}`, so a timed-out batch can be resent without double-counting a clip.
 - **Step authority.** Add `stepId` (the headset `CaseRunner`'s current step before handling the event) to each exercise event. The headset is the authority, per the integration map: if it is ahead, the coach catches up silently (`resyncCount` increments); if it is behind or unknown, `snapshot.desynced` is true and Jarvis is told to trust the headset until they agree. This addresses the two-engine divergence risk in `docs/system-integration.md`.
 
-## Native Quest voice: wiring the full harness (for Stephen)
+## Native Quest Voice: Current Main Status
+
+Main consolidates Jarvis `64edc9e` and the native integration. `QuestJarvisVoice.ExecuteTool` already handled six built-in tools before this consolidation; the earlier claim that every tool returned unavailable incorrectly inferred behavior from the unknown-tool fallback in `NativeCaseSession`. Those six tools now use the shared `POST /coach/sessions/:sid/tools/:name` implementation with full JSON parameters. `NativeCaseSession` sends context only when `contextKey` changes. Fifty actual Unity coroutine/HTTP checks passed against isolated coach fixtures; authenticated voice and physical headset operation remain unverified.
+
+Alert/reflex pacing below remains proposed native work. Keep the synthetic patient for this bounded scene; real-record selection requires its own deliberately integrated review/consent flow. The remaining section records the earlier branch review and recommendations, not current main behavior.
+
+## Earlier Native Voice Handoff
 
 Reviewed `codex/headset-session-integration` (c41372a, still current at 6ca92b5). That branch vendors an older copy of `services/preop` from before these endpoints existed: take `services/preop` from `matthew/jarvis` (b1fc5ed or later) before wiring the C# below, or `/tools`, `/alerts`, and `contextKey` will be missing. `QuestJarvisVoice` is a solid native transport, and the session build already allows development HTTP. As wired, though, the headset Jarvis loses most of its coaching. The coach server now exposes everything the headset needs, so the fixes are small C# changes in `NativeCaseSession`:
 
-**1. Tools (today every tool returns "unavailable").** Forward each tool call to the coach, which implements all six tools for every client:
+**1. Shared tools (implemented on main; earlier fallback diagnosis was incorrect).** Forward each tool call to the coach, which implements all six tools for every client:
 
 ```csharp
 [Serializable] class ToolReply { public string result; }
@@ -208,7 +214,7 @@ IEnumerator RunTool(QuestJarvisVoice.ToolRequest request, int epoch, string sid)
 
 `highlight_structure` waits up to 2 s for the headset's own ack (through `CoachRelay` command polling), so keep `CoachCommand` acking as it is.
 
-**2. Context only on change (today it is sent every second).** The context text contains ticking timers, so every send is new. `GET /coach/sessions/:id` now returns `contextKey`, which changes only when something meaningful changes. Add `public string contextKey;` to `ContextReply` and send only when it differs from the last one sent.
+**2. Context only on change (implemented on main).** The context text contains ticking timers, so every send is new. `GET /coach/sessions/:id` now returns `contextKey`, which changes only when something meaningful changes. Add `public string contextKey;` to `ContextReply` and send only when it differs from the last one sent.
 
 **3. Alerts instead of "Simulator feedback".** Remove the `voice.SendUserMessage("Simulator feedback: ...")` call in `EventHandled` (it sends every mistake through the LLM, 1.5 to 3 s, with no pacing). Poll `GET /coach/sessions/:id/alerts?after=<latestSeq>` every 250 ms. Each alert has `tier`, `kind`, `stepId`, `reflexRoute` (a pre-rendered clip in Jarvis's voice, or ""), `reflexText`, and `simEvent` (the exact user message to send):
 

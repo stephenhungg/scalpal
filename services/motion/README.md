@@ -17,6 +17,8 @@ Offline pipeline on the Mac: decode a short permitted passthrough clip, estimate
 
 `uv run pytest` covers the round trip, gap reporting, joint naming, fixed wrist, joint limits, and the job failure paths.
 
+Merged-source verification: `uv sync --frozen` and `uv run --frozen pytest -q` passed all 25 tests, including traversal/symlink rejection and malformed jobs, without opening a listening server. A 60-frame synthetic replay preserved its 10-frame tracking gap; `ffprobe` confirmed H.264/yuv420p, 640×480, 30 fps, 60 frames and a 2-second duration. This checks generated motion and encoding, not actual Quest footage or Nathan's worker adapter.
+
 ## Setup and Use
 
 Requires [uv](https://docs.astral.sh/uv/). Python 3.11 is pinned; the hand model downloads to `models/` on first run.
@@ -47,6 +49,7 @@ SCALPAL_MOTION_TOKEN=... uv run scalpal-motion serve --port 8765
 - **Job** (`scalpal.motion_job/0`, [example](examples/job.example.json)): `job_id`, `run_id`, optional `attempt_id`, `input.artifact_id`, `input.source` (local path or signed http(s) URL), and optional `config` (`hand`, `mirrored`, `smooth`).
 - **Result** (`scalpal.motion_result/0`, [example](examples/result.example.json)): echoes the job/run/attempt/artifact IDs and has `status` `ready` or `failed`. On failure, `error.code` is one of `bad_job`, `unsupported_config`, `input_unavailable`, `decode_failed`, `no_hand_detected`, `run_exists`, or `processor_error`. The result also carries processor versions, the config used, `quality` (valid fraction, longest valid segment, vector error, segments), and `artifacts` with kind, content type, size, and sha256.
 - **Run isolation:** outputs go to `<output-root>/<run_id>/`. A repeated `run_id` is refused with `run_exists` and never touches the existing files, so a retry needs a new `run_id`. Deciding which run is current stays with SpacetimeDB.
+- Run IDs start with an ASCII letter or digit, contain only ASCII letters/digits, `-`, `_`, or `.`, and have at most 128 characters. Invalid IDs are rejected rather than sanitized; output reads reject paths or symlinks outside the output root.
 - **Not decided here:** learning completion and whether a clip counts as a useful contribution. The worker reports quality, and acceptance thresholds should come from measured clips.
 - **For the companion:** `replay.mp4` is the display artifact (source with landmarks next to the robot, H.264). `motion.json` has named joint angles per frame if a 3D web viewer is wanted later.
 
