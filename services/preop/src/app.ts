@@ -96,7 +96,8 @@ export function createApp(options: AppOptions = {}) {
       const extraGaps: DataGap[] = [];
       if (!subject.startsWith("patient-demo-")) {
         const matched = await scenariosFromOrganizations((record.sources ?? []).map((s) => s.organization));
-        if (!scenarioId) scenarioId = matched.at(-1) ?? "";
+        // Sources can change after consent (connect, disconnect), so the live record wins over any cached scenario.
+        scenarioId = matched.at(-1) ?? scenarioId;
         if (scenarioId) subjectScenario.set(subject, scenarioId);
         // One FinchNode account connected sources that describe different people.
         if (matched.length > 1) {
