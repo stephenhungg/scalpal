@@ -2,7 +2,7 @@
 
 Updated October 3, 2026. Owner: Matthew. This is what other lanes need to do so Jarvis (the voice coach) knows exactly what is happening in the headset. Jarvis code lives in `services/preop/` (coach engine, routes, `/jarvis` page) and `apps/quest/Assets/Scalpal/Exercises/Coach/CoachRelay.cs`.
 
-Status: the coach engine, per-case prompts, routes, laptop voice page, and Unity relay are implemented and tested in code (`npm test`, `npm run test:unity`). Nothing has run on the Quest yet. The ElevenLabs agent needs an API key before voice works; without it the page runs with browser speech as a fallback.
+Status: the coach engine, per-case prompts, routes, laptop voice page, and Unity relay are implemented and tested in code (`npm test`, `npm run test:unity`). The ElevenLabs agent (Claude Sonnet 5.5, "Jarvis" library voice) was exercised live in text mode over its websocket on October 3: the per-case prompt override applied, it called `get_hint` and `highlight_structure` on its own, answered an urgent [SIM EVENT] with "Stop" plus the correction, and refused a structure from another surgery. Measured text response time was 1.4 to 3.2 s, before speech synthesis; spoken end-to-end latency has not been measured. Nothing has run on the Quest yet.
 
 ## How it fits together
 
