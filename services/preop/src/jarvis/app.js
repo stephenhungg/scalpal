@@ -13,7 +13,7 @@ const api = async (method, path, body) => {
 };
 
 let sid = "", patientId = "", kase = null, convo = null, feed = null, lastTyped = "";
-let snapshot = null, currentContext = "", lastSemantic = "", contextTimer = 0;
+let snapshot = null, currentContext = "", currentContextKey = "", lastSemantic = "", contextTimer = 0;
 let arbiter = createArbiter();
 const reflexClips = new Map(); // reflexKey -> HTMLAudioElement
 const traces = []; // one per delivered alert, for the latency panel
@@ -63,7 +63,7 @@ function render(snap) {
 function syncContext(force = false) {
   clearTimeout(contextTimer);
   contextTimer = setTimeout(() => {
-    const key = semanticKey(snapshot);
+    const key = currentContextKey || semanticKey(snapshot);
     if (!convo || (!force && key === lastSemantic)) return;
     lastSemantic = key;
     try { convo.sendContextualUpdate(currentContext); } catch (e) { console.warn(e); }
@@ -153,6 +153,7 @@ function renderLatency() {
 function onState(payload) {
   snapshot = payload.snapshot;
   currentContext = payload.context;
+  currentContextKey = payload.contextKey ?? "";
   arbiter.setSnapshot(snapshot);
   render(snapshot);
   $("context").textContent = currentContext;
@@ -188,43 +189,17 @@ async function loadReflexClips() {
 
 // ---- tools --------------------------------------------------------------------------------------
 
-async function waitForAck(commandId) {
-  for (let i = 0; i < 8; i++) {
-    const { json } = await api("GET", `/coach/sessions/${sid}`);
-    const c = json.snapshot?.commands.find((x) => x.commandId === commandId);
-    if (c && c.status !== "pending") return c;
-    await new Promise((r) => setTimeout(r, 250));
-  }
-  return { status: "pending" };
-}
-
-const clientTools = {
-  get_surgery_state: async () => (await api("GET", `/coach/sessions/${sid}`)).json.context ?? "No live session.",
-  get_hint: async () => {
-    const { json } = await api("POST", `/coach/sessions/${sid}/hint`);
-    if (json.highlight?.length) await clientTools.highlight_structure({ structure: json.highlight[0] });
-    return `Hint tier ${json.tier} of 3: ${json.say}`;
-  },
-  explain_structure: async ({ structure }) => (await api("POST", `/coach/sessions/${sid}/explain`, { structure })).json.say,
-  highlight_structure: async ({ structure }) => {
-    const { ok, json } = await api("POST", `/coach/sessions/${sid}/commands`, { action: "highlight", structure });
-    if (!ok) return json.error?.message ?? "Highlight request failed.";
-    const result = await waitForAck(json.command.commandId);
-    if (result.status === "applied") return `Highlighted ${structure} in the headset.`;
-    if (result.status === "rejected") return `The headset rejected the highlight: ${result.reason}`;
-    return `Highlight requested for ${structure}; the headset has not confirmed yet.`;
-  },
-  get_patient_brief: async () => {
-    if (!kase) return "No case loaded.";
-    const flags = kase.brief.flags.map((f) => `${f.title}: ${f.detail}`).join(" ");
-    const options = kase.checklistOptions.map((o) => `${o.type} (${o.label})`).join(", ");
-    return `${kase.brief.say} Flags: ${flags || "none"}. Gaps: ${kase.brief.dataGaps.map((g) => g.message).join(" ") || "none"}. Checklist option types: ${options}.`;
-  },
-  check_preop: async ({ selected }) => {
-    const list = Array.isArray(selected) ? selected : String(selected ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-    return (await api("POST", `/patients/${patientId}/preop-check`, { selected: list })).json.say ?? "Pre-op check failed.";
-  },
-};
+// Tools run on the coach server, shared with the native headset voice client.
+const TOOL_NAMES = ["get_surgery_state", "get_hint", "explain_structure", "highlight_structure", "get_patient_brief", "check_preop"];
+const clientTools = Object.fromEntries(
+  TOOL_NAMES.map((name) => [
+    name,
+    async (params) => {
+      const { ok, json } = await api("POST", `/coach/sessions/${sid}/tools/${name}`, params ?? {});
+      return ok ? json.result : (json.error?.message ?? `${name} failed.`);
+    },
+  ]),
+);
 
 // ---- voice --------------------------------------------------------------------------------------
 

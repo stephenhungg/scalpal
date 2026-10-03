@@ -43,6 +43,11 @@ export interface CoachAlert {
   at: string;
 }
 
+export interface LoggedAlert extends CoachAlert {
+  seq: number;
+  simEvent: string; // exact text to send as a user message when this alert becomes an LLM turn
+}
+
 export interface StructureRef {
   id: string;
   name: string;
@@ -164,6 +169,8 @@ export class CoachSession {
   private hintsUsed = 0;
   private inputCount = 0; // exercise inputs that reached the engine; 0 means an untouched attempt
   private seenEventIds = new Set<string>();
+  private alertLog: LoggedAlert[] = [];
+  private alertLogSeq = 0;
   private headsetStepId = "";
   private desynced = false;
   private resyncCount = 0;
@@ -210,6 +217,12 @@ export class CoachSession {
     this.version += 1;
     for (const a of alerts) a.version = this.version;
     const snapshot = this.snapshot();
+    // Clients that cannot hold an SSE stream (the native headset voice client) poll this log instead.
+    const tag = snapshot.status === "completed" ? `v${snapshot.version} complete` : `v${snapshot.version} step ${snapshot.stepNumber}/${snapshot.stepCount} "${snapshot.step.title}"`;
+    for (const a of alerts) {
+      this.alertLog.push({ ...a, seq: ++this.alertLogSeq, simEvent: `[SIM EVENT ${tag}] kind=${a.kind} tier=${a.tier}: ${a.say}` });
+    }
+    if (this.alertLog.length > 200) this.alertLog.splice(0, this.alertLog.length - 200);
     for (const fn of this.listeners) fn({ snapshot, alerts });
   }
 
@@ -521,6 +534,14 @@ export class CoachSession {
     return command;
   }
 
+  command(commandId: string): CoachCommand | undefined {
+    return this.commands.find((c) => c.commandId === commandId);
+  }
+
+  alertsAfter(seq: number): { alerts: LoggedAlert[]; latestSeq: number } {
+    return { alerts: this.alertLog.filter((a) => a.seq > seq), latestSeq: this.alertLogSeq };
+  }
+
   pendingCommands(): CoachCommand[] {
     return this.commands.filter((c) => c.status === "pending");
   }
@@ -691,6 +712,18 @@ function describeOffTarget(event: EngineEvent, name: (id: string) => string, too
     case "confirm":
       return "Tried to confirm, but this step finishes on its targets, not a confirmation.";
   }
+}
+
+// Changes only when something Jarvis should know changes; ticking timers do not. Clients send the
+// context to the agent only when this key differs from the last one they sent.
+export function contextKey(s: CoachSnapshot): string {
+  const parts = [
+    s.status, s.step.id, s.step.progressText, s.completedCount, s.mistakeCount, s.focusStructure.id, s.stuckLevel,
+    s.trackingValid, s.hintTier, s.desynced, s.commands.map((c) => `${c.commandId}:${c.status}`).join(","),
+  ];
+  let h = 2166136261;
+  for (const ch of JSON.stringify(parts)) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+  return (h >>> 0).toString(16);
 }
 
 // Compact text for the voice agent's contextual updates. Short lines, facts only.

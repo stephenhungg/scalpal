@@ -4,7 +4,8 @@ import { streamSSE } from "hono/streaming";
 import { ANATOMY, ANATOMY_BY_ID } from "./catalog/anatomy.js";
 import { STRUCTURE_FACTS } from "./catalog/coach-knowledge.js";
 import { INSTRUMENTS_BY_ID } from "./catalog/instruments.js";
-import { CoachSession, PRESENTATION_MODES, reflexLines, renderContext, type CoachEvent, type StuckPolicy } from "./coach.js";
+import { CoachSession, PRESENTATION_MODES, contextKey, reflexLines, renderContext, type CoachEvent, type StuckPolicy } from "./coach.js";
+import { explainStructure, runTool } from "./coach-tools.js";
 import { ReflexAudio } from "./reflex.js";
 import { buildSystemPrompt, firstMessage } from "./coach-prompt.js";
 import type { Action, SurgicalCase } from "./types.js";
@@ -20,6 +21,7 @@ export interface CoachRouteOptions {
   tickMs?: number; // 0 disables the background stuck timer (tests call tick directly)
   elevenLabs?: { apiKey: string; agentId: string; voiceId?: string };
   reflex?: ReflexAudio; // injectable for tests; built from elevenLabs when omitted
+  toolAckWaitMs?: number; // how long a highlight tool waits for the headset ack (tests shorten it)
 }
 
 const MAX_SESSIONS = 50;
@@ -91,7 +93,7 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
       {
         sessionId: sid,
         snapshot,
-        context: renderContext(snapshot),
+        context: renderContext(snapshot), contextKey: contextKey(snapshot),
         systemPrompt: buildSystemPrompt(kase, mode),
         firstMessage: firstMessage(kase),
         actions: coachActions(sid),
@@ -113,7 +115,7 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
     const s = getSession(c);
     if (!s) return missing(c);
     const snapshot = s.snapshot();
-    return c.json({ snapshot, context: renderContext(snapshot), actions: coachActions(s.id) });
+    return c.json({ snapshot, context: renderContext(snapshot), contextKey: contextKey(snapshot), actions: coachActions(s.id) });
   });
 
   app.post("/coach/sessions/:sid/events", async (c) => {
@@ -142,7 +144,7 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
       // duplicate (same eventId seen before) is accepted but not applied, so a relay can retry safely.
       alerts: results.flatMap((r) => r.alerts),
       snapshot,
-      context: renderContext(snapshot),
+      context: renderContext(snapshot), contextKey: contextKey(snapshot),
       actions: coachActions(s.id),
     });
   });
@@ -158,29 +160,42 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
     if (!s) return missing(c);
     const { structure } = await body(c);
     const query = typeof structure === "string" ? structure : "";
-    const match = resolveStructure(query, s.kase);
-    if (match.kind === "none") {
-      return c.json({ found: false, structureId: "", say: `I don't have a structure called "${query}" in this case.`, actions: coachActions(s.id) });
-    }
-    if (match.kind === "other_case") {
-      return c.json({
-        found: false,
-        structureId: match.id,
-        say: `The ${ANATOMY_BY_ID.get(match.id)?.displayName.toLowerCase()} isn't part of the ${s.kase.procedure.title.toLowerCase()}.`,
-        actions: coachActions(s.id),
-      });
-    }
-    const a = s.kase.anatomy.find((x) => x.id === match.id)!;
-    const f = STRUCTURE_FACTS[a.id];
+    const result = explainStructure(s, query, resolveStructure);
+    const facts = result.found ? STRUCTURE_FACTS[result.structureId] : undefined;
     return c.json({
-      found: true,
-      structureId: a.id,
-      name: a.displayName,
-      what: f?.what ?? "",
-      where: f?.where ?? "",
-      supply: f?.supply ?? "",
-      why: f?.why ?? "",
-      say: f ? `${a.displayName}: ${f.what} ${f.where} ${f.why}` : a.displayName,
+      ...result,
+      name: result.found ? (s.kase.anatomy.find((a) => a.id === result.structureId)?.displayName ?? "") : "",
+      what: facts?.what ?? "",
+      where: facts?.where ?? "",
+      supply: facts?.supply ?? "",
+      why: facts?.why ?? "",
+      actions: coachActions(s.id),
+    });
+  });
+
+  // One implementation of Jarvis's client tools for every voice client (laptop page, Quest native voice).
+  app.post("/coach/sessions/:sid/tools/:name", async (c) => {
+    const s = getSession(c);
+    if (!s) return missing(c);
+    const result = await runTool(s, c.req.param("name") ?? "", await body(c), {
+      renderContext: (x) => renderContext(x.snapshot()),
+      resolveStructure,
+      ackWaitMs: options.toolAckWaitMs,
+    });
+    if (result == null) return bad(c, 404, "unknown_tool", `No Jarvis tool named "${c.req.param("name")}".`, coachActions(s.id));
+    return c.json({ result, actions: coachActions(s.id) });
+  });
+
+  // Alerts for clients without SSE. Each carries its tier, an optional reflex clip route, and the exact
+  // [SIM EVENT] text to send when it becomes an LLM turn. Poll with after=<latestSeq from the last call>.
+  app.get("/coach/sessions/:sid/alerts", (c) => {
+    const s = getSession(c);
+    if (!s) return missing(c);
+    const after = Number(c.req.query("after") ?? "0");
+    const { alerts, latestSeq } = s.alertsAfter(Number.isFinite(after) ? after : 0);
+    return c.json({
+      alerts: alerts.map((a) => ({ ...a, reflexRoute: a.reflexKey && reflex?.configured ? `/jarvis/reflex/${s.id}/${a.reflexKey}` : "" })),
+      latestSeq,
       actions: coachActions(s.id),
     });
   });
@@ -271,7 +286,7 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
     }
     const results = [...stepResults, ...events.map((e) => s.handle(e))];
     const snapshot = s.snapshot();
-    return c.json({ alerts: results.flatMap((r) => r.alerts), snapshot, context: renderContext(snapshot), actions: coachActions(s.id) });
+    return c.json({ alerts: results.flatMap((r) => r.alerts), snapshot, context: renderContext(snapshot), contextKey: contextKey(snapshot), actions: coachActions(s.id) });
   });
 
   // Server-sent events: one "state" message per change (with any alerts), plus the stuck timer.
@@ -282,8 +297,8 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
     return streamSSE(c, async (stream) => {
       const send = (payload: unknown) => stream.writeSSE({ event: "state", data: JSON.stringify(payload) });
       const first = s.snapshot();
-      await send({ snapshot: first, context: renderContext(first), alerts: [] });
-      const unsubscribe = s.subscribe((u) => void send({ ...u, context: renderContext(u.snapshot) }));
+      await send({ snapshot: first, context: renderContext(first), contextKey: contextKey(first), alerts: [] });
+      const unsubscribe = s.subscribe((u) => void send({ ...u, context: renderContext(u.snapshot), contextKey: contextKey(u.snapshot) }));
       stream.onAbort(unsubscribe);
       while (!stream.aborted) {
         await stream.sleep(15000);

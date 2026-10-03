@@ -182,3 +182,44 @@ Updated after reviewing the relay rewrite on `codex/anatomy-atlas` (6057689). Th
 - **Fresh-attempt check.** Do not require `snapshot.version == 0` before joining. The version changes whenever Jarvis requests a highlight, gives a hint, or the stuck timer fires (20 s after start), so a headset joining late would always be refused. Use `snapshot.eventCount == 0` (no exercise input has reached the coach yet) together with `completedCount == 0` and `stepNumber == 1`.
 - **Retries.** Add an `eventId` (unique per event, well-formed id) to each event. A repeat returns `{accepted: true, applied: false, reason: "duplicate"}`, so a timed-out batch can be resent without double-counting a clip.
 - **Step authority.** Add `stepId` (the headset `CaseRunner`'s current step before handling the event) to each exercise event. The headset is the authority, per the integration map: if it is ahead, the coach catches up silently (`resyncCount` increments); if it is behind or unknown, `snapshot.desynced` is true and Jarvis is told to trust the headset until they agree. This addresses the two-engine divergence risk in `docs/system-integration.md`.
+
+## Native Quest voice: wiring the full harness (for Stephen)
+
+Reviewed `codex/headset-session-integration` (c41372a). `QuestJarvisVoice` is a solid native transport, and the session build already allows development HTTP. As wired, though, the headset Jarvis loses most of its coaching. The coach server now exposes everything the headset needs, so the fixes are small C# changes in `NativeCaseSession`:
+
+**1. Tools (today every tool returns "unavailable").** Forward each tool call to the coach, which implements all six tools for every client:
+
+```csharp
+[Serializable] class ToolReply { public string result; }
+
+void VoiceTool(QuestJarvisVoice.ToolRequest request) => StartCoroutine(RunTool(request, generation, coach.SessionId));
+
+IEnumerator RunTool(QuestJarvisVoice.ToolRequest request, int epoch, string sid)
+{
+    string json = null;
+    var body = string.IsNullOrEmpty(request.ParametersJson) ? "{}" : request.ParametersJson;
+    yield return Request("POST", "/coach/sessions/" + Uri.EscapeDataString(sid) + "/tools/" + Uri.EscapeDataString(request.ToolName), body, v => json = v);
+    if (epoch != generation) yield break;
+    ToolReply reply = null;
+    try { if (json != null) reply = JsonUtility.FromJson<ToolReply>(json); } catch (ArgumentException) { }
+    voice.ResolveClientTool(request, reply?.result ?? "That tool is unavailable right now.", reply?.result == null);
+}
+```
+
+`highlight_structure` waits up to 2 s for the headset's own ack (through `CoachRelay` command polling), so keep `CoachCommand` acking as it is.
+
+**2. Context only on change (today it is sent every second).** The context text contains ticking timers, so every send is new. `GET /coach/sessions/:id` now returns `contextKey`, which changes only when something meaningful changes. Add `public string contextKey;` to `ContextReply` and send only when it differs from the last one sent.
+
+**3. Alerts instead of "Simulator feedback".** Remove the `voice.SendUserMessage("Simulator feedback: ...")` call in `EventHandled` (it sends every mistake through the LLM, 1.5 to 3 s, with no pacing). Poll `GET /coach/sessions/:id/alerts?after=<latestSeq>` every 250 ms. Each alert has `tier`, `kind`, `stepId`, `reflexRoute` (a pre-rendered clip in Jarvis's voice, or ""), `reflexText`, and `simEvent` (the exact user message to send):
+
+| Alert | Do |
+| --- | --- |
+| `warning` with `reflexRoute` (dangerous mistake, tracking loss) | Play the clip immediately on its own `AudioSource`, then `voice.SendContext("[JARVIS SAID] \"" + reflexText + "\"")` so Jarvis does not repeat it |
+| `warning` without a clip | `voice.SendUserMessage(simEvent)` immediately |
+| `caution` with `reflexRoute` (next-step callouts) | Play the clip when Jarvis is not speaking |
+| other `caution` (moderate mistake, wrong tool, danger focus, stuck hint, case complete) | Keep only the newest per `kind`; drop it if `stepId` is no longer the current step; send `simEvent` when Jarvis is not speaking, the learner has been quiet for 1.5 s, and 6 s have passed since the last proactive turn (2.5 s for mistakes and completions) |
+| `advisory` | Nothing; the context already carries it |
+
+Download all clips at session start from `GET /jarvis/reflex/:id` (load with `UnityWebRequestMultimedia.GetAudioClip(url, AudioType.MPEG)`), so a warning plays with no network wait. The browser page's `services/preop/src/jarvis/arbiter.js` is the reference implementation of these rules, with tests in `test/arbiter.test.ts`.
+
+**4. Demo patient.** `NativeCaseSession.PatientId` is hardcoded to `patient-demo-multi-source`. The real-data demo patient is sandbox Priya, `u_115958ef4e58c641` (needs `FINCHNODE_API_KEY` on the service). Make it configurable next to `coachBaseUrl` and keep the demo id as the fallback.
