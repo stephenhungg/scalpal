@@ -1,0 +1,40 @@
+# Agent Instructions
+
+## Communication
+
+- Write casual chat updates clearly and in lowercase, without emojis. Preserve correct capitalization in code, paths, technical names, and professional documents.
+- Lead with the outcome. Explain meaningful decisions and tradeoffs; do not narrate every tool operation.
+- Ask for decisions when missing information materially changes correctness, architecture, or an irreversible action. Make reasonable assumptions for routine reversible work.
+
+## Read Before Working
+
+Read `README.md`, `docs/thesis.md`, `docs/decisions.md`, and the document for your component. Check the current repository before editing: this initial handoff is documentation-only, and the established hardware results come from a separate official Meta sample.
+
+User direction takes precedence over older proposals. In particular:
+
+- Use a real reclining participant and a generic teaching anatomy overlay.
+- Selection is conversational, with a rotating 3D anatomy preview during selection.
+- The robotics input proposal is recorded passthrough video, not Meta SDK hand-joint telemetry.
+- First demonstrate video-derived hand motion retargeting and replay in simulation. Do not describe replay as a learned autonomous policy.
+- Preserve both education and robotics goals. Do not silently replace the project with a pure analytics dashboard or robotics-only collector.
+- Rewards are a sponsor-funded Solana Devnet demonstration. No lab funding or real-token economics have been validated.
+
+## Implementation Discipline
+
+- Identify what result would demonstrate success before implementing a component.
+- Build the simplest complete slice for one exercise. Avoid speculative catalogs, custom neural models, dashboards, and multiple competing databases.
+- Delegate bounded independent work when useful, with explicit file ownership. Avoid overlapping edits.
+- Coordinate shared schemas and state transitions through `docs/integration-contracts.md`; proposed contracts are not existing APIs.
+- Preserve unrelated work and inspect the final diff. Choose verification based on behavior and risk, and never claim a check passed unless it ran.
+- State whether a result is measured on the headset, reported by a participant, simulated, or merely proposed.
+- Keep camera-image coordinates, camera-relative estimates, Unity world coordinates, and robot coordinates explicit. Do not conceal missing depth, clock synchronization, or registration behind smoothing.
+- Pause scoring and hide misleading anatomy when registration is invalid. Handle missing video landmarks explicitly in replay rather than inventing precise movement.
+- Use authored exercise rules for scoring and a backend verifier for reward eligibility. Voice agents do not authorize payouts or execute arbitrary scene code.
+- Keep secrets on the service side. Never commit treasury keys, provider credentials, participant footage, raw motion datasets, or identifying device logs.
+- Camera permission and participant consent do not by themselves establish rights to export, license, or train on platform data. Consult the primary sources in `docs/research/README.md` for the intended use.
+
+## Status and Handoff
+
+The repo-creation task authorizes this context handoff, not implementation of every proposed component. Follow subsequent user-assigned scope. Before a broad build, reconcile the expanded architecture and unresolved decisions with the owner; do not treat the prior pre-robotics draft review as approval of the current specification.
+
+For completed work, report changed files, relevant checks, measured limitations, and the next blocked interface or decision. Update the relevant document when evidence changes a premise. Do not add a tracking file for every small task.
