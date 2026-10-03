@@ -9,6 +9,7 @@ const instrument = (id: string, displayName: string, kind: string): Instrument =
 });
 
 export const INSTRUMENTS: Instrument[] = [
+  instrument("scalpel", "Scalpel", "cutting"),
   instrument("trocar_5mm", "5 mm trocar", "access"),
   instrument("trocar_12mm", "12 mm trocar", "access"),
   instrument("laparoscope_30", "30 degree laparoscope", "visualization"),

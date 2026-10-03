@@ -40,6 +40,7 @@ namespace UnityEngine
         public Vector3 InverseTransformPoint(Vector3 position) => position;
         public void Rotate(Vector3 axis, float angle, Space relativeTo) { }
         public Vector3 localPosition { get; set; }
+        public Transform parent => null;
         public void SetParent(Transform parent, bool worldPositionStays) { }
     }
 
@@ -236,5 +237,19 @@ namespace UnityEditor
     public static class Selection
     {
         public static UnityEngine.GameObject activeGameObject => null;
+    }
+}
+
+// Stephen's instrument runtime (Assets/Scalpal/Instruments, its own asmdef) needs XR input and physics
+// stubs to compile here, so only the members the Experience layer reads are mirrored. Keep in sync with
+// Instruments/Runtime/InstrumentBehaviour.cs.
+namespace Scalpal.Instruments
+{
+    public sealed class InstrumentBehaviour : UnityEngine.MonoBehaviour
+    {
+        public string instrumentId;
+        public bool Held { get; private set; }
+        public bool TrackingValid { get; private set; }
+        public float Activation { get; private set; }
     }
 }

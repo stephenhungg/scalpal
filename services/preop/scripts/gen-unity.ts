@@ -118,7 +118,7 @@ ${ROUTE_PATTERNS.map((r) => `            (RouteKind.${r.kind}, ${str(r.method)},
 
 export function generateManifest(): string {
   const usedBy = (pred: (p: (typeof PROCEDURES)[number]) => boolean) =>
-    PROCEDURES.filter(pred).map((p) => p.shortTitle).join(", ") || "risk highlight only";
+    PROCEDURES.filter(pred).map((p) => p.shortTitle).join(", ") || "not used by a step yet";
   const fmt = (n: number) => n.toFixed(2);
 
   const anatomyRows = ANATOMY.map(

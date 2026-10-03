@@ -40,6 +40,9 @@ namespace Scalpal.Experience
 
         CaseRunner runner;
 
+        // The enabled director, so generated instrument prefabs can find it without scene wiring.
+        public static CaseDirector Active { get; private set; }
+
         public CasePhase Phase { get; private set; } = CasePhase.Idle;
         public SurgicalCase Case { get; private set; }
         public PreopCheckResult PreopResult { get; private set; }
@@ -60,6 +63,7 @@ namespace Scalpal.Experience
 
         void OnEnable()
         {
+            Active = this;
             if (service != null)
             {
                 service.CaseLoaded += OnCaseLoaded;
@@ -71,6 +75,7 @@ namespace Scalpal.Experience
 
         void OnDisable()
         {
+            if (Active == this) Active = null;
             if (service != null)
             {
                 service.CaseLoaded -= OnCaseLoaded;

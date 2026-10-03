@@ -217,7 +217,7 @@ describe("coach routes", () => {
     // A batch with one unknown instrument still applies the valid events around it.
     const mixed = await call("POST", `/coach/sessions/${sid}/events`, {
       events: [
-        { type: "touch", structureId: "abdominal_wall", instrumentId: "scalpel" },
+        { type: "touch", structureId: "abdominal_wall", instrumentId: "laser_scalpel" },
         { type: "place_port", portId: "epigastric" },
       ],
     });

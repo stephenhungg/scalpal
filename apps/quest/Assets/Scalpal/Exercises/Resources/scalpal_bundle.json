@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-10-03T20:07:22.342Z",
+ "generatedAt": "2026-10-03T20:17:15.173Z",
  "anatomy": [
   {
    "id": "abdominal_wall",
@@ -234,6 +234,12 @@
   }
  ],
  "instruments": [
+  {
+   "id": "scalpel",
+   "unityPrefab": "inst_scalpel",
+   "displayName": "Scalpel",
+   "kind": "cutting"
+  },
   {
    "id": "trocar_5mm",
    "unityPrefab": "inst_trocar_5mm",
@@ -2346,7 +2352,7 @@
     "dataSource": "demo",
     "consentStatus": "simulated",
     "consentReceipts": [],
-    "generatedAt": "2026-10-03T20:07:19.969Z",
+    "generatedAt": "2026-10-03T20:17:14.973Z",
     "dataAsOf": "2026-08-25T17:00:00Z",
     "patient": {
      "name": "Morgan Rivera",
@@ -3221,7 +3227,7 @@
     "dataSource": "demo",
     "consentStatus": "simulated",
     "consentReceipts": [],
-    "generatedAt": "2026-10-03T20:07:20.187Z",
+    "generatedAt": "2026-10-03T20:17:15.172Z",
     "dataAsOf": "2026-09-01T00:00:00Z",
     "patient": {
      "name": "Harriet Lindqvist",
@@ -4449,7 +4455,7 @@
     "dataSource": "demo",
     "consentStatus": "simulated",
     "consentReceipts": [],
-    "generatedAt": "2026-10-03T20:07:20.053Z",
+    "generatedAt": "2026-10-03T20:17:15.122Z",
     "dataAsOf": "2026-09-01T00:00:00Z",
     "patient": {
      "name": "Theo Abernathy",
@@ -5212,7 +5218,7 @@
     "dataSource": "demo",
     "consentStatus": "simulated",
     "consentReceipts": [],
-    "generatedAt": "2026-10-03T20:07:20.186Z",
+    "generatedAt": "2026-10-03T20:17:15.125Z",
     "dataAsOf": "2026-09-01T00:00:00Z",
     "patient": {
      "name": "Priya Ramaswamy",
@@ -5937,7 +5943,7 @@
     "dataSource": "demo",
     "consentStatus": "simulated",
     "consentReceipts": [],
-    "generatedAt": "2026-10-03T20:07:20.165Z",
+    "generatedAt": "2026-10-03T20:17:15.129Z",
     "dataAsOf": "2026-09-01T00:00:00Z",
     "patient": {
      "name": "Jonah Okoye",
@@ -6624,7 +6630,7 @@
     "dataSource": "demo",
     "consentStatus": "simulated",
     "consentReceipts": [],
-    "generatedAt": "2026-10-03T20:07:20.047Z",
+    "generatedAt": "2026-10-03T20:17:15.130Z",
     "dataAsOf": "2026-09-01T00:00:00Z",
     "patient": {
      "name": "Dolores Marchetti",
@@ -7538,7 +7544,7 @@
     "dataSource": "demo",
     "consentStatus": "simulated",
     "consentReceipts": [],
-    "generatedAt": "2026-10-03T20:07:22.341Z",
+    "generatedAt": "2026-10-03T20:17:15.100Z",
     "dataAsOf": "2026-09-01T00:00:00Z",
     "patient": {
      "name": "Samir Haddad",
@@ -7881,7 +7887,7 @@
     "dataSource": "",
     "consentStatus": "",
     "consentReceipts": [],
-    "generatedAt": "2026-10-03T20:07:20.185Z",
+    "generatedAt": "2026-10-03T20:17:15.108Z",
     "dataAsOf": "",
     "patient": {
      "name": "",
@@ -8436,7 +8442,7 @@
     "consentReceipts": [
      "rcpt_demo_consent_partial"
     ],
-    "generatedAt": "2026-10-03T20:07:20.263Z",
+    "generatedAt": "2026-10-03T20:17:15.129Z",
     "dataAsOf": "2026-09-01T00:00:00Z",
     "patient": {
      "name": "",
@@ -9266,7 +9272,7 @@
     "dataSource": "demo",
     "consentStatus": "simulated",
     "consentReceipts": [],
-    "generatedAt": "2026-10-03T20:07:20.186Z",
+    "generatedAt": "2026-10-03T20:17:15.126Z",
     "dataAsOf": "2026-09-01T00:00:00Z",
     "patient": {
      "name": "Ingrid Solano",

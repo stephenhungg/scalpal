@@ -21,7 +21,7 @@ One separate object per row, named exactly as shown, each with a collider.
 | `anat_right_hepatic_artery` | Right hepatic artery | cardiovascular | upper_abdomen | Gallbladder removal |
 | `anat_stomach` | Stomach | digestive | upper_abdomen | Gallbladder removal |
 | `anat_duodenum` | Duodenum | digestive | upper_abdomen | Gallbladder removal |
-| `anat_pancreas` | Pancreas | digestive | upper_abdomen | risk highlight only |
+| `anat_pancreas` | Pancreas | digestive | upper_abdomen | not used by a step yet |
 | `anat_transverse_colon` | Transverse colon | digestive | mid_abdomen | Gallbladder removal |
 | `anat_small_bowel` | Small bowel | digestive | mid_abdomen | Appendix removal, Sigmoid colon resection |
 | `anat_terminal_ileum` | Terminal ileum | digestive | right_lower_quadrant | Appendix removal |
@@ -38,17 +38,18 @@ One separate object per row, named exactly as shown, each with a collider.
 | `anat_left_gonadal_vessels` | Left gonadal vessels | cardiovascular | retroperitoneum | Sigmoid colon resection |
 | `anat_rectum` | Rectum | digestive | pelvis | Sigmoid colon resection |
 | `anat_urinary_bladder` | Urinary bladder | urinary | pelvis | Appendix removal, Sigmoid colon resection |
-| `anat_right_kidney` | Right kidney | urinary | retroperitoneum | risk highlight only |
-| `anat_left_kidney` | Left kidney | urinary | retroperitoneum | risk highlight only |
-| `anat_heart` | Heart | cardiovascular | thorax | risk highlight only |
-| `anat_lungs` | Lungs | respiratory | thorax | risk highlight only |
+| `anat_right_kidney` | Right kidney | urinary | retroperitoneum | not used by a step yet |
+| `anat_left_kidney` | Left kidney | urinary | retroperitoneum | not used by a step yet |
+| `anat_heart` | Heart | cardiovascular | thorax | not used by a step yet |
+| `anat_lungs` | Lungs | respiratory | thorax | not used by a step yet |
 
-## Instrument prefabs (14)
+## Instrument prefabs (15)
 
 Each prefab needs a trigger collider on a child named `Tip` at the working end.
 
 | Prefab name | Instrument | Kind | Used by |
 | --- | --- | --- | --- |
+| `inst_scalpel` | Scalpel | cutting | not used by a step yet |
 | `inst_trocar_5mm` | 5 mm trocar | access | Gallbladder removal, Appendix removal, Sigmoid colon resection |
 | `inst_trocar_12mm` | 12 mm trocar | access | Gallbladder removal, Appendix removal, Sigmoid colon resection |
 | `inst_laparoscope_30` | 30 degree laparoscope | visualization | Gallbladder removal, Appendix removal, Sigmoid colon resection |

@@ -157,6 +157,7 @@ namespace Scalpal.Exercises.Generated
 
     public static class InstrumentIds
     {
+        public const string Scalpel = "scalpel";
         public const string Trocar5mm = "trocar_5mm";
         public const string Trocar12mm = "trocar_12mm";
         public const string Laparoscope30 = "laparoscope_30";
@@ -175,6 +176,7 @@ namespace Scalpal.Exercises.Generated
 
     public static class InstrumentPrefabs
     {
+        public const string Scalpel = "inst_scalpel";
         public const string Trocar5mm = "inst_trocar_5mm";
         public const string Trocar12mm = "inst_trocar_12mm";
         public const string Laparoscope30 = "inst_laparoscope_30";
@@ -192,6 +194,7 @@ namespace Scalpal.Exercises.Generated
 
         public static readonly string[] All =
         {
+            Scalpel,
             Trocar5mm,
             Trocar12mm,
             Laparoscope30,
