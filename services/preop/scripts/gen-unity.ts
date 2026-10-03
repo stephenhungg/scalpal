@@ -42,6 +42,11 @@ namespace Scalpal.Exercises.Generated
     public static class AnatomyIds
     {
 ${consts(ANATOMY.map((a) => [pascal(a.id), a.id]))}
+
+        public static readonly string[] All =
+        {
+${ANATOMY.map((a) => `            ${pascal(a.id)},`).join("\n")}
+        };
     }
 
     public static class AnatomyUnityNames

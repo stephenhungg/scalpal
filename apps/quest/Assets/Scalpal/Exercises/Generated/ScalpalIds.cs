@@ -42,6 +42,43 @@ namespace Scalpal.Exercises.Generated
         public const string LeftKidney = "left_kidney";
         public const string Heart = "heart";
         public const string Lungs = "lungs";
+
+        public static readonly string[] All =
+        {
+            AbdominalWall,
+            Umbilicus,
+            GreaterOmentum,
+            Liver,
+            Gallbladder,
+            CysticDuct,
+            CysticArtery,
+            CommonHepaticDuct,
+            CommonBileDuct,
+            RightHepaticArtery,
+            Stomach,
+            Duodenum,
+            Pancreas,
+            TransverseColon,
+            SmallBowel,
+            TerminalIleum,
+            Cecum,
+            Appendix,
+            Mesoappendix,
+            AppendicularArtery,
+            RightUreter,
+            DescendingColon,
+            SigmoidColon,
+            SigmoidMesocolon,
+            InferiorMesentericArtery,
+            LeftUreter,
+            LeftGonadalVessels,
+            Rectum,
+            UrinaryBladder,
+            RightKidney,
+            LeftKidney,
+            Heart,
+            Lungs,
+        };
     }
 
     public static class AnatomyUnityNames

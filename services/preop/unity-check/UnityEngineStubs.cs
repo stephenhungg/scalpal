@@ -8,6 +8,8 @@ namespace UnityEngine
     public class Object
     {
         public string name { get; set; }
+        public static T Instantiate<T>(T original) where T : Object => original;
+        public static void Destroy(Object obj) { }
     }
 
     public class Component : Object
@@ -22,8 +24,12 @@ namespace UnityEngine
 
     public class GameObject : Object
     {
+        public GameObject() { }
+        public GameObject(string name) { }
         public Transform transform => null;
         public bool activeInHierarchy => true;
+        public void SetActive(bool value) { }
+        public T AddComponent<T>() where T : Component => default;
     }
 
     public enum Space { World, Self }
@@ -33,11 +39,19 @@ namespace UnityEngine
         public Vector3 position => default;
         public Vector3 InverseTransformPoint(Vector3 position) => position;
         public void Rotate(Vector3 axis, float angle, Space relativeTo) { }
+        public Vector3 localPosition { get; set; }
+        public void SetParent(Transform parent, bool worldPositionStays) { }
     }
 
     public class Collider : Component
     {
         public bool enabled { get; set; }
+    }
+
+    public class SphereCollider : Collider
+    {
+        public bool isTrigger { get; set; }
+        public float radius { get; set; }
     }
 
     [AttributeUsage(AttributeTargets.Class)]
@@ -152,6 +166,7 @@ namespace UnityEngine
     {
         public static float Max(float a, float b) => Math.Max(a, b);
         public static float Sign(float f) => f >= 0f ? 1f : -1f;
+        public static float Min(float a, float b) => Math.Min(a, b);
     }
 
     public struct Vector3
