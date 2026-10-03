@@ -6,7 +6,7 @@ Updated October 3, 2026. These are current boundary requirements, not a claim th
 
 Each exchange identifies its session, attempt, authored exercise ID/content version, schema version and applicable step version. A retry of practice creates a new attempt; a processor retry creates a new run under the same job. Pair explicitly with an authorized session rather than adopting the newest patient session.
 
-Matthew currently uses case/patient/procedure IDs and coach IDs; Nathan uses session/attempt/exercise IDs. Agree the mapping and selected authored case/version. The browser's `instrument-transfer` @ `0.1.0` placeholder is not a catalog agreement. Artifact, command, event and job IDs refer to the same session and attempt; existence alone is insufficient.
+Matthew currently uses case/patient/procedure IDs and coach IDs; Nathan uses session/attempt/exercise IDs. Agree the mapping and selected authored case/version. The browser's `instrument-transfer` @ `0.1.0` placeholder is not a catalog agreement. Matthew's newer anatomy slice prepares adult `patient-demo-multi-source` / `lap_appendectomy` first; map that exact case/version rather than the placeholder. Artifact, command, event and job IDs refer to the same session and attempt; existence alone is insufficient.
 
 Keep presentation mode separate from lifecycle phase. Matthew's coach `mode` already means `mixed_reality` or `virtual`; Nathan's current `mode` means lifecycle phase. Map those semantics explicitly and agree the separate presentation field/migration before publishing it from Unity.
 
