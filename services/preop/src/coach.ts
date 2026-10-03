@@ -25,12 +25,20 @@ export type AlertKind =
 
 export type AlertPriority = "urgent" | "normal" | "low";
 
+// Alerting tiers after FAA AC 25.1322-1: warnings preempt everything and play a pre-rendered reflex clip
+// (no LLM in the loop), cautions become a queued spoken turn, advisories only update silent context.
+export type AlertTier = "warning" | "caution" | "advisory";
+
 export interface CoachAlert {
   id: string;
   kind: AlertKind;
   priority: AlertPriority;
+  tier: AlertTier;
   stepId: string;
+  version: number; // state version this alert belongs to; the client drops it once the state moves on
   say: string;
+  reflexKey: string; // "" unless a pre-rendered clip exists for this warning
+  reflexText: string;
   highlight: string[];
   at: string;
 }
@@ -189,13 +197,27 @@ export class CoachSession {
 
   private changed(alerts: CoachAlert[]) {
     this.version += 1;
+    for (const a of alerts) a.version = this.version;
     const snapshot = this.snapshot();
     for (const fn of this.listeners) fn({ snapshot, alerts });
   }
 
-  private alert(kind: AlertKind, priority: AlertPriority, say: string, highlight: string[] = [], stepId = this.engine.current?.id ?? ""): CoachAlert {
+  private alert(kind: AlertKind, priority: AlertPriority, say: string, highlight: string[] = [], stepId = this.engine.current?.id ?? "", reflexKey = ""): CoachAlert {
     this.alertSeq += 1;
-    return { id: `${this.id}-a${this.alertSeq}`, kind, priority, stepId, say, highlight, at: this.clock().toISOString() };
+    const tier: AlertTier = priority === "urgent" ? "warning" : priority === "low" ? "advisory" : "caution";
+    return {
+      id: `${this.id}-a${this.alertSeq}`,
+      kind,
+      priority,
+      tier,
+      stepId,
+      version: this.version,
+      say,
+      reflexKey: tier === "warning" ? reflexKey : "",
+      reflexText: tier === "warning" && reflexKey ? say : "",
+      highlight,
+      at: this.clock().toISOString(),
+    };
   }
 
   private name(id: string): string {
@@ -244,7 +266,9 @@ export class CoachSession {
       this.mistakes.push({ stepId: step.id, mistakeId: m.id, severity: m.severity, structure: m.structure, feedback: m.feedback, at: this.clock().toISOString() });
       this.offTarget += 1;
       this.lastEvent = `Mistake on ${this.name(m.structure)}: ${m.feedback}`;
-      alerts.push(this.alert("mistake", m.severity === "high" ? "urgent" : "normal", m.feedback, [m.structure, ...step.targets.slice(0, 1)]));
+      const urgent = m.severity === "high";
+      const say = urgent ? reflexLine(m.feedback) : m.feedback;
+      alerts.push(this.alert("mistake", urgent ? "urgent" : "normal", say, [m.structure, ...step.targets.slice(0, 1)], step.id, `mistake.${m.id}`));
     } else if (result.advanced) {
       const seconds = Math.round((this.ms() - this.stepStartedAt) / 1000);
       const stepMistakes = this.mistakes.filter((m) => m.stepId === step.id).length;
@@ -293,7 +317,7 @@ export class CoachSession {
       alerts.push(this.alert("tracking_restored", "low", "Tracking is back. Pick up where you left off."));
     } else {
       this.lastEvent = "Tracking lost; anatomy hidden and scoring paused.";
-      alerts.push(this.alert("tracking_lost", "urgent", "I've lost tracking on the patient, so I've paused. Hold still and look back at the torso."));
+      alerts.push(this.alert("tracking_lost", "urgent", TRACKING_LOST_LINE, [], this.engine.current?.id ?? "", "tracking_lost"));
     }
     this.changed(alerts);
     return { accepted: true, reason: "", alerts };
@@ -304,7 +328,9 @@ export class CoachSession {
     this.focus = structureId;
     const alerts: CoachAlert[] = [];
     const step = this.engine.current;
-    if (step && structureId && this.dangersOf(step).includes(structureId) && !this.warnedFocus.has(structureId)) {
+    // Looking at a step's own target is the point of the step, even if mishandling it is a listed mistake.
+    const danger = step && structureId && this.dangersOf(step).includes(structureId) && !step.targets.includes(structureId);
+    if (step && danger && !this.warnedFocus.has(structureId)) {
       this.warnedFocus.add(structureId);
       // The step's own mistake feedback is the relevant warning; the general fact is the fallback.
       const reason = step.mistakes.find((m) => m.structure === structureId)?.feedback ?? STRUCTURE_FACTS[structureId]?.why ?? "";
@@ -536,6 +562,20 @@ export class CoachSession {
       nextTitle: next?.title ?? "",
     };
   }
+}
+
+export const TRACKING_LOST_LINE = "I've lost tracking on the patient, so I've paused. Hold still and look back at the torso.";
+
+// Urgent mistake lines open with "Stop." so the reflex clip and any LLM follow-up sound the same.
+export function reflexLine(feedback: string): string {
+  return /^(stop|careful)\b/i.test(feedback) ? feedback : `Stop. ${feedback}`;
+}
+
+// Every pre-renderable warning line for a case: high-severity mistakes plus tracking loss.
+export function reflexLines(kase: SurgicalCase): { key: string; text: string }[] {
+  const lines = kase.procedure.steps.flatMap((s) => s.mistakes.filter((m) => m.severity === "high").map((m) => ({ key: `mistake.${m.id}`, text: reflexLine(m.feedback) })));
+  const unique = [...new Map(lines.map((l) => [l.key, l])).values()];
+  return [...unique, { key: "tracking_lost", text: TRACKING_LOST_LINE }];
 }
 
 // True when the authored hint mostly repeats the coaching sentence, so the nudge says it once.

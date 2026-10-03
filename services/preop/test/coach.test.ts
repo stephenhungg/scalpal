@@ -269,3 +269,13 @@ describe("coach routes", () => {
     expect(await page.text()).toMatch(/<title>/);
   });
 });
+
+describe("danger focus", () => {
+  it("does not warn when the learner looks at the step's own target", () => {
+    const s = new CoachSession("coach-f", buildCase(fixture("patient-demo-pediatric-asthma"), "", NOW), () => NOW);
+    while (s.engine.current?.id !== "find_appendix") s.handle(s.nextCorrectEvent()!);
+    expect(s.handle({ type: "focus", structureId: "appendix" }).alerts).toEqual([]);
+    while ((s.engine.current?.id as string) !== "divide_mesoappendix") s.handle(s.nextCorrectEvent()!);
+    expect(s.handle({ type: "focus", structureId: "terminal_ileum" }).alerts[0]?.kind).toBe("danger_focus");
+  });
+});

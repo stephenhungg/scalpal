@@ -7,6 +7,7 @@ import { buildBrief, DISCLAIMER } from "./brief.js";
 import { buildCase, routes, scorePreopCheck, unavailableCase } from "./case-builder.js";
 import type { StuckPolicy } from "./coach.js";
 import { registerCoachRoutes } from "./coach-routes.js";
+import type { ReflexAudio } from "./reflex.js";
 import { FinchNodeError, createFinchNodeClient, type FinchNodeClient } from "./finchnode.js";
 import type { Action, AdmissionStatus, Scenario, SandboxSession, SurgicalCase } from "./types.js";
 
@@ -15,7 +16,8 @@ export interface AppOptions {
   now?: () => Date;
   coachTickMs?: number;
   stuckPolicy?: StuckPolicy;
-  elevenLabs?: { apiKey: string; agentId: string };
+  elevenLabs?: { apiKey: string; agentId: string; voiceId?: string };
+  reflex?: ReflexAudio;
 }
 
 export interface PatientListEntry {
@@ -390,6 +392,7 @@ export function createApp(options: AppOptions = {}) {
     tickMs: options.coachTickMs,
     stuckPolicy: options.stuckPolicy,
     elevenLabs: options.elevenLabs,
+    reflex: options.reflex,
     loadCase: async (id) => {
       const target = await resolve(id);
       return target ? caseOrUnavailable(target.subject, target.scenarioId) : null;

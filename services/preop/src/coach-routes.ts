@@ -4,7 +4,8 @@ import { streamSSE } from "hono/streaming";
 import { ANATOMY, ANATOMY_BY_ID } from "./catalog/anatomy.js";
 import { STRUCTURE_FACTS } from "./catalog/coach-knowledge.js";
 import { INSTRUMENTS_BY_ID } from "./catalog/instruments.js";
-import { CoachSession, renderContext, type CoachEvent, type StuckPolicy } from "./coach.js";
+import { CoachSession, reflexLines, renderContext, type CoachEvent, type StuckPolicy } from "./coach.js";
+import { ReflexAudio } from "./reflex.js";
 import { buildSystemPrompt, firstMessage } from "./coach-prompt.js";
 import type { Action, SurgicalCase } from "./types.js";
 
@@ -17,7 +18,8 @@ export interface CoachRouteOptions {
   now: () => Date;
   stuckPolicy?: StuckPolicy;
   tickMs?: number; // 0 disables the background stuck timer (tests call tick directly)
-  elevenLabs?: { apiKey: string; agentId: string };
+  elevenLabs?: { apiKey: string; agentId: string; voiceId?: string };
+  reflex?: ReflexAudio; // injectable for tests; built from elevenLabs when omitted
 }
 
 const MAX_SESSIONS = 50;
@@ -44,6 +46,8 @@ const coachActions = (sid: string): Action[] => [
 
 export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
   const sessions = new Map<string, CoachSession>();
+  const reflex =
+    options.reflex ?? (options.elevenLabs?.apiKey && options.elevenLabs.voiceId ? new ReflexAudio({ apiKey: options.elevenLabs.apiKey, voiceId: options.elevenLabs.voiceId }) : null);
   let ticker: ReturnType<typeof setInterval> | null = null;
   const tickMs = options.tickMs ?? 1000;
 
@@ -243,7 +247,8 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
         break;
       }
       case "look_at_danger": {
-        const danger = s.engine.current?.mistakes[0]?.structure;
+        const step = s.engine.current;
+        const danger = step?.mistakes.find((m) => !step.targets.includes(m.structure))?.structure;
         events = danger ? [{ type: "focus", structureId: danger }] : [];
         break;
       }
@@ -280,8 +285,36 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
     });
   });
 
+  // Pre-rendered warning clips for a session's case. The page fetches them all at start so a warning
+  // plays instantly, without an LLM turn.
+  app.get("/jarvis/reflex/:sid", (c) => {
+    const s = getSession(c);
+    if (!s) return missing(c);
+    const lines = reflexLines(s.kase).map((l) => ({ ...l, route: `/jarvis/reflex/${s.id}/${l.key}` }));
+    return c.json({ configured: Boolean(reflex?.configured), lines, actions: coachActions(s.id) });
+  });
+
+  app.get("/jarvis/reflex/:sid/:key", async (c) => {
+    const s = getSession(c);
+    if (!s) return missing(c);
+    const line = reflexLines(s.kase).find((l) => l.key === c.req.param("key"));
+    if (!line) return bad(c, 404, "reflex_not_found", "No warning line with that key in this case.", coachActions(s.id));
+    if (!reflex?.configured) return bad(c, 503, "reflex_unconfigured", "Set ELEVENLABS_API_KEY and JARVIS_VOICE_ID to pre-render warnings.", coachActions(s.id));
+    try {
+      const audio = await reflex.render(line.text);
+      return c.body(new Uint8Array(audio), 200, { "Content-Type": "audio/mpeg", "Cache-Control": "private, max-age=3600" });
+    } catch (err) {
+      return bad(c, 503, "reflex_render_failed", err instanceof Error ? err.message : "TTS failed.", coachActions(s.id));
+    }
+  });
+
   // Jarvis voice page (laptop browser) and its ElevenLabs connection details.
   app.get("/jarvis", (c) => c.html(readFileSync(new URL("./jarvis/index.html", import.meta.url), "utf8")));
+  for (const file of ["app.js", "arbiter.js"]) {
+    app.get(`/jarvis/${file}`, (c) =>
+      c.body(readFileSync(new URL(`./jarvis/${file}`, import.meta.url), "utf8"), 200, { "Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "no-cache" }),
+    );
+  }
 
   app.get("/jarvis/connection", async (c) => {
     const el = options.elevenLabs;
