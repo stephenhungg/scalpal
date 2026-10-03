@@ -4,7 +4,7 @@ This package is a functional virtual-tool prototype for Unity 6000.0.66f2. It is
 
 ## Build and Open
 
-Open the committed [Unity project](../apps/quest/README.md) at `apps/quest` in Unity 6000.0.66f2, then open `Assets/Scalpal/Instruments/Samples/InstrumentSandbox.unity`. Its package manifest, lock, project settings and enabled sandbox build scene are committed. The project remains a standalone editor workbench: it does not configure a native XR loader, Android deployment, passthrough permission or headset rig. Alternatively, import the complete [Instruments](../apps/quest/Assets/Scalpal/Instruments/) folder into an existing native Quest project's `Assets/Scalpal/` directory, preserving `.meta` files.
+Open the committed [Unity project](../apps/quest/README.md) at `apps/quest` in Unity 6000.0.66f2, then open `Assets/Scalpal/Instruments/Samples/InstrumentSandbox.unity`. Its package manifest, lock and project settings are committed. The enabled build scene is now the standalone [native full-VR workbench](native-workbench.md), which configures Android OpenXR and tracked head/controllers. Passthrough, body registration and the assembled surgical case remain unconnected. Alternatively, import the complete [Instruments](../apps/quest/Assets/Scalpal/Instruments/) folder into an existing native Quest project's `Assets/Scalpal/` directory, preserving `.meta` files.
 
 In Unity, use **Scalpal → Instruments → Build Prefabs and Sandbox**. This reads fifteen `Models/inst_<id>.fbx` files, creates PBR materials and pickup prefabs under `Prefabs/`, and creates `Samples/InstrumentSandbox.unity`. Existing open scenes are restored after generation; the menu asks to save modified scenes first. This generator intentionally rebuilds its outputs, so authored customization should be made in separate prefab variants.
 
@@ -16,12 +16,12 @@ The generator adds a Rigidbody, compound box/capsule colliders, and a small dist
 
 [XRInstrumentInput.cs](../apps/quest/Assets/Scalpal/Instruments/Runtime/XRInstrumentInput.cs) reads Unity's `InputDevices.GetDeviceAtXRNode`, `CommonUsages.devicePosition`, `deviceRotation`, `isTracked`, `grip`, and `trigger`. It does not depend on Meta-specific C# classes or XR Interaction Toolkit.
 
-For each controller, attach `InstrumentInteractor` and `XRInstrumentInput` to a dedicated GameObject. Select `LeftHand` or `RightHand`, and assign the **actual tracking-origin transform** from the application's XR rig. The sandbox's `TrackingOrigin` is an integration placeholder; it does not start XR or track its desktop preview camera. Replace the sandbox camera with the configured headset rig when moving the workbench into the Quest application.
+For each controller, attach `InstrumentInteractor` and `XRInstrumentInput` to a dedicated GameObject. Select `LeftHand` or `RightHand`, and assign the **actual tracking-origin transform** from the application's XR rig. The sandbox's `TrackingOrigin` is an integration placeholder; it does not start XR or track its desktop preview camera. The native scene already supplies a stereo head camera and shared floor-space origin; use it for physical controller tests.
 
 - Grip crossing 0.65 picks up the nearest unheld instrument within 14 cm of the controller's grip point.
 - Grip below 0.25 releases it and restores its earlier physics settings.
 - Trigger above 0.7 activates a held tool. Below 0.2 releases its target and rearms discrete actions.
-- A held instrument follows the controller at its `GripAnchor`; its Rigidbody becomes kinematic while held.
+- A held instrument follows the controller at its `GripAnchor`; its Rigidbody becomes kinematic and disables physics interpolation while held. Release restores the original interpolation policy. The XR adapter refreshes poses before rendering, without repeating trigger/grip actions.
 - Losing valid controller tracking immediately releases the instrument, ends its action, and releases any grasped virtual target. Recovery requires a physical grip release before another pickup.
 
 Hand tracking, two-hand grips, controller haptics, throw velocity, tool-change UI, and laparoscopic port constraints are not implemented. These are explicit extension points rather than claimed capabilities.

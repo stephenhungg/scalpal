@@ -1,6 +1,6 @@
 # Mixed Reality and Full VR Modes
 
-Updated October 3, 2026 from the user's explicit direction: support a real reclining person with generic virtual organs and a separate entirely virtual surgery-themed demo. These share one exercise, tool behavior, voice coach and state flow. The two modes are a product direction; only static VR scene art and the earlier instrument sandbox are prepared on this branch.
+Updated October 3, 2026 from the user's explicit direction: support a real reclining person with generic virtual organs and a separate entirely virtual surgery-themed demo. These share one exercise, tool behavior, voice coach and state flow. The two modes are a product direction; a standalone native full-VR workbench now combines the room art, XR rig and instrument patch. Organs, the connected case/coach and MR fit remain pending; see [hardware evidence](native-workbench.md).
 
 ## Shared Core
 
@@ -33,7 +33,7 @@ A translucent body outline and focused anatomy window can show correspondence wi
 
 The prepared CC0 room and mannequin are available in `Assets/Scalpal/Environment/Samples/OperatingRoomPreview.unity`. The source model is approximate, static scene art. `PatientRoot` and `AnatomyRoot_Unbound` make the missing organ binding visible; no organs or surgery logic are secretly attached.
 
-Next integrate the real XR rig, a selected anatomy assembly and the existing tool prefabs. Validate that the anatomy source frame fits the mannequin/table; Matthew's Z-Anatomy layers and separate HRA detail models are not automatically interchangeable. Existing authored seam cutting remains a practice-patch effect rather than arbitrary organ slicing.
+The native workbench supplies the XR rig and shared tool prefabs for an authored patch test. Next integrate a selected anatomy/case assembly. Validate that the anatomy source frame fits the mannequin/table; Matthew's Z-Anatomy layers and separate HRA detail models are not automatically interchangeable. Existing authored seam cutting remains a practice-patch effect rather than arbitrary organ slicing.
 
 At a mode transition, release held tools, invalidate the previous patient fit and rebind the same exercise to the new patient root before accepting another action. Record the presentation mode in session context for the companion and Jarvis; field names and migration are proposed until agreed with Nathan and Matthew.
 
