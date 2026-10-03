@@ -18,6 +18,7 @@ namespace Scalpal.Quest
         public TextMesh status;
         public Vector3 initialHeadFloorPosition = new Vector3(0, 0, -0.5f);
         public bool externalSessionControls;
+        public NativePresentation presentation;
         public bool IsReady { get; private set; }
         public event Action ResetRequested;
 
@@ -67,7 +68,7 @@ namespace Scalpal.Quest
                 gripMarkers[i] = inputs[i].transform.Find("ControllerGripMarker")?.GetComponent<Renderer>();
             Gate(false);
             sampleStart = Time.unscaledTime;
-            Debug.Log("SCALPAL_NATIVE_BOOT version=" + Application.version + " mode=full_vr tools=" + tools.Length);
+            Debug.Log("SCALPAL_NATIVE_BOOT version=" + Application.version + " view=" + (presentation && presentation.passthrough ? "passthrough" : "full_vr") + " tools=" + tools.Length);
         }
 
         void OnEnable() => Application.onBeforeRender += UpdateHeadPose;
@@ -107,7 +108,8 @@ namespace Scalpal.Quest
                 aligned = true;
                 Debug.Log("SCALPAL_NATIVE_ALIGNED origin=floor");
             }
-            bool valid = running && floor && aligned && headTracked && focused && !paused;
+            bool valid = running && floor && aligned && headTracked && focused && !paused
+                && (!presentation || presentation.Ready);
             Gate(valid);
             var right = InputDevices.GetDeviceAtXRNode(XRNode.RightHand);
             right.TryGetFeatureValue(CommonUsages.primaryButton, out bool reset);

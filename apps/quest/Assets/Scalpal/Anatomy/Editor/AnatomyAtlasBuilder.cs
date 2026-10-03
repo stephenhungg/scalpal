@@ -18,6 +18,30 @@ namespace Scalpal.Anatomy.EditorTools
         public const string PrefabPath = AnatomyPath + "/Prefabs/AnatomyAtlas.prefab";
         public const string DefaultProcedureId = "lap_appendectomy";
         public const string AppendectomyPrefabPath = AnatomyPath + "/Prefabs/AnatomyExercise_lap_appendectomy.prefab";
+        public const string OrganOverviewPrefabPath = AnatomyPath + "/Prefabs/AnatomyOrgans_Overview.prefab";
+        public const int OrganOverviewExpectedTriangles = 110511;
+        public const int OrganOverviewTriangleBudget = 150000;
+        public static int OrganOverviewPartCount => OrganOverviewIds.Count;
+
+        // Explicit shared-body-frame parts, including the five lung lobes and four heart
+        // chambers as their source IDs. Do not invent combined "heart"/"lungs" surgery IDs.
+        // Greater omentum is deliberately omitted: its 77,968 triangles cover anterior
+        // organs. BuildExercise still preserves that authored appendectomy context.
+        public static readonly IReadOnlyList<string> OrganOverviewIds = Array.AsReadOnly(new[] {
+            "liver", "gallbladder", "pancreas", "stomach", "duodenum", "small_bowel",
+            "cecum", "terminal_ileum", "appendix", "mesoappendix", "visceral__ascending_colon",
+            "transverse_colon", "descending_colon", "sigmoid_colon", "rectum",
+            "sigmoid_mesocolon", "left_gonadal_vessels", "cystic_duct", "cystic_artery",
+            "common_bile_duct", "common_hepatic_duct", "right_hepatic_artery", "appendicular_artery",
+            "left_kidney", "right_kidney", "left_ureter", "right_ureter", "urinary_bladder",
+            "visceral__suprarenal_gland_l", "visceral__suprarenal_gland_r", "lymphatic__spleen",
+            "visceral__oesophagus", "visceral__trachea",
+            "visceral__superior_lobe_of_left_lung", "visceral__inferior_lobe_of_left_lung",
+            "visceral__superior_lobe_of_right_lung", "visceral__middle_lobe_of_right_lung",
+            "visceral__inferior_lobe_of_right_lung",
+            "cardiovascular__left_atrium", "cardiovascular__right_atrium",
+            "cardiovascular__left_ventricle", "cardiovascular__right_ventricle"
+        });
 
         [Serializable]
         sealed class Atlas
@@ -43,6 +67,7 @@ namespace Scalpal.Anatomy.EditorTools
             public string system;
             public string objectName;
             public string catalogId;
+            public int triangles;
         }
 
         [MenuItem("Scalpal/Anatomy/Build Atlas Prefab")]
@@ -145,6 +170,46 @@ namespace Scalpal.Anatomy.EditorTools
                 AnatomyPath + "/Prefabs/AnatomyExercise_" + procedureId + ".prefab", false);
         }
 
+        [MenuItem("Scalpal/Anatomy/Build Organ Overview Prefab")]
+        public static void BuildOrganOverviewFromMenu()
+        {
+            Selection.activeObject = BuildOrganOverview();
+        }
+
+        // Reusable selection/inspection anatomy, never another scored case. All selected
+        // geometry retains its source frame; the caller centers/scales the pedestal only.
+        // Independent HRA detail assets and the full skin/skeleton atlas remain separate.
+        public static GameObject BuildOrganOverview()
+        {
+            var text = AssetDatabase.LoadAssetAtPath<TextAsset>(ManifestPath);
+            if (text == null) throw new InvalidOperationException("Missing atlas manifest: " + ManifestPath);
+            var atlas = JsonUtility.FromJson<Atlas>(text.text);
+            ValidateManifest(atlas);
+            var available = atlas.parts.ToDictionary(part => part.stableId, StringComparer.Ordinal);
+            var bodySystems = new HashSet<string>(atlas.systems.Where(system => system.group == "body")
+                .Select(system => system.id), StringComparer.Ordinal);
+            var selected = new List<PartEntry>();
+            foreach (var id in OrganOverviewIds)
+            {
+                if (!available.TryGetValue(id, out var part) || !bodySystems.Contains(part.system) || part.triangles <= 0)
+                    throw new InvalidOperationException("Organ overview requires verified shared-frame body geometry: " + id);
+                selected.Add(part);
+            }
+            long triangles = selected.Sum(part => (long)part.triangles);
+            if (triangles != OrganOverviewExpectedTriangles || triangles > OrganOverviewTriangleBudget)
+                throw new InvalidOperationException("Organ overview geometry changed: " + triangles
+                    + " triangles; expected " + OrganOverviewExpectedTriangles + ", budget " + OrganOverviewTriangleBudget + ".");
+            var systems = new HashSet<string>(selected.Select(part => part.system), StringComparer.Ordinal);
+            var subset = new Atlas {
+                schemaVersion = atlas.schemaVersion,
+                systems = atlas.systems.Where(system => systems.Contains(system.id)).ToArray(),
+                parts = selected.ToArray()
+            };
+            // No collider is authored into this overview, including catalog-named organs.
+            // Practice physics continue to come exclusively from BuildExercise.
+            return BuildAtlas(subset, FindShader(), "AnatomyOrgans_Overview", OrganOverviewPrefabPath, false, false);
+        }
+
         static Shader FindShader()
         {
             var shader = UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline == null
@@ -154,7 +219,8 @@ namespace Scalpal.Anatomy.EditorTools
             return shader;
         }
 
-        static GameObject BuildAtlas(Atlas atlas, Shader shader, string rootName, string prefabPath, bool requireCompleteCoverage = true)
+        static GameObject BuildAtlas(Atlas atlas, Shader shader, string rootName, string prefabPath,
+            bool requireCompleteCoverage = true, bool addCatalogColliders = true)
         {
             var root = new GameObject(rootName);
             try
@@ -248,6 +314,7 @@ namespace Scalpal.Anatomy.EditorTools
                     component.ghostMaterial = ghostMaterials[MaterialKey(part.system, part.displayName)];
                     if (string.IsNullOrEmpty(part.catalogId)) continue;
                     filter.name = "anat_" + part.catalogId;
+                    if (!addCatalogColliders) continue;
                     // Only authored exercise targets get physics. Thousands of whole-body
                     // colliders are unnecessary; static concave geometry needs no Rigidbody.
                     var collider = filter.gameObject.GetComponent<MeshCollider>();
@@ -275,6 +342,9 @@ namespace Scalpal.Anatomy.EditorTools
                 var bounds = renderers[0].bounds;
                 foreach (var renderer in renderers.Skip(1)) bounds.Encapsulate(renderer.bounds);
                 long triangles = geometry.Sum(filter => (long)filter.sharedMesh.triangles.Length / 3);
+                if (prefabPath == OrganOverviewPrefabPath && (geometry.Length != OrganOverviewPartCount
+                    || triangles != OrganOverviewExpectedTriangles || triangles > OrganOverviewTriangleBudget || colliders != 0))
+                    throw new InvalidOperationException("Imported organ overview does not match its bounded render-only geometry contract.");
                 var prefab = PrefabUtility.SaveAsPrefabAsset(root, prefabPath, out bool success);
                 if (!success || prefab == null) throw new InvalidOperationException("Unity could not save " + prefabPath);
                 AssetDatabase.SaveAssets();

@@ -28,6 +28,8 @@ def main():
         if url.hostname in {"localhost", "127.0.0.1"} and url.port:
             subprocess.run([adb, "-d", "reverse", f"tcp:{url.port}", f"tcp:{url.port}"],
                            check=True, capture_output=True, timeout=20)
+    # Local, ephemeral body-pose inference; forwarding does not start camera capture.
+    subprocess.run([adb, "-d", "reverse", "tcp:8790", "tcp:8790"], check=True, capture_output=True, timeout=20)
     destination = "files"
     # Fixed command text; private JSON travels only through stdin, never command arguments/logs.
     command = f"run-as {PACKAGE} sh -c 'mkdir -p {destination} && cat > {destination}/session-config.json'"

@@ -15,7 +15,8 @@ using UnityEngine.XR;
 
 namespace Scalpal.Quest
 {
-    // One authored full-VR exercise. The case engine owns progression; adapters report real inputs.
+    // One exercise across AR/VR. The case engine owns progression; adapters report real inputs.
+    [DefaultExecutionOrder(75)]
     public sealed class NativeCaseSession : MonoBehaviour
     {
         public NativeWorkbench workbench;
@@ -26,6 +27,11 @@ namespace Scalpal.Quest
         public QuestJarvisVoice voice;
         public Transform patientFrame;
         public TextMesh status;
+        public NativePresentation presentation;
+        public NativeBodyRegistration bodyRegistration;
+        public string PresentationMode => presentation ? presentation.CoachMode : "virtual";
+        public bool RegistrationReady => workbench && workbench.IsReady && (!presentation || !presentation.passthrough
+            || (bodyRegistration && bodyRegistration.Accepted && bodyRegistration.CandidateValid));
         public string coachBaseUrl = "http://localhost:8787";
         public const string PatientId = "patient-demo-multi-source";
         public const string ProcedureId = "lap_appendectomy";
@@ -70,9 +76,10 @@ namespace Scalpal.Quest
             voice.ConfigureEndpoint(coachBaseUrl);
             input = GetComponent<NativeProcedureInput>() ?? gameObject.AddComponent<NativeProcedureInput>();
             input.portMarkers = patientFrame.GetComponentsInChildren<NativePortMarker>(true);
-            input.Initialize(exercise, workbench, () => Practicing && SharedMatches);
+            patientFrame.gameObject.SetActive(false);
+            input.Initialize(exercise, workbench, () => Practicing && SharedMatches && RegistrationReady);
             exercise.anatomy = anatomy; exercise.coach = coach;
-            exercise.presentationMode = "virtual"; exercise.requireCoachSynchronization = true;
+            exercise.presentationMode = PresentationMode; exercise.requireCoachSynchronization = true;
             exercise.EventHandled += EventHandled;
             coach.CommandRequested += CoachCommand;
             realtime.AttemptStarted += AttemptStarted;
@@ -137,7 +144,8 @@ namespace Scalpal.Quest
                 preview.gameObject.SetActive(true);
                 Message = "Shared session/attempt changed; A: start a new matching attempt";
             }
-            bool fitValid = workbench.IsReady && Practicing && SharedMatches;
+            bool fitValid = RegistrationReady && Practicing && SharedMatches;
+            patientFrame.gameObject.SetActive(fitValid);
             anatomy.SetRegistrationValid(fitValid);
             coach.Tracking(fitValid);
             if (realtime.Paired && !sharedAttemptReady && !attemptRequested && !attemptFailed) RequestAttempt();
@@ -182,6 +190,13 @@ namespace Scalpal.Quest
         public bool ConfirmAction()
         {
             if (busy || candidate == null) return false;
+            if (presentation && presentation.passthrough && bodyRegistration && !bodyRegistration.Accepted
+                && (Phase == "Confirmed" || Phase == "Practicing"))
+            {
+                bool accepted = bodyRegistration.TryAccept();
+                Message = accepted ? "Body fit accepted. B: continue" : bodyRegistration.Status;
+                return accepted;
+            }
             if (Phase == "Selecting")
             {
                 reviewed = true; Phase = "Confirmed"; rotating = false; preview.SetPreviewRotation(false);
@@ -189,6 +204,7 @@ namespace Scalpal.Quest
             }
             if (Phase == "Confirmed")
             {
+                if (!RegistrationReady) { Message = "Waiting for a valid accepted body fit"; return false; }
                 if (!SharedMatches || attemptRequested)
                 { Message = "Waiting for a confirmed shared headset session"; return false; }
                 StartCoroutine(StartPractice(generation)); return true;
@@ -205,13 +221,13 @@ namespace Scalpal.Quest
         {
             busy = true; Message = "Creating a fresh matched coach session";
             string json = null;
-            yield return Request("POST", "/coach/sessions", JsonUtility.ToJson(new CreateRequest()), value => json = value);
+            yield return Request("POST", "/coach/sessions", JsonUtility.ToJson(new CreateRequest { mode = PresentationMode }), value => json = value);
             if (epoch != generation) yield break;
-            if (!SharedMatches) { busy = false; Message = "Shared attempt changed while coach was loading; A: retry"; yield break; }
+            if (!SharedMatches || !RegistrationReady) { busy = false; Message = "Shared attempt or body fit changed while loading; confirm and retry"; yield break; }
             Created created = null;
             try { if (json != null) created = JsonUtility.FromJson<Created>(json); } catch (ArgumentException) { }
             if (created?.snapshot == null || created.snapshot.caseId != candidate.caseId ||
-                created.snapshot.patientId != PatientId || created.snapshot.procedureId != ProcedureId || created.snapshot.mode != "virtual")
+                created.snapshot.patientId != PatientId || created.snapshot.procedureId != ProcedureId || created.snapshot.mode != PresentationMode)
             { busy = false; Message = "Coach case differs from the reviewed case; restart selection"; yield break; }
             coachSessionId = created.sessionId;
             voicePrompt = created.systemPrompt; voiceGreeting = created.firstMessage; voiceContext = created.context;
@@ -220,9 +236,9 @@ namespace Scalpal.Quest
             { busy = false; Message = reason; yield break; }
             preview.gameObject.SetActive(false);
             Phase = "Practicing"; practicePaused = false;
-            anatomy.SetRegistrationValid(workbench.IsReady); coach.Tracking(workbench.IsReady);
+            anatomy.SetRegistrationValid(RegistrationReady); coach.Tracking(RegistrationReady);
             busy = false; Message = "Practice starts after coach synchronization";
-            realtime.AppendEvent("practice_started", exercise.Current?.id, null, "Authored full-VR synthetic case", Time.realtimeSinceStartupAsDouble * 1000);
+            realtime.AppendEvent("practice_started", exercise.Current?.id, null, "Generic teaching anatomy; " + PresentationMode, Time.realtimeSinceStartupAsDouble * 1000);
             if (voiceRequested) ConnectVoice();
             Publish();
         }
@@ -233,6 +249,8 @@ namespace Scalpal.Quest
             generation++; voice.Disconnect(); coachSessionId = "";
             sharedAttemptReady = false; attemptFailed = false; attemptRequested = false;
             exercise.StopAttempt(); workbench.ResetWorkbench();
+            if (bodyRegistration) bodyRegistration.ResetFit();
+            patientFrame.gameObject.SetActive(false);
             completedSteps = mistakes = 0; practicePaused = reviewed = false; highlighted = selected = "";
             preview.gameObject.SetActive(true); preview.SetPreviewMode(true); preview.RestoreVisibility();
             preview.SetPreviewRotation(true); rotating = true;
@@ -262,7 +280,7 @@ namespace Scalpal.Quest
                 Phase = "Recap"; anatomy.SetRegistrationValid(false); coach.Tracking(false);
                 Message = $"Complete: {completedSteps}/{candidate.procedure.steps.Length} steps, {mistakes} authored warnings. A: new attempt";
                 realtime.ReportAttemptResult((uint)completedSteps, (uint)candidate.procedure.steps.Length,
-                    (uint)mistakes, 0, "Authored full-VR appendectomy rehearsal completed");
+                    (uint)mistakes, 0, "Generic appendectomy rehearsal completed; " + PresentationMode);
             }
             Publish();
         }
@@ -303,7 +321,7 @@ namespace Scalpal.Quest
                 case "pausePractice":
                     if (Phase == "Practicing") { practicePaused = true; anatomy.SetRegistrationValid(false); coach.Tracking(false); applied = true; } break;
                 case "resumePractice":
-                    if (Phase == "Practicing" && workbench.IsReady) { practicePaused = false; applied = true; } break;
+                    if (Phase == "Practicing" && RegistrationReady) { practicePaused = false; applied = true; } break;
                 case "requestHint":
                     realtime.ResolveCommand(command, "unavailable", "Coach hints are available through native Jarvis; async hint confirmation is not implemented"); return;
             }
@@ -345,8 +363,22 @@ namespace Scalpal.Quest
             if (!realtime || candidate == null || !SharedMatches) return;
             realtime.PublishSnapshot(Phase, exercise.Current?.id, (uint)completedSteps, (uint)candidate.procedure.steps.Length,
                 selected, highlighted, rotating && Phase == "Selecting", practicePaused || (Phase == "Practicing" && !exercise.CanScore),
-                workbench.IsReady && Practicing && SharedMatches, "Authored full-VR anatomy; not participant registration");
+                RegistrationReady && Practicing && SharedMatches,
+                presentation && presentation.passthrough ? "Operator-assisted planar generic body fit" : "Authored virtual mannequin fit");
         }
+        public bool TryChangePresentation(bool passthrough)
+        {
+            if (!presentation || busy || (Phase != "Selecting" && Phase != "Recap")) return false;
+            if (presentation.passthrough == passthrough) return true;
+            // A presentation change starts a new attempt; old commands/voice cannot cross modes.
+            presentation.passthrough = passthrough;
+            if (bodyRegistration) bodyRegistration.StopTracking();
+            presentation.Apply();
+            exercise.presentationMode = PresentationMode;
+            Retry();
+            return true;
+        }
+
         void UpdateUi()
         {
             string body;
@@ -362,7 +394,8 @@ namespace Scalpal.Quest
                 body = step == null ? "Finishing case" : $"{completedSteps + 1}/{candidate.procedure.steps.Length}: {step.title}\n{step.instruction}\nTool: {step.instrumentId}\nX: identify looked-at anatomy | B: confirm\nFocus: {selected}";
             }
             else body = "B: review appendectomy | Y: enable voice | A: retry";
-            status.text = $"SCALPAL | {Phase}\n{body}\n{Message}\nXR: {(workbench.IsReady ? "ready" : "paused")} | Shared: {realtime.Status}\nCoach: {(exercise.CoachMatches ? "synchronized" : coach.SyncFailureReason)} | Voice: {voice.Status}";
+            string registration = presentation && presentation.passthrough ? "\n" + (bodyRegistration ? bodyRegistration.Status : "Body registration missing") : "\nVirtual mannequin fit";
+            status.text = $"SCALPAL | {Phase} | {PresentationMode}\n{body}\n{Message}{registration}\nXR: {(workbench.IsReady ? "ready" : "paused")} | Shared: {realtime.Status}\nCoach: {(exercise.CoachMatches ? "synchronized" : coach.SyncFailureReason)} | Voice: {voice.Status}\nRight stick: AR/VR in selection";
         }
         IEnumerator Request(string method, string path, string body, Action<string> receive)
         {

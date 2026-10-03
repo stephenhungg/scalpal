@@ -1,6 +1,6 @@
 # Mixed Reality and Full VR Modes
 
-Updated October 3, 2026 from the user's explicit direction: support a real reclining person with generic virtual organs and a separate entirely virtual surgery-themed demo. These share one exercise, tool behavior, voice coach and state flow. The two modes are a product direction; a standalone native full-VR workbench now combines the room art, XR rig and instrument patch. Organs, the connected case/coach and MR fit remain pending; see [hardware evidence](native-workbench.md).
+Updated October 3, 2026 from the user's explicit direction: support a real reclining person with generic virtual organs and a separate entirely virtual surgery-themed demo. These share one exercise, tool behavior, voice coach and state flow. The two modes are a product direction; a standalone native full-VR workbench now combines the room art, XR rig and instrument patch. The native case/coach and organ assembly are now connected. The AR/body-fit milestone uses an operator-assisted torso plane plus MediaPipe; physical participant alignment remains pending. See [body registration](body-registration.md) and [native session](native-session.md).
 
 ## Shared Core
 
@@ -27,7 +27,7 @@ Surface video cannot reveal someone's actual organ geometry. Generic internal an
 5. Fit the selected generic anatomy frame to visible landmarks, inspect external alignment in both eyes, then confirm it. For the first controlled demo, an explicit operator-assisted fit is a proposed fallback if automatic pose detection fails; it must be labeled and measured. A fixed world anchor does not follow a moving participant.
 6. Monitor pose age, confidence, occlusion, head tracking and participant movement. Invalidity pauses assessment and virtual effects. Recovery requires checking/confirming the fit; smoothing must not hide a stale observation.
 
-A translucent body outline and focused anatomy window can show correspondence without covering the whole real person. Ordinary depth occlusion could hide the intentionally visible internal-organ overlay, so that presentation needs an explicit design rather than blindly applying occlusion to every object. No automatic table/body CV or this registration pipeline is implemented by the static environment import.
+A translucent body outline and focused anatomy window can show correspondence without covering the whole real person. Ordinary depth occlusion could hide the intentionally visible internal-organ overlay, so that presentation needs an explicit design rather than blindly applying occlusion to every object. The static environment import itself has no table/body CV. The current [body-fit adapter](body-registration.md) adds visible landmark inference and operator-assisted planar fit; automatic table semantics/depth reconstruction remain absent.
 
 ## Full VR
 

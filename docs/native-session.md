@@ -1,10 +1,18 @@
 # Native Appendectomy Integration
 
-This milestone assembles one full-VR rehearsal in `Assets/Scalpal/Quest/Scenes/NativeSession.unity`. It preserves the native tracked-head/controller rig and the user-confirmed held-tool motion fix. It connects Matthew's authored appendectomy case, selected anatomy, coach HTTP service, a native client for his existing Jarvis agent, and Nathan's actual SpacetimeDB session adapter.
+The original milestone assembled one full-VR rehearsal in `Assets/Scalpal/Quest/Scenes/NativeSession.unity`. It preserves the native tracked-head/controller rig and the user-confirmed held-tool motion fix. It connects Matthew's authored appendectomy case, selected anatomy, coach HTTP service, a native client for his existing Jarvis agent, and Nathan's actual SpacetimeDB session adapter.
 
-The exercise is illustrative. Tool contact advances authored procedural checks; the organs do not have validated deformable-tissue physics. The static virtual patient fit is explicitly authored. This scene does not perform real-person registration, passthrough capture, video streaming, or robot replay.
+The exercise is illustrative. Tool contact advances authored procedural checks; the organs do not have validated deformable-tissue physics. The static virtual patient fit is explicitly authored. The current AR/body-fit milestone is described below; video streaming and robot replay remain absent.
 
-## One Session
+## Current AR / Body Fit Milestone
+
+`0.3.0-ar` defaults to transparent Quest passthrough and hides the virtual room/mannequin. Selection uses a 42-part/110,511-triangle organ overview; practice preserves the nine-part scored appendectomy. MediaPipe image inference is connected through an opt-in local service on 8790, official Meta MRUK 85 calibrated camera rays and an operator-set anterior torso plane. Explicit visual fit acceptance gates anatomy/ports, effects, coach tracking and scoring. Tracking loss/movement requires a fresh acceptance. Right stick switches AR/VR during selection/recap and begins a new attempt. [Body registration](body-registration.md) contains exact coordinates, controls, model identity, bounds and remaining physical checks.
+
+The earlier `0.2.1-main` controllers-required blocker cleared: actual USB smoke showed tracked floor/head/focus, and the live Quest mirror showed the full-VR scene with Shared: Paired. That proves launch/tracking/pairing, not a complete wearer exercise or body fit. Earlier verification paragraphs below preserve historical checks and should not be interpreted as the current blocker.
+
+The current Unity gate passed 37 imported body-reference geometry checks and 34 synthetic body-projection/acceptance/staleness/occlusion/identity checks, alongside the existing instrument/input/playthrough/attempt/coach checks. The local registration service passed 33 tests with actual blank-image inference and loopback HTTP; positive body points and multi-person result rejection used synthetic fixtures. Physical reclining-person detection, camera orientation, stereo alignment, source-to-person accuracy and performance remain unverified. Participant images are not recorded or sent to the media worker.
+
+## Original Full-VR Session Flow
 
 1. Load the synthetic `patient-demo-multi-source` case from Matthew's running service; reject unknown patients, procedures, nonsynthetic briefs and unavailable cases.
 2. Join a genuine headset invitation and create a fresh `lap_appendectomy@0.1.0` attempt. Freeze its shared session/attempt IDs so external attempt changes cannot receive the old local runner's progress.
@@ -56,8 +64,12 @@ Confirmed regressions: stale/unknown coach step metadata no longer scores the cu
 - Existing ElevenLabs agent credentials are currently absent locally; `/jarvis/connection` reports unconfigured. Spoken headset input/output remains unverified.
 - Main includes Matthew's shared tool/alert/context-key service. The native six-tool path now posts complete JSON parameters to the explicit coach-session tool endpoint. Context updates use the meaningful `contextKey`. Fifty actual Unity coroutine/HTTP checks passed against isolated synthetic Hono fixtures, including pending/applied highlights and stale connections; WSS, microphone and provider calls did not run. Polled alerts/reflex pacing remains an adapter gap.
 - Conversational selection and native visual preview actions need to be connected to the same single agent; controller selection is the bounded first integration.
-- MR body registration and camera acquisition remain in the separate camera experiment, not this scene.
+- The new operator-assisted MR/camera route is implemented but its reclining-person/stereo-alignment test remains unverified; see [body registration](body-registration.md).
 - Native video production/WebRTC publishing and upload are absent; the companion must not claim a live headset video feed.
 - Silas's video-to-motion processor is merged on main. Its latest frozen-dependency suite passed 30 tests (one external sample-video test skipped), including output-path traversal and malformed job regressions. A 60-frame synthetic kinematic replay encoded successfully and preserved ten explicit gap frames. Nathan's lease/artifact worker adapter and compatible trajectory conversion are now implemented. Actual permitted Quest-video validation remains absent; synthetic checks do not prove first-person reconstruction quality.
 
 See [system integration](system-integration.md) for exact audited commits and [native workbench evidence](native-workbench.md) for the earlier physical controller result.
+
+The current corrected `0.3.0-ar` ARM64 development APK (code 5, approximately 77 MiB) built and installed over USB. Its manifest includes the required headset-camera permission; acquisition remains off until operator opt-in. The current launch check is blocked at Quest’s controllers-required dialog after reinstall, so this APK has no claimed physical passthrough/body-fit pass yet. Local pose8790 and coach8787 health checks returned 200; private USB routes were restored. Current `services` gate passed preop 140 (two provider checks skipped), backend 23, coach HTTP 19, relay 156, SDK 10 and companion type/build checks on an isolated throwaway database. The demo database was not reset.
+
+The wearer subsequently confirmed the real room and floating preview are visible in `0.3.0-ar`. This is participant-reported passthrough/preview evidence; it does not establish body calibration or alignment. The source’s final 34 synthetic body checks additionally reject the SDK historical-pose identity fallback and invalid lens rotations.
