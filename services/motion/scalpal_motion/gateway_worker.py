@@ -169,7 +169,8 @@ def process_claim(gateway: Gateway, claim: dict, mirrored: bool = False, log=pri
                 "job": job, "summary": s, "retargeting": motion["retargeting"], "robot": motion["robot"],
                 "perception": track["model"], "mirrored_input": mirrored,
             }, indent=1))
-            render_replay(motion, files["replay_video"][0], video_path=clip, track=track)
+            # Robot only: the companion already plays the source clip beside this video, synced.
+            render_replay(motion, files["replay_video"][0], track=track)
 
             hb.update(0.9, "uploading outputs")
             artifact_ids = [_upload(gateway, endpoints["outputs"], kind, p, ct) for kind, (p, ct) in files.items()]
