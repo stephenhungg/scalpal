@@ -1,6 +1,6 @@
 # Unity Instrument Runtime
 
-This package is a functional virtual-tool prototype for Unity 6000.0.66f2. It is separate from Matthew's feature branch and does not change his exercise state machine or Jarvis service. The fourteen existing catalog IDs are preserved; `scalpel` is an additional prototype ID and is not yet in Matthew's catalog.
+This package is a functional virtual-tool prototype for Unity 6000.0.66f2. It is separate from Matthew's feature branch and does not change his exercise state machine or Jarvis service. All fifteen prefab IDs match Matthew's current catalog, including `scalpel`, added upstream at `a629fdf`.
 
 ## Build and Open
 
@@ -59,7 +59,7 @@ These events report a simulated scene effect, not an automatically completed sur
 
 The timestamp uses the Unity monotonic clock. It is not a camera acquisition timestamp or synchronized video time; capture integration must record the clock relationship and uncertainty separately.
 
-`InstrumentTipContact` supplies a separate distal-touch callback with real instrument/anatomy IDs. Set its `RegistrationIsValid` function from the registration owner and subscribe `TouchApplied` only through the current attempt/step dispatcher. It defaults to blocked, requires held/tracked/activated input, and emits once per anatomy structure per deliberate activation cycle, across multiple colliders and exit/reentry. It does not call Matthew's state machine automatically.
+`InstrumentTipContact` supplies a separate distal-touch callback with real instrument/anatomy IDs. Set its `RegistrationIsValid` function from the registration owner and subscribe `TouchApplied` only through the current attempt/step dispatcher. It defaults to blocked, requires held/tracked/activated input, and emits once per anatomy structure per deliberate activation cycle, across multiple colliders and exit/reentry. It does not call Matthew's state machine automatically. Matthew's latest feature branch adds an alternative `InstrumentTip` adapter with raw-contact focus and held/tracked/activated scoring. Use either that scoring adapter or an accepted `InstrumentTipContact.TouchApplied` dispatcher, never both for the same contact; otherwise actions can be counted twice. Neither path replaces the registration/current-attempt gate.
 
 Virtual instruments are already named scene objects. For them, use their IDs and renderer geometry rather than requiring a CV model to rediscover them. **Raw passthrough video does not contain virtual instruments.** A rendered spectator/composited view can show them. `InstrumentProjection` can project renderer bounding-box corners through an explicitly supplied rendered-view camera/eye and return clipped screen pixels or normalized top-left rectangles. These are conservative projected geometry boxes, not pixel segmentation or camera-frame calibration. Geometry crossing the camera near plane is rejected. Use the actual rendered eye camera; do not apply its rectangles directly to raw passthrough images. Unity documents the [per-eye world-to-screen overload and bottom-left pixel origin](https://docs.unity3d.com/6000.0/Documentation/ScriptReference/Camera.WorldToScreenPoint.html); the helper explicitly converts that to a top-left normalized rectangle.
 
