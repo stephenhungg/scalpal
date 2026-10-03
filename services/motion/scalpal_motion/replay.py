@@ -8,6 +8,8 @@ valid pose and are labeled as such on screen.
 from __future__ import annotations
 
 import re
+import shutil
+import subprocess
 from pathlib import Path
 
 import cv2
@@ -48,6 +50,38 @@ def _draw_landmarks(img: np.ndarray, image_pts: list[list[float]], box: tuple[in
         cv2.line(img, pts[a], pts[b], (255, 255, 255), 2, cv2.LINE_AA)
     for p in pts:
         cv2.circle(img, p, 4, (48, 48, 255), -1, cv2.LINE_AA)
+
+
+class _VideoOut:
+    """H.264/yuv420p mp4 via ffmpeg so browsers can play it; OpenCV mp4v fallback without ffmpeg."""
+
+    def __init__(self, path: Path, fps: float, size: tuple[int, int]):
+        self.ffmpeg = shutil.which("ffmpeg")
+        w, h = size
+        if self.ffmpeg:
+            self.proc = subprocess.Popen(
+                [self.ffmpeg, "-loglevel", "error", "-y", "-f", "rawvideo", "-pix_fmt", "bgr24",
+                 "-s", f"{w}x{h}", "-r", f"{fps:.3f}", "-i", "-",
+                 "-c:v", "libx264", "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(path)],
+                stdin=subprocess.PIPE,
+            )
+        else:
+            print("warning: ffmpeg not found; writing mp4v, which browsers may not play")
+            self.writer = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"mp4v"), fps, size)
+
+    def write(self, frame: np.ndarray) -> None:
+        if self.ffmpeg:
+            self.proc.stdin.write(np.ascontiguousarray(frame).tobytes())
+        else:
+            self.writer.write(frame)
+
+    def close(self) -> None:
+        if self.ffmpeg:
+            self.proc.stdin.close()
+            if self.proc.wait() != 0:
+                raise RuntimeError("ffmpeg failed to encode the replay")
+        else:
+            self.writer.release()
 
 
 def _fit(img: np.ndarray, w: int, h: int) -> tuple[np.ndarray, tuple[int, int, int, int]]:
@@ -96,7 +130,7 @@ def render_replay(
     out_w = w * 2 if cap else w
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    writer = cv2.VideoWriter(str(out_path), cv2.VideoWriter_fourcc(*"mp4v"), fps, (out_w, h))
+    writer = _VideoOut(out_path, fps, (out_w, h))
 
     last_q = None
     for f in frames:
@@ -129,7 +163,7 @@ def render_replay(
             robot_img = np.hstack([src, robot_img])
         writer.write(robot_img)
 
-    writer.release()
+    writer.close()
     if cap:
         cap.release()
     return out_path

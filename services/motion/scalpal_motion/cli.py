@@ -81,6 +81,19 @@ def cmd_replay(args: argparse.Namespace) -> None:
     print("wrote", render_replay(motion, args.out, video_path=args.video, track=track))
 
 
+def cmd_process(args: argparse.Namespace) -> None:
+    from .jobs import run_job
+
+    result = run_job(json.loads(Path(args.job).read_text()), args.output_root)
+    print(json.dumps({k: result.get(k) for k in ("status", "error", "output_dir", "processing_s")}, indent=1))
+
+
+def cmd_serve(args: argparse.Namespace) -> None:
+    from .server import serve
+
+    serve(args.host, args.port, Path(args.output_root))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="scalpal-motion", description=__doc__)
     sub = parser.add_subparsers(required=True)
@@ -108,6 +121,17 @@ def main() -> None:
     p.add_argument("--video", default=None)
     p.add_argument("--track", default=None)
     p.set_defaults(func=cmd_replay)
+
+    p = sub.add_parser("process", help="run one scalpal.motion_job/0 file, write result.json")
+    p.add_argument("job")
+    p.add_argument("--output-root", default=default_out / "runs")
+    p.set_defaults(func=cmd_process)
+
+    p = sub.add_parser("serve", help="HTTP worker: POST /jobs, GET /runs/<run>/<file>")
+    p.add_argument("--host", default="127.0.0.1")
+    p.add_argument("--port", type=int, default=8765)
+    p.add_argument("--output-root", default=default_out / "runs")
+    p.set_defaults(func=cmd_serve)
 
     args = parser.parse_args()
     if getattr(args, "video", None) and args.func is cmd_run and args.out is None:
