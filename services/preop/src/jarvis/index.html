@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jarvis Coach</title>
+<style>
+  :root {
+    --bg: #0b0e12; --panel: #131820; --line: #222a35; --text: #e6ebf2; --muted: #8a96a8;
+    --accent: #5cc8ff; --ok: #4ade80; --warn: #fbbf24; --danger: #f87171;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 ui-sans-serif, system-ui, -apple-system, sans-serif; }
+  header { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  h1 { font-size: 16px; margin: 0; letter-spacing: .02em; }
+  select, button, input { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; }
+  button { cursor: pointer; }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button:disabled { opacity: .45; cursor: default; }
+  button.primary { background: var(--accent); color: #04121c; border-color: var(--accent); font-weight: 600; }
+  .pill { font-size: 12px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+  .pill.on { color: var(--ok); border-color: var(--ok); }
+  .pill.speaking { color: var(--accent); border-color: var(--accent); }
+  .pill.warn { color: var(--warn); border-color: var(--warn); }
+  main { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 16px; padding: 16px; }
+  @media (max-width: 860px) { main { grid-template-columns: 1fr; } }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; min-width: 0; }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 10px; }
+  .step-title { font-size: 20px; font-weight: 650; margin: 2px 0 6px; }
+  .muted { color: var(--muted); }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .kv { display: grid; grid-template-columns: 110px 1fr; gap: 4px 10px; margin-top: 10px; }
+  .kv div:nth-child(odd) { color: var(--muted); }
+  .danger { color: var(--danger); }
+  .meter { display: flex; gap: 4px; margin-top: 4px; }
+  .meter span { flex: 1; height: 6px; border-radius: 3px; background: var(--line); }
+  .meter span.lit1 { background: var(--ok); } .meter span.lit2 { background: var(--warn); } .meter span.lit3 { background: var(--danger); }
+  .progress { height: 4px; background: var(--line); border-radius: 2px; margin: 8px 0 2px; overflow: hidden; }
+  .progress > div { height: 100%; background: var(--accent); transition: width .3s; }
+  #log { height: 52vh; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+  .msg { padding: 8px 10px; border-radius: 10px; max-width: 92%; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .msg.ai { background: #16324a; align-self: flex-start; }
+  .msg.user { background: #2a2f3a; align-self: flex-end; }
+  .msg.event { background: transparent; border: 1px dashed var(--line); color: var(--muted); font-size: 12px; align-self: stretch; max-width: 100%; }
+  .msg.event.urgent { border-color: var(--danger); color: var(--danger); }
+  .sim { margin-top: 12px; }
+  .sim button { font-size: 12px; padding: 5px 8px; }
+  pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; color: var(--muted); max-height: 180px; overflow-y: auto; margin: 0; }
+  details summary { cursor: pointer; color: var(--muted); font-size: 12px; margin-top: 10px; }
+  form { display: flex; gap: 8px; margin-top: 10px; }
+  form input { flex: 1; min-width: 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Jarvis</h1>
+  <select id="patient" aria-label="Patient"><option>Loading patients...</option></select>
+  <select id="presentation" aria-label="Presentation mode"><option value="mixed_reality">Mixed reality (real person)</option><option value="virtual">Full VR (virtual patient)</option></select>
+  <button id="start" class="primary" disabled>Start surgery</button>
+  <button id="stop" disabled>End</button>
+  <span id="voice" class="pill">voice off</span>
+  <span id="mode" class="pill">idle</span>
+  <span id="feed" class="pill">no state feed</span>
+  <span id="ctx" class="pill">context n/a</span>
+</header>
+<main>
+  <section>
+    <h2 id="caseline">No session</h2>
+    <div id="stepno" class="muted"></div>
+    <div class="progress"><div id="bar" style="width:0%"></div></div>
+    <div id="steptitle" class="step-title">Pick a patient and start.</div>
+    <div id="instruction"></div>
+    <div class="kv" id="details"></div>
+    <div style="margin-top:12px">
+      <div class="muted" id="stucklabel">coaching: on track</div>
+      <div class="meter"><span></span><span></span><span></span></div>
+    </div>
+    <div class="sim">
+      <h2>Simulate headset events</h2>
+      <div class="row" id="simbuttons">
+        <button data-sim="correct_action">Correct action</button>
+        <button data-sim="complete_step">Finish step</button>
+        <button data-sim="mistake">Make a mistake</button>
+        <button data-sim="wrong_instrument">Wrong instrument</button>
+        <button data-sim="off_target">Off-target touch</button>
+        <button data-sim="look_at_danger">Look at danger</button>
+        <button data-sim="tracking_lost">Lose tracking</button>
+        <button data-sim="tracking_restored">Restore tracking</button>
+      </div>
+      <label class="row muted" style="margin-top:8px;font-size:12px"><input type="checkbox" id="autoack" checked> act as headset: auto-apply highlight requests</label>
+    </div>
+    <details><summary>live context sent to Jarvis</summary><pre id="context"></pre></details>
+    <details open><summary>latency and arbiter (this session)</summary><pre id="latency">no events yet</pre></details>
+  </section>
+  <section>
+    <h2>Conversation</h2>
+    <div id="log"></div>
+    <form id="say"><input id="sayinput" placeholder="Type to Jarvis (works without a mic)" autocomplete="off"><button>Send</button></form>
+  </section>
+</main>
+<script type="module" src="/jarvis/app.js"></script>
+</body>
+</html>

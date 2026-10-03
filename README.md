@@ -26,6 +26,8 @@ This repository contains documentation and a native Quest full-VR tool workbench
 10. [Data storage and realtime](docs/data-and-realtime.md): Latest proposed storage split, Nathan's backend lane, and the distinction between session sync and video processing.
 11. [Nathan's implementation plan](docs/nathan-plan.md): Assigned companion website, SpacetimeDB, live-video, storage, and integration milestones.
 
+The new [native appendectomy session](docs/native-session.md) assembles the working Quest rig, selected anatomy, authored case, coach and real session adapter. Start with `Assets/Scalpal/Quest/Scenes/NativeSession.unity`; use the component workbench for isolated tool checks. Verification and unconnected media/MR/robot interfaces are listed in that document.
+
 ## Status
 
 As of October 3, 2026, native camera acquisition, Unity sample deployment, desktop mirroring, and an immersive bottle-detection overlay have been demonstrated on the headset. The native workbench combines the shared tools, tracked head/controllers and operating-room/patient art. USB installation, XR tracking and held-tool telemetry were exercised on Quest; the user reported tool-motion lag, then confirmed the corrected build keeps up with hand movement. See [native workbench evidence](docs/native-workbench.md). Teammate branches contain anatomy, case/coach, realtime/companion and motion implementations. Native torso registration, capture and their complete integration have not been demonstrated; see the audited map.
@@ -34,7 +36,7 @@ The conversational selection experience was accepted during product exploration.
 
 ## Collaboration
 
-Follow [AGENTS.md](AGENTS.md) and the [team plan](docs/team-plan.md). The Quest folder includes the standalone native workbench; the other major component folders still contain onboarding scaffolds. Reconcile the actual feature-branch contracts and select one shared authored exercise before overlapping integration. Work on one measurable technical question at a time. Update the integration map when routes, contracts or verification change; distinguish a proposal from a verified result.
+Follow [AGENTS.md](AGENTS.md) and the [team plan](docs/team-plan.md). The Quest folder includes the standalone native workbench; the preop, realtime, gateway and companion implementations are now included. Reconcile the actual feature-branch contracts and select one shared authored exercise before overlapping integration. Work on one measurable technical question at a time. Update the integration map when routes, contracts or verification change; distinguish a proposal from a verified result.
 
 Keep credentials, participant footage, device identifiers, and raw datasets out of Git. This is an illustrative simulator, not clinical guidance or evidence of surgical competence. Actual recording, processing, sharing, and training rights must be established for each data source and use.
 

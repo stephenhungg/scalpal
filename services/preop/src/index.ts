@@ -1,0 +1,12 @@
+import { createApp } from "./app.js";
+import { createFinchNodeClient } from "./finchnode.js";
+
+// Vercel and other Hono hosts pick up the default export.
+export default createApp({
+  client: createFinchNodeClient({
+    baseUrl: process.env.FINCHNODE_BASE_URL || undefined,
+    // Optional ck_test_ sandbox key: enables real Connect admissions. Without it, demo records only.
+    apiKey: process.env.FINCHNODE_API_KEY || undefined,
+  }),
+  elevenLabs: { apiKey: process.env.ELEVENLABS_API_KEY ?? "", agentId: process.env.ELEVENLABS_AGENT_ID ?? "", voiceId: process.env.JARVIS_VOICE_ID ?? "" },
+});

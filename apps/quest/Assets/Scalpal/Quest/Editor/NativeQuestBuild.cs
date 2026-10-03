@@ -34,9 +34,10 @@ namespace Scalpal.Quest.Editor
             // Add art to a separate copy of the sandbox without touching the original samples.
             var scene = EditorSceneManager.OpenScene(Sandbox, OpenSceneMode.Single);
             var art = EditorSceneManager.OpenScene(ArtPreview, OpenSceneMode.Additive);
-            var retained = art.GetRootGameObjects().Where(root => root.name == "VirtualOperatingRoom" || root.name == "PatientRoot").ToArray();
+            var retained = art.GetRootGameObjects().Where(root => root.name == "VirtualOperatingRoom" || root.name == "OperatingTheatre" || root.name == "PatientRoot").ToArray();
             foreach (var root in retained)
             {
+                if (root.name == "OperatingTheatre") root.name = "VirtualOperatingRoom";
                 UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(root, scene);
                 root.transform.position += new Vector3(0, 0, 2.2f);
             }
@@ -95,7 +96,7 @@ namespace Scalpal.Quest.Editor
             Debug.Log("SCALPAL_NATIVE_PREPARED");
         }
 
-        static void Configure()
+        public static void Configure()
         {
             Directory.CreateDirectory("Assets/XR/Settings"); AssetDatabase.Refresh();
             if (!EditorBuildSettings.TryGetConfigObject(XRGeneralSettings.k_SettingsKey, out XRGeneralSettingsPerBuildTarget store))

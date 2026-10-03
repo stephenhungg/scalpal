@@ -7,9 +7,9 @@ Owner: Stephen for runtime, capture, registration, bootstrap and Unity configura
 1. Clone the repository and run `git lfs install` followed by `git lfs pull`.
 2. In Unity Hub, add this repository's `apps/quest` directory as a project.
 3. Open it with Unity **6000.0.66f2**.
-4. Open `Assets/Scalpal/Quest/Scenes/NativeWorkbench.unity` for the native full-VR tool test, or `Assets/Scalpal/Instruments/Samples/InstrumentSandbox.unity` for the original editor sample.
+4. Open `Assets/Scalpal/Quest/Scenes/NativeSession.unity` for the integrated appendectomy rehearsal, `Assets/Scalpal/Quest/Scenes/NativeWorkbench.unity` for the isolated native tool test, or `Assets/Scalpal/Instruments/Samples/InstrumentSandbox.unity` for the original editor sample.
 
-The repository contains the complete source for this standalone instrument workbench: `Assets/`, stable `.meta` files, `Packages/manifest.json`, the package lock and `ProjectSettings/`. The native workbench is the enabled build scene. Its table, fifteen virtual instruments, teaching patch, materials, lighting and preview camera are committed. [Blender sources and renders](../../assets/instruments/README.md) are also committed, alongside an optional importable Unity package.
+The repository contains the complete source for this standalone instrument workbench: `Assets/`, stable `.meta` files, `Packages/manifest.json`, the package lock and `ProjectSettings/`. The native appendectomy session is the enabled build scene; see [native session](../../docs/native-session.md) for services, pairing, controls and current verification. Its table, fifteen virtual instruments, teaching patch, materials, lighting and preview camera are committed. [Blender sources and renders](../../assets/instruments/README.md) are also committed, alongside an optional importable Unity package.
 
 The native workbench now configures Android OpenXR, stereo head/controller tracking, a room/patient backdrop and the shared instrument practice patch. See [build/deploy instructions and physical checks](../../docs/native-workbench.md). This is a standalone native input/tool test; organs, torso registration, passthrough, Jarvis and network adapters remain unconnected. Use [runtime integration](../../docs/instrument-runtime.md) for supported tool effects and gates. Ordinary Play mode does not provide mouse/keyboard pickup controls.
 
