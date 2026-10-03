@@ -142,3 +142,20 @@ npm run dev                   # open http://localhost:8787/jarvis
 ```
 
 The simulate buttons on the page drive the coach without the headset. The agent LLM defaults to `claude-sonnet-5-5` (`JARVIS_LLM`); switch to `claude-haiku-4-5` if turn latency is noticeable.
+
+## Feedback on Nathan's realtime contract v1 (from the Jarvis lane)
+
+Reviewed `packages/contracts/realtime-v1.md` on `nathan/companion-realtime` (9bd6517). It fits Jarvis well. Four changes would let the coach run on it without losing signal:
+
+1. **Raw exercise input, not only interpreted events.** `appendExerciseEvent` carries `kind`, `message`, `stepId`, `structureId`. Jarvis's wrong-instrument, off-target, and stuck detection need the raw input that produced those outcomes. Proposal: add input kinds `touch`, `place_port`, `identify`, `confirm`, `focus` with two more optional fields, `instrumentId` and `portId`, and keep the existing interpreted kinds. The headset appends both; the coach worker replays the input kinds through `CoachSession`.
+2. **One command vocabulary.** Adopt Nathan's names (`highlightStructure`, `isolateStructure`, `restoreContext`, ...) and his `expectedStepVersion` stale check in the coach and `CoachRelay`; `clear_highlight` maps to `restoreContext`. His `applied | rejected | unavailable | failed` resolutions replace our `applied | rejected`.
+3. **Step agreement check.** The headset publishes `stepId`/`stepVersion`; the coach derives its own step from input. If they disagree, the coach tells Jarvis to trust the headset and flags the desync instead of coaching the wrong step.
+4. **Jarvis bridge identity.** The `/jarvis` page takes the `coach` role: it posts `postCoachMessage` for every learner and coach line, mirrors ElevenLabs mode changes into `setCoachStatus`, and gets its signed URL from a `voice` service grant instead of `/jarvis/connection`.
+
+Until this is agreed, the HTTP coach routes stay as the working path.
+
+## Request for Stephen: tip proximity
+
+`InstrumentTipContact.TouchApplied` fires only when the instrument is activated (trigger at least 0.7). Jarvis can warn before a mistake if it also knows what the tip is hovering over. Please call `relay.Focus(structureId)` when the held instrument's tip enters an `anat_` collider without activation, and `relay.Focus("")` when it leaves. The coach already turns focus on a danger structure into a one-time "careful, that's the common bile duct" warning.
+
+Note: `inst_scalpel` exists in the Unity prefabs but not in the catalog. The coach rejects scalpel touches individually (the rest of the batch still applies). If the scalpel should count in a step, add it to `services/preop/src/catalog/instruments.ts`.
