@@ -15,6 +15,10 @@ This is an initialized Unity editor project with built-in physics/XR modules, no
 
 Use **Scalpal → Instruments → Build Prefabs and Sandbox** to regenerate tool assets. Prefab variants should hold authored customizations because the builder replaces its generated outputs.
 
+## Operating-Room Art Preview
+
+Open `Assets/Scalpal/Environment/Samples/OperatingRoomPreview.unity` to inspect the separate static CC0 room/patient scene. Its source models, Blender scene, runtime FBXs, materials, prefabs, metadata and reproducible builder are committed. The room/patient are not yet bound to organs, tools or an XR rig; the instrument sandbox remains the enabled build scene. See [two-mode engineering](../../docs/environment-modes.md) and [asset provenance](../../assets/environments/ATTRIBUTION.md).
+
 ## Earlier Camera Experiment
 
 The physical-headset camera/bottle test is a separate official Meta sample. Its pinned source, our code modifications and reconstruction instructions are preserved in [experiments/quest-camera-baseline](../../experiments/quest-camera-baseline/README.md). [Hardware evidence](../../docs/hardware-baseline.md) describes what was actually measured. These scenes are not integrated into this workbench.

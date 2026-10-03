@@ -43,3 +43,7 @@ Keep credentials, participant footage, device identifiers, and raw datasets out 
 The [Unity project](apps/quest/README.md) includes committed scenes, assets, package configuration and project settings. The [instrument kit](assets/instruments/README.md) contains fourteen catalog tools plus a scalpel: Blender sources, previews, optimized runtime FBX models, Unity pickup/action prefabs and an authored practice sandbox. It is a standalone component, not the complete application described above. Matthew's current feature branch also contains case/coach code and a Unity relay; those are not merged into main by this asset work. Read [runtime integration](docs/instrument-runtime.md) before connecting actions to scoring or Jarvis.
 
 Our earlier physical camera experiment is preserved as [pinned upstream source plus local changes](experiments/quest-camera-baseline/README.md). Unity caches, captured footage and build outputs are excluded; all authored instrument environment source is committed.
+
+## Two Demo Modes
+
+The latest direction adds a full-VR virtual patient/operating room alongside the real-person mixed-reality overlay. Both should share organs, tools and the coach/exercise core. [Mode engineering](docs/environment-modes.md) separates surface perception from body registration. [Reusable environment art](assets/environments/README.md) now includes a static CC0 operating-room/patient Unity preview and editable Blender scene; native XR, anatomy bindings and mode switching remain pending.

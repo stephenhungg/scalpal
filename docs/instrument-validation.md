@@ -5,7 +5,7 @@ Verified October 3, 2026 using Blender 4.5.7 LTS and Unity 6000.0.66f2. This rec
 ## Results
 
 - Generated fifteen editable per-tool Blender files, one combined library, fifteen individual 1200 × 1200 renders, fifteen full-detail GLBs and fifteen optimized runtime FBXs.
-- Matched all fourteen existing instrument IDs and prefab names, plus the additional `scalpel` sandbox ID. The scalpel is not yet an accepted ID in Matthew's case/coach catalogs.
+- Matched all fourteen existing instrument IDs and prefab names, plus the additional `scalpel` sandbox ID. The scalpel was originally additional; Matthew's later `a629fdf` catalog now includes it.
 - Each runtime FBX is below 2,000 triangles. Named moving-part pivots, grip anchors and distal tips survive import. Full-detail sources are preserved separately.
 - Reconstructed the pinned official Meta camera experiment into a fresh checkout using the committed setup script. Verified patched files match the prior tested source and all overlay assets are present; confirmed the script refuses an existing checkout. No new APK or camera capture was started.
 - Retained the MIT LapGym source/license provenance; verified hashes for all twenty-three source STL files and the license.
@@ -17,7 +17,7 @@ Verified October 3, 2026 using Blender 4.5.7 LTS and Unity 6000.0.66f2. This rec
 
 ## Latest Teammate Context
 
-Fetched remote commits at integration checkpoints. Reviewed Matthew's Unity/Blender handoff, generated IDs, `CoachRelay`, live-test notes and the anatomy source/control additions. Latest inspected anatomy branch is `7d5896587a09d459649dbcd66231ad6f893b96f6`; Jarvis branch is `f9574cbc13c5e7c0121180f61e89e3c0f9124b87`. Instrument catalog contents remain identical to the original inspected branch. The kit does not merge these feature branches or change their scoring/voice code.
+Fetched remote commits at integration checkpoints. Reviewed Matthew's Unity/Blender handoff, generated IDs, `CoachRelay`, live-test notes and the anatomy source/control additions. Latest inspected anatomy branch is `7d5896587a09d459649dbcd66231ad6f893b96f6`; Jarvis branch is `f9574cbc13c5e7c0121180f61e89e3c0f9124b87`. At the original validation checkpoint the instrument catalog matched the initial branch. A later publication check fetched `a629fdf`, verified its added `scalpel` makes the complete fifteen-ID catalog match our prefabs, and inspected its alternative `InstrumentTip` activation adapter; do not subscribe both scoring paths. The kit does not merge these feature branches or change their scoring/voice code.
 
 The distal contact callback supplies instrument/anatomy IDs but defaults to blocked until the registration owner supplies a validity function. Subscribe through a current-attempt dispatcher; do not treat a virtual effect as an automatically accepted surgery step. The coach relay still needs reliable attempt/event identity and canonical state reconciliation; the laptop's simulated highlight acknowledgment must be disabled during actual headset integration.
 
