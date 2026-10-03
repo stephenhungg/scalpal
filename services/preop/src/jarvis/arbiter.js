@@ -76,6 +76,10 @@ export function createArbiter(options = {}) {
       st.sawCompleteEvent = true;
       st.responseComplete = true;
     },
+    // A delivery that produced no agent turn (a clip) is finished.
+    deliveryDone() {
+      st.responseComplete = true;
+    },
     userSpoke() {
       st.lastUserSpeechAt = now();
     },

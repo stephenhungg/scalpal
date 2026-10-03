@@ -33,6 +33,7 @@ export interface Arbiter {
   setSnapshot(snapshot: ArbiterSnapshot): void;
   setMode(mode: string): void;
   responseComplete(): void;
+  deliveryDone(): void;
   userSpoke(): void;
   setReflexPlaying(playing: boolean): void;
   offer(alert: ArbiterAlert): { action: OfferAction; reason: string };

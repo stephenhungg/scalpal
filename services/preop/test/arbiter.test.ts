@@ -77,6 +77,18 @@ describe("arbiter", () => {
     expect(arb.next()?.kind).toBe("step_complete");
   });
 
+  it("does not stall after a clip delivery once the SDK reports response completion", () => {
+    const { arb, advance } = rig();
+    arb.responseComplete(); // the SDK has shown it emits completion events
+    arb.offer(alert("step_complete", "caution", { reflexKey: "step.b" }));
+    advance(5000);
+    expect(arb.next()?.reflexKey).toBe("step.b");
+    arb.deliveryDone(); // clip finished; no agent turn will complete
+    arb.offer(alert("step_complete", "caution", { reflexKey: "step.c" }));
+    advance(3000);
+    expect(arb.next()?.reflexKey).toBe("step.c");
+  });
+
   it("coalesces repeats, keeping only the newest", () => {
     const { arb, advance } = rig();
     arb.offer(alert("step_complete", "caution", { say: "first" }));
@@ -145,6 +157,8 @@ describe("warning alerts", () => {
     expect(new Set(lines.map((l) => l.key)).size).toBe(lines.length);
     expect(lines.map((l) => l.key)).toEqual(expect.arrayContaining(["mistake.sealer_on_ileum", "mistake.staple_ileum", "mistake.port_into_bladder", "tracking_lost"]));
     expect(lines.map((l) => l.key)).not.toContain("mistake.grab_appendix"); // moderate: spoken by the LLM instead
+    expect(lines.find((l) => l.key === "step.find_appendix")?.text).toBe("Next step: locate the appendix.");
+    expect(lines.some((l) => l.key === "step.access_umbilical")).toBe(false); // the first step is announced by the greeting
   });
 });
 

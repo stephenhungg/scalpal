@@ -204,7 +204,7 @@ export class CoachSession {
     for (const fn of this.listeners) fn({ snapshot, alerts });
   }
 
-  private alert(kind: AlertKind, priority: AlertPriority, say: string, highlight: string[] = [], stepId = this.engine.current?.id ?? "", reflexKey = ""): CoachAlert {
+  private alert(kind: AlertKind, priority: AlertPriority, say: string, highlight: string[] = [], stepId = this.engine.current?.id ?? "", reflexKey = "", reflexText = say): CoachAlert {
     this.alertSeq += 1;
     const tier: AlertTier = priority === "urgent" ? "warning" : priority === "low" ? "advisory" : "caution";
     return {
@@ -215,8 +215,8 @@ export class CoachSession {
       stepId,
       version: this.version,
       say,
-      reflexKey: tier === "warning" ? reflexKey : "",
-      reflexText: tier === "warning" && reflexKey ? say : "",
+      reflexKey,
+      reflexText: reflexKey ? reflexText : "",
       highlight,
       at: this.clock().toISOString(),
     };
@@ -279,7 +279,7 @@ export class CoachSession {
       this.lastEvent = `Completed step: ${step.title}.`;
       const next = this.engine.current;
       if (next) {
-        alerts.push(this.alert("step_complete", "normal", `${step.title} done. Next: ${next.title.toLowerCase()}. ${next.instruction}`, next.targets, next.id));
+        alerts.push(this.alert("step_complete", "normal", `${step.title} done. ${nextStepLine(next.title)}`, next.targets, next.id, `step.${next.id}`, nextStepLine(next.title)));
       } else {
         const total = this.mistakes.length;
         alerts.push(this.alert("case_complete", "normal", `That completes the ${this.kase.procedure.title.toLowerCase()} with ${total === 0 ? "no mistakes" : `${total} mistake${total === 1 ? "" : "s"}`}.`, [], step.id));
@@ -583,11 +583,17 @@ export function reflexLine(feedback: string): string {
   return /^(stop|careful)\b/i.test(feedback) ? feedback : `Stop. ${feedback}`;
 }
 
-// Every pre-renderable warning line for a case: high-severity mistakes plus tracking loss.
+// Milestone callouts are deterministic too: no LLM turn just to announce the next step.
+export function nextStepLine(title: string): string {
+  return `Next step: ${title.charAt(0).toLowerCase()}${title.slice(1)}.`;
+}
+
+// Every pre-renderable line for a case: high-severity mistake warnings, tracking loss, and next-step callouts.
 export function reflexLines(kase: SurgicalCase, mode: PresentationMode = "mixed_reality"): { key: string; text: string }[] {
   const lines = kase.procedure.steps.flatMap((s) => s.mistakes.filter((m) => m.severity === "high").map((m) => ({ key: `mistake.${m.id}`, text: reflexLine(m.feedback) })));
   const unique = [...new Map(lines.map((l) => [l.key, l])).values()];
-  return [...unique, { key: "tracking_lost", text: trackingLostLine(mode) }];
+  const callouts = kase.procedure.steps.slice(1).map((s) => ({ key: `step.${s.id}`, text: nextStepLine(s.title) }));
+  return [...unique, { key: "tracking_lost", text: trackingLostLine(mode) }, ...callouts];
 }
 
 // True when the authored hint mostly repeats the coaching sentence, so the nudge says it once.

@@ -95,18 +95,19 @@ function speakViaLLM(alert, path) {
   renderLatency();
 }
 
-function playReflex(alert) {
+function playReflex(alert, { duck = true } = {}) {
   const clip = reflexClips.get(alert.reflexKey);
   if (!clip) return speakViaLLM(alert, "llm-warning");
-  const t = trace(alert, "reflex");
+  const t = trace(alert, alert.tier === "warning" ? "reflex" : "callout");
   arbiter.setReflexPlaying(true);
-  if (convo) convo.setVolume({ volume: 0 }); // duck whatever the agent was saying
+  if (convo && duck) convo.setVolume({ volume: 0 }); // a warning cuts off whatever the agent was saying
   clip.currentTime = 0;
   clip.onplaying = () => { t.playAt = performance.timeOrigin + performance.now(); renderLatency(); };
   clip.onended = clip.onerror = () => {
     arbiter.setReflexPlaying(false);
+    arbiter.deliveryDone();
     if (!convo) return;
-    convo.setVolume({ volume: 1 });
+    if (duck) convo.setVolume({ volume: 1 });
     convo.sendContextualUpdate(`[JARVIS SAID ${stateTag()}] "${alert.reflexText || alert.say}"`);
   };
   clip.play().catch(() => { arbiter.setReflexPlaying(false); if (convo) convo.setVolume({ volume: 1 }); speakViaLLM(alert, "llm-warning"); });
@@ -123,18 +124,21 @@ function deliver(alert) {
 
 setInterval(() => {
   const alert = arbiter.next();
-  if (alert) speakViaLLM(alert, "llm-caution");
+  if (!alert) return;
+  // Milestone callouts have a pre-rendered clip; everything else is a coached LLM turn.
+  if (alert.reflexKey && reflexClips.has(alert.reflexKey)) playReflex(alert, { duck: false });
+  else speakViaLLM(alert, "llm-caution");
 }, 200);
 
 function ms(v) { return Number.isFinite(v) ? `${Math.round(v)} ms` : "n/a"; }
 function renderLatency() {
-  const reflex = traces.filter((t) => t.path === "reflex" && t.playAt);
-  const llm = traces.filter((t) => t.path !== "reflex" && t.sentAt);
+  const reflex = traces.filter((t) => (t.path === "reflex" || t.path === "callout") && t.playAt);
+  const llm = traces.filter((t) => t.path.startsWith("llm") && t.sentAt);
   const col = (rows, f) => rows.map(f).filter((v) => v > 0 && Number.isFinite(v));
   const line = (label, vals) => `${label.padEnd(34)} p50 ${ms(percentile(vals, 50)).padEnd(9)} p95 ${ms(percentile(vals, 95)).padEnd(9)} n=${vals.length}`;
   $("latency").textContent = [
     line("server alert -> page (same Mac clock)", col(traces, (t) => t.recvAt - t.serverAt)),
-    line("warning -> reflex clip playing", col(reflex, (t) => t.playAt - t.recvAt)),
+    line("warning/callout -> clip playing", col(reflex, (t) => t.playAt - t.recvAt)),
     line("caution queue wait", col(llm, (t) => t.sentAt - t.recvAt)),
     line("LLM turn: sent -> first text", col(llm, (t) => t.firstTextAt - t.sentAt)),
     line("LLM turn: sent -> agent speaking", col(llm, (t) => t.speakingAt - t.sentAt)),
