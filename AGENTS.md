@@ -8,7 +8,7 @@
 
 ## Read Before Working
 
-Read `README.md` and `docs/current-direction.md` first, then the thesis, decisions, team plan, and your component document. Current direction supersedes older removed-feature proposals. Check the repository before editing: this handoff contains documentation and folder scaffolds, and the hardware results come from a separate official Meta sample. The latest user assigned Nathan the companion website + SpacetimeDB/routing lane; follow `docs/nathan-plan.md` for that implementation work order. Matthew is already working on Jarvis. The earlier blanket wait is superseded for Nathan's assigned lane; do not imply the remaining open product decisions or unbuilt integrations are resolved.
+Read `README.md` and `docs/current-direction.md` first, then the thesis, decisions, team plan, and your component document. Current direction supersedes older removed-feature proposals. Check the repository before editing: this repository contains documentation, an openable Unity instrument workbench and other component scaffolds. The hardware results come from a separate official Meta sample, with its pinned source and local changes preserved in `experiments/quest-camera-baseline/`. The instrument project has no configured native XR loader or complete surgery environment. The latest user assigned Nathan the companion website + SpacetimeDB/routing lane; follow `docs/nathan-plan.md` for that implementation work order. Matthew is already working on Jarvis. The earlier blanket wait is superseded for Nathan's assigned lane; do not imply the remaining open product decisions or unbuilt integrations are resolved.
 
 User direction takes precedence over older proposals. In particular:
 
@@ -34,6 +34,8 @@ User direction takes precedence over older proposals. In particular:
 - Camera permission and participant consent do not by themselves establish rights to export, license, or train on platform data. Consult the primary sources in `docs/research/README.md` for the intended use.
 
 ## Status and Handoff
+
+Commit and push verified milestones as work progresses; the user has authorized this ongoing workflow. Fetch teammate commits at integration checkpoints and before publishing. Use focused branches and pull requests, preserve unrelated local changes, and report verification and remaining limitations with each handoff.
 
 The repository/context and team-layout requests authorize this handoff and scaffold, not implementation of every proposed component. Follow subsequent user-assigned scope. Before a broad build, reconcile the expanded architecture and unresolved decisions with the owner; do not treat the prior pre-robotics draft review as approval of the current specification.
 

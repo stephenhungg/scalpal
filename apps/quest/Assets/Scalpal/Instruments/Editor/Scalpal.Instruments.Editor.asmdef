@@ -1,0 +1,14 @@
+{
+  "name": "Scalpal.Instruments.Editor",
+  "rootNamespace": "Scalpal.Instruments.Editor",
+  "references": ["Scalpal.Instruments"],
+  "includePlatforms": ["Editor"],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

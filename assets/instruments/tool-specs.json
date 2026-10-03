@@ -1,0 +1,421 @@
+{
+  "schemaVersion": 1,
+  "units": "m",
+  "catalogSource": "origin/matthew/jarvis:services/preop/src/catalog/instruments.ts (14 IDs) plus explicitly added scalpel",
+  "scope": "15 original generic educational simulator assets, not all instruments across all surgical specialties. Manufacturer pages are reference material, not licensed mesh downloads.",
+  "coordinateConvention": "Each asset generator must document grip origin, forward direction, mesh axes, tip transform, jaw pivots, and collision geometry; this research JSON does not assert exported axes.",
+  "instruments": [
+    {
+      "id": "trocar_5mm",
+      "unityPrefab": "inst_trocar_5mm",
+      "displayName": "5 mm trocar",
+      "function": "Access port with cannula, proximal valve housing, and removable obturator.",
+      "referenceDimensions": {
+        "shaftDiameterM": 0.005,
+        "shaftWorkingLengthM": 0.1,
+        "totalLengthEstimateM": 0.17,
+        "status": "Generic simulator proxy. Reference shaft/head sizes where stated; total length, handle dimensions, and articulation are author estimates, not certified device geometry.",
+        "note": "5 mm nominal access and 100 mm cannula reference. Exterior cannula wall and proximal housing are estimated; 5 mm is not the overall housing diameter."
+      },
+      "articulatedParts": [
+        "obturator (axial removal)",
+        "proximal valve (visual proxy)"
+      ],
+      "action": "access",
+      "cvNotes": "Virtual tool identity and Unity renderer bounds are deterministic; raw passthrough camera pixels do not include this tool. Real-camera recognition requires separate labeled real-tool footage and validation.",
+      "references": [
+        {
+          "url": "https://www.medtronic.com/covidien/pt-pt/products/trocars-access/bladeless-trocars.html",
+          "title": "Medtronic VersaOne bladeless trocars \u2014 ordering dimensions"
+        }
+      ]
+    },
+    {
+      "id": "trocar_12mm",
+      "unityPrefab": "inst_trocar_12mm",
+      "displayName": "12 mm trocar",
+      "function": "Larger access port with cannula, valve/seal housing, and obturator.",
+      "referenceDimensions": {
+        "shaftDiameterM": 0.012,
+        "shaftWorkingLengthM": 0.1,
+        "totalLengthEstimateM": 0.18,
+        "status": "Generic simulator proxy. Reference shaft/head sizes where stated; total length, handle dimensions, and articulation are author estimates, not certified device geometry.",
+        "note": "12 mm nominal access and 100 mm cannula reference; wall thickness and total exterior size are estimates."
+      },
+      "articulatedParts": [
+        "obturator (axial removal)",
+        "proximal valve (visual proxy)"
+      ],
+      "action": "access",
+      "cvNotes": "Virtual tool identity and Unity renderer bounds are deterministic; raw passthrough camera pixels do not include this tool. Real-camera recognition requires separate labeled real-tool footage and validation.",
+      "references": [
+        {
+          "url": "https://www.medtronic.com/covidien/pt-pt/products/trocars-access/bladeless-trocars.html",
+          "title": "Medtronic VersaOne bladeless trocars \u2014 ordering dimensions"
+        }
+      ]
+    },
+    {
+      "id": "laparoscope_30",
+      "unityPrefab": "inst_laparoscope_30",
+      "displayName": "30 degree laparoscope",
+      "function": "Rigid telescope for visualization; 30 degrees specifies view direction, not field of view.",
+      "referenceDimensions": {
+        "shaftDiameterM": 0.01,
+        "shaftWorkingLengthM": 0.31,
+        "totalLengthEstimateM": 0.44,
+        "status": "Generic simulator proxy. Reference shaft/head sizes where stated; total length, handle dimensions, and articulation are author estimates, not certified device geometry.",
+        "note": "Reference 10 mm outer diameter and 310 mm working length. Virtual camera view direction may be offset 30 degrees; camera FOV is a separately authored parameter.",
+        "viewDirectionDegrees": 30
+      },
+      "articulatedParts": [
+        "shaft rotation (view direction)",
+        "eyepiece and light connector (fixed)"
+      ],
+      "action": "view",
+      "cvNotes": "Virtual tool identity and Unity renderer bounds are deterministic; raw passthrough camera pixels do not include this tool. Real-camera recognition requires separate labeled real-tool footage and validation.",
+      "references": [
+        {
+          "url": "https://www.karlstorz.com/gb/en/product-detail-page.htm?cat=1000071971&productID=1000119886",
+          "title": "KARL STORZ HOPKINS 26003BA telescope"
+        }
+      ]
+    },
+    {
+      "id": "atraumatic_grasper",
+      "unityPrefab": "inst_atraumatic_grasper",
+      "displayName": "Atraumatic grasper",
+      "function": "Broad jaw grasping of allowed virtual objects; geometry does not imply safe real-tissue forces.",
+      "referenceDimensions": {
+        "shaftDiameterM": 0.005,
+        "shaftWorkingLengthM": 0.36,
+        "totalLengthEstimateM": 0.47,
+        "status": "Generic simulator proxy. Reference shaft/head sizes where stated; total length, handle dimensions, and articulation are author estimates, not certified device geometry.",
+        "note": "Reference 5 mm and 360 mm working length. Jaw size, ridges, and opening angle are approximate.",
+        "jawLengthEstimateM": 0.02
+      },
+      "articulatedParts": [
+        "jaw_left",
+        "jaw_right",
+        "trigger",
+        "shaft rotation collar"
+      ],
+      "action": "grasp",
+      "cvNotes": "Virtual tool identity and Unity renderer bounds are deterministic; raw passthrough camera pixels do not include this tool. Real-camera recognition requires separate labeled real-tool footage and validation.",
+      "references": [
+        {
+          "url": "https://www.karlstorz.com/de/en/product-detail-page.htm?cat=1000071971&productID=1000120466",
+          "title": "KARL STORZ CLICKLINE atraumatic grasping forceps 33353AF"
+        }
+      ]
+    },
+    {
+      "id": "maryland_dissector",
+      "unityPrefab": "inst_maryland_dissector",
+      "displayName": "Maryland dissector",
+      "function": "Curved fine paired jaws for virtual grasping and blunt separation, not a mechanical cutting edge.",
+      "referenceDimensions": {
+        "shaftDiameterM": 0.005,
+        "shaftWorkingLengthM": 0.36,
+        "totalLengthEstimateM": 0.47,
+        "status": "Generic simulator proxy. Reference shaft/head sizes where stated; total length, handle dimensions, and articulation are author estimates, not certified device geometry.",
+        "note": "Manufacturer sell sheet identifies 5 mm x 360 mm Kelly/Maryland inserts; modeled curvature and articulation are generic.",
+        "jawLengthEstimateM": 0.016
+      },
+      "articulatedParts": [
+        "jaw_left",
+        "jaw_right",
+        "trigger",
+        "shaft rotation collar"
+      ],
+      "action": "dissect",
+      "cvNotes": "Virtual tool identity and Unity renderer bounds are deterministic; raw passthrough camera pixels do not include this tool. Real-camera recognition requires separate labeled real-tool footage and validation.",
+      "references": [
+        {
+          "url": "https://www.lapspay.com/cps/rde/xbcr/karlstorz_assets/ASSETS/3641937.pdf",
+          "title": "KARL STORZ CLICKLINE manufacturer sell sheet \u2014 Kelly/Maryland inserts"
+        }
+      ]
+    },
+    {
+      "id": "hook_cautery",
+      "unityPrefab": "inst_hook_cautery",
+      "displayName": "Monopolar hook",
+      "function": "Insulated shaft with exposed hooked electrode; electrosurgical effect requires a simulated activation state.",
+      "referenceDimensions": {
+        "shaftDiameterM": 0.005,
+        "shaftWorkingLengthM": 0.32,
+        "totalLengthEstimateM": 0.44,
+        "status": "Generic simulator proxy. Reference shaft/head sizes where stated; total length, handle dimensions, and articulation are author estimates, not certified device geometry.",
+        "note": "Reference 5 mm x 320 mm L-hook electrode. Pistol-style handle is a generic proxy rather than a replica of the cited combined system.",
+        "tipLengthEstimateM": 0.01
+      },
+      "articulatedParts": [
+        "activation button",
+        "shaft rotation (optional)"
+      ],
+      "action": "energy",
+      "cvNotes": "Virtual tool identity and Unity renderer bounds are deterministic; raw passthrough camera pixels do not include this tool. Real-camera recognition requires separate labeled real-tool footage and validation.",
+      "references": [
+        {
+          "url": "https://www.conmed.com/en/products/surgical-and-medical-instruments/laparoscopic-and-robotic-instruments/universal-plus-handpieces-and-reusable-electrodes/",
+          "title": "CONMED Universal Plus electrodes and suction/irrigation cannulas"
+        }
+      ]
+    },
+    {
+      "id": "vessel_sealer",
+      "unityPrefab": "inst_vessel_sealer",
+      "displayName": "Bipolar vessel sealer",
+      "function": "Paired sealing jaws with a divider mechanism; simulated sealing and division are separate authored state changes.",
+      "referenceDimensions": {
+        "shaftDiameterM": 0.005,
+        "shaftWorkingLengthM": 0.37,
+        "totalLengthEstimateM": 0.5,
+        "status": "Generic simulator proxy. Reference shaft/head sizes where stated; total length, handle dimensions, and articulation are author estimates, not certified device geometry.",
+        "note": "Reference LF1937: 5 mm x 370 mm. Source sealing length 20.3 mm and cut length 18.5 mm; generic mesh need not reproduce internals.",
+        "jawLengthEstimateM": 0.023,
+        "referenceSealLengthM": 0.0203,
+        "referenceCutLengthM": 0.0185
+      },
+      "articulatedParts": [
+        "jaw_left",
+        "jaw_right",
+        "trigger",
+        "divider slider",
+        "shaft rotation collar"
+      ],
+      "action": "seal",
+      "cvNotes": "Virtual tool identity and Unity renderer bounds are deterministic; raw passthrough camera pixels do not include this tool. Real-camera recognition requires separate labeled real-tool footage and validation.",
+      "references": [
+        {
+          "url": "https://www.medtronic.com/covidien/de-at/products/vessel-sealing/ligasure-maryland-jaw-sealer-divider.html",
+          "title": "Medtronic LigaSure Maryland jaw sealer/divider dimensions"
+        }
+      ]
+    },
+    {
+      "id": "clip_applier",
+      "unityPrefab": "inst_clip_applier",
+      "displayName": "Clip applier",
+      "function": "Paired distal jaws that place a virtual clip on an explicitly eligible target.",
+      "referenceDimensions": {
+        "shaftDiameterM": 0.01,
+        "shaftWorkingLengthM": 0.33,
+        "totalLengthEstimateM": 0.49,
+        "status": "Generic simulator proxy. Reference shaft/head sizes where stated; total length, handle dimensions, and articulation are author estimates, not certified device geometry.",
+        "note": "Reference 10 mm Endo Clip with 330 mm shaft. Clip geometry and amount in the simulator are independently authored.",
+        "jawLengthEstimateM": 0.016
+      },
+      "articulatedParts": [
+        "jaw_left",
+        "jaw_right",
+        "trigger",
+        "shaft rotation collar"
+      ],
+      "action": "clip",
+      "cvNotes": "Virtual tool identity and Unity renderer bounds are deterministic; raw passthrough camera pixels do not include this tool. Real-camera recognition requires separate labeled real-tool footage and validation.",
+      "references": [
+        {
+          "url": "https://www.medtronic.com/en-ca/healthcare-professionals/products/access-instruments/ligation/laparoscopic-surgical-devices/endo-clip-clip-applier.html",
+          "title": "Medtronic Endo Clip appliers"
+        }
+      ]
+    },
+    {
+      "id": "lap_scissors",
+      "unityPrefab": "inst_lap_scissors",
+      "displayName": "Laparoscopic scissors",
+      "function": "Two sharpened distal blades for a virtual cuttable target when the blades close.",
+      "referenceDimensions": {
+        "shaftDiameterM": 0.005,
+        "shaftWorkingLengthM": 0.36,
+        "totalLengthEstimateM": 0.47,
+        "status": "Generic simulator proxy. Reference shaft/head sizes where stated; total length, handle dimensions, and articulation are author estimates, not certified device geometry.",
+        "note": "Reference 5 mm and 360 mm working length. Blade length and opening range are estimated.",
+        "jawLengthEstimateM": 0.018
+      },
+      "articulatedParts": [
+        "blade_left",
+        "blade_right",
+        "trigger",
+        "shaft rotation collar"
+      ],
+      "action": "cut",
+      "cvNotes": "Virtual tool identity and Unity renderer bounds are deterministic; raw passthrough camera pixels do not include this tool. Real-camera recognition requires separate labeled real-tool footage and validation.",
+      "references": [
+        {
+          "url": "https://www.karlstorz.com/us/en/product-detail-page.htm?cat=1000209369&productID=1000120506",
+          "title": "KARL STORZ CLICKLINE scissors 34351MW"
+        }
+      ]
+    },
+    {
+      "id": "endo_stapler",
+      "unityPrefab": "inst_endo_stapler",
+      "displayName": "Endoscopic linear stapler",
+      "function": "Long reload cartridge and opposing anvil; virtual line closure with optional preauthored division.",
+      "referenceDimensions": {
+        "shaftDiameterM": 0.012,
+        "shaftWorkingLengthM": 0.16,
+        "totalLengthEstimateM": 0.39,
+        "status": "Generic simulator proxy. Reference shaft/head sizes where stated; total length, handle dimensions, and articulation are author estimates, not certified device geometry.",
+        "note": "Reference standard handle shaft 160 mm and 45 mm reload. 12 mm delivery diameter and total silhouette are generic estimates, not manufacturer-verified compatibility.",
+        "reloadLengthM": 0.045
+      },
+      "articulatedParts": [
+        "anvil",
+        "cartridge",
+        "trigger",
+        "articulation joint",
+        "firing slider"
+      ],
+      "action": "staple",
+      "cvNotes": "Virtual tool identity and Unity renderer bounds are deterministic; raw passthrough camera pixels do not include this tool. Real-camera recognition requires separate labeled real-tool footage and validation.",
+      "references": [
+        {
+          "url": "https://www.medtronic.com/en-ca/healthcare-professionals/products/surgical-stapling/surgical-staplers/laparoscopic-staplers/endo-gia-ultra-universal-stapler.html",
+          "title": "Medtronic Endo GIA Ultra Universal stapler"
+        },
+        {
+          "url": "https://www.medtronic.com/covidien/it-it/products/surgical-stapling/endo-gia-black-reload.html",
+          "title": "Medtronic Endo GIA 45/60 mm reloads"
+        }
+      ]
+    },
+    {
+      "id": "circular_stapler",
+      "unityPrefab": "inst_circular_stapler",
+      "displayName": "Circular stapler",
+      "function": "Circular cartridge head and opposing removable anvil; virtual circular closure.",
+      "referenceDimensions": {
+        "shaftDiameterM": 0.012,
+        "shaftWorkingLengthM": 0.22,
+        "totalLengthEstimateM": 0.43,
+        "status": "Generic simulator proxy. Reference shaft/head sizes where stated; total length, handle dimensions, and articulation are author estimates, not certified device geometry.",
+        "note": "Reference 28 mm head variant with 220 mm shaft. Shaft diameter and total size are author estimates; circular cutter internals are not physically modeled.",
+        "headDiameterM": 0.028
+      },
+      "articulatedParts": [
+        "anvil (axial)",
+        "approximation knob",
+        "trigger"
+      ],
+      "action": "staple",
+      "cvNotes": "Virtual tool identity and Unity renderer bounds are deterministic; raw passthrough camera pixels do not include this tool. Real-camera recognition requires separate labeled real-tool footage and validation.",
+      "references": [
+        {
+          "url": "https://www.medtronic.com/covidien/nl-nl/products/surgical-stapling/eea-circular-stapler.html",
+          "title": "Medtronic EEA circular stapler ordering dimensions"
+        }
+      ]
+    },
+    {
+      "id": "suction_irrigator",
+      "unityPrefab": "inst_suction_irrigator",
+      "displayName": "Suction irrigator",
+      "function": "Hollow cannula with tip/side openings and separate suction/irrigation controls.",
+      "referenceDimensions": {
+        "shaftDiameterM": 0.005,
+        "shaftWorkingLengthM": 0.32,
+        "totalLengthEstimateM": 0.44,
+        "status": "Generic simulator proxy. Reference shaft/head sizes where stated; total length, handle dimensions, and articulation are author estimates, not certified device geometry.",
+        "note": "Reference 5 mm x 320 mm sump or stainless steel cannula. Tubing outlets are visual sockets; fluid dynamics are not represented."
+      },
+      "articulatedParts": [
+        "suction button",
+        "irrigation button"
+      ],
+      "action": "suction",
+      "cvNotes": "Virtual tool identity and Unity renderer bounds are deterministic; raw passthrough camera pixels do not include this tool. Real-camera recognition requires separate labeled real-tool footage and validation.",
+      "references": [
+        {
+          "url": "https://www.conmed.com/en/products/surgical-and-medical-instruments/laparoscopic-and-robotic-instruments/universal-plus-handpieces-and-reusable-electrodes/",
+          "title": "CONMED Universal Plus electrodes and suction/irrigation cannulas"
+        }
+      ]
+    },
+    {
+      "id": "retrieval_bag",
+      "unityPrefab": "inst_retrieval_bag",
+      "displayName": "Specimen retrieval bag",
+      "function": "Deployable pouch and support hoop for containment of an eligible virtual specimen.",
+      "referenceDimensions": {
+        "shaftDiameterM": 0.01,
+        "shaftWorkingLengthM": 0.21,
+        "totalLengthEstimateM": 0.34,
+        "status": "Generic simulator proxy. Reference shaft/head sizes where stated; total length, handle dimensions, and articulation are author estimates, not certified device geometry.",
+        "note": "10 mm delivery device and 190 ml bag are reference family examples. Working shaft length, open hoop, bag mesh, and total size are author estimates; not a validated volume.",
+        "bagCapacityReferenceMl": 190,
+        "openHoopDiameterEstimateM": 0.09
+      },
+      "articulatedParts": [
+        "deployment slider",
+        "support hoop",
+        "pouch (deployed state)",
+        "drawstring (visual)"
+      ],
+      "action": "retrieve",
+      "cvNotes": "Virtual tool identity and Unity renderer bounds are deterministic; raw passthrough camera pixels do not include this tool. Real-camera recognition requires separate labeled real-tool footage and validation.",
+      "references": [
+        {
+          "url": "https://www.medtronic.com/covidien/de-de/products/hand-instruments-ligation/specimen-retrieval-products.html",
+          "title": "Medtronic specimen retrieval products"
+        }
+      ]
+    },
+    {
+      "id": "fascial_closure",
+      "unityPrefab": "inst_fascial_closure",
+      "displayName": "Fascial closure device",
+      "function": "Suture passer with small distal capture jaw; real systems also use separate port guides.",
+      "referenceDimensions": {
+        "shaftDiameterM": 0.003,
+        "shaftWorkingLengthM": 0.18,
+        "totalLengthEstimateM": 0.27,
+        "status": "Generic simulator proxy. Reference shaft/head sizes where stated; total length, handle dimensions, and articulation are author estimates, not certified device geometry.",
+        "note": "Source supports needle-like shaft, hinged jaw, and separate pilot guides. 3 mm shaft, 180 mm working length, and total size are entirely author estimates, not listed certified dimensions."
+      },
+      "articulatedParts": [
+        "distal capture jaw",
+        "plunger",
+        "separate pilot guide (future asset)"
+      ],
+      "action": "close",
+      "cvNotes": "Virtual tool identity and Unity renderer bounds are deterministic; raw passthrough camera pixels do not include this tool. Real-camera recognition requires separate labeled real-tool footage and validation.",
+      "references": [
+        {
+          "url": "https://www.coopersurgical.com/wp-content/uploads/CooperSurgical_Surgical_Products_Catalog.pdf",
+          "title": "CooperSurgical surgical products catalog \u2014 Carter-Thomason CloseSure"
+        }
+      ]
+    },
+    {
+      "id": "scalpel",
+      "unityPrefab": "inst_scalpel",
+      "displayName": "Scalpel",
+      "function": "Flat metal handle with curved blade for a virtual cuttable surface.",
+      "referenceDimensions": {
+        "shaftDiameterM": null,
+        "shaftWorkingLengthM": null,
+        "totalLengthEstimateM": 0.155,
+        "status": "Generic simulator proxy. Reference shaft/head sizes where stated; total length, handle dimensions, and articulation are author estimates, not certified device geometry.",
+        "note": "No. 3 handle and curved No. 10 blade are shape references. 155 mm overall size, blade size, and handle grooves are author estimates.",
+        "bladeLengthEstimateM": 0.025
+      },
+      "articulatedParts": [],
+      "action": "cut",
+      "cvNotes": "Virtual tool identity and Unity renderer bounds are deterministic; raw passthrough camera pixels do not include this tool. Real-camera recognition requires separate labeled real-tool footage and validation.",
+      "references": [
+        {
+          "url": "https://www.swann-morton.com/product_range/3.php",
+          "title": "Swann-Morton No. 3 scalpel handles"
+        },
+        {
+          "url": "https://www.swann-morton.com/product/16.php",
+          "title": "Swann-Morton No. 10 curved scalpel blade"
+        }
+      ]
+    }
+  ]
+}
