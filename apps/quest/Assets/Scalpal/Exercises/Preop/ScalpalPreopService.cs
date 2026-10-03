@@ -183,6 +183,7 @@ namespace Scalpal.Exercises.Preop
                     {
                         sessionId = "",
                         scenarioId = kind == RouteKind.Admit ? segment : "",
+                        connectUrl = "",
                         state = "unavailable",
                         sessionStatus = "",
                         syncStatus = "",

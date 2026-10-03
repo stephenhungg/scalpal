@@ -119,6 +119,20 @@ describe("FinchNode Connect admissions", () => {
     expect((list.json.patients as { patientId: string; kind: string }[]).some((p) => p.patientId === "u_test_polypharmacy_senior" && p.kind === "sandbox")).toBe(true);
   });
 
+  it("admission returns FinchNode's hosted consent link", async () => {
+    const admit = await call("POST", "/admit/baseline-adult");
+    expect(String(admit.json.connectUrl)).toMatch(/^https:\/\/finchnode\.com\/connect\//);
+    expect(String(admit.json.say)).toMatch(/approve sharing/);
+  });
+
+  it("lists patients who consented on the hosted page and maps them to their scenario's case", async () => {
+    const list = await call("GET", "/patients");
+    const console = (list.json.patients as { patientId: string; scenarioId: string; procedureId: string }[]).find((p) => p.patientId === "u_test_messy_coding");
+    expect(console).toMatchObject({ scenarioId: "messy-coding", procedureId: "lap_sigmoid_colectomy" });
+    const kase = await call("GET", "/patients/u_test_messy_coding/case");
+    expect((kase.json.brief as { dataSource: string }).dataSource).toBe("sandbox");
+  });
+
   it("without a sandbox key, admission falls back to the demo record", async () => {
     const plain = createApp({ client: fixtureClient(), now: () => NOW });
     const res = await plain.request("/admit/baseline-adult", { method: "POST" });

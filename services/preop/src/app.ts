@@ -13,6 +13,9 @@ import type { Action, AdmissionStatus, Scenario, SandboxSession, SurgicalCase } 
 export interface AppOptions {
   client?: FinchNodeClient;
   now?: () => Date;
+  // Use FinchNode's sandbox simulate shortcut instead of the hosted consent link. Off by default:
+  // as of Oct 3 simulated sessions stall at partial sync, while the hosted link completes.
+  simulateAdmissions?: boolean;
   coachTickMs?: number;
   stuckPolicy?: StuckPolicy;
   elevenLabs?: { apiKey: string; agentId: string };
@@ -44,6 +47,7 @@ export function createApp(options: AppOptions = {}) {
 
   // Sandbox admissions live in memory: sessionId -> scenario, and admitted subject -> scenario.
   const admissions = new Map<string, string>();
+  const connectUrls = new Map<string, string>();
   const subjectScenario = new Map<string, string>();
 
   const fail = (c: Context, status: 400 | 404 | 409 | 429 | 502, code: string, message: string, actions: Action[]) =>
@@ -68,10 +72,27 @@ export function createApp(options: AppOptions = {}) {
     return { subject: id, scenarioId: list.find((s) => s.subject === id)?.id ?? "" };
   }
 
+  // Sandbox sources are labeled "<health system> · <scenario title>", which maps a consented subject
+  // back to the scenario whose authored case plan it should use.
+  async function scenarioFromOrganizations(organizations: string[]): Promise<string> {
+    const list = await scenarios();
+    for (const org of organizations) {
+      const title = org.split(" \u00b7 ").slice(1).join(" \u00b7 ").trim();
+      const match = title ? list.find((s) => s.title === title && s.subject) : undefined;
+      if (match) return match.id;
+    }
+    return "";
+  }
+
   async function loadCase(subject: string, scenarioId: string): Promise<SurgicalCase | FinchNodeError> {
     try {
+      const record = await client.getRecord(subject);
+      if (!scenarioId && !subject.startsWith("patient-demo-")) {
+        scenarioId = await scenarioFromOrganizations((record.sources ?? []).map((s) => s.organization));
+        if (scenarioId) subjectScenario.set(subject, scenarioId);
+      }
       const planSubject = (await scenarios()).find((s) => s.id === scenarioId)?.subject ?? subject;
-      return buildCase(await client.getRecord(subject), scenarioId, now(), planSubject);
+      return buildCase(record, scenarioId, now(), planSubject);
     } catch (err) {
       if (err instanceof FinchNodeError) return err;
       throw err;
@@ -123,6 +144,16 @@ export function createApp(options: AppOptions = {}) {
         };
       }),
     );
+    if (client.sandbox) {
+      try {
+        for (const user of await client.sandbox.listUsers()) {
+          if (subjectScenario.has(user.id)) continue;
+          subjectScenario.set(user.id, await scenarioFromOrganizations((user.sources ?? []).map((src) => src.organization)));
+        }
+      } catch {
+        // Listing consented patients is best effort; demo patients still list.
+      }
+    }
     const admitted = await Promise.all(
       [...subjectScenario].map(async ([subject, scenarioId]): Promise<PatientListEntry> => {
         const kase = (await caseOrUnavailable(subject, scenarioId)) ?? unavailableCase(subject, scenarioId, new FinchNodeError(404, "patient_not_found", "Patient not found"), now());
@@ -154,6 +185,7 @@ export function createApp(options: AppOptions = {}) {
     const base = {
       sessionId: session.id,
       scenarioId,
+      connectUrl: session.url ?? connectUrls.get(session.id) ?? "",
       sessionStatus: session.status,
       syncStatus: session.sync?.status ?? "",
       patientId: session.subject ?? "",
@@ -165,7 +197,14 @@ export function createApp(options: AppOptions = {}) {
     if (failed) {
       return { ...base, state: "failed", say: "The health system connection didn't finish. Try again, or use the demo record.", actions: [routes.admit(scenarioId), ...demoCase, routes.patients()] };
     }
-    return { ...base, state: "connecting", say: "Connecting to the patient's health system and waiting for their consent.", actions: [routes.admission(session.id), ...demoCase, routes.patients()] };
+    return {
+      ...base,
+      state: "connecting",
+      say: base.connectUrl
+        ? "Open the FinchNode Connect link on the laptop, choose the patient's health system, and approve sharing. I'll pick up the records as soon as consent is recorded."
+        : "Connecting to the patient's health system and waiting for their consent.",
+      actions: [routes.admission(session.id), ...demoCase, routes.patients()],
+    };
   }
 
   app.get("/", (c) =>
@@ -250,13 +289,14 @@ export function createApp(options: AppOptions = {}) {
     const demoCase = routes.caseFor(scenario.subject, "Use the demo record instead");
     if (!client.sandbox) {
       return c.json({
-        sessionId: "", scenarioId, state: "unavailable", sessionStatus: "", syncStatus: "", patientId: "", organization: "",
+        sessionId: "", scenarioId, connectUrl: "", state: "unavailable", sessionStatus: "", syncStatus: "", patientId: "", organization: "",
         say: "Live admission needs a FinchNode sandbox key on the server. Using the demo record works the same.",
         actions: [demoCase, routes.patients()],
       } satisfies AdmissionStatus);
     }
     try {
-      const session = await client.sandbox.admit(scenarioId);
+      const session = await client.sandbox.admit(scenarioId, { simulate: options.simulateAdmissions === true });
+      connectUrls.set(session.id, session.url ?? "");
       admissions.set(session.id, scenarioId);
       return c.json(admissionStatus(session, scenarioId));
     } catch (err) {

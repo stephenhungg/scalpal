@@ -464,7 +464,8 @@ export function buildBrief(record: HealthRecord, now: Date = new Date()): PreopB
   flags.sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]);
   const highlightStructures = [...new Set(flags.flatMap((f) => f.structures))];
 
-  const dataSource = record.environment === "sandbox" ? "sandbox" : "demo";
+  // Sandbox records carry no environment field; their subjects are app-scoped ids, not "patient-demo-...".
+  const dataSource = record.environment === "demo" || record.id.startsWith("patient-demo-") ? "demo" : "sandbox";
   const consentReceipts = record.consent?.receiptIds ?? [];
   return {
     patientId: record.id,

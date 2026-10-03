@@ -18,26 +18,11 @@ This is Scalpal's FinchNode sponsor integration: a live API read that changes wh
 | Path | Needs | What happens |
 | --- | --- | --- |
 | Demo records | nothing | `GET /patients/:id/case` reads `api.finchnode.com/demo/v1` directly |
-| Connect admission | `FINCHNODE_API_KEY=ck_test_...` in `.env` | `POST /admit/:scenarioId` creates a real Connect session on `api/v1`, a synthetic patient consents via `simulate`, `GET /admissions/:sessionId` polls until FinchNode exposes the app-scoped subject (`u_...`), then that subject's case is read with the key and shows its consent receipt |
+| Connect admission | `FINCHNODE_API_KEY=ck_test_...` in `.env` | `POST /admit/:scenarioId` creates a real Connect session on `api/v1` and returns its hosted `connectUrl`. Open it (laptop or QR), choose the scenario's synthetic health system under "FinchNode Scenario Sandbox", and approve sharing. `GET /admissions/:sessionId` polls until FinchNode exposes the app-scoped subject (`u_...`); that subject's case reads from `api/v1` and shows its consent receipt |
 
-Every admission response also offers "Use the demo record instead", so a slow or stuck sandbox never blocks the learner. Record reads retry once after `Retry-After` on a 429, per FinchNode's contract. Keys stay in `.env` on the server, never in Unity builds.
+Patients who consent on the hosted page appear in `GET /patients` automatically (from FinchNode's `GET /users`) with `kind: sandbox`. Their surgical case plan comes from the scenario title in their source label ("Northstar Health System (Synthetic) · Baseline adult, age 38"). Every admission response also offers "Use the demo record instead", so a slow sandbox never blocks the learner. Record reads retry once after `Retry-After` on a 429, per FinchNode's contract. Keys stay in `.env` on the server, never in Unity builds.
 
-Known issue (Oct 3): simulated sandbox sessions import successfully (`sync.status` partial, since the app only requests six categories) but have stayed at `system-selected` with `simulation.state` `syncing` instead of completing. Reported state is FinchNode-side; the demo fallback keeps the flow working.
-
-## Run
-
-```bash
-npm install
-npm run dev            # http://localhost:8787, bound to 0.0.0.0 so the Quest can reach it on the LAN
-npm test               # rules, catalog integrity, engine playthroughs, route crawl, Unity DTO contract
-npm run test:live      # same app against the real FinchNode demo API
-npm run test:unity     # compiles the Quest C# under .NET and plays every bundled case through CaseRunner
-npm run validate       # catalog referential integrity only
-npm run gen:unity      # regenerate Generated/ScalpalIds.cs after editing a catalog
-npm run export:unity   # refresh Resources/scalpal_bundle.json from the live API (add -- --offline for fixtures)
-```
-
-`test:unity` needs the .NET SDK (`brew install dotnet`). Node 22+.
+Verified Oct 3: a patient consented on the hosted page (`u_115958ef4e58c641`, receipt `rcpt_A6505A1C2C57`) reads end to end through `/patients/:id/case` with `dataSource: sandbox`. FinchNode's `simulate` shortcut does not complete: the simulated source withholds `documents` and `claims`, sync stays `partial`, and `simulation.state` stays `syncing`. `createApp({ simulateAdmissions: true })` re-enables it once FinchNode fixes that.
 
 ## API
 

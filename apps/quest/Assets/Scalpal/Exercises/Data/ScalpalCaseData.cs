@@ -291,6 +291,8 @@ namespace Scalpal.Exercises.Data
     {
         public string sessionId;
         public string scenarioId;
+        // FinchNode's hosted consent page: show it on the laptop or as a QR code; the patient approves sharing there.
+        public string connectUrl;
         public string state;
         public string sessionStatus;
         public string syncStatus;
