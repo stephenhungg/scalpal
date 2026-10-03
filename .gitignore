@@ -19,3 +19,6 @@ __pycache__/
 /apps/quest/UserSettings/
 /apps/quest/Builds/
 .gstack/
+
+# Pre-rendered Jarvis warning audio
+services/preop/.cache/

@@ -21,6 +21,7 @@ export interface AppOptions {
   stuckPolicy?: StuckPolicy;
   elevenLabs?: { apiKey: string; agentId: string; voiceId?: string };
   reflex?: ReflexAudio;
+  toolAckWaitMs?: number;
 }
 
 export interface PatientListEntry {
@@ -449,6 +450,7 @@ export function createApp(options: AppOptions = {}) {
     stuckPolicy: options.stuckPolicy,
     elevenLabs: options.elevenLabs,
     reflex: options.reflex,
+    toolAckWaitMs: options.toolAckWaitMs,
     loadCase: async (id) => {
       const target = await resolve(id);
       return target ? caseOrUnavailable(target.subject, target.scenarioId) : null;

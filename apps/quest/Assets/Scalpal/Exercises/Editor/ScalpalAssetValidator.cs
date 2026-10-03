@@ -4,6 +4,7 @@
 // flipped axes, and a triangle count over the Quest budget.
 using System.Collections.Generic;
 using System.Linq;
+using Scalpal.Anatomy;
 using Scalpal.Exercises.Generated;
 using UnityEditor;
 using UnityEngine;
@@ -18,13 +19,13 @@ namespace Scalpal.Exercises.EditorTools
         // x < 0 is the participant's right, z > 0 is toward the head.
         static readonly (string name, int xSign, int zSign)[] Landmarks =
         {
-            (AnatomyUnityNames.Liver, -1, 1),
-            (AnatomyUnityNames.Gallbladder, -1, 1),
-            (AnatomyUnityNames.Cecum, -1, -1),
-            (AnatomyUnityNames.Appendix, -1, -1),
-            (AnatomyUnityNames.SigmoidColon, 1, -1),
-            (AnatomyUnityNames.UrinaryBladder, 0, -1),
-            (AnatomyUnityNames.Heart, 0, 1),
+            (AnatomyIds.Liver, -1, 1),
+            (AnatomyIds.Gallbladder, -1, 1),
+            (AnatomyIds.Cecum, -1, -1),
+            (AnatomyIds.Appendix, -1, -1),
+            (AnatomyIds.SigmoidColon, 1, -1),
+            (AnatomyIds.UrinaryBladder, 0, -1),
+            (AnatomyIds.Heart, 0, 1),
         };
 
         [MenuItem("Scalpal/Validate Selected Anatomy Rig")]
@@ -37,32 +38,38 @@ namespace Scalpal.Exercises.EditorTools
                 return;
             }
             var problems = Validate(root.transform);
-            if (problems.Count == 0) Debug.Log($"[Scalpal] {root.name}: anatomy rig ok ({AnatomyUnityNames.All.Length} structures).");
+            if (problems.Count == 0) Debug.Log($"[Scalpal] {root.name}: anatomy rig ok ({AnatomyIds.All.Length} structures).");
             else Debug.LogError($"[Scalpal] {root.name}: {problems.Count} problem(s)\n- " + string.Join("\n- ", problems));
         }
 
+        // Structures are found by AnatomyPart.stableId (the Codex atlas convention), falling back to
+        // GameObjects named anat_<id> for hand-built placeholder rigs.
         public static List<string> Validate(Transform root)
         {
             var problems = new List<string>();
-            var byName = new Dictionary<string, Transform>();
+            var byId = new Dictionary<string, Transform>();
+            foreach (var part in root.GetComponentsInChildren<AnatomyPart>(true))
+            {
+                if (string.IsNullOrEmpty(part.stableId)) continue;
+                if (byId.ContainsKey(part.stableId)) problems.Add($"duplicate stableId {part.stableId}");
+                else byId[part.stableId] = part.transform;
+            }
             foreach (var t in root.GetComponentsInChildren<Transform>(true))
             {
                 if (!t.name.StartsWith("anat_")) continue;
-                if (byName.ContainsKey(t.name)) problems.Add($"duplicate object {t.name}");
-                else byName[t.name] = t;
+                var id = t.name.Substring(5);
+                if (!byId.ContainsKey(id)) byId[id] = t;
             }
 
-            foreach (var name in AnatomyUnityNames.All)
+            foreach (var id in AnatomyIds.All)
             {
-                if (!byName.TryGetValue(name, out var t)) problems.Add($"missing {name}");
-                else if (t.GetComponent<Collider>() == null) problems.Add($"{name} has no Collider, so instrument touches cannot register");
+                if (!byId.TryGetValue(id, out var t)) problems.Add($"missing {id} (no AnatomyPart with that stableId)");
+                else if (t.GetComponentsInChildren<Collider>(true).Length == 0) problems.Add($"{id} has no Collider, so instrument touches cannot register");
             }
-            var known = new HashSet<string>(AnatomyUnityNames.All);
-            foreach (var extra in byName.Keys.Where(n => !known.Contains(n))) problems.Add($"{extra} is not in the catalog (typo, or add it to services/preop/src/catalog/anatomy.ts)");
 
             foreach (var (name, xSign, zSign) in Landmarks)
             {
-                if (!byName.TryGetValue(name, out var t)) continue;
+                if (!byId.TryGetValue(name, out var t)) continue;
                 var renderer = t.GetComponent<Renderer>();
                 var local = root.InverseTransformPoint(renderer != null ? renderer.bounds.center : t.position);
                 if (xSign != 0 && Mathf.Sign(local.x) != xSign) problems.Add($"{name} is on the wrong side (x = {local.x:F2}); the rig is mirrored or the X axis is flipped");
