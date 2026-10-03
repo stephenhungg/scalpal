@@ -1,0 +1,101 @@
+{
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "id": "cardiovascular",
+      "source": "z-anatomy",
+      "url": "https://raw.githubusercontent.com/LluisV/Z-Anatomy/6c7f9016bd5899ac8edafd31b9900c151df42ed6/Resources/Models/FBX/CardioVascular41.fbx",
+      "gitBlob": "aa5bbcb63ae6e9ace8051111b3a85ea87f00c4f3",
+      "bytes": 64889388,
+      "filename": "cardiovascular.fbx",
+      "sha256": "ed7d049117cc944a8c47a416b16ade642cbd1392bbcce3c677450d3234dbf680"
+    },
+    {
+      "id": "joints",
+      "source": "z-anatomy",
+      "url": "https://raw.githubusercontent.com/LluisV/Z-Anatomy/6c7f9016bd5899ac8edafd31b9900c151df42ed6/Resources/Models/FBX/Joints100.fbx",
+      "gitBlob": "9db06d20217f4f42999dcfdf31b1f6af78dc7794",
+      "bytes": 9804796,
+      "filename": "joints.fbx",
+      "sha256": "f4ba7a910cdaef99e31530f368628780d9f06b5d77853f8b721f47f67137e823"
+    },
+    {
+      "id": "lymphatic",
+      "source": "z-anatomy",
+      "url": "https://raw.githubusercontent.com/LluisV/Z-Anatomy/6c7f9016bd5899ac8edafd31b9900c151df42ed6/Resources/Models/FBX/LymphoidOrgans100.fbx",
+      "gitBlob": "fa39c3f65ecbf7d97c3f56ba47b4382e957ef85e",
+      "bytes": 2130876,
+      "filename": "lymphatic.fbx",
+      "sha256": "310ff82f502f4f3a79e85f99ddc2009bba9514338119af9edff87b20cf1b3609"
+    },
+    {
+      "id": "muscular",
+      "source": "z-anatomy",
+      "url": "https://raw.githubusercontent.com/LluisV/Z-Anatomy/6c7f9016bd5899ac8edafd31b9900c151df42ed6/Resources/Models/FBX/MuscularSystem100.fbx",
+      "gitBlob": "2477e1b6caf97d7174762b5eec6cf1c80db64eed",
+      "bytes": 37343180,
+      "filename": "muscular.fbx",
+      "sha256": "4c19df534d5d84aabbce08604306aa0485b43e8a2483c72a95b569e1dfea2279"
+    },
+    {
+      "id": "nervous",
+      "source": "z-anatomy",
+      "url": "https://raw.githubusercontent.com/LluisV/Z-Anatomy/6c7f9016bd5899ac8edafd31b9900c151df42ed6/Resources/Models/FBX/NervousSystem100.fbx",
+      "gitBlob": "4ec6e3cb2a1ba821aca02c1d523ac614fdf41a02",
+      "bytes": 53887724,
+      "filename": "nervous.fbx",
+      "sha256": "3ea1aad64956cad27348a27b8fb50494b7cc307c6bc77bee0810ec2a67dff2b1"
+    },
+    {
+      "id": "surface",
+      "source": "z-anatomy",
+      "url": "https://raw.githubusercontent.com/LluisV/Z-Anatomy/6c7f9016bd5899ac8edafd31b9900c151df42ed6/Resources/Models/FBX/Regions%20of%20human%20body100.fbx",
+      "gitBlob": "99d81944658b3407f62d3428d40a89646d9c6369",
+      "bytes": 4433260,
+      "filename": "surface.fbx",
+      "sha256": "9d8da01d4719f9a61ee6ccfcaef85f788c4c67e9bcd74f5725c6946ab8b44199"
+    },
+    {
+      "id": "skeletal",
+      "source": "z-anatomy",
+      "url": "https://raw.githubusercontent.com/LluisV/Z-Anatomy/6c7f9016bd5899ac8edafd31b9900c151df42ed6/Resources/Models/FBX/SkeletalSystem100.fbx",
+      "gitBlob": "7c62e45211bf3992bb7239170343e06e2b073865",
+      "bytes": 41339660,
+      "filename": "skeletal.fbx",
+      "sha256": "294a649765cd060a62a4095da52b9c8ef2d97769aa447e196448aa5f7d596dea"
+    },
+    {
+      "id": "visceral",
+      "source": "z-anatomy",
+      "url": "https://raw.githubusercontent.com/LluisV/Z-Anatomy/6c7f9016bd5899ac8edafd31b9900c151df42ed6/Resources/Models/FBX/VisceralSystem100.fbx",
+      "gitBlob": "355770ae46123044c85deca03de3fb880b8f7301",
+      "bytes": 18401708,
+      "filename": "visceral.fbx",
+      "sha256": "22b301c93327929c9a14ee582d1848b550a950376e221a6d1078c7256bb83d0e"
+    },
+    {
+      "id": "detail-heart",
+      "source": "hra",
+      "url": "https://raw.githubusercontent.com/cns-iu/hra-organ-gallery-in-vr/92dc604271f1a3e92cc2ce598405ada2daeb9460/hra-organ-gallery/Assets/Models/Organs/2.5/hi-res/3d-vh-m-heart.glb",
+      "filename": "detail-heart.glb",
+      "sha256": "689df039c8bc264ea06a44cd926762976f0666c0ff2dc532d046409b185e6b0c",
+      "bytes": 4071772
+    },
+    {
+      "id": "detail-liver",
+      "source": "hra",
+      "url": "https://raw.githubusercontent.com/cns-iu/hra-organ-gallery-in-vr/92dc604271f1a3e92cc2ce598405ada2daeb9460/hra-organ-gallery/Assets/Models/Organs/2.5/hi-res/3d-vh-m-liver.glb",
+      "filename": "detail-liver.glb",
+      "sha256": "8e4c38293cfdb6b4f47ef2930c7f4af9e37b9144d1cf26d07c8f12c5045eb404",
+      "bytes": 1136412
+    },
+    {
+      "id": "detail-blood-vasculature",
+      "source": "hra",
+      "url": "https://raw.githubusercontent.com/cns-iu/hra-organ-gallery-in-vr/92dc604271f1a3e92cc2ce598405ada2daeb9460/hra-organ-gallery/Assets/Models/Organs/2.5/hi-res/3d-vh-m-blood-vasculature.glb",
+      "filename": "detail-blood-vasculature.glb",
+      "sha256": "3a9fe60549769f3a27c15a0901a055e7c4fd3a9f4a37f39a77f5047f0166d4c3",
+      "bytes": 18050040
+    }
+  ]
+}

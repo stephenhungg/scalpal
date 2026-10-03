@@ -464,16 +464,32 @@ export function buildBrief(record: HealthRecord, now: Date = new Date()): PreopB
   flags.sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]);
   const highlightStructures = [...new Set(flags.flatMap((f) => f.structures))];
 
+  const dataSource = record.environment === "sandbox" ? "sandbox" : "demo";
+  const consentReceipts = record.consent?.receiptIds ?? [];
   return {
     patientId: record.id,
     synthetic: record.synthetic !== false,
+    dataSource,
+    consentStatus: record.consent?.status ?? "unknown",
+    consentReceipts,
     generatedAt: now.toISOString(),
     dataAsOf: record.meta?.dataAsOf ?? "",
     patient,
     flags,
     highlightStructures,
     activeMedicationCount: meds.length,
-    chart: buildChart(patient, conditions, meds, allergies, labs, flags),
+    chart: [
+      ...buildChart(patient, conditions, meds, allergies, labs, flags),
+      {
+        section: "Consent",
+        text: consentReceipts.length
+          ? `Shared by patient consent, receipt ${consentReceipts.join(", ")}`
+          : dataSource === "sandbox"
+            ? "Shared by patient consent (no receipt returned)"
+            : "FinchNode demo record (consent simulated)",
+        flagged: false,
+      },
+    ],
     dataGaps: finalGaps,
     sources: (record.sources ?? []).map((s) => s.organization),
     say: buildSay(patient, flags),

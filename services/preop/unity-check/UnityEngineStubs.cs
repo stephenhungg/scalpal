@@ -13,22 +13,68 @@ namespace UnityEngine
     public class Component : Object
     {
         public Transform transform => null;
+        public GameObject gameObject => null;
         public T GetComponent<T>() => default;
+        public T GetComponentInParent<T>() => default;
+        public T GetComponentInParent<T>(bool includeInactive) => default;
         public T[] GetComponentsInChildren<T>(bool includeInactive) => new T[0];
     }
 
     public class GameObject : Object
     {
         public Transform transform => null;
+        public bool activeInHierarchy => true;
     }
+
+    public enum Space { World, Self }
 
     public class Transform : Component
     {
         public Vector3 position => default;
         public Vector3 InverseTransformPoint(Vector3 position) => position;
+        public void Rotate(Vector3 axis, float angle, Space relativeTo) { }
     }
 
-    public class Collider : Component { }
+    public class Collider : Component
+    {
+        public bool enabled { get; set; }
+    }
+
+    [AttributeUsage(AttributeTargets.Class)]
+    public sealed class DisallowMultipleComponent : Attribute { }
+
+    public struct Color
+    {
+        public float r, g, b, a;
+        public Color(float r, float g, float b, float a) { this.r = r; this.g = g; this.b = b; this.a = a; }
+    }
+
+    public struct Vector2
+    {
+        public float x, y;
+    }
+
+    public class Shader : Object
+    {
+        public static int PropertyToID(string name) => name.GetHashCode();
+    }
+
+    public class Material : Object
+    {
+        public bool HasProperty(int nameID) => false;
+        public bool IsKeywordEnabled(string keyword) => false;
+    }
+
+    public sealed class MaterialPropertyBlock
+    {
+        public bool isEmpty => true;
+        public void SetColor(int nameID, Color value) { }
+    }
+
+    public static class Time
+    {
+        public static float deltaTime => 0f;
+    }
 
     public struct Bounds
     {
@@ -38,6 +84,11 @@ namespace UnityEngine
     public class Renderer : Component
     {
         public Bounds bounds => default;
+        public bool enabled { get; set; }
+        public Material[] sharedMaterials { get; set; }
+        public void GetPropertyBlock(MaterialPropertyBlock properties) { }
+        public void GetPropertyBlock(MaterialPropertyBlock properties, int materialIndex) { }
+        public void SetPropertyBlock(MaterialPropertyBlock properties, int materialIndex) { }
     }
 
     public class Mesh : Object
@@ -51,7 +102,11 @@ namespace UnityEngine
     }
 
 
-    public class Behaviour : Component { }
+    public class Behaviour : Component
+    {
+        public bool enabled { get; set; }
+        public bool isActiveAndEnabled => true;
+    }
 
     public class Coroutine { }
 
@@ -89,6 +144,7 @@ namespace UnityEngine
     {
         public static void Log(object message) { }
         public static void LogWarning(object message) { }
+        public static void LogWarning(object message, Object context) { }
         public static void LogError(object message) { }
     }
 
@@ -102,6 +158,7 @@ namespace UnityEngine
     {
         public float x, y, z;
         public Vector3(float x, float y, float z) { this.x = x; this.y = y; this.z = z; }
+        public static Vector3 up => new Vector3(0f, 1f, 0f);
         public static Vector3 operator *(Vector3 a, float d) => new Vector3(a.x * d, a.y * d, a.z * d);
     }
 
