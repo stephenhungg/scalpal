@@ -1,0 +1,250 @@
+import { describe, expect, it } from "vitest";
+import { createApp } from "../src/app.js";
+import { buildCase } from "../src/case-builder.js";
+import { CoachSession, renderContext, type CoachAlert } from "../src/coach.js";
+import { buildSystemPrompt } from "../src/coach-prompt.js";
+import { resolveStructure } from "../src/coach-routes.js";
+import { unitySafetyErrors } from "../src/unity-safe.js";
+import { validateCatalog } from "../src/validate.js";
+import { NOW, fixture, fixtureClient } from "./helpers.js";
+
+const SUBJECTS = [
+  "patient-demo-polypharmacy",
+  "patient-demo-001",
+  "patient-demo-pediatric-asthma",
+  "patient-demo-sparse",
+  "patient-demo-messy-coding",
+];
+
+function clock() {
+  let t = NOW.getTime();
+  return { now: () => new Date(t), advance: (seconds: number) => void (t += seconds * 1000) };
+}
+
+function session(subject = "patient-demo-polypharmacy") {
+  const c = clock();
+  return { s: new CoachSession("coach-test", buildCase(fixture(subject), "", NOW), c.now), ...c };
+}
+
+describe("coach knowledge", () => {
+  it("covers every structure and step with no orphans", () => {
+    expect(validateCatalog()).toEqual([]);
+  });
+});
+
+describe("coach session", () => {
+  it.each(SUBJECTS)("plays %s to completion one correct action at a time", (subject) => {
+    const { s } = session(subject);
+    const alerts: CoachAlert[] = [];
+    for (let i = 0; i < 200 && !s.done; i++) {
+      const e = s.nextCorrectEvent();
+      expect(e).not.toBeNull();
+      alerts.push(...s.handle(e!).alerts);
+    }
+    expect(s.done).toBe(true);
+    const snap = s.snapshot();
+    expect(snap.status).toBe("completed");
+    expect(snap.completedCount).toBe(s.kase.procedure.steps.length);
+    expect(alerts.at(-1)?.kind).toBe("case_complete");
+    expect(alerts.filter((a) => a.kind === "step_complete")).toHaveLength(s.kase.procedure.steps.length - 1);
+    expect(unitySafetyErrors(snap)).toEqual([]);
+  });
+
+  it("raises an urgent alert for a high-severity mistake and records it", () => {
+    const { s } = session();
+    while (s.engine.current?.id !== "critical_view") s.handle(s.nextCorrectEvent()!);
+    const out = s.handle({ type: "identify", structureId: "common_bile_duct" });
+    expect(out.alerts[0]).toMatchObject({ kind: "mistake", priority: "urgent" });
+    expect(out.alerts[0]!.say).toMatch(/common bile duct/i);
+    expect(s.snapshot().recentMistakes.at(-1)?.mistakeId).toBe("cbd_as_cystic");
+    expect(s.engine.current?.id).toBe("critical_view");
+  });
+
+  it("calls out the right structure with the wrong instrument", () => {
+    const { s } = session();
+    while (s.engine.current?.id !== "clip_artery") s.handle(s.nextCorrectEvent()!);
+    const out = s.handle({ type: "touch", structureId: "cystic_artery", instrumentId: "lap_scissors" });
+    expect(out.alerts[0]).toMatchObject({ kind: "wrong_instrument" });
+    expect(out.alerts[0]!.say).toMatch(/clip applier/i);
+    expect(s.snapshot().step.progressText).toBe("0 of 3 applied");
+  });
+
+  it("escalates hints as time passes without progress, once per tier", () => {
+    const { s, advance } = session();
+    expect(s.tick()).toEqual([]);
+    advance(21);
+    const [nudge] = s.tick();
+    expect(nudge).toMatchObject({ kind: "stuck", highlight: [] });
+    expect(s.tick()).toEqual([]);
+    advance(25);
+    const [look] = s.tick();
+    expect(look!.say).toMatch(/umbilicus/i);
+    expect(look!.highlight).toEqual(["umbilicus"]);
+    advance(30);
+    const [explicit] = s.tick();
+    expect(explicit!.say).toMatch(/12 mm trocar/i);
+    expect(s.snapshot().stuckLabel).toBe("walk through");
+    s.handle(s.nextCorrectEvent()!);
+    expect(s.snapshot().stuckLevel).toBe(0);
+  });
+
+  it("escalates on repeated off-target attempts and highlights what is left", () => {
+    const { s } = session();
+    while (s.engine.current?.id !== "dissect_triangle") s.handle(s.nextCorrectEvent()!);
+    s.handle({ type: "touch", structureId: "cystic_duct", instrumentId: "hook_cautery" });
+    s.handle({ type: "touch", structureId: "stomach", instrumentId: "hook_cautery" });
+    s.handle({ type: "touch", structureId: "duodenum", instrumentId: "hook_cautery" });
+    expect(s.snapshot().stuckLevel).toBe(1);
+    s.handle({ type: "touch", structureId: "transverse_colon", instrumentId: "hook_cautery" });
+    const snap = s.snapshot();
+    expect(snap.stuckLevel).toBe(2);
+    expect(snap.guidance.highlight).toEqual(["cystic_artery"]);
+    expect(snap.step.remaining).toEqual(["Cystic artery"]);
+  });
+
+  it("pauses scoring while tracking is lost and does not count the pause as stuck", () => {
+    const { s, advance } = session();
+    expect(s.handle({ type: "tracking", valid: false }).alerts[0]).toMatchObject({ kind: "tracking_lost", priority: "urgent" });
+    expect(s.handle(s.nextCorrectEvent()!)).toMatchObject({ accepted: false, reason: "tracking_invalid" });
+    expect(s.snapshot().status).toBe("paused");
+    advance(120);
+    expect(s.tick()).toEqual([]);
+    s.handle({ type: "tracking", valid: true });
+    expect(s.snapshot().stuckLevel).toBe(0);
+    expect(s.handle(s.nextCorrectEvent()!).accepted).toBe(true);
+  });
+
+  it("warns once when the learner looks at a danger structure", () => {
+    const { s } = session();
+    while (s.engine.current?.id !== "dissect_triangle") s.handle(s.nextCorrectEvent()!);
+    expect(s.handle({ type: "focus", structureId: "common_bile_duct" }).alerts[0]?.kind).toBe("danger_focus");
+    s.handle({ type: "focus", structureId: "gallbladder" });
+    expect(s.handle({ type: "focus", structureId: "common_bile_duct" }).alerts).toEqual([]);
+  });
+
+  it("gives hints in increasing tiers when asked, capped at the explicit move", () => {
+    const { s } = session();
+    while (s.engine.current?.id !== "clip_artery") s.handle(s.nextCorrectEvent()!);
+    s.handle(s.nextCorrectEvent()!);
+    expect(s.requestHint().tier).toBe(1);
+    expect(s.requestHint()).toMatchObject({ tier: 2, highlight: ["cystic_artery"] });
+    const explicit = s.requestHint();
+    expect(explicit.tier).toBe(3);
+    expect(explicit.say).toMatch(/clip the cystic artery 2 more times/i);
+    expect(s.requestHint().tier).toBe(3);
+  });
+
+  it("only lets the headset highlight this case's anatomy, and tracks the ack", () => {
+    const { s } = session();
+    expect(s.requestCommand("highlight", "appendix")).toHaveProperty("error");
+    const cmd = s.requestCommand("highlight", "cystic_artery");
+    expect(cmd).toMatchObject({ status: "pending" });
+    if ("error" in cmd) throw new Error(cmd.error);
+    expect(s.pendingCommands()).toHaveLength(1);
+    s.ackCommand(cmd.commandId, "applied");
+    expect(s.pendingCommands()).toHaveLength(0);
+  });
+
+  it("renders a live context block with the step, dangers, and patient notes", () => {
+    const { s } = session();
+    while (s.engine.current?.id !== "liver_bed") s.handle(s.nextCorrectEvent()!);
+    const text = renderContext(s.snapshot());
+    expect(text).toMatch(/Step 10 of 13: Dissect off the liver bed/);
+    expect(text).toMatch(/Danger structures this step: Liver/);
+    expect(text).toMatch(/Patient-specific: .*bleed/i);
+  });
+});
+
+describe("per-case prompt isolation", () => {
+  const prompt = (subject: string) => buildSystemPrompt(buildCase(fixture(subject), "", NOW));
+
+  it("only carries the anatomy of its own procedure", () => {
+    const chole = prompt("patient-demo-polypharmacy");
+    expect(chole).toMatch(/Cystic artery:/);
+    expect(chole).toMatch(/Rouviere/);
+    expect(chole).not.toMatch(/Appendicular artery|Inferior mesenteric artery|Left ureter/);
+
+    const appy = prompt("patient-demo-pediatric-asthma");
+    expect(appy).toMatch(/Appendicular artery:/);
+    expect(appy).not.toMatch(/Cystic duct|Common bile duct|Sigmoid/);
+
+    const colectomy = prompt("patient-demo-messy-coding");
+    expect(colectomy).toMatch(/Left ureter:/);
+    expect(colectomy).not.toMatch(/Cystic|Appendi/);
+  });
+
+  it("includes this patient's chart risks and none from other patients", () => {
+    const harriet = prompt("patient-demo-polypharmacy");
+    expect(harriet).toMatch(/apixaban/i);
+    expect(prompt("patient-demo-pediatric-asthma")).not.toMatch(/apixaban/i);
+  });
+});
+
+describe("structure resolution", () => {
+  const chole = buildCase(fixture("patient-demo-polypharmacy"), "", NOW);
+  it("maps spoken names and abbreviations within the case", () => {
+    expect(resolveStructure("the CBD", chole)).toEqual({ kind: "case", id: "common_bile_duct" });
+    expect(resolveStructure("Right hepatic artery", chole)).toEqual({ kind: "case", id: "right_hepatic_artery" });
+    expect(resolveStructure("appendix", chole)).toEqual({ kind: "other_case", id: "appendix" });
+    expect(resolveStructure("spleen", chole)).toEqual({ kind: "none" });
+  });
+});
+
+describe("coach routes", () => {
+  const app = createApp({ client: fixtureClient(), now: () => NOW, coachTickMs: 0 });
+  const call = async (method: string, route: string, body?: unknown) => {
+    const res = await app.request(route, { method, headers: body ? { "Content-Type": "application/json" } : {}, body: body ? JSON.stringify(body) : undefined });
+    const json = (await res.json()) as Record<string, any>;
+    expect(unitySafetyErrors(json), `${method} ${route}`).toEqual([]);
+    expect(Array.isArray(json.actions), `${method} ${route} has actions`).toBe(true);
+    return { status: res.status, json };
+  };
+
+  it("runs a session from patient to alerts over HTTP", async () => {
+    const created = await call("POST", "/coach/sessions", { patientId: "polypharmacy-senior" });
+    expect(created.status).toBe(201);
+    const sid = created.json.sessionId as string;
+    expect(created.json.systemPrompt).toMatch(/Laparoscopic cholecystectomy/);
+    expect(created.json.firstMessage).toMatch(/Jarvis here/);
+
+    const ev = await call("POST", `/coach/sessions/${sid}/events`, { event: { type: "place_port", portId: "umbilical" } });
+    expect(ev.json.alerts[0].kind).toBe("step_complete");
+    expect(ev.json.snapshot.step.id).toBe("working_ports");
+
+    expect((await call("POST", `/coach/sessions/${sid}/events`, { event: { type: "touch", structureId: "spleen", instrumentId: "x" } })).status).toBe(400);
+    expect((await call("POST", `/coach/sessions/${sid}/events`, { event: { type: "place_port", portId: "left_lower" } })).status).toBe(400);
+
+    const mistake = await call("POST", `/coach/sessions/${sid}/simulate`, { kind: "mistake" });
+    expect(mistake.json.alerts[0].kind).toBe("mistake");
+
+    const step = await call("POST", `/coach/sessions/${sid}/simulate`, { kind: "complete_step" });
+    expect(step.json.snapshot.step.id).toBe("retract_fundus");
+    expect(step.json.alerts.some((a: CoachAlert) => a.kind === "step_complete")).toBe(true);
+
+    expect((await call("POST", `/coach/sessions/${sid}/explain`, { structure: "CBD" })).json).toMatchObject({ found: true, structureId: "common_bile_duct" });
+    expect((await call("POST", `/coach/sessions/${sid}/explain`, { structure: "appendix" })).json.found).toBe(false);
+
+    const cmd = await call("POST", `/coach/sessions/${sid}/commands`, { action: "highlight", structure: "gallbladder" });
+    expect(cmd.json.command.status).toBe("pending");
+    expect((await call("GET", `/coach/sessions/${sid}/commands`)).json.commands).toHaveLength(1);
+    const ack = await call("POST", `/coach/sessions/${sid}/commands/${cmd.json.command.commandId}/ack`, { status: "applied" });
+    expect(ack.json.command.status).toBe("applied");
+    expect((await call("POST", `/coach/sessions/${sid}/commands`, { action: "highlight", structure: "appendix" })).status).toBe(409);
+
+    expect((await call("POST", `/coach/sessions/${sid}/hint`)).json.tier).toBe(1);
+    expect((await call("GET", `/coach/sessions/${sid}`)).json.context).toMatch(/LIVE SURGERY STATE/);
+  });
+
+  it("rejects unknown patients, unavailable cases, and unknown sessions with a way onward", async () => {
+    expect((await call("POST", "/coach/sessions", { patientId: "nobody-here" })).status).toBe(404);
+    expect((await call("POST", "/coach/sessions", { patientId: "patient-demo-consent-revoked" })).status).toBe(409);
+    expect((await call("GET", "/coach/sessions/coach-doesnotexist")).status).toBe(404);
+  });
+
+  it("explains how to configure Jarvis when no agent is set", async () => {
+    expect((await call("GET", "/jarvis/connection")).status).toBe(503);
+    const page = await app.request("/jarvis");
+    expect(page.status).toBe(200);
+    expect(await page.text()).toMatch(/<title>/);
+  });
+});

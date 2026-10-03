@@ -32,6 +32,11 @@ export class StepEngine {
     return this.current == null;
   }
 
+  // Read-only view of progress inside the current step (targets or ports done, apply count so far).
+  get stepProgress(): { done: string[]; applied: number } {
+    return { done: [...this.progress], applied: this.applied };
+  }
+
   handle(event: EngineEvent): EngineResult {
     const step = this.current;
     if (!step) return { advanced: false, completed: true, mistake: null, stepId: "" };

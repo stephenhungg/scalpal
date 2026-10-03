@@ -1,5 +1,6 @@
 import { ANATOMY, ANATOMY_BY_ID } from "./catalog/anatomy.js";
 import { CASE_PLANS, CONSIDERATION_NOTES, STEP_ROLES } from "./catalog/cases.js";
+import { STEP_COACHING, STRUCTURE_FACTS } from "./catalog/coach-knowledge.js";
 import { INSTRUMENTS, INSTRUMENTS_BY_ID } from "./catalog/instruments.js";
 import { PROCEDURES, PROCEDURES_BY_ID } from "./catalog/procedures.js";
 
@@ -101,5 +102,18 @@ export function validateCatalog(): string[] {
   for (const [type, notes] of Object.entries(CONSIDERATION_NOTES)) {
     if (!notes.length) err(`flag type "${type}" has no consideration notes`);
   }
+
+  // Jarvis coaching: every structure has facts and every step has coaching, with no orphans.
+  for (const a of ANATOMY) if (!STRUCTURE_FACTS[a.id]) err(`anatomy "${a.id}" has no coach facts`);
+  for (const id of Object.keys(STRUCTURE_FACTS)) if (!ANATOMY_BY_ID.has(id)) err(`coach facts for unknown anatomy "${id}"`);
+  for (const p of PROCEDURES) {
+    const coaching = STEP_COACHING[p.id] ?? {};
+    for (const s of p.steps) {
+      const sc = coaching[s.id];
+      if (!sc?.why || !sc.lookHere) err(`${p.id}: step "${s.id}" has no coaching (why and lookHere)`);
+    }
+    for (const id of Object.keys(coaching)) if (!p.steps.some((s) => s.id === id)) err(`${p.id}: coaching for unknown step "${id}"`);
+  }
+  for (const id of Object.keys(STEP_COACHING)) if (!PROCEDURES_BY_ID.has(id)) err(`coaching for unknown procedure "${id}"`);
   return errors;
 }

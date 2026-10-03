@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jarvis Coach</title>
+<style>
+  :root {
+    --bg: #0b0e12; --panel: #131820; --line: #222a35; --text: #e6ebf2; --muted: #8a96a8;
+    --accent: #5cc8ff; --ok: #4ade80; --warn: #fbbf24; --danger: #f87171;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 ui-sans-serif, system-ui, -apple-system, sans-serif; }
+  header { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  h1 { font-size: 16px; margin: 0; letter-spacing: .02em; }
+  select, button, input { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; }
+  button { cursor: pointer; }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button:disabled { opacity: .45; cursor: default; }
+  button.primary { background: var(--accent); color: #04121c; border-color: var(--accent); font-weight: 600; }
+  .pill { font-size: 12px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+  .pill.on { color: var(--ok); border-color: var(--ok); }
+  .pill.speaking { color: var(--accent); border-color: var(--accent); }
+  .pill.warn { color: var(--warn); border-color: var(--warn); }
+  main { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 16px; padding: 16px; }
+  @media (max-width: 860px) { main { grid-template-columns: 1fr; } }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; min-width: 0; }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 10px; }
+  .step-title { font-size: 20px; font-weight: 650; margin: 2px 0 6px; }
+  .muted { color: var(--muted); }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .kv { display: grid; grid-template-columns: 110px 1fr; gap: 4px 10px; margin-top: 10px; }
+  .kv div:nth-child(odd) { color: var(--muted); }
+  .danger { color: var(--danger); }
+  .meter { display: flex; gap: 4px; margin-top: 4px; }
+  .meter span { flex: 1; height: 6px; border-radius: 3px; background: var(--line); }
+  .meter span.lit1 { background: var(--ok); } .meter span.lit2 { background: var(--warn); } .meter span.lit3 { background: var(--danger); }
+  .progress { height: 4px; background: var(--line); border-radius: 2px; margin: 8px 0 2px; overflow: hidden; }
+  .progress > div { height: 100%; background: var(--accent); transition: width .3s; }
+  #log { height: 52vh; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+  .msg { padding: 8px 10px; border-radius: 10px; max-width: 92%; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .msg.ai { background: #16324a; align-self: flex-start; }
+  .msg.user { background: #2a2f3a; align-self: flex-end; }
+  .msg.event { background: transparent; border: 1px dashed var(--line); color: var(--muted); font-size: 12px; align-self: stretch; max-width: 100%; }
+  .msg.event.urgent { border-color: var(--danger); color: var(--danger); }
+  .sim { margin-top: 12px; }
+  .sim button { font-size: 12px; padding: 5px 8px; }
+  pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; color: var(--muted); max-height: 180px; overflow-y: auto; margin: 0; }
+  details summary { cursor: pointer; color: var(--muted); font-size: 12px; margin-top: 10px; }
+  form { display: flex; gap: 8px; margin-top: 10px; }
+  form input { flex: 1; min-width: 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Jarvis</h1>
+  <select id="patient" aria-label="Patient"><option>Loading patients...</option></select>
+  <button id="start" class="primary" disabled>Start surgery</button>
+  <button id="stop" disabled>End</button>
+  <span id="voice" class="pill">voice off</span>
+  <span id="mode" class="pill">idle</span>
+  <span id="feed" class="pill">no state feed</span>
+</header>
+<main>
+  <section>
+    <h2 id="caseline">No session</h2>
+    <div id="stepno" class="muted"></div>
+    <div class="progress"><div id="bar" style="width:0%"></div></div>
+    <div id="steptitle" class="step-title">Pick a patient and start.</div>
+    <div id="instruction"></div>
+    <div class="kv" id="details"></div>
+    <div style="margin-top:12px">
+      <div class="muted" id="stucklabel">coaching: on track</div>
+      <div class="meter"><span></span><span></span><span></span></div>
+    </div>
+    <div class="sim">
+      <h2>Simulate headset events</h2>
+      <div class="row" id="simbuttons">
+        <button data-sim="correct_action">Correct action</button>
+        <button data-sim="complete_step">Finish step</button>
+        <button data-sim="mistake">Make a mistake</button>
+        <button data-sim="wrong_instrument">Wrong instrument</button>
+        <button data-sim="off_target">Off-target touch</button>
+        <button data-sim="look_at_danger">Look at danger</button>
+        <button data-sim="tracking_lost">Lose tracking</button>
+        <button data-sim="tracking_restored">Restore tracking</button>
+      </div>
+      <label class="row muted" style="margin-top:8px;font-size:12px"><input type="checkbox" id="autoack" checked> act as headset: auto-apply highlight requests</label>
+    </div>
+    <details><summary>live context sent to Jarvis</summary><pre id="context"></pre></details>
+  </section>
+  <section>
+    <h2>Conversation</h2>
+    <div id="log"></div>
+    <form id="say"><input id="sayinput" placeholder="Type to Jarvis (works without a mic)" autocomplete="off"><button>Send</button></form>
+  </section>
+</main>
+<script type="module">
+import { Conversation } from "https://esm.sh/@elevenlabs/client@1.26.0";
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const api = async (method, path, body) => {
+  const res = await fetch(path, { method, headers: body ? { "Content-Type": "application/json" } : {}, body: body ? JSON.stringify(body) : undefined });
+  const json = await res.json().catch(() => ({}));
+  return { ok: res.ok, status: res.status, json };
+};
+
+let sid = "", patientId = "", kase = null, convo = null, feed = null;
+let lastTyped = "";
+let mode = "listening", lastVersion = -1, lastContextSent = "", contextTimer = 0, lastSimAt = 0;
+const queue = [];
+
+function log(kind, text, extra = "") {
+  const el = document.createElement("div");
+  el.className = `msg ${kind} ${extra}`;
+  el.textContent = text;
+  $("log").append(el);
+  $("log").scrollTop = $("log").scrollHeight;
+}
+
+async function loadPatients() {
+  const { json } = await api("GET", "/patients");
+  const list = (json.patients ?? []).filter((p) => p.patientId && p.procedureId);
+  $("patient").innerHTML = list.map((p) => `<option value="${esc(p.patientId)}">${esc(p.displayLabel)}: ${esc(p.procedureTitle)} (${esc(p.urgency)})</option>`).join("");
+  $("start").disabled = !list.length;
+}
+
+function render(snap) {
+  const s = snap.step;
+  $("caseline").textContent = `${snap.patientLabel} · ${snap.procedureTitle}`;
+  $("stepno").textContent = snap.status === "completed" ? "Complete" : `Step ${snap.stepNumber} of ${snap.stepCount}${snap.status === "paused" ? " · PAUSED (tracking lost)" : ""}`;
+  $("bar").style.width = `${Math.round((snap.completedCount / snap.stepCount) * 100)}%`;
+  $("steptitle").textContent = snap.status === "completed" ? "Procedure complete" : s.title;
+  $("instruction").textContent = s.instruction;
+  const rows = snap.status === "completed"
+    ? [["Mistakes", `${snap.mistakeCount} (${snap.highSeverityMistakeCount} high)`], ["Hints", snap.hintsUsed], ["Time", `${snap.elapsedSeconds}s`]]
+    : [
+        ["Instrument", `${s.instrumentName}${s.ports.length ? ` via ${s.ports.join(" / ")}` : ""}`],
+        ["Progress", s.progressText],
+        ["Still needed", s.remaining.join(", ") || "nothing"],
+        ["Danger", s.dangers.length ? `<span class="danger">${esc(s.dangers.map((d) => d.name).join(", "))}</span>` : "none flagged"],
+        ["Looking at", snap.focusStructure.name || "n/a"],
+        ["This patient", s.patientNotes.join(" ") || "no step-specific notes"],
+        ["Last event", snap.lastEvent],
+        ["Mistakes", `${snap.mistakeCount} total`],
+      ];
+  $("details").innerHTML = rows.map(([k, v]) => `<div>${esc(k)}</div><div>${k === "Danger" ? v : esc(v)}</div>`).join("");
+  $("stucklabel").textContent = `coaching: ${snap.stuckLabel} · ${snap.secondsSinceProgress}s since progress · ${snap.offTargetAttempts} off-target`;
+  document.querySelectorAll(".meter span").forEach((el, i) => (el.className = i < snap.stuckLevel ? `lit${snap.stuckLevel}` : ""));
+  for (const b of document.querySelectorAll("#simbuttons button")) b.disabled = snap.status === "completed";
+}
+
+// Keep the agent's view of the surgery current without making it talk.
+function pushContext(context) {
+  clearTimeout(contextTimer);
+  contextTimer = setTimeout(() => {
+    if (!convo || context === lastContextSent) return;
+    lastContextSent = context;
+    try { convo.sendContextualUpdate(context); } catch (e) { console.warn(e); }
+  }, 250);
+}
+
+function speakFallback(text) {
+  if (!("speechSynthesis" in window)) return;
+  if (!convo) speechSynthesis.speak(new SpeechSynthesisUtterance(text));
+}
+
+// Simulator events make Jarvis speak. Urgent ones go out immediately; the rest wait for a pause.
+function deliver(alert) {
+  log("event", `${alert.kind}: ${alert.say}`, alert.priority === "urgent" ? "urgent" : "");
+  if (!convo) { if (alert.priority !== "low") speakFallback(alert.say); return; }
+  if (alert.priority === "urgent") { send(alert); return; }
+  for (let i = queue.length - 1; i >= 0; i--) if (queue[i].kind === alert.kind) queue.splice(i, 1);
+  queue.push(alert);
+  flush();
+}
+
+function send(alert) {
+  if (lastContextSent !== currentContext) { lastContextSent = currentContext; convo.sendContextualUpdate(currentContext); }
+  convo.sendUserMessage(`[SIM EVENT] kind=${alert.kind} priority=${alert.priority}: ${alert.say}`);
+  lastSimAt = Date.now();
+}
+
+function flush() {
+  if (!convo || !queue.length || mode === "speaking" || Date.now() - lastSimAt < 4000) return;
+  send(queue.shift());
+}
+setInterval(flush, 500);
+
+let currentContext = "";
+function onState(payload) {
+  const { snapshot, context, alerts } = payload;
+  currentContext = context;
+  if (snapshot.version !== lastVersion) { lastVersion = snapshot.version; render(snapshot); pushContext(context); }
+  $("context").textContent = context;
+  for (const a of alerts ?? []) deliver(a);
+  if ($("autoack").checked) {
+    for (const c of snapshot.commands.filter((c) => c.status === "pending")) {
+      api("POST", `/coach/sessions/${sid}/commands/${c.commandId}/ack`, { status: "applied" });
+    }
+  }
+}
+
+function openFeed() {
+  feed?.close();
+  feed = new EventSource(`/coach/sessions/${sid}/stream`);
+  feed.addEventListener("state", (e) => onState(JSON.parse(e.data)));
+  feed.onopen = () => { $("feed").textContent = "state feed live"; $("feed").className = "pill on"; };
+  feed.onerror = () => { $("feed").textContent = "state feed reconnecting"; $("feed").className = "pill warn"; };
+}
+
+async function waitForAck(commandId) {
+  for (let i = 0; i < 8; i++) {
+    const { json } = await api("GET", `/coach/sessions/${sid}`);
+    const c = json.snapshot?.commands.find((x) => x.commandId === commandId);
+    if (c && c.status !== "pending") return c;
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  return { status: "pending" };
+}
+
+const clientTools = {
+  get_surgery_state: async () => (await api("GET", `/coach/sessions/${sid}`)).json.context ?? "No live session.",
+  get_hint: async () => {
+    const { json } = await api("POST", `/coach/sessions/${sid}/hint`);
+    if (json.highlight?.length) await clientTools.highlight_structure({ structure: json.highlight[0] });
+    return `Hint tier ${json.tier} of 3: ${json.say}`;
+  },
+  explain_structure: async ({ structure }) => (await api("POST", `/coach/sessions/${sid}/explain`, { structure })).json.say,
+  highlight_structure: async ({ structure }) => {
+    const { ok, json } = await api("POST", `/coach/sessions/${sid}/commands`, { action: "highlight", structure });
+    if (!ok) return json.error?.message ?? "Highlight request failed.";
+    const result = await waitForAck(json.command.commandId);
+    if (result.status === "applied") return `Highlighted ${structure} in the headset.`;
+    if (result.status === "rejected") return `The headset rejected the highlight: ${result.reason}`;
+    return `Highlight requested for ${structure}; the headset has not confirmed yet.`;
+  },
+  get_patient_brief: async () => {
+    if (!kase) return "No case loaded.";
+    const flags = kase.brief.flags.map((f) => `${f.title}: ${f.detail}`).join(" ");
+    const options = kase.checklistOptions.map((o) => `${o.type} (${o.label})`).join(", ");
+    return `${kase.brief.say} Flags: ${flags || "none"}. Gaps: ${kase.brief.dataGaps.map((g) => g.message).join(" ") || "none"}. Checklist option types: ${options}.`;
+  },
+  check_preop: async ({ selected }) => {
+    const list = Array.isArray(selected) ? selected : String(selected ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+    return (await api("POST", `/patients/${patientId}/preop-check`, { selected: list })).json.say ?? "Pre-op check failed.";
+  },
+};
+
+async function startVoice(created) {
+  const conn = await api("GET", "/jarvis/connection");
+  if (!conn.ok) {
+    $("voice").textContent = "voice not configured"; $("voice").className = "pill warn";
+    log("event", `${conn.json.error?.message ?? "Voice unavailable."} Alerts will use the browser voice instead.`);
+    return;
+  }
+  await navigator.mediaDevices.getUserMedia({ audio: true });
+  convo = await Conversation.startSession({
+    ...(conn.json.signedUrl ? { signedUrl: conn.json.signedUrl, connectionType: "websocket" } : { agentId: conn.json.agentId }),
+    overrides: { agent: { prompt: { prompt: created.systemPrompt }, firstMessage: created.firstMessage } },
+    clientTools,
+    onConnect: () => { $("voice").textContent = "voice live"; $("voice").className = "pill on"; lastContextSent = ""; pushContext(currentContext); },
+    onDisconnect: () => { $("voice").textContent = "voice off"; $("voice").className = "pill"; convo = null; },
+    onError: (e) => log("event", `Voice error: ${e?.message ?? e}`, "urgent"),
+    onModeChange: ({ mode: m }) => { mode = m; $("mode").textContent = m; $("mode").className = `pill ${m === "speaking" ? "speaking" : ""}`; },
+    onMessage: ({ message, source }) => {
+      if (source === "user" && (String(message).startsWith("[SIM EVENT]") || message === lastTyped)) return;
+      log(source === "user" ? "user" : "ai", message);
+    },
+  });
+}
+
+$("start").onclick = async () => {
+  $("start").disabled = true;
+  patientId = $("patient").value;
+  const created = await api("POST", "/coach/sessions", { patientId });
+  if (!created.ok) { log("event", created.json.error?.message ?? "Could not start.", "urgent"); $("start").disabled = false; return; }
+  sid = created.json.sessionId;
+  kase = (await api("GET", `/patients/${patientId}/case`)).json;
+  $("log").innerHTML = "";
+  onState({ snapshot: created.json.snapshot, context: created.json.context, alerts: [] });
+  openFeed();
+  $("stop").disabled = false;
+  try { await startVoice(created.json); }
+  catch (e) { log("event", `Voice failed to start: ${e?.message ?? e}. Alerts will use the browser voice.`, "urgent"); }
+  if (!convo) log("ai", created.json.firstMessage);
+};
+
+$("stop").onclick = async () => {
+  feed?.close(); feed = null;
+  if (convo) await convo.endSession();
+  convo = null; sid = ""; queue.length = 0;
+  $("feed").textContent = "no state feed"; $("feed").className = "pill";
+  $("start").disabled = false; $("stop").disabled = true;
+};
+
+document.querySelectorAll("#simbuttons button").forEach((b) => (b.onclick = async () => {
+  if (!sid) return;
+  const { ok, json } = await api("POST", `/coach/sessions/${sid}/simulate`, { kind: b.dataset.sim });
+  if (!ok) log("event", json.error?.message ?? "Simulation failed.", "urgent");
+}));
+
+$("say").onsubmit = (e) => {
+  e.preventDefault();
+  const text = $("sayinput").value.trim();
+  if (!text) return;
+  $("sayinput").value = "";
+  if (convo) { lastTyped = text; convo.sendUserMessage(text); log("user", text); }
+  else log("event", "Voice is not connected. Configure ElevenLabs to talk to Jarvis.");
+};
+
+loadPatients();
+</script>
+</body>
+</html>
