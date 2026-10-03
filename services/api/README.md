@@ -1,11 +1,57 @@
-# API Service
+# Gateway (API Service)
 
-Owner: Nathan for the assigned companion/backend integration lane. Follow [Nathan's implementation plan](../../docs/nathan-plan.md); no GitHub identity mapping is assumed.
+Owner: Nathan. Follows [Nathan's implementation plan](../../docs/nathan-plan.md).
 
-Potential service responsibilities include authorized artifact upload/download, motion-worker integration, and scoped voice authorization. SpacetimeDB in `services/realtime/` is the proposed core shared-state backend. Solana, wallet pairing, challenge payouts, and monetary completion rewards have been removed. This is not an initialized backend and no endpoints are implemented. See [data and realtime proposal](../../docs/data-and-realtime.md) and [current direction](../../docs/current-direction.md) before older plans.
+A thin Node service that does the I/O SpacetimeDB reducers cannot. It connects to the realtime database as a **service identity** and:
 
-Connect Matthew's existing Jarvis context/actions, Stephen's Quest state/capture metadata, and Silas's replay results. Keep learning results and motion quality separate, and keep provider/storage secrets service-side. Nathan supplies routing and scoped authorization where needed; he does not build a second voice agent or take over the CV pipeline.
+- **Transfer grants:** fills upload/download requests with short-lived signed URLs. It supports local disk (dev) or S3/R2 (production), so clip bytes never pass through the database.
+- **Upload verification:** checks that each uploaded object exists, has the declared size and, if given, the declared SHA-256, before marking it `available`.
+- **Provider credentials:** fills `voice` grants with an ElevenLabs signed URL and `ice` grants with Cloudflare TURN credentials. API keys never reach clients.
+- **Motion worker API:** an HTTP pull API for Silas's processor (claim, heartbeat, outputs, complete, fail) on top of the module's lease and run checks. See [worker-api.md](../../packages/contracts/worker-api.md).
+- **Restart safety:** state lives in SpacetimeDB, so after a restart the gateway resumes whatever is outstanding.
 
-The latest recommendation uses one core state backend rather than adding Tiger Data alongside it. Detailed clips and replay artifacts need a restricted file/object store with stable references. A private R2 bucket is a researched candidate; local restricted artifact storage can serve the first test. No store or account is configured by this scaffold.
+Browsers and the Quest never call the gateway for state. They use SpacetimeDB directly and get URLs and credentials through rows only they can see.
 
-See the [architecture](../../docs/architecture.md), [integration contracts](../../docs/integration-contracts.md), and [team plan](../../docs/team-plan.md).
+## Run
+
+See `.env.example` for every setting.
+
+```sh
+npm install
+cp .env.example .env
+npm run dev               # tsx watch
+npm run build && npm start  # bundled (esbuild) production build
+npm run worker:synthetic  # synthetic motion worker (labelled output; not reconstruction)
+```
+
+On first start without `SPACETIMEDB_TOKEN`, the gateway creates an identity, saves its token to `.gateway-token`, and logs the `spacetime call … add_service_identity` command that registers it. In production, store that token as a secret.
+
+`GET /healthz` reports database connection, service registration, storage driver and which providers are configured.
+
+## Tests
+
+The integration tests need a local `spacetime start`. They publish the module to a throwaway `scalpal-test` database and run the real gateway in-process:
+
+```sh
+npm test
+```
+
+They cover:
+
+- **State and access:** propagation to every member, reconnect with the same identity, outsider read/write isolation, role checks, presence, invite rotation.
+- **Commands:** idempotency, stale-step rejection, expiry.
+- **Uploads:** verified upload/download, tampered signatures, size mismatch, missing object.
+- **Jobs:** duplicate requests, the full worker lifecycle, lease expiry with a late completion rejected, concurrent claims, retryable and fatal failures.
+- **Grants and signaling:** ICE and voice grants, recipient-only signals.
+- **Lifecycle:** new attempts superseding pending commands, ended sessions.
+
+Last run: 23/23 passing (Oct 3, local SpacetimeDB 2.10.2).
+
+## Deploy
+
+`Dockerfile` builds a small Node 22 image (`docker build -t scalpal-gateway services/api`). It needs:
+
+- **Outbound** WebSocket access to SpacetimeDB.
+- **Inbound** HTTPS for workers (and for `/files` when `STORAGE_DRIVER=local`).
+
+For a hosted site use `STORAGE_DRIVER=s3` with a private R2 bucket. Configure the bucket's CORS to allow `PUT`/`GET` from the companion origin with the `content-type` header.

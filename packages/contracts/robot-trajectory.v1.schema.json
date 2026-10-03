@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "scalpal.robot_trajectory.v1",
+  "title": "Scalpal robot trajectory (proposed v1)",
+  "description": "Applied robot joint targets derived from one recorded clip, on the clip's timebase, with explicit validity. Produced by the motion worker (Silas), rendered by the companion. Replay of recorded motion, not a learned policy.",
+  "type": "object",
+  "required": ["schema", "kind", "robot", "timebase", "frames"],
+  "properties": {
+    "schema": { "const": "scalpal.robot_trajectory.v1" },
+    "kind": { "enum": ["kinematic", "physics"], "description": "kinematic = joint playback; physics = simulated with dynamics/contacts" },
+    "robot": {
+      "type": "object",
+      "required": ["model", "joints"],
+      "properties": {
+        "model": { "type": "string" },
+        "version": { "type": "string" },
+        "joints": {
+          "type": "array",
+          "minItems": 1,
+          "description": "Order defines the order of values in frames.q",
+          "items": {
+            "type": "object",
+            "required": ["name", "unit"],
+            "properties": {
+              "name": { "type": "string" },
+              "unit": { "enum": ["rad", "m"] },
+              "lower": { "type": "number" },
+              "upper": { "type": "number" }
+            }
+          }
+        }
+      }
+    },
+    "timebase": {
+      "type": "object",
+      "required": ["unit", "clock"],
+      "properties": {
+        "unit": { "const": "ms" },
+        "clock": { "type": "string", "description": "clip_pts = decoded presentation time of the raw clip; anything else is not aligned to the source video" },
+        "startMs": { "type": "number" }
+      }
+    },
+    "frames": {
+      "type": "object",
+      "required": ["t", "q"],
+      "properties": {
+        "t": { "type": "array", "items": { "type": "number" }, "description": "Non-decreasing frame times" },
+        "q": { "type": "array", "items": { "type": "array", "items": { "type": "number" } }, "description": "Applied (post-limit) joint targets per frame" },
+        "valid": { "type": "array", "items": { "type": "boolean" }, "description": "False where the observation was missing or rejected; viewers do not interpolate across invalid frames" }
+      }
+    },
+    "invalidIntervals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["startMs", "endMs"],
+        "properties": { "startMs": { "type": "number" }, "endMs": { "type": "number" }, "reason": { "type": "string" } }
+      }
+    },
+    "source": {
+      "type": "object",
+      "properties": {
+        "inputArtifactId": { "type": "string" },
+        "handedness": { "enum": ["left", "right", "unknown"] },
+        "perception": { "type": "string", "description": "Model/version, e.g. mediapipe-hand-landmarker@0.10.x" },
+        "retargeting": { "type": "string", "description": "Method/config version, e.g. dex-retargeting@x vector config v1" }
+      }
+    },
+    "notes": { "type": "string" }
+  }
+}
