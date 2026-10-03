@@ -11,6 +11,14 @@ namespace Scalpal.Anatomy
         public string stableId = "";
         public string displayName = "";
         public string system = "organs";
+        [Tooltip("Optional shared transparent material. Overlapping ghost layers increase Quest overdraw.")]
+        public Material ghostMaterial;
+
+        public bool IsGhosted { get; private set; }
+        public bool CanGhost
+        {
+            get { EnsureCached(); return ghostMaterial != null && renderers.Count > 0; }
+        }
 
         public bool IsVisible { get; private set; }
         public bool IsHighlighted { get; private set; }
@@ -31,6 +39,7 @@ namespace Scalpal.Anatomy
             public Renderer renderer;
             public bool enabled;
             public MaterialPropertyBlock[] originalBlocks;
+            public Material[] ghostOriginalMaterials;
         }
         sealed class ColliderState
         {
@@ -71,6 +80,34 @@ namespace Scalpal.Anatomy
             foreach (var state in colliders)
                 if (state.collider != null) state.collider.enabled = visible && state.enabled;
             if (!visible) ClearHighlight();
+        }
+
+        // Uses one pre-authored shared transparent material for every slot. No material instances.
+        // Visibility and registration changes keep this preference for the next visible frame.
+        public bool SetGhosted(bool ghosted)
+        {
+            EnsureCached();
+            if (ghosted && !CanGhost) return false;
+            if (IsGhosted == ghosted) return true;
+            ClearHighlight();
+            foreach (var state in renderers)
+            {
+                if (state.renderer == null) continue;
+                if (ghosted)
+                {
+                    state.ghostOriginalMaterials = state.renderer.sharedMaterials;
+                    var ghostSlots = new Material[state.ghostOriginalMaterials.Length];
+                    for (var i = 0; i < ghostSlots.Length; i++) ghostSlots[i] = ghostMaterial;
+                    state.renderer.sharedMaterials = ghostSlots;
+                }
+                else if (state.ghostOriginalMaterials != null)
+                {
+                    state.renderer.sharedMaterials = state.ghostOriginalMaterials;
+                    state.ghostOriginalMaterials = null;
+                }
+            }
+            IsGhosted = ghosted;
+            return true;
         }
 
         public bool SetHighlight(Color color)

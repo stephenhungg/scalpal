@@ -91,6 +91,23 @@ namespace Scalpal.Anatomy
             return true;
         }
 
+        // All members must have a pre-authored ghost material before enabling the system.
+        // Reject unsupported requests without partially changing the system.
+        public bool SetSystemGhosted(string system, bool ghosted)
+        {
+            if (string.IsNullOrWhiteSpace(system)) return false;
+            var members = new List<AnatomyPart>();
+            foreach (var part in parts)
+            {
+                if (part == null || !string.Equals(part.system, system, StringComparison.OrdinalIgnoreCase)) continue;
+                if (ghosted && !part.CanGhost) return false;
+                members.Add(part);
+            }
+            if (members.Count == 0) return false;
+            foreach (var part in members) part.SetGhosted(ghosted);
+            return true;
+        }
+
         // Isolation temporarily overrides system filters. RestoreVisibility brings those filters back.
         public bool Isolate(string id)
         {
