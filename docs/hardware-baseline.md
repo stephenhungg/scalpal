@@ -75,7 +75,7 @@ The supplied 80-class detector does not identify surgical instrument categories 
 
 ## Native Workbench Follow-Up
 
-The repository now has a separate OpenXR full-VR tool workbench. Its build/install, live tracking/pickup telemetry and the user-reported motion lag are recorded in [native workbench evidence](native-workbench.md). The interpolation/before-render correction requires a physical retest. These new results do not change the earlier camera/inference measurements or establish surgery, MR fit or capture integration.
+The repository now has a separate OpenXR full-VR tool workbench. Its build/install, live tracking/pickup telemetry and the user-reported motion lag are recorded in [native workbench evidence](native-workbench.md). The user confirmed that held tools keep up after the interpolation/before-render correction; quantitative latency remains unmeasured. These new results do not change the earlier camera/inference measurements or establish surgery, MR fit or capture integration.
 
 ## Next Hardware Evidence
 
