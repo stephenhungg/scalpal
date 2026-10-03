@@ -5,7 +5,7 @@ import { unitySafetyErrors } from "../src/unity-safe.js";
 import type { Action } from "../src/types.js";
 import { NOW, fixtureClient } from "./helpers.js";
 
-const app = createApp({ client: fixtureClient(), now: () => NOW });
+const app = createApp({ client: fixtureClient({ sandbox: true }), now: () => NOW });
 
 async function call(method: string, route: string, body?: unknown) {
   const res = await app.request(route, {
@@ -95,6 +95,42 @@ describe("unavailable states still route", () => {
     const { status, json } = await call("GET", "/nope");
     expect(status).toBe(404);
     expect((json.actions as Action[])[0]?.route).toBe("/");
+  });
+});
+
+describe("FinchNode Connect admissions", () => {
+  it("admits a patient through a consented sandbox session and opens their case", async () => {
+    const admit = await call("POST", "/admit/polypharmacy-senior");
+    expect(admit.json).toMatchObject({ state: "connecting", scenarioId: "polypharmacy-senior" });
+    const routesOffered = (admit.json.actions as Action[]).map((a) => a.route);
+    expect(routesOffered).toContain("/patients/patient-demo-polypharmacy/case");
+
+    const poll = await call("GET", `/admissions/${admit.json.sessionId}`);
+    expect(poll.json).toMatchObject({ state: "completed", patientId: "u_test_polypharmacy_senior" });
+
+    const kase = await call("GET", "/patients/u_test_polypharmacy_senior/case");
+    expect(kase.json).toMatchObject({ procedureId: "lap_cholecystectomy", urgency: "urgent" });
+    const brief = kase.json.brief as { dataSource: string; consentReceipts: string[]; chart: { section: string; text: string }[] };
+    expect(brief.dataSource).toBe("sandbox");
+    expect(brief.consentReceipts).toEqual(["rcpt_test_0001"]);
+    expect(brief.chart.find((l) => l.section === "Consent")?.text).toContain("rcpt_test_0001");
+
+    const list = await call("GET", "/patients");
+    expect((list.json.patients as { patientId: string; kind: string }[]).some((p) => p.patientId === "u_test_polypharmacy_senior" && p.kind === "sandbox")).toBe(true);
+  });
+
+  it("without a sandbox key, admission falls back to the demo record", async () => {
+    const plain = createApp({ client: fixtureClient(), now: () => NOW });
+    const res = await plain.request("/admit/baseline-adult", { method: "POST" });
+    const json = (await res.json()) as { state: string; actions: Action[] };
+    expect(json.state).toBe("unavailable");
+    expect(json.actions[0]?.route).toBe("/patients/patient-demo-001/case");
+  });
+
+  it("unknown admissions 404 with a way back", async () => {
+    const { status, json } = await call("GET", "/admissions/cs_nope123456");
+    expect(status).toBe(404);
+    expect((json.actions as Action[])[0]?.route).toBe("/patients");
   });
 });
 

@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { FinchNodeError, type ConnectSession, type FinchNodeClient } from "../src/finchnode.js";
+import { FinchNodeError, type ConnectSession, type FinchNodeClient, type SandboxSession } from "../src/finchnode.js";
 import type { HealthRecord, Scenario } from "../src/types.js";
 
 const FIXTURES = join(import.meta.dirname, "fixtures");
@@ -13,9 +13,26 @@ export function fixture(subject: string): HealthRecord {
 
 // Offline stand-in for the FinchNode demo API, built from recorded synthetic responses and the
 // documented behavior scenarios (revoked consent 410, rate limit 429, unknown patient 404).
-export function fixtureClient(): FinchNodeClient {
+// With sandbox: true it also fakes Connect admissions: a session completes on its first poll and
+// its subject ("u_test_<scenario>") reads the scenario's record with a consent receipt.
+export function fixtureClient(options: { sandbox?: boolean } = {}): FinchNodeClient {
   const scenarios = (JSON.parse(readFileSync(join(FIXTURES, "scenarios.json"), "utf8")) as { data: Scenario[] }).data;
-  return {
+  const sandboxSubject = (scenario: string) => `u_test_${scenario.replace(/-/g, "_")}`;
+  const sandboxRecord = (subject: string): HealthRecord | null => {
+    const scenario = scenarios.find((s) => sandboxSubject(s.id) === subject);
+    if (!scenario?.subject || !existsSync(join(FIXTURES, `${scenario.subject}.json`))) return null;
+    return { ...fixture(scenario.subject), id: subject, environment: "sandbox", consent: { status: "active", receiptIds: ["rcpt_test_0001"] } };
+  };
+  const session = (scenario: string, completed: boolean): SandboxSession => ({
+    id: `cs_test${scenario.replace(/[^a-z0-9]/g, "")}`,
+    status: completed ? "completed" : "system-selected",
+    subject: completed ? sandboxSubject(scenario) : null,
+    organization: "Northstar Health System (Synthetic)",
+    externalId: `scalpal-${scenario}`,
+    simulation: { scenario, state: completed ? "completed" : "syncing" },
+    sync: { status: completed ? "complete" : "syncing" },
+  });
+  const client: FinchNodeClient = {
     listScenarios: async () => scenarios,
     getRecord: async (subject) => {
       if (subject === "patient-demo-consent-revoked") {
@@ -24,6 +41,8 @@ export function fixtureClient(): FinchNodeClient {
       if (subject === "patient-demo-rate-limited") {
         throw new FinchNodeError(429, "rate_limited", "Scenario rate-limited: retry after the indicated interval.", 1);
       }
+      const sandbox = subject.startsWith("u_test_") ? sandboxRecord(subject) : null;
+      if (sandbox) return sandbox;
       const file = join(FIXTURES, `${subject}.json`);
       if (!existsSync(file)) throw new FinchNodeError(404, "patient_not_found", "Synthetic demo patient not found.");
       return fixture(subject);
@@ -37,4 +56,15 @@ export function fixtureClient(): FinchNodeClient {
       failure_message: scenario === "connect-failed" ? "The health system did not respond during authorization." : null,
     }),
   };
+  if (options.sandbox) {
+    client.sandbox = {
+      admit: async (scenario) => session(scenario, false),
+      getSession: async (sessionId) => {
+        const scenario = scenarios.find((s) => session(s.id, false).id === sessionId);
+        if (!scenario) throw new FinchNodeError(404, "not_found", "No such session.");
+        return session(scenario.id, true);
+      },
+    };
+  }
+  return client;
 }

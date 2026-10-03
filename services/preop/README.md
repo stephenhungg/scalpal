@@ -11,7 +11,18 @@ This is Scalpal's FinchNode sponsor integration: a live API read that changes wh
 - **Everything renders in Unity.** Every payload is JsonUtility-safe (no nulls, no dictionaries, no nested arrays, `{x,y,z}` vectors) and maps 1:1 onto the C# DTOs in `apps/quest/Assets/Scalpal/Exercises/Data/`. Tests enforce both.
 - **No dead routes or buttons.** Every response carries `actions` (`{id, label, method, route}`). Every route resolves, failures included: revoked consent, rate limits, unknown patients, and failed connections all render a state with a way onward. A crawler test walks every action from `/`.
 - **Risks are deterministic.** Flags come from rules over coded data (RxNorm, LOINC, SNOMED), each with the record entries behind it. No model decides what counts as a risk. Missing data is reported as unknown, never as none.
-- **No key, no real patients.** The demo API is public and synthetic. Nothing here touches real health data.
+- **Synthetic only.** The demo API is public and keyless. An optional sandbox key (`ck_test_`) unlocks FinchNode's real Connect flow, but sandbox keys can only ever see synthetic patients. Nothing here touches real health data.
+
+## Two FinchNode paths
+
+| Path | Needs | What happens |
+| --- | --- | --- |
+| Demo records | nothing | `GET /patients/:id/case` reads `api.finchnode.com/demo/v1` directly |
+| Connect admission | `FINCHNODE_API_KEY=ck_test_...` in `.env` | `POST /admit/:scenarioId` creates a real Connect session on `api/v1`, a synthetic patient consents via `simulate`, `GET /admissions/:sessionId` polls until FinchNode exposes the app-scoped subject (`u_...`), then that subject's case is read with the key and shows its consent receipt |
+
+Every admission response also offers "Use the demo record instead", so a slow or stuck sandbox never blocks the learner. Record reads retry once after `Retry-After` on a 429, per FinchNode's contract. Keys stay in `.env` on the server, never in Unity builds.
+
+Known issue (Oct 3): simulated sandbox sessions import successfully (`sync.status` partial, since the app only requests six categories) but have stayed at `system-selected` with `simulation.state` `syncing` instead of completing. Reported state is FinchNode-side; the demo fallback keeps the flow working.
 
 ## Run
 
@@ -39,7 +50,9 @@ npm run export:unity   # refresh Resources/scalpal_bundle.json from the live API
 | POST | `/patients/:id/preop-check` | `PreopCheckResult`: body `{"selected": ["bleeding", ...]}` |
 | GET | `/procedures`, `/procedures/:id` | `ProcedureList`, `Procedure` |
 | GET | `/anatomy`, `/instruments` | `AnatomyList`, `InstrumentList` |
-| POST | `/connect/:scenarioId` | `ConnectResult`: runs a FinchNode Connect session scenario |
+| POST | `/connect/:scenarioId` | `ConnectResult`: runs a demo Connect session scenario (cancelled/failed cases) |
+| POST | `/admit/:scenarioId` | `AdmissionStatus`: sandbox Connect admission (needs the key; otherwise `unavailable` plus demo fallback) |
+| GET | `/admissions/:sessionId` | `AdmissionStatus`: poll until `state` is `completed`, then follow its open-case action |
 | GET | `/unity/bundle` | `ScalpalBundle`: catalogs plus every case, for offline use |
 | GET | `/health` | `HealthStatus` |
 

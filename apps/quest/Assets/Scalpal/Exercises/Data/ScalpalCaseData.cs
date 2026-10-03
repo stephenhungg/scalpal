@@ -80,6 +80,10 @@ namespace Scalpal.Exercises.Data
     {
         public string patientId;
         public bool synthetic;
+        // "demo" (keyless public API) or "sandbox" (real Connect session with a consent receipt).
+        public string dataSource;
+        public string consentStatus;
+        public string[] consentReceipts;
         public string generatedAt;
         public string dataAsOf;
         public PatientSummary patient;
@@ -277,6 +281,21 @@ namespace Scalpal.Exercises.Data
         public string failureCode;
         public string failureMessage;
         public string patientId;
+        public string say;
+        public ScalpalAction[] actions;
+    }
+
+    // FinchNode Connect admission: poll the check_admission action until state is completed.
+    [Serializable]
+    public class AdmissionStatus
+    {
+        public string sessionId;
+        public string scenarioId;
+        public string state;
+        public string sessionStatus;
+        public string syncStatus;
+        public string patientId;
+        public string organization;
         public string say;
         public ScalpalAction[] actions;
     }

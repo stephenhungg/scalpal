@@ -23,6 +23,8 @@ export const routes = {
   preopCheck: (id: string): Action => ({ id: "submit_preop_check", label: "Submit pre-op safety check", method: "POST", route: `/patients/${id}/preop-check` }),
   procedure: (pid: string): Action => ({ id: "view_procedure", label: "View procedure steps", method: "GET", route: `/procedures/${pid}` }),
   connect: (scenarioId: string, label: string): Action => ({ id: "start_connect", label, method: "POST", route: `/connect/${scenarioId}` }),
+  admit: (scenarioId: string): Action => ({ id: "admit_patient", label: "Admit through FinchNode Connect", method: "POST", route: `/admit/${scenarioId}` }),
+  admission: (sessionId: string): Action => ({ id: "check_admission", label: "Check admission", method: "GET", route: `/admissions/${sessionId}` }),
 };
 
 const ALL_FLAG_TYPES = Object.keys(CHECKLIST_LABELS) as FlagType[];
@@ -46,6 +48,9 @@ const emptyProcedure = (): Procedure => ({
 const emptyBrief = (patientId: string, now: Date): PreopBrief => ({
   patientId,
   synthetic: true,
+  dataSource: "",
+  consentStatus: "",
+  consentReceipts: [],
   generatedAt: now.toISOString(),
   dataAsOf: "",
   patient: { name: "", age: -1, sex: "", displayLabel: "Unavailable patient" },
@@ -76,9 +81,10 @@ export function checklistFor(patientId: string, present: FlagType[]): ChecklistO
   return seededOrder(chosen, `${patientId}:order`).map((type) => ({ type, label: CHECKLIST_LABELS[type] }));
 }
 
-export function buildCase(record: HealthRecord, scenarioId: string, now: Date = new Date()): SurgicalCase {
+// planSubject lets a sandbox subject (u_...) use the authored plan of the demo patient its scenario mirrors.
+export function buildCase(record: HealthRecord, scenarioId: string, now: Date = new Date(), planSubject = record.id): SurgicalCase {
   const brief = buildBrief(record, now);
-  const plan = CASE_PLANS[record.id] ?? fallbackPlan(brief.patient.age);
+  const plan = CASE_PLANS[planSubject] ?? CASE_PLANS[record.id] ?? fallbackPlan(brief.patient.age);
   const procedure = PROCEDURES_BY_ID.get(plan.procedureId);
   if (!procedure) throw new Error(`Case plan for ${record.id} references missing procedure ${plan.procedureId}`);
 
