@@ -14,7 +14,7 @@ Offline pipeline on the Mac: decode a short permitted passthrough clip, estimate
 | Real-time / headset display | Out of scope for this slice | — |
 
 | Real moving hand, dex-retargeting's 20 s sample webcam clip (MIT) | 621/621 frames tracked; robot finger bend follows the estimate at r = 0.93 to 0.97 (fingers) and 0.86 (thumb); spread hits Shadow's ±20° abduction limits (flagged) | Real video, not headset |
-| Nathan's gateway worker (`gateway-worker`) | Claim, heartbeat, 4 uploads, and complete against a stand-in gateway built to worker-api v1; no-hand fails without retry; a stale run is dropped; trajectory validates against his schema | Local test, real gateway not run |
+| Nathan's gateway worker (`gateway-worker`) | Real gateway + SpacetimeDB: upload → job → claim → 4 verified outputs → `ready` → viewer download, 17.5 s for a 20 s clip. Stand-in gateway: no-hand fails without retry, stale run dropped. Trajectory validates against his schema | Local end to end, not deployed |
 | Worker job/result boundary (`process`, HTTP `serve`) | Success, no-hand, missing input, bad job, and duplicate run_id paths exercised; a duplicate run never overwrites an existing result; HTTP auth, job, and replay download checked locally | Local test, no gateway yet |
 
 `uv run pytest` covers the round trip, gap reporting, joint naming, fixed wrist, joint limits, and the job failure paths.
@@ -51,7 +51,9 @@ For each job it claims, downloads the clip from the signed URL, runs inference, 
 
 When no hand is found or the clip won't decode, it fails without retry. Download and processor errors fail with retry. A `409` at any point drops the run without completing.
 
-Tested against a stand-in gateway that follows the written contract (`tests/test_gateway_worker.py`), including a 20 s real hand clip end to end, plus validation against Nathan's trajectory schema. **Not yet run against the real gateway**, which needs a local `spacetime start` or a deployed instance.
+**Verified end to end against Nathan's real gateway** (`nathan/companion-realtime` at 9bd6517, local SpacetimeDB 2.10.2, local storage). A headset client uploaded the 20 s sample hand clip and the operator requested a job. This worker claimed it, tracked 621/621 frames, and uploaded 4 outputs that the gateway verified. The job became `ready`, and a viewer downloaded a schema-valid trajectory (24 joints × 621 frames). Worker wall time was 17.5 s.
+
+To rerun it, copy `integration/silas-e2e.test.ts` into `services/api/test/` on Nathan's branch. With `spacetime start` running, run `E2E_CLIP=<clip> MOTION_DIR=<this folder> node --import tsx --test test/silas-e2e.test.ts`. The stand-in gateway tests in `tests/test_gateway_worker.py` cover the failure paths (no hand, stale run) without SpacetimeDB.
 
 ## Local Worker Boundary (standalone)
 
