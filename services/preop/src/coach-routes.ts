@@ -4,7 +4,7 @@ import { streamSSE } from "hono/streaming";
 import { ANATOMY, ANATOMY_BY_ID } from "./catalog/anatomy.js";
 import { STRUCTURE_FACTS } from "./catalog/coach-knowledge.js";
 import { INSTRUMENTS_BY_ID } from "./catalog/instruments.js";
-import { CoachSession, reflexLines, renderContext, type CoachEvent, type StuckPolicy } from "./coach.js";
+import { CoachSession, PRESENTATION_MODES, reflexLines, renderContext, type CoachEvent, type StuckPolicy } from "./coach.js";
 import { ReflexAudio } from "./reflex.js";
 import { buildSystemPrompt, firstMessage } from "./coach-prompt.js";
 import type { Action, SurgicalCase } from "./types.js";
@@ -75,14 +75,16 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
   const body = async (c: Context) => (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
 
   app.post("/coach/sessions", async (c) => {
-    const { patientId } = await body(c);
+    const { patientId, mode: rawMode } = await body(c);
+    const mode = rawMode === undefined ? "mixed_reality" : PRESENTATION_MODES.find((m) => m === rawMode);
+    if (!mode) return bad(c, 400, "invalid_mode", 'mode must be "mixed_reality" or "virtual".', [{ id: "choose_patient", label: "Choose a patient", method: "GET", route: "/patients" }]);
     const kase = typeof patientId === "string" ? await options.loadCase(patientId) : null;
     if (!kase) return bad(c, 404, "patient_not_found", 'Send {"patientId": "<FinchNode subject>"} for a known patient.', [{ id: "choose_patient", label: "Choose a patient", method: "GET", route: "/patients" }]);
     if (!kase.procedureId) return bad(c, 409, "case_unavailable", kase.statusReason, kase.actions);
 
     if (sessions.size >= MAX_SESSIONS) sessions.delete(sessions.keys().next().value!);
     const sid = `coach-${crypto.randomUUID().replaceAll("-", "").slice(0, 16)}`;
-    const session = new CoachSession(sid, kase, options.now, options.stuckPolicy);
+    const session = new CoachSession(sid, kase, options.now, options.stuckPolicy, mode);
     sessions.set(sid, session);
     const snapshot = session.snapshot();
     return c.json(
@@ -90,7 +92,7 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
         sessionId: sid,
         snapshot,
         context: renderContext(snapshot),
-        systemPrompt: buildSystemPrompt(kase),
+        systemPrompt: buildSystemPrompt(kase, mode),
         firstMessage: firstMessage(kase),
         actions: coachActions(sid),
       },
@@ -290,14 +292,14 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
   app.get("/jarvis/reflex/:sid", (c) => {
     const s = getSession(c);
     if (!s) return missing(c);
-    const lines = reflexLines(s.kase).map((l) => ({ ...l, route: `/jarvis/reflex/${s.id}/${l.key}` }));
+    const lines = reflexLines(s.kase, s.mode).map((l) => ({ ...l, route: `/jarvis/reflex/${s.id}/${l.key}` }));
     return c.json({ configured: Boolean(reflex?.configured), lines, actions: coachActions(s.id) });
   });
 
   app.get("/jarvis/reflex/:sid/:key", async (c) => {
     const s = getSession(c);
     if (!s) return missing(c);
-    const line = reflexLines(s.kase).find((l) => l.key === c.req.param("key"));
+    const line = reflexLines(s.kase, s.mode).find((l) => l.key === c.req.param("key"));
     if (!line) return bad(c, 404, "reflex_not_found", "No warning line with that key in this case.", coachActions(s.id));
     if (!reflex?.configured) return bad(c, 503, "reflex_unconfigured", "Set ELEVENLABS_API_KEY and JARVIS_VOICE_ID to pre-render warnings.", coachActions(s.id));
     try {

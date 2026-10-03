@@ -267,7 +267,7 @@ async function startVoice(created) {
 $("start").onclick = async () => {
   $("start").disabled = true;
   patientId = $("patient").value;
-  const created = await api("POST", "/coach/sessions", { patientId });
+  const created = await api("POST", "/coach/sessions", { patientId, mode: $("presentation").value });
   if (!created.ok) { log("event", created.json.error?.message ?? "Could not start.", "urgent"); $("start").disabled = false; return; }
   sid = created.json.sessionId;
   arbiter = createArbiter();

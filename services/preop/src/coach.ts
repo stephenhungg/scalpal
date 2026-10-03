@@ -87,6 +87,7 @@ export interface CoachCommand {
 export interface CoachSnapshot {
   sessionId: string;
   version: number;
+  mode: PresentationMode;
   status: "active" | "paused" | "completed";
   caseId: string;
   patientId: string;
@@ -173,6 +174,7 @@ export class CoachSession {
     readonly kase: SurgicalCase,
     private readonly clock: () => Date = () => new Date(),
     private readonly policy: StuckPolicy = DEFAULT_STUCK_POLICY,
+    readonly mode: PresentationMode = "mixed_reality",
   ) {
     this.engine = new StepEngine(kase.procedure);
     this.startedAt = this.stepStartedAt = this.lastProgressAt = this.ms();
@@ -317,7 +319,7 @@ export class CoachSession {
       alerts.push(this.alert("tracking_restored", "low", "Tracking is back. Pick up where you left off."));
     } else {
       this.lastEvent = "Tracking lost; anatomy hidden and scoring paused.";
-      alerts.push(this.alert("tracking_lost", "urgent", TRACKING_LOST_LINE, [], this.engine.current?.id ?? "", "tracking_lost"));
+      alerts.push(this.alert("tracking_lost", "urgent", trackingLostLine(this.mode), [], this.engine.current?.id ?? "", "tracking_lost"));
     }
     this.changed(alerts);
     return { accepted: true, reason: "", alerts };
@@ -510,6 +512,7 @@ export class CoachSession {
     return {
       sessionId: this.id,
       version: this.version,
+      mode: this.mode,
       status: !step ? "completed" : this.trackingValid ? "active" : "paused",
       caseId: this.kase.caseId,
       patientId: this.kase.patientId,
@@ -564,7 +567,16 @@ export class CoachSession {
   }
 }
 
-export const TRACKING_LOST_LINE = "I've lost tracking on the patient, so I've paused. Hold still and look back at the torso.";
+// Mixed reality overlays generic anatomy on a real reclining person; full VR uses a virtual patient and room.
+// Same coach, steps, and tools; only what "tracking" means and how the scene is described differ.
+export type PresentationMode = "mixed_reality" | "virtual";
+export const PRESENTATION_MODES: PresentationMode[] = ["mixed_reality", "virtual"];
+
+export function trackingLostLine(mode: PresentationMode): string {
+  return mode === "virtual"
+    ? "I've lost headset tracking, so I've paused. Hold still for a moment."
+    : "I've lost tracking on the patient, so I've paused. Hold still and look back at the torso.";
+}
 
 // Urgent mistake lines open with "Stop." so the reflex clip and any LLM follow-up sound the same.
 export function reflexLine(feedback: string): string {
@@ -572,10 +584,10 @@ export function reflexLine(feedback: string): string {
 }
 
 // Every pre-renderable warning line for a case: high-severity mistakes plus tracking loss.
-export function reflexLines(kase: SurgicalCase): { key: string; text: string }[] {
+export function reflexLines(kase: SurgicalCase, mode: PresentationMode = "mixed_reality"): { key: string; text: string }[] {
   const lines = kase.procedure.steps.flatMap((s) => s.mistakes.filter((m) => m.severity === "high").map((m) => ({ key: `mistake.${m.id}`, text: reflexLine(m.feedback) })));
   const unique = [...new Map(lines.map((l) => [l.key, l])).values()];
-  return [...unique, { key: "tracking_lost", text: TRACKING_LOST_LINE }];
+  return [...unique, { key: "tracking_lost", text: trackingLostLine(mode) }];
 }
 
 // True when the authored hint mostly repeats the coaching sentence, so the nudge says it once.

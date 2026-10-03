@@ -279,3 +279,20 @@ describe("danger focus", () => {
     expect(s.handle({ type: "focus", structureId: "terminal_ileum" }).alerts[0]?.kind).toBe("danger_focus");
   });
 });
+
+describe("presentation modes", () => {
+  it("describes the scene and tracking loss for the chosen mode", async () => {
+    const app = createApp({ client: fixtureClient(), now: () => NOW, coachTickMs: 0 });
+    const start = async (mode?: string) =>
+      app.request("/coach/sessions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ patientId: "patient-demo-pediatric-asthma", ...(mode ? { mode } : {}) }) });
+    const mr = (await (await start()).json()) as { systemPrompt: string; snapshot: { mode: string } };
+    expect(mr.snapshot.mode).toBe("mixed_reality");
+    expect(mr.systemPrompt).toMatch(/real person reclining/);
+    const vr = (await (await start("virtual")).json()) as { sessionId: string; systemPrompt: string };
+    expect(vr.systemPrompt).toMatch(/fully virtual operating room/);
+    expect(vr.systemPrompt).not.toMatch(/real person/);
+    const lines = (await (await app.request(`/jarvis/reflex/${vr.sessionId}`)).json()) as { lines: { key: string; text: string }[] };
+    expect(lines.lines.find((l) => l.key === "tracking_lost")?.text).toMatch(/headset tracking/);
+    expect((await start("hologram")).status).toBe(400);
+  });
+});

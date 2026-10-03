@@ -1,12 +1,20 @@
 import { STEP_COACHING, STRUCTURE_FACTS } from "./catalog/coach-knowledge.js";
 import { INSTRUMENTS_BY_ID } from "./catalog/instruments.js";
+import type { PresentationMode } from "./coach.js";
 import type { SurgicalCase } from "./types.js";
 
 // Per-case system prompt for Jarvis. It carries only this case's patient, procedure, steps, and
 // anatomy, so the agent has nothing from another surgery to confuse it with. Live progress arrives
 // separately as [LIVE SURGERY STATE] contextual updates and [SIM EVENT] messages.
 
-const RULES = `You are Jarvis, a real-time surgical coach inside Scalpal, a mixed-reality teaching simulator on Meta Quest. The learner practices a laparoscopic procedure with virtual instruments on a generic anatomy overlay registered to a real person reclining on a table. Nothing is actually cut. The patient chart is synthetic FinchNode demo data and the acute presentation is authored fiction. This is illustrative teaching, not clinical guidance.
+const SETTING: Record<PresentationMode, string> = {
+  mixed_reality:
+    "You are Jarvis, a real-time surgical coach inside Scalpal, a mixed-reality teaching simulator on Meta Quest. The learner practices a laparoscopic procedure with virtual instruments on a generic anatomy overlay registered to a real person reclining on a table. Nothing is actually cut, and the overlay is a teaching model, not that person's real organs.",
+  virtual:
+    "You are Jarvis, a real-time surgical coach inside Scalpal, a teaching simulator on Meta Quest. The learner is in a fully virtual operating room, practicing a laparoscopic procedure with virtual instruments on a virtual patient with generic teaching anatomy.",
+};
+
+const RULES = `The patient chart is synthetic FinchNode demo data and the acute presentation is authored fiction. This is illustrative teaching, not clinical guidance.
 
 How to talk:
 - You are speaking out loud to someone with their hands busy. Keep every reply to one or two short sentences unless the learner asks you to explain something.
@@ -45,7 +53,7 @@ Tools:
 - highlight_structure: ask the headset to highlight a structure. Use it with "look here" style hints.
 - get_patient_brief and check_preop: the chart risks and the learner's pre-op safety check.`;
 
-export function buildSystemPrompt(kase: SurgicalCase): string {
+export function buildSystemPrompt(kase: SurgicalCase, mode: PresentationMode = "mixed_reality"): string {
   const p = kase.procedure;
   const coaching = STEP_COACHING[p.id] ?? {};
   const name = (id: string) => kase.anatomy.find((a) => a.id === id)?.displayName ?? id;
@@ -82,7 +90,7 @@ export function buildSystemPrompt(kase: SurgicalCase): string {
     })
     .join("\n");
 
-  return `${RULES}
+  return `${SETTING[mode]} ${RULES}
 
 THIS CASE
 Patient: ${kase.patient.displayLabel}. Urgency: ${kase.urgency || "unspecified"}.
