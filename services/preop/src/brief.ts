@@ -198,7 +198,8 @@ export function summarizePatient(record: HealthRecord, asOf: string): PatientSum
   return { name, age, sex, displayLabel: name ? parts.join(", ").replace(/, ([MFOU])$/, " $1") : "Unnamed patient (limited chart)" };
 }
 
-export function buildBrief(record: HealthRecord, now: Date = new Date()): PreopBrief {
+// extraGaps carries problems only the caller can see, such as sources that belong to different patients.
+export function buildBrief(record: HealthRecord, now: Date = new Date(), extraGaps: DataGap[] = []): PreopBrief {
   const asOf = record.meta?.dataAsOf ?? now.toISOString();
   const patient = summarizePatient(record, asOf);
   const meds = dedupe((record.data.medications ?? []).filter((m) => isLive(m.status)));
@@ -206,7 +207,7 @@ export function buildBrief(record: HealthRecord, now: Date = new Date()): PreopB
   const allergies = (record.data.allergies ?? []).filter((a) => isLive(a.status) && !/no known/i.test(allergyName(a)));
   const labs = latestLabs(record.data.labs ?? []);
   const flags: Flag[] = [];
-  const gaps: DataGap[] = [];
+  const gaps: DataGap[] = [...extraGaps];
 
   const condition = (key: keyof typeof CONDITIONS) => conditions.filter((c) => CONDITIONS[key].test(c.name ?? ""));
   const add = (flag: Omit<Flag, "id">) => flags.push({ id: `flag_${flag.type}`, ...flag });
@@ -449,7 +450,7 @@ export function buildBrief(record: HealthRecord, now: Date = new Date()): PreopB
   // An empty or partial chart must never read as a safe chart.
   const finalGaps = dedupeGaps(gaps);
   if (finalGaps.length) {
-    const unknownCritical = finalGaps.some((g) => /(missing|not_shared)_(medications|allergies)|no_demographics/.test(g.code));
+    const unknownCritical = finalGaps.some((g) => /(missing|not_shared)_(medications|allergies)|no_demographics|identity_mismatch/.test(g.code));
     add({
       type: "incomplete_chart",
       severity: unknownCritical ? "high" : "moderate",

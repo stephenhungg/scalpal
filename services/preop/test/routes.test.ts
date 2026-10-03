@@ -133,6 +133,14 @@ describe("FinchNode Connect admissions", () => {
     expect((kase.json.brief as { dataSource: string }).dataSource).toBe("sandbox");
   });
 
+  it("flags a patient whose connected sources belong to different people", async () => {
+    const { json } = await call("GET", "/patients/u_test_mixed/case");
+    expect(json).toMatchObject({ scenarioId: "multi-source-overlap", procedureId: "lap_appendectomy" });
+    const brief = json.brief as { dataGaps: { code: string }[]; flags: { type: string; severity: string }[] };
+    expect(brief.dataGaps.map((g) => g.code)).toContain("identity_mismatch");
+    expect(brief.flags.find((f) => f.type === "incomplete_chart")?.severity).toBe("high");
+  });
+
   it("without a sandbox key, admission falls back to the demo record", async () => {
     const plain = createApp({ client: fixtureClient(), now: () => NOW });
     const res = await plain.request("/admit/baseline-adult", { method: "POST" });

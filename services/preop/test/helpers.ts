@@ -49,6 +49,19 @@ export function fixtureClient(options: { sandbox?: boolean } = {}): FinchNodeCli
       if (subject === "patient-demo-rate-limited") {
         throw new FinchNodeError(429, "rate_limited", "Scenario rate-limited: retry after the indicated interval.", 1);
       }
+      // One FinchNode account that connected two different scenario patients' sources.
+      if (subject === "u_test_mixed" && options.sandbox) {
+        return {
+          ...fixture("patient-demo-001"),
+          id: subject,
+          environment: undefined,
+          sources: [
+            { system: "synthetic-test@o_a", organization: "Northstar Health System (Synthetic) \u00b7 Baseline adult, age 38" },
+            { system: "synthetic-test@o_b", organization: "Quillhaven Medical Group (Synthetic) \u00b7 Two sources with overlapping records, age 40" },
+          ],
+          consent: { status: "active", receiptIds: ["rcpt_test_a", "rcpt_test_b"] },
+        };
+      }
       const sandbox = subject.startsWith("u_test_") ? sandboxRecord(subject) : null;
       if (sandbox) return sandbox;
       const file = join(FIXTURES, `${subject}.json`);

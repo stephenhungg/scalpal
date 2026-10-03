@@ -9,7 +9,7 @@ import type { StuckPolicy } from "./coach.js";
 import { registerCoachRoutes } from "./coach-routes.js";
 import type { ReflexAudio } from "./reflex.js";
 import { FinchNodeError, createFinchNodeClient, type FinchNodeClient } from "./finchnode.js";
-import type { Action, AdmissionStatus, Scenario, SandboxSession, SurgicalCase } from "./types.js";
+import type { Action, AdmissionStatus, DataGap, Scenario, SandboxSession, SurgicalCase } from "./types.js";
 
 export interface AppOptions {
   client?: FinchNodeClient;
@@ -76,25 +76,40 @@ export function createApp(options: AppOptions = {}) {
 
   // Sandbox sources are labeled "<health system> · <scenario title>", which maps a consented subject
   // back to the scenario whose authored case plan it should use.
-  async function scenarioFromOrganizations(organizations: string[]): Promise<string> {
+  async function scenariosFromOrganizations(organizations: string[]): Promise<string[]> {
     const list = await scenarios();
+    const found: string[] = [];
     for (const org of organizations) {
       const title = org.split(" \u00b7 ").slice(1).join(" \u00b7 ").trim();
       const match = title ? list.find((s) => s.title === title && s.subject) : undefined;
-      if (match) return match.id;
+      if (match && !found.includes(match.id)) found.push(match.id);
     }
-    return "";
+    return found;
+  }
+
+  // The most recently connected source decides the case plan.
+  async function scenarioFromOrganizations(organizations: string[]): Promise<string> {
+    return (await scenariosFromOrganizations(organizations)).at(-1) ?? "";
   }
 
   async function loadCase(subject: string, scenarioId: string): Promise<SurgicalCase | FinchNodeError> {
     try {
       const record = await client.getRecord(subject);
-      if (!scenarioId && !subject.startsWith("patient-demo-")) {
-        scenarioId = await scenarioFromOrganizations((record.sources ?? []).map((s) => s.organization));
+      const extraGaps: DataGap[] = [];
+      if (!subject.startsWith("patient-demo-")) {
+        const matched = await scenariosFromOrganizations((record.sources ?? []).map((s) => s.organization));
+        if (!scenarioId) scenarioId = matched.at(-1) ?? "";
         if (scenarioId) subjectScenario.set(subject, scenarioId);
+        // One FinchNode account connected sources that describe different people.
+        if (matched.length > 1) {
+          extraGaps.push({
+            code: "identity_mismatch",
+            message: `Connected sources describe different patients (${matched.join(", ")}). Confirm identity and disconnect the wrong source before surgery.`,
+          });
+        }
       }
       const planSubject = (await scenarios()).find((s) => s.id === scenarioId)?.subject ?? subject;
-      return buildCase(record, scenarioId, now(), planSubject);
+      return buildCase(record, scenarioId, now(), planSubject, extraGaps);
     } catch (err) {
       if (err instanceof FinchNodeError) return err;
       throw err;
