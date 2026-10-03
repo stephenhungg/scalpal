@@ -125,3 +125,15 @@ Still needed:
 - an R2 bucket and Cloudflare TURN key
 - the ElevenLabs agent id and key (from Matthew)
 - agreement with Stephen, Matthew and Silas on the contracts
+
+### Deployment (October 3, 2026)
+
+| Piece | Where | Notes |
+| --- | --- | --- |
+| Website | https://scalpal-companion.vercel.app | Vercel project `scalpal-companion` (Nathan's account), built from `apps/companion` |
+| Realtime database | SpacetimeDB maincloud, database `scalpal` | Published from `services/realtime` with Nathan's SpacetimeDB login |
+| Gateway | https://scalpal-gateway.fly.dev (Fly app `scalpal-gateway`, region `ord`) | One always-on machine; secrets in Fly, `fly.toml` in `services/api` |
+| Artifact storage | Cloudflare R2 bucket `scalpal-artifacts` | Private; CORS allows the website origin and localhost dev ports |
+| Video relay | Cloudflare Realtime TURN | Short-lived credentials minted per viewer by the gateway |
+
+Verified against the live URLs with headless Chromium, both peers forced onto the TURN relay: session creation, invite join, live video via the relay, the synthetic headset script, a headset-applied action, browser upload to R2 with gateway verification, synthetic processing, a synced replay, source stop, the phone layout, and ending the session. The real Quest mirror, Matthew's Jarvis and Silas's worker are not yet connected.

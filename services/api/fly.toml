@@ -1,0 +1,35 @@
+# Fly.io config for the Scalpal gateway. Secrets are set with `fly secrets`,
+# never in this file. Deploy from services/api: fly deploy
+app = "scalpal-gateway"
+primary_region = "ord"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+  PORT = "8787"
+  STORAGE_DRIVER = "s3"
+  SPACETIMEDB_URI = "wss://maincloud.spacetimedb.com"
+  SPACETIMEDB_DB = "scalpal"
+  PUBLIC_BASE_URL = "https://scalpal-gateway.fly.dev"
+
+[http_service]
+  internal_port = 8787
+  force_https = true
+  # The gateway holds a live database connection and fulfils grants; it must
+  # not scale to zero.
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    grace_period = "15s"
+    interval = "30s"
+    method = "GET"
+    path = "/healthz"
+    timeout = "5s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

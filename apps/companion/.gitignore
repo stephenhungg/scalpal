@@ -1,2 +1,4 @@
 dist/
 *.tsbuildinfo
+.vercel
+.env*
