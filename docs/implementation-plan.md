@@ -1,6 +1,6 @@
 # Implementation Plan and Team Handoff
 
-This is a proposed sequence for a documentation-only repo. It is not authorization to implement every workstream in parallel. The latest user request was to establish a repository and preserve full context for the team.
+This is a proposed sequence for a documentation-and-folder-scaffold repo. The user requested repository context, folder structure, and a team work split; application implementation has not begun. See the [team plan](team-plan.md) for proposed ownership, component boundaries, and parallel checkpoints.
 
 ## First Align the Team
 

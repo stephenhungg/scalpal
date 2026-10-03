@@ -8,7 +8,7 @@
 
 ## Read Before Working
 
-Read `README.md`, `docs/thesis.md`, `docs/decisions.md`, and the document for your component. Check the current repository before editing: this initial handoff is documentation-only, and the established hardware results come from a separate official Meta sample.
+Read `README.md`, `docs/thesis.md`, `docs/decisions.md`, `docs/team-plan.md`, and the document for your component. Check the current repository before editing: this handoff contains documentation and folder scaffolds, and the established hardware results come from a separate official Meta sample. Respect the proposed path/scene ownership; coordinate shared contracts and global Unity settings before editing them.
 
 User direction takes precedence over older proposals. In particular:
 
@@ -35,6 +35,6 @@ User direction takes precedence over older proposals. In particular:
 
 ## Status and Handoff
 
-The repo-creation task authorizes this context handoff, not implementation of every proposed component. Follow subsequent user-assigned scope. Before a broad build, reconcile the expanded architecture and unresolved decisions with the owner; do not treat the prior pre-robotics draft review as approval of the current specification.
+The repository/context and team-layout requests authorize this handoff and scaffold, not implementation of every proposed component. Follow subsequent user-assigned scope. Before a broad build, reconcile the expanded architecture and unresolved decisions with the owner; do not treat the prior pre-robotics draft review as approval of the current specification.
 
 For completed work, report changed files, relevant checks, measured limitations, and the next blocked interface or decision. Update the relevant document when evidence changes a premise. Do not add a tracking file for every small task.

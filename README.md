@@ -18,6 +18,7 @@ This repository currently contains documentation, not an implemented Scalpal app
 6. [Implementation plan](docs/implementation-plan.md): Bounded workstreams, ordering, and evidence required to proceed.
 7. [Integration contracts](docs/integration-contracts.md): Proposed shared identifiers and records so parallel components can connect.
 8. [Research](docs/research/README.md) and [sponsor alignment](docs/sponsors.md): Primary sources and conditional event integrations.
+9. [Folder structure and team split](docs/team-plan.md): Proposed ownership for Stephen, Matthew, Silas, and Nakim, parallel checkpoints, and copyable agent briefs.
 
 ## Status
 
@@ -27,6 +28,6 @@ The conversational selection experience was accepted during product exploration.
 
 ## Collaboration
 
-Follow [AGENTS.md](AGENTS.md). Agree on one supported exercise, one robot-hand model, and component contracts before overlapping implementation. Work on one measurable technical question at a time. Update the docs when a decision or measured result changes; distinguish a proposal from a verified result.
+Follow [AGENTS.md](AGENTS.md) and the [team plan](docs/team-plan.md). Major component folders contain onboarding READMEs; they are scaffolds, not initialized applications. Agree on one supported exercise, one robot-hand model, and component contracts before overlapping implementation. Work on one measurable technical question at a time. Update the docs when a decision or measured result changes; distinguish a proposal from a verified result.
 
 Keep credentials, participant footage, device identifiers, and raw datasets out of Git. This is an illustrative simulator, not clinical guidance or evidence of surgical competence. Actual recording, processing, sharing, and training rights must be established for each data source and use.

@@ -8,3 +8,13 @@
 /artifacts/
 *.pem
 *.key
+node_modules/
+.venv/
+__pycache__/
+*.pyc
+/apps/quest/Library/
+/apps/quest/Temp/
+/apps/quest/Obj/
+/apps/quest/Logs/
+/apps/quest/UserSettings/
+/apps/quest/Builds/

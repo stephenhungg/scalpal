@@ -39,7 +39,7 @@ The original device setup logs also include earlier failures and pending install
 5. **Content and assets:** Who authors and reviews the exercise? Which anatomy model is licensed for the intended use and performs well enough on Quest?
 6. **Contribution acceptance:** What checks make a clip useful? What happens when learning completes but reconstruction fails? Who operates the demo verifier?
 7. **Reward design:** Which challenge program/receipt and bounded test-token amount? Must challenge enrollment itself be onchain for the first slice, or can a smaller verified-payout milestone come first?
-8. **Team and logistics:** Internal milestones, owners, active development machines, accounts, endpoints, and remaining build budget. These are not yet assigned. The working event submission deadline is noon Eastern on October 4; see [event constraints](sponsors.md#event-constraints-for-the-team) for the published deadline discrepancy.
+8. **Team and logistics:** The [team plan](team-plan.md) proposes owners and folder boundaries for the four collaborators, based on Stephen having the headset. Teammate specialties, internal milestone times, development machines/accounts/endpoints, and remaining build budget still need confirmation. The working event submission deadline is noon Eastern on October 4; see [event constraints](sponsors.md#event-constraints-for-the-team) for the published deadline discrepancy.
 
 ## Claims Requiring Evidence
 
