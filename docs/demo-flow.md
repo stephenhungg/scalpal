@@ -1,5 +1,7 @@
 # End-to-End Demo Flow
 
+> Scope update: Solana, wallets, payouts, and monetary completion rewards are removed. Nathan owns the companion website + SpacetimeDB/routing lane; Matthew continues Jarvis. This earlier proposal contains superseded reward/challenge references. Read [current direction](current-direction.md) and [Nathan's implementation plan](nathan-plan.md) first.
+
 This is the proposed experience from startup through completion. Most components are not implemented yet; see [hardware baseline](hardware-baseline.md). The chosen exercise, recording route, robot model, and acceptance rule remain unresolved.
 
 ## Before the Learner Arrives

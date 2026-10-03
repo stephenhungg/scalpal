@@ -5,12 +5,17 @@ import { INSTRUMENTS } from "./catalog/instruments.js";
 import { PROCEDURES, PROCEDURES_BY_ID } from "./catalog/procedures.js";
 import { buildBrief, DISCLAIMER } from "./brief.js";
 import { buildCase, routes, scorePreopCheck, unavailableCase } from "./case-builder.js";
+import type { StuckPolicy } from "./coach.js";
+import { registerCoachRoutes } from "./coach-routes.js";
 import { FinchNodeError, createFinchNodeClient, type FinchNodeClient } from "./finchnode.js";
 import type { Action, Scenario, SurgicalCase } from "./types.js";
 
 export interface AppOptions {
   client?: FinchNodeClient;
   now?: () => Date;
+  coachTickMs?: number;
+  stuckPolicy?: StuckPolicy;
+  elevenLabs?: { apiKey: string; agentId: string };
 }
 
 export interface PatientListEntry {
@@ -286,6 +291,17 @@ export function createApp(options: AppOptions = {}) {
       nextStepId: step.next,
       say: [step.instruction, ...notes, next ? `Next up: ${next.title.toLowerCase()}.` : "That's the last step."].join(" "),
     });
+  });
+
+  registerCoachRoutes(app, {
+    now,
+    tickMs: options.coachTickMs,
+    stuckPolicy: options.stuckPolicy,
+    elevenLabs: options.elevenLabs,
+    loadCase: async (id) => {
+      const target = await resolve(id);
+      return target ? caseOrUnavailable(target.subject, target.scenarioId) : null;
+    },
   });
 
   app.notFound((c) => fail(c, 404, "route_not_found", `No route ${c.req.method} ${c.req.path}.`, [routes.index()]));

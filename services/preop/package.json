@@ -13,7 +13,8 @@
     "validate": "tsx src/validate-cli.ts",
     "gen:unity": "tsx scripts/gen-unity.ts",
     "export:unity": "tsx scripts/export-unity-bundle.ts",
-    "test:unity": "dotnet run --project unity-check -- ../../apps/quest/Assets/Scalpal/Exercises/Resources/scalpal_bundle.json"
+    "test:unity": "dotnet run --project unity-check -- ../../apps/quest/Assets/Scalpal/Exercises/Resources/scalpal_bundle.json",
+    "jarvis:setup": "tsx scripts/setup-jarvis-agent.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.0",

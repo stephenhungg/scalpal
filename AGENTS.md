@@ -8,7 +8,7 @@
 
 ## Read Before Working
 
-Read `README.md`, `docs/thesis.md`, `docs/decisions.md`, `docs/team-plan.md`, and the document for your component. Check the current repository before editing: this handoff contains documentation and folder scaffolds, and the established hardware results come from a separate official Meta sample. Respect the proposed path/scene ownership; coordinate shared contracts and global Unity settings before editing them.
+Read `README.md` and `docs/current-direction.md` first, then the thesis, decisions, team plan, and your component document. Current direction supersedes older removed-feature proposals. Check the repository before editing: this handoff contains documentation and folder scaffolds, and the hardware results come from a separate official Meta sample. The latest user assigned Nathan the companion website + SpacetimeDB/routing lane; follow `docs/nathan-plan.md` for that implementation work order. Matthew is already working on Jarvis. The earlier blanket wait is superseded for Nathan's assigned lane; do not imply the remaining open product decisions or unbuilt integrations are resolved.
 
 User direction takes precedence over older proposals. In particular:
 
@@ -17,7 +17,7 @@ User direction takes precedence over older proposals. In particular:
 - The robotics input proposal is recorded passthrough video, not Meta SDK hand-joint telemetry.
 - First demonstrate video-derived hand motion retargeting and replay in simulation. Do not describe replay as a learned autonomous policy.
 - Preserve both education and robotics goals. Do not silently replace the project with a pure analytics dashboard or robotics-only collector.
-- Rewards are a sponsor-funded Solana Devnet demonstration. No lab funding or real-token economics have been validated.
+- Solana, wallets, onchain challenges, payouts, and monetary completion rewards are removed. Do not implement the historical reward lane. Nathan owns the companion/realtime routing assignment; Matthew owns the single Jarvis voice agent.
 
 ## Implementation Discipline
 
@@ -29,7 +29,7 @@ User direction takes precedence over older proposals. In particular:
 - State whether a result is measured on the headset, reported by a participant, simulated, or merely proposed.
 - Keep camera-image coordinates, camera-relative estimates, Unity world coordinates, and robot coordinates explicit. Do not conceal missing depth, clock synchronization, or registration behind smoothing.
 - Pause scoring and hide misleading anatomy when registration is invalid. Handle missing video landmarks explicitly in replay rather than inventing precise movement.
-- Use authored exercise rules for scoring and a backend verifier for reward eligibility. Voice agents do not authorize payouts or execute arbitrary scene code.
+- Use authored exercise rules for feedback and assessment. Voice agents do not execute arbitrary scene code.
 - Keep secrets on the service side. Never commit treasury keys, provider credentials, participant footage, raw motion datasets, or identifying device logs.
 - Camera permission and participant consent do not by themselves establish rights to export, license, or train on platform data. Consult the primary sources in `docs/research/README.md` for the intended use.
 

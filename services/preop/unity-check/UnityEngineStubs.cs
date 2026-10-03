@@ -105,6 +105,11 @@ namespace UnityEngine
         public static Vector3 operator *(Vector3 a, float d) => new Vector3(a.x * d, a.y * d, a.z * d);
     }
 
+    public sealed class WaitForSeconds : YieldInstruction
+    {
+        public WaitForSeconds(float seconds) { }
+    }
+
     public class AsyncOperation : YieldInstruction { }
 
     public class YieldInstruction { }

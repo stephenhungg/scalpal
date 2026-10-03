@@ -1,5 +1,7 @@
 # Research and Evidence
 
+> Scope update: Solana, wallets, payouts, and monetary completion rewards are removed. Nathan owns the companion website + SpacetimeDB/routing lane; Matthew continues Jarvis. This earlier proposal contains superseded reward/challenge references. Read [current direction](../current-direction.md) and [Nathan's implementation plan](../nathan-plan.md) first.
+
 Research snapshot: October 3, 2026. This page consolidates the sources relevant to Scalpal's current direction. It distinguishes documented capabilities, prior hardware observations, proposed integrations, and unanswered questions. It is not a clinical operating manual or a claim that the product has been implemented.
 
 Start with the [repository overview](../../README.md) for the thesis and product scope. See [sponsor alignment](../sponsors.md) for event eligibility. Sources below support decisions; they do not automatically validate Scalpal's educational effectiveness or robotics results.

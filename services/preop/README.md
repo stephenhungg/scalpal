@@ -106,6 +106,20 @@ Create each as a **webhook (server) tool**, method POST, JSON body, pointed at t
 
 Suggested system prompt fragment: *"Only state patient facts returned by tools. Never invent medications, labs, or allergies. If a tool reports a gap, say it is unknown."*
 
+## Jarvis live coach
+
+Real-time voice coach on top of the same catalogs. See [docs/jarvis-handoff.md](../../docs/jarvis-handoff.md) for the Unity, Blender, and SpacetimeDB side.
+
+- `src/catalog/coach-knowledge.ts`: anatomy facts for every structure and why/look-here coaching for every step (validated by `npm run validate`).
+- `src/coach.ts`: `CoachSession` wraps the step engine and tracks time on step, off-target attempts, wrong instruments, gaze on danger structures, and tracking loss, escalating hints from why to where-to-look to the explicit move.
+- `src/coach-prompt.ts`: per-case system prompt containing only that case's patient, steps, and anatomy.
+- `src/coach-routes.ts`: `/coach/sessions` (create, events, hint, explain, commands/ack, simulate, SSE stream), `/coach/current` for the headset, `/jarvis` voice page, `/jarvis/connection` signed URL.
+- `scripts/setup-jarvis-agent.ts` (`npm run jarvis:setup`): creates or updates the ElevenLabs agent and its client tools.
+
+```bash
+cp .env.example .env && npm run jarvis:setup && npm run dev   # then open http://localhost:8787/jarvis
+```
+
 ## Data
 
 `test/fixtures/` holds recorded responses from the public FinchNode demo API. They are fictional synthetic records, not participant or patient data.

@@ -1,5 +1,7 @@
 # Implementation Plan and Team Handoff
 
+> Scope update: Solana, wallets, payouts, and monetary completion rewards are removed. Nathan owns the companion website + SpacetimeDB/routing lane; Matthew continues Jarvis. This earlier proposal contains superseded reward/challenge references. Read [current direction](current-direction.md) and [Nathan's implementation plan](nathan-plan.md) first.
+
 This is a proposed sequence for a documentation-and-folder-scaffold repo. The user requested repository context, folder structure, and a team work split; application implementation has not begun. See the [team plan](team-plan.md) for proposed ownership, component boundaries, and parallel checkpoints.
 
 ## First Align the Team

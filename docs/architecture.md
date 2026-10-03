@@ -1,5 +1,7 @@
 # Scalpal Architecture
 
+> Scope update: Solana, wallets, payouts, and monetary completion rewards are removed. Nathan owns the companion website + SpacetimeDB/routing lane; Matthew continues Jarvis. This earlier proposal contains superseded reward/challenge references. Read [current direction](current-direction.md) and [Nathan's implementation plan](nathan-plan.md) first.
+
 Updated October 3, 2026. This document describes the current proposed application, not an implemented system or an approved clinical specification. The earlier office-hours design was reviewed before the robotics extension; that review does not establish feasibility of the current combined scope.
 
 ## Product and First Slice
