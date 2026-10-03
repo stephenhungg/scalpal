@@ -154,6 +154,15 @@ Reviewed `packages/contracts/realtime-v1.md` on `nathan/companion-realtime` (9bd
 
 Until this is agreed, the HTTP coach routes stay as the working path.
 
+## Blocker for Stephen: HTTP from the headset
+
+`codex/native-quest-workbench` (a895dab) sets `PlayerSettings.insecureHttpOption = InsecureHttpOption.NotAllowed` in `NativeQuestBuild.cs`. The coach and pre-op service run as plain HTTP on the Mac (`http://<mac-lan-ip>:8787`), so on the Quest every `CoachRelay` and `ScalpalPreopService` request would be refused: no events reach Jarvis, no highlights reach the headset, and cases load only from the offline bundle.
+
+Pick one before the first integrated headset run:
+
+1. **Development builds allow HTTP** (`InsecureHttpOption.DevelopmentOnly`). One line; release builds stay locked down. Recommended for the demo: no internet dependency between headset and laptop.
+2. **HTTPS tunnel** (`cloudflared tunnel --url http://localhost:8787`) and point both `baseUrl` fields at the `https://` URL. Works with the current setting but adds an internet round trip to every event.
+
 ## Request for Stephen: tip proximity
 
 `InstrumentTipContact.TouchApplied` fires only when the instrument is activated (trigger at least 0.7). Jarvis can warn before a mistake if it also knows what the tip is hovering over. Please call `relay.Focus(structureId)` when the held instrument's tip enters an `anat_` collider without activation, and `relay.Focus("")` when it leaves. The coach already turns focus on a danger structure into a one-time "careful, that's the common bile duct" warning.
