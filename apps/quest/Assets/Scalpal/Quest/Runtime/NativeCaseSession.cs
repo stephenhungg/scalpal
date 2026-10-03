@@ -193,9 +193,8 @@ namespace Scalpal.Quest
             if (presentation && presentation.passthrough && bodyRegistration && !bodyRegistration.Accepted
                 && (Phase == "Confirmed" || Phase == "Practicing"))
             {
-                bool accepted = bodyRegistration.TryAccept();
-                Message = accepted ? "Body fit accepted. B: continue" : bodyRegistration.Status;
-                return accepted;
+                Message = bodyRegistration.Status;
+                return false; // Body acquisition is automatic; B only confirms the case.
             }
             if (Phase == "Selecting")
             {
@@ -364,7 +363,7 @@ namespace Scalpal.Quest
             realtime.PublishSnapshot(Phase, exercise.Current?.id, (uint)completedSteps, (uint)candidate.procedure.steps.Length,
                 selected, highlighted, rotating && Phase == "Selecting", practicePaused || (Phase == "Practicing" && !exercise.CanScore),
                 RegistrationReady && Practicing && SharedMatches,
-                presentation && presentation.passthrough ? "Operator-assisted planar generic body fit" : "Authored virtual mannequin fit");
+                presentation && presentation.passthrough ? "Automatically acquired generic surface body fit" : "Authored virtual mannequin fit");
         }
         public bool TryChangePresentation(bool passthrough)
         {

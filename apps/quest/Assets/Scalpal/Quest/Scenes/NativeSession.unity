@@ -1153,6 +1153,7 @@ GameObject:
   - component: {fileID: 469738863}
   - component: {fileID: 469738862}
   - component: {fileID: 469738861}
+  - component: {fileID: 1190077406}
   m_Layer: 0
   m_Name: NativeCaseSession
   m_TagString: Untagged
@@ -1207,6 +1208,7 @@ MonoBehaviour:
   workbench: {fileID: 297631271}
   presentation: {fileID: 469738864}
   cameraAccess: {fileID: 469738862}
+  surfaceAccess: {fileID: 1190077406}
   anatomyFit: {fileID: 921908685}
   patientFrame: {fileID: 1129493664}
   bodyOverview: {fileID: 661018218}
@@ -3328,3 +3330,17 @@ SceneRoots:
   - {fileID: 110182238}
   - {fileID: 469738870}
   - {fileID: 661018217}
+
+--- !u!114 &1190077406
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 469738860}
+  m_Enabled: 0
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2d8affdff7ba47d892cc734baac9ac71, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  CustomTrackingSpace: {fileID: 297631270}

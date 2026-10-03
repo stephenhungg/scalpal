@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace Scalpal.Quest.Editor
 {
-    // Synthetic calibrated images/plane only; no headset, camera or participant observations.
+    // Synthetic acquisition-time images/depth only; no headset, camera or participant observations.
     public static class NativeBodyRegistrationValidation
     {
         static int checks;
@@ -22,9 +22,34 @@ namespace Scalpal.Quest.Editor
             Assert(BodyRegistrationMath.ValidFloorLensPose(new Pose(offset.position + Vector3.up * 1.6f, offset.rotation), offset), "valid historical floor-head lens pose accepted");
             var points = new[] { new Vector3(.167503f, 1, .521565f), new Vector3(-.167503f, 1, .521565f),
                 new Vector3(.084307f, 1, 0), new Vector3(-.084307f, 1, 0) };
-            Assert(BodyRegistrationMath.TryPlane(points[0], points[1], points[2], new Vector3(0, 2, 0), out var plane), "reclining plane");
-            Assert(!BodyRegistrationMath.TryPlane(Vector3.zero, Vector3.right, Vector3.up, Vector3.forward, out _), "standing plane rejected");
-            Assert(!BodyRegistrationMath.TryPlane(points[0], points[0], points[0], Vector3.up, out _), "degenerate plane rejected");
+            var surface = Surface();
+            var images = Images(points);
+            Assert(surface.TryTorsoPlane(images, out var plane, out var center), "cached native surface supplies reclining torso plane");
+            Assert(Vector3.Dot(plane.normal, Vector3.up) > .999f && Mathf.Abs(center.y - 1) < .001f, "surface depth and normals retained");
+            Assert(surface.Sample(images[0], out var sampled, out _) && Vector3.Distance(sampled, points[0]) < .001f,
+                "sub-grid landmark uses calibrated pinhole ray rather than nearest grid point");
+            Assert(surface.Sample(Vector2.zero, out _, out _) && surface.Sample(Vector2.one, out _, out _), "image boundary samples stay within grid");
+            Assert(!surface.Sample(new Vector2(-.01f, .5f), out _, out _) && !surface.Sample(new Vector2(float.NaN, .5f), out _, out _), "invalid image coordinates rejected");
+            var missing = Surface(); Array.Clear(missing.valid, 0, missing.valid.Length);
+            Assert(!missing.TryTorsoPlane(images, out _, out _), "unavailable or low-confidence depth cannot calibrate");
+            var hole = Surface(); hole.valid[6 * BodySurfaceSnapshot.Width + 8] = false;
+            Assert(!hole.TryTorsoPlane(images, out _, out _), "partial torso coverage cannot silently interpolate a missing hit");
+            var invalidDepth = Surface(); invalidDepth.points[6 * BodySurfaceSnapshot.Width + 8] = new Vector3(float.NaN, 1, 0);
+            Assert(!invalidDepth.TryTorsoPlane(images, out _, out _), "nonfinite depth rejected");
+            var badNormal = Surface(); badNormal.normals[6 * BodySurfaceSnapshot.Width + 8] = Vector3.up * 2;
+            Assert(!badNormal.TryTorsoPlane(images, out _, out _), "non-unit native normals rejected");
+            var standing = Surface(); for (int i = 0; i < standing.normals.Length; i++) standing.normals[i] = Vector3.forward;
+            Assert(!standing.TryTorsoPlane(images, out _, out _), "standing surface not mistaken for reclining torso");
+            var discontinuity = Surface(); discontinuity.points[6 * BodySurfaceSnapshot.Width + 8].y -= .2f;
+            Assert(!discontinuity.TryTorsoPlane(images, out _, out _), "body/table boundary cannot blend into phantom surface");
+            var opposed = Surface(); opposed.normals[6 * BodySurfaceSnapshot.Width + 8] = Vector3.down;
+            Assert(!opposed.TryTorsoPlane(images, out _, out _), "inconsistent neighborhood normals rejected");
+            var inconsistent = Surface();
+            for (int y = 0; y < 5; y++) for (int x = 0; x < BodySurfaceSnapshot.Width; x++)
+                inconsistent.points[y * BodySurfaceSnapshot.Width + x].y += .3f;
+            var separated = new[] { new Vector2(.25f, .25f), new Vector2(.75f, .25f), new Vector2(.25f, .75f), new Vector2(.75f, .75f) };
+            Assert(!inconsistent.TryTorsoPlane(separated, out _, out _), "individually smooth but incompatible torso depth samples rejected");
+            Assert(!surface.TryTorsoPlane(null, out _, out _) && !surface.TryTorsoPlane(new Vector2[3], out _, out _), "incomplete torso landmark set rejected");
             Assert(BodyRegistrationMath.TryFit(points, plane.normal, out var fit), "correct labeled torso fits");
             Assert(Mathf.Abs(fit.scale - 1) < .0001f, "uniform metric scale");
             Assert(Vector3.Distance(fit.position + fit.rotation * new Vector3(0, BodyRegistrationMath.SourceHipHeight, BodyRegistrationMath.SourceFront), Vector3.up) < .001f, "source front hip projects to accepted surface");
@@ -43,12 +68,19 @@ namespace Scalpal.Quest.Editor
             var target = rotation * points[0] + translation;
             var ray = new Ray(rotation * new Vector3(0, 2, 0) + translation, rotation * (points[0] - new Vector3(0, 2, 0)));
             Assert(BodyRegistrationMath.Intersect(ray, transformedPlane, rotation * Vector3.up + translation, out var hit)
-                && Vector3.Distance(hit, target) < .001f, "rotated tracking origin preserves calibrated ray lift");
+                && Vector3.Distance(hit, target) < .001f, "rotated tracking origin preserves acquisition-time ray lift");
             var eye = new Vector3(0, 2, 0);
             Assert(BodyRegistrationMath.ImageRay(new Ray(eye, new Vector3(-.2f, -1, -.6f)), new Ray(eye, new Vector3(1.8f, -1, -.6f)),
                 new Ray(eye, new Vector3(-.2f, -1, 1.4f)), Vector3.down, new Vector2(.25f, .6f), out var calibrated)
                 && BodyRegistrationMath.Intersect(calibrated, plane, Vector3.up, out var offCenter)
                 && Vector3.Distance(offCenter, new Vector3(.3f, 1, .2f)) < .001f, "off-center principal point preserves pinhole ray rather than interpolating normalized directions");
+
+            var transformedSurface = Surface(rotation, translation);
+            Assert(transformedSurface.TryTorsoPlane(images, out var liftedPlane, out _) && transformedSurface.Sample(images[0], out var lifted, out _)
+                && Vector3.Distance(lifted, target) < .001f && Vector3.Dot(liftedPlane.normal, rotation * Vector3.up) > .999f,
+                "cached depth remains in tracking world after response-time head movement");
+            var tilted = Surface(Quaternion.Euler(0, 0, 12), Vector3.zero);
+            Assert(tilted.TryTorsoPlane(images, out _, out _), "modestly tilted reclining surface supported");
 
             var root = new GameObject("SyntheticBodyRegistrationBoundary"); root.SetActive(false);
             try
@@ -61,27 +93,45 @@ namespace Scalpal.Quest.Editor
                 body.patientFrame = new GameObject("SyntheticPorts").transform; body.patientFrame.SetParent(root.transform);
                 presentation.anatomyFit = body.anatomyFit; presentation.patientFrame = body.patientFrame;
                 typeof(NativePresentation).GetMethod("Awake", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(presentation, null);
-                Set(body, "plane", plane); Set(body, "center", Vector3.up);
                 Assert(!body.TryAccept(), "unobserved fit cannot be accepted");
                 var reply = Reply(points);
-                Action observe = () => body.Process(reply, "synthetic-1", new Vector2Int(640, 480), Time.realtimeSinceStartup,
-                    new Ray(new Vector3(0, 2, 0), new Vector3(-1, -1, -1)),
-                    new Ray(new Vector3(0, 2, 0), new Vector3(1, -1, -1)),
-                    new Ray(new Vector3(0, 2, 0), new Vector3(-1, -1, 1)), Vector3.down);
-                observe(); Assert(body.CandidateValid && !body.Accepted, "one observation does not silently accept fit");
-                Assert(!body.TryAccept(), "one sample is not stable"); observe(); observe();
-                Assert(body.TryAccept(), "three stable observations plus explicit accept");
+                Action observe = () => body.Process(reply, "synthetic-1", new Vector2Int(640, 480), Time.realtimeSinceStartup, surface);
+                observe(); Assert(body.CandidateValid && !body.Accepted, "one observation cannot auto-calibrate");
+                Assert(!body.TryAccept(), "one sample is not stable");
+                observe(); Assert(body.CandidateValid && !body.Accepted, "two observations cannot auto-calibrate");
+                observe(); Assert(body.Accepted, "third stable image/depth pair automatically calibrates without controller points");
                 Assert(Vector3.Distance(body.patientFrame.position, body.anatomyFit.TransformPoint(BodyRegistrationMath.SourceUmbilicus)) < .001f, "ports derive from fitted source umbilicus");
+                body.Process(reply, "synthetic-1", new Vector2Int(640, 480), Time.realtimeSinceStartup, null);
+                Assert(!body.Accepted && !body.CandidateValid, "missing acquisition-time depth closes scoring gate");
+                observe(); observe(); observe(); Assert(body.Accepted, "fresh valid depth automatically recovers registration");
+                body.Process(reply, "synthetic-1", new Vector2Int(640, 480), Time.realtimeSinceStartup, missing);
+                Assert(!body.Accepted && !body.CandidateValid, "lost depth confidence invalidates accepted fit");
+                observe(); observe(); observe(); Assert(body.Accepted, "depth recovery requires three fresh observations");
+                body.Process(reply, "synthetic-1", new Vector2Int(640, 480), Time.realtimeSinceStartup, Surface(Quaternion.identity, Vector3.up * .06f));
+                Assert(!body.Accepted && body.CandidateValid, "participant surface motion invalidates previously accepted fit");
+                observe(); observe(); observe(); Assert(body.Accepted, "stable participant position automatically reacquires");
                 reply.personCount = 2; observe(); Assert(!body.Accepted && !body.CandidateValid, "ambiguous person count closes gate"); reply.personCount = 1;
-                observe(); observe(); observe(); Assert(body.TryAccept(), "recovery requires new acceptance");
+                observe(); observe(); observe(); Assert(body.Accepted, "single-person recovery automatically reacquires");
                 reply.landmarks[11].visibility = .2f; observe(); Assert(!body.Accepted, "occlusion closes gate"); reply.landmarks[11].visibility = .9f;
-                observe(); observe(); observe(); Assert(body.TryAccept(), "second explicit acceptance");
-                body.Process(reply, "synthetic-1", new Vector2Int(640, 480), Time.realtimeSinceStartup - 2, default, default, default, Vector3.down);
-                Assert(!body.Accepted, "stale frame closes gate");
-                reply.frameId = "foreign"; observe(); Assert(!body.CandidateValid, "wrong frame cannot lift into cached rays"); reply.frameId = "synthetic-1";
+                observe(); observe(); observe(); Assert(body.Accepted, "visible landmarks automatically reacquire");
+                body.Process(reply, "synthetic-1", new Vector2Int(640, 480), Time.realtimeSinceStartup - 2, surface);
+                Assert(!body.Accepted && !body.CandidateValid, "stale image cannot calibrate against cached depth");
+                body.Process(reply, "synthetic-1", new Vector2Int(640, 480), Time.realtimeSinceStartup + 2, surface);
+                Assert(!body.CandidateValid, "future acquisition timestamp rejected");
+                reply.frameId = "foreign"; observe(); Assert(!body.CandidateValid, "wrong image identity cannot use cached depth"); reply.frameId = "synthetic-1";
+                reply.imageWidth = 1280; observe(); Assert(!body.CandidateValid, "image dimensions must match depth sampling rays"); reply.imageWidth = 640;
                 reply.landmarks[12].index = 11; observe(); Assert(!body.CandidateValid, "duplicate landmarks rejected"); reply.landmarks[12].index = 12;
-                reply.model.sha256 = "wrong"; observe(); Assert(!body.CandidateValid, "unknown model identity rejected");
-                body.ResetFit(); Assert(!body.Accepted && !body.CandidateValid, "retry invalidates fit");
+                reply.landmarks[11].x = float.NaN; observe(); Assert(!body.CandidateValid, "nonfinite model landmarks rejected"); reply = Reply(points);
+                reply.model.sha256 = "wrong"; observe(); Assert(!body.CandidateValid, "unknown model identity rejected"); reply = Reply(points);
+                // MediaPipe z does not provide metric depth, even when it is finite and extreme.
+                foreach (var landmark in reply.landmarks) landmark.z = 500;
+                observe(); observe(); observe(); Assert(body.Accepted && Mathf.Abs(body.patientFrame.position.y - 1) < .001f,
+                    "MediaPipe relative z never substitutes for native surface depth");
+                typeof(NativeBodyRegistration).GetProperty("EnabledByOperator").GetSetMethod(true).Invoke(body, new object[] { true });
+                typeof(NativeBodyRegistration).GetMethod("OriginChanged", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(body, new object[] { null });
+                Assert(!body.Accepted && !body.CandidateValid, "XR origin change invalidates cached registration");
+                observe(); observe(); observe(); Assert(body.Accepted, "fresh post-origin observations automatically reacquire");
+                body.ResetFit(); Assert(!body.Accepted && !body.CandidateValid, "retry invalidates automatic fit");
                 presentation.passthrough = false; presentation.Apply();
                 Assert(body.anatomyFit.position == Vector3.zero && body.patientFrame.position == Vector3.zero,
                     "full VR restores authored transforms after real-body fit");
@@ -91,7 +141,34 @@ namespace Scalpal.Quest.Editor
                     "deactivation clears canceled observation before reactivation");
             }
             finally { UnityEngine.Object.DestroyImmediate(root); }
-            Debug.Log("SCALPAL_NATIVE_BODY_REGISTRATION_VALIDATION_OK checks=" + checks + " synthetic calibration/projection/gates; no physical alignment evidence");
+            Debug.Log("SCALPAL_NATIVE_BODY_REGISTRATION_VALIDATION_OK checks=" + checks + " synthetic native depth/projection/automatic gates; no physical alignment evidence");
+        }
+
+        static BodySurfaceSnapshot Surface() => Surface(Quaternion.identity, Vector3.zero);
+        static BodySurfaceSnapshot Surface(Quaternion rotation, Vector3 translation)
+        {
+            var eye = new Vector3(0, 2, 0);
+            var snapshot = new BodySurfaceSnapshot
+            {
+                bottomLeft = new Ray(rotation * eye + translation, rotation * new Vector3(-1, -1, -1)),
+                bottomRight = new Ray(rotation * eye + translation, rotation * new Vector3(1, -1, -1)),
+                topLeft = new Ray(rotation * eye + translation, rotation * new Vector3(-1, -1, 1)),
+                lensForward = rotation * Vector3.down
+            };
+            for (int y = 0; y < BodySurfaceSnapshot.Height; y++) for (int x = 0; x < BodySurfaceSnapshot.Width; x++)
+            {
+                int index = y * BodySurfaceSnapshot.Width + x;
+                snapshot.points[index] = rotation * new Vector3(2f * x / (BodySurfaceSnapshot.Width - 1) - 1, 1, 1 - 2f * y / (BodySurfaceSnapshot.Height - 1)) + translation;
+                snapshot.normals[index] = rotation * Vector3.up; snapshot.valid[index] = true;
+            }
+            return snapshot;
+        }
+
+        static Vector2[] Images(Vector3[] points)
+        {
+            var images = new Vector2[points.Length];
+            for (int i = 0; i < points.Length; i++) images[i] = new Vector2((points[i].x + 1) / 2, (1 - points[i].z) / 2);
+            return images;
         }
 
         static NativeBodyRegistration.Reply Reply(Vector3[] points)

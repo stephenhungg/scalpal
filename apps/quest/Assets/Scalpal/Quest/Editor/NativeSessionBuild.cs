@@ -136,6 +136,9 @@ namespace Scalpal.Quest.Editor
             body.cameraAccess = sessionObject.AddComponent<PassthroughCameraAccess>();
             body.cameraAccess.enabled = false;
             body.cameraAccess.RequestedResolution = new Vector2Int(640, 480);
+            body.surfaceAccess = sessionObject.AddComponent<EnvironmentRaycastManager>();
+            body.surfaceAccess.enabled = false;
+            body.surfaceAccess.CustomTrackingSpace = workbench.trackingOrigin;
             body.anatomyFit = fit; body.patientFrame = frame;
             var bodyObject = (GameObject)PrefabUtility.InstantiatePrefab(overview);
             bodyObject.name = "BodyFitOrganOverview";
@@ -164,14 +167,14 @@ namespace Scalpal.Quest.Editor
             EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) };
             AssetDatabase.SaveAssets();
             Validate();
-            Debug.Log("SCALPAL_NATIVE_SESSION_PREPARED view=passthrough registration=operator_assisted_planar_body_fit physicalAlignmentUnverified=true");
+            Debug.Log("SCALPAL_NATIVE_SESSION_PREPARED view=passthrough registration=automatic_surface_body_fit physicalAlignmentUnverified=true");
         }
 
         static void ApplySessionSettings()
         {
             PlayerSettings.productName = "Scalpal Surgical Session";
-            PlayerSettings.bundleVersion = "0.3.0-ar";
-            PlayerSettings.Android.bundleVersionCode = 5;
+            PlayerSettings.bundleVersion = "0.3.1-auto-body";
+            PlayerSettings.Android.bundleVersionCode = 6;
             // Meta's OpenXR camera-pose plugin requires linear lighting; retain built-in rendering.
             PlayerSettings.colorSpace = ColorSpace.Linear;
             var settings = OpenXRSettings.GetSettingsForBuildTargetGroup(BuildTargetGroup.Android);
@@ -182,6 +185,7 @@ namespace Scalpal.Quest.Editor
             var meta = OVRProjectConfig.CachedProjectConfig;
             meta.insightPassthroughSupport = OVRProjectConfig.FeatureSupport.Supported;
             meta.isPassthroughCameraAccessEnabled = true;
+            meta.sceneSupport = OVRProjectConfig.FeatureSupport.Supported;
             OVRProjectConfig.CommitProjectConfig(meta);
             EditorUtility.SetDirty(settings);
             // The integration harness uses LAN HTTP only in this development player.
@@ -332,6 +336,8 @@ namespace Scalpal.Quest.Editor
                 || !presentation.virtualMannequin || presentation.virtualMannequin.enabled
                 || !session.bodyRegistration || session.bodyRegistration.Accepted || session.bodyRegistration.EnabledByOperator
                 || !session.bodyRegistration.cameraAccess || session.bodyRegistration.cameraAccess.enabled
+                || !session.bodyRegistration.surfaceAccess || session.bodyRegistration.surfaceAccess.enabled
+                || session.bodyRegistration.surfaceAccess.CustomTrackingSpace != session.workbench.trackingOrigin
                 || session.bodyRegistration.anatomyFit != session.anatomy.transform.parent
                 || session.bodyRegistration.patientFrame != session.patientFrame
                 || session.bodyRegistration.bodyOverview.gameObject.activeSelf)

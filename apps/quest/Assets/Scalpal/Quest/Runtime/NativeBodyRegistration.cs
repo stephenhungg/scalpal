@@ -18,6 +18,7 @@ namespace Scalpal.Quest
         public NativeWorkbench workbench;
         public NativePresentation presentation;
         public PassthroughCameraAccess cameraAccess;
+        public EnvironmentRaycastManager surfaceAccess;
         public Transform anatomyFit, patientFrame;
         public AnatomyController bodyOverview;
         public string endpoint = "http://localhost:8790";
@@ -26,12 +27,10 @@ namespace Scalpal.Quest
         public string Status { get; private set; } = "Participant agreed? Left stick: enable local body detection";
         public bool EnabledByOperator { get; private set; }
         bool previousClick, candidateValid, inFlight;
-        int calibrationCount, epoch, stableFrames;
-        readonly Vector3[] calibration = new Vector3[3];
+        int epoch, stableFrames;
         Plane plane;
-        Vector3 center;
         BodyRegistrationMath.Fit candidate, accepted;
-        float observationTime, nextFrame;
+        float observationTime, nextFrame, nextDepthDiagnostic;
         Texture2D readback;
         UnityWebRequest activeRequest;
         DateTime lastCameraTimestamp;
@@ -53,6 +52,7 @@ namespace Scalpal.Quest
         void Start()
         {
             if (cameraAccess) cameraAccess.enabled = false;
+            if (surfaceAccess) surfaceAccess.enabled = false;
             for (int i = 0; i < markers.Length; i++)
             {
                 markers[i] = GameObject.CreatePrimitive(PrimitiveType.Sphere);
@@ -77,51 +77,81 @@ namespace Scalpal.Quest
             if (!presentation || !presentation.passthrough) { StopTracking(); return; }
             var left = InputDevices.GetDeviceAtXRNode(XRNode.LeftHand);
             left.TryGetFeatureValue(CommonUsages.primary2DAxisClick, out bool click);
-            if (click && !previousClick && workbench.IsReady) Calibrate();
+            if (click && !previousClick && workbench.IsReady) EnableDetection();
             previousClick = click;
-            if (EnabledByOperator && (!workbench.IsReady || (candidateValid && !CandidateValid))) Invalidate("Body tracking stale or XR paused; confirm a new fit");
-            if (EnabledByOperator && cameraAccess && !cameraAccess.IsPlaying && calibrationCount == 3)
-                Status = "Waiting for camera permission/frames; body fit remains invalid";
-            if (EnabledByOperator && workbench.IsReady && cameraAccess && cameraAccess.IsPlaying && calibrationCount == 3 && !inFlight && Time.realtimeSinceStartup >= nextFrame)
+            if (EnabledByOperator && (!workbench.IsReady || (candidateValid && !CandidateValid))) Invalidate("Body tracking stale or XR paused; automatically reacquiring fit");
+            if (EnabledByOperator && cameraAccess && !cameraAccess.IsPlaying)
+                Status = "Waiting for camera permission/frames; automatic fit remains paused";
+            if (EnabledByOperator && workbench.IsReady && cameraAccess && cameraAccess.IsPlaying && !inFlight && Time.realtimeSinceStartup >= nextFrame)
                 StartCoroutine(Observe(epoch));
-            bool show = presentation.passthrough && CandidateValid;
+            bool show = presentation.passthrough && Accepted && CandidateValid;
             foreach (var marker in markers) if (marker) marker.SetActive(show);
             if (bodyOverview)
             {
                 bodyOverview.gameObject.SetActive(show && presentation.session && !presentation.session.Practicing);
-                if (show) Apply(candidate, bodyOverview.transform);
+                if (show) Apply(accepted, bodyOverview.transform);
             }
         }
 
-        void Calibrate()
+        void EnableDetection()
         {
-            if (!EnabledByOperator)
-            {
-                EnabledByOperator = true;
+            ResetFit();
+            if (!cameraAccess || !surfaceAccess || !EnvironmentRaycastManager.IsSupported)
+            { Status = "Automatic body depth unavailable on this runtime; alignment paused"; return; }
+            EnabledByOperator = true;
 #if UNITY_ANDROID && !UNITY_EDITOR
-                if (!Permission.HasUserAuthorizedPermission("horizonos.permission.HEADSET_CAMERA"))
-                    Permission.RequestUserPermission("horizonos.permission.HEADSET_CAMERA");
+            var permissions = new List<string>();
+            if (!Permission.HasUserAuthorizedPermission("horizonos.permission.HEADSET_CAMERA"))
+                permissions.Add("horizonos.permission.HEADSET_CAMERA");
+            if (!Permission.HasUserAuthorizedPermission(OVRPermissionsRequester.ScenePermission))
+                permissions.Add(OVRPermissionsRequester.ScenePermission);
+            if (permissions.Count > 0) Permission.RequestUserPermissions(permissions.ToArray());
 #endif
-                cameraAccess.enabled = true;
-                Status = "Hold right controller just above torso front near a shoulder. Left stick: first plane point";
-                return;
-            }
-            var right = InputDevices.GetDeviceAtXRNode(XRNode.RightHand);
-            if (!right.TryGetFeatureValue(CommonUsages.isTracked, out bool tracked) || !tracked
-                || !right.TryGetFeatureValue(CommonUsages.devicePosition, out Vector3 position)) { Status = "Right controller is not tracked"; return; }
-            if (calibrationCount == 3) { ResetFit(); calibrationCount = 0; }
-            calibration[calibrationCount++] = workbench.trackingOrigin.TransformPoint(position);
-            if (calibrationCount < 3)
-            { Status = calibrationCount == 1 ? "Second plane point: just above other shoulder; left stick" : "Third plane point: just above hip at same front surface; left stick"; return; }
-            if (!BodyRegistrationMath.TryPlane(calibration[0], calibration[1], calibration[2], workbench.headCamera.transform.position, out plane))
-            { calibrationCount = 0; Status = "Plane is too small or not reclining. Set three spaced torso surface points again"; return; }
-            center = (calibration[0] + calibration[1] + calibration[2]) / 3;
-            Status = "Torso plane set. Look at both shoulders and hips; waiting for one person";
+            surfaceAccess.CustomTrackingSpace = workbench.trackingOrigin;
+            surfaceAccess.enabled = true;
+            cameraAccess.enabled = true;
+            Status = "Look at both shoulders and hips; automatically measuring torso surface";
+            Debug.Log("SCALPAL_NATIVE_BODY_DEPTH enabled=True supported=True");
+        }
+
+        BodySurfaceSnapshot CaptureSurface(Ray bottomLeft, Ray bottomRight, Ray topLeft, Vector3 forward, float cameraAge)
+        {
+            if (!surfaceAccess || !surfaceAccess.enabled || cameraAge > .1f) return null;
+            var surface = new BodySurfaceSnapshot { bottomLeft = bottomLeft, bottomRight = bottomRight, topLeft = topLeft, lensForward = forward };
+            float started = Time.realtimeSinceStartup;
+            int count = 0;
+            for (int y = 0; y < BodySurfaceSnapshot.Height; y++)
+                for (int x = 0; x < BodySurfaceSnapshot.Width; x++)
+                {
+                    int i = y * BodySurfaceSnapshot.Width + x;
+                    var image = new Vector2((float)x / (BodySurfaceSnapshot.Width - 1), (float)y / (BodySurfaceSnapshot.Height - 1));
+                    if (BodyRegistrationMath.ImageRay(bottomLeft, bottomRight, topLeft, forward, image, out var ray)
+                        && surfaceAccess.Raycast(ray, out var hit, 3f)
+                        && hit.status == EnvironmentRaycastHitStatus.Hit && hit.normalConfidence >= .8f
+                        && BodyRegistrationMath.Finite(hit.point) && BodyRegistrationMath.Finite(hit.normal)
+                        && hit.normal.sqrMagnitude > .9f && Vector3.Distance(ray.origin, hit.point) >= .2f)
+                    {
+                        surface.valid[i] = true; surface.points[i] = hit.point; surface.normals[i] = hit.normal.normalized; count++;
+                    }
+                    // Native raycast has no sensor timestamp. Bound the acquisition window;
+                    // never use depth first queried after the HTTP landmark response.
+                    if (Time.realtimeSinceStartup - started > .008f)
+                    { ReportDepth(started, count, false); return null; }
+                }
+            ReportDepth(started, count, true);
+            return count > 0 ? surface : null;
+        }
+
+        void ReportDepth(float started, int count, bool complete)
+        {
+            if (Time.realtimeSinceStartup < nextDepthDiagnostic) return;
+            nextDepthDiagnostic = Time.realtimeSinceStartup + 5;
+            Debug.Log($"SCALPAL_NATIVE_BODY_DEPTH snapshotComplete={complete} hits={count} sampleMs={(Time.realtimeSinceStartup - started) * 1000:F2}");
         }
 
         IEnumerator Observe(int generation)
         {
-            inFlight = true; nextFrame = Time.realtimeSinceStartup + 0.2f;
+            inFlight = true; nextFrame = Time.realtimeSinceStartup + 0.3f;
             yield return new WaitForEndOfFrame();
             if (generation != epoch || !cameraAccess || !cameraAccess.IsPlaying) { inFlight = false; yield break; }
             float captured = Time.realtimeSinceStartup;
@@ -141,6 +171,8 @@ namespace Scalpal.Quest
             Ray bottomLeft = cameraAccess.ViewportPointToRay(Vector2.zero, world);
             Ray bottomRight = cameraAccess.ViewportPointToRay(Vector2.right, world);
             Ray topLeft = cameraAccess.ViewportPointToRay(Vector2.up, world);
+            var surface = CaptureSurface(bottomLeft, bottomRight, topLeft, world.rotation * Vector3.forward, (float)Math.Max(0, cameraAge));
+            if (surface == null) { Invalidate("Waiting for live spatial depth/permission; automatic fit paused"); inFlight = false; yield break; }
             // Meta explicitly warns that blocking Blit/GetTexture readback can return the
             // preceding image. Queue asynchronous GPU readback with this frame's metadata.
             if (!SystemInfo.supportsAsyncGPUReadback) { Invalidate("Calibrated camera readback unsupported"); inFlight = false; yield break; }
@@ -163,7 +195,7 @@ namespace Scalpal.Quest
                     Reply reply = null;
                     if (request.result == UnityWebRequest.Result.Success)
                         try { reply = JsonUtility.FromJson<Reply>(request.downloadHandler.text); } catch (ArgumentException) { }
-                    Process(reply, id, resolution, captured, bottomLeft, bottomRight, topLeft, world.rotation * Vector3.forward);
+                    Process(reply, id, resolution, captured, surface);
                 }
                 activeRequest = null;
             }
@@ -178,7 +210,7 @@ namespace Scalpal.Quest
             return Vector3.Distance(position, ovr.position) < 0.05f && Quaternion.Angle(rotation, ovr.orientation) < 8f;
         }
 
-        public void Process(Reply reply, string id, Vector2Int resolution, float captured, Ray bottomLeft, Ray bottomRight, Ray topLeft, Vector3 lensForward)
+        public void Process(Reply reply, string id, Vector2Int resolution, float captured, BodySurfaceSnapshot surface)
         {
             if (reply == null || reply.schema != "scalpal.body_pose.v1" || reply.frameId != id || !reply.valid || reply.personCount != 1
                 || reply.coordinateConvention != "normalized_image_top_left" || reply.imageWidth != resolution.x || reply.imageHeight != resolution.y
@@ -195,7 +227,7 @@ namespace Scalpal.Quest
                 { Invalidate("Malformed body landmark result"); return; }
                 indices[point.index] = true;
             }
-            int[] ids = { 11, 12, 23, 24 }; var points = new Vector3[4];
+            int[] ids = { 11, 12, 23, 24 }; var points = new Vector3[4]; var imagePoints = new Vector2[4];
             for (int i = 0; i < 4; i++)
             {
                 var item = Array.Find(reply.landmarks, p => p != null && p.index == ids[i]);
@@ -203,16 +235,21 @@ namespace Scalpal.Quest
                     || !BodyRegistrationMath.Finite(item.visibility) || !BodyRegistrationMath.Finite(item.presence)
                     || item.x < 0 || item.x > 1 || item.y < 0 || item.y > 1 || item.visibility < 0.65f || item.presence < 0.65f)
                 { Invalidate("Shoulders/hips occluded or uncertain; scoring paused"); return; }
-                if (!BodyRegistrationMath.ImageRay(bottomLeft, bottomRight, topLeft, lensForward, new Vector2(item.x, item.y), out var ray)
-                    || !BodyRegistrationMath.Intersect(ray, plane, center, out points[i]))
-                { Invalidate("Landmark ray misses the accepted torso plane"); return; }
+                imagePoints[i] = new Vector2(item.x, item.y);
             }
+            if (surface == null || !surface.TryTorsoPlane(imagePoints, out plane, out var center))
+            { Invalidate("Torso depth missing or discontinuous; automatic fit paused"); return; }
+            for (int i = 0; i < 4; i++)
+                if (!BodyRegistrationMath.ImageRay(surface.bottomLeft, surface.bottomRight, surface.topLeft, surface.lensForward, imagePoints[i], out var ray)
+                    || !BodyRegistrationMath.Intersect(ray, plane, center, out points[i]))
+                { Invalidate("Body rays do not meet the measured torso surface"); return; }
             if (!BodyRegistrationMath.TryFit(points, plane.normal, out var proposed)) { Invalidate("Body fit proportions/orientation uncertain"); return; }
-            if (Accepted && !BodyRegistrationMath.Near(proposed, accepted)) Invalidate("Participant moved; visually accept a fresh fit");
+            if (Accepted && !BodyRegistrationMath.Near(proposed, accepted)) Invalidate("Participant moved; automatically reacquiring fit");
             stableFrames = candidateValid && BodyRegistrationMath.Near(candidate, proposed) ? stableFrames + 1 : 1;
             candidate = proposed; candidateValid = true; observationTime = captured;
             for (int i = 0; i < 4; i++) if (markers[i]) markers[i].transform.position = points[i];
-            Status = Accepted ? "Accepted generic planar body fit; tracking live" : stableFrames >= 3 ? "Check shoulder/hip markers in both eyes. B: accept generic fit" : "Waiting for a stable body fit";
+            if (!Accepted && stableFrames >= 3) TryAccept();
+            Status = Accepted ? "Automatically aligned generic anatomy; tracking live" : "Automatically acquiring a stable body fit";
         }
 
         public bool TryAccept()
@@ -222,7 +259,7 @@ namespace Scalpal.Quest
             patientFrame.SetPositionAndRotation(anatomyFit.TransformPoint(BodyRegistrationMath.SourceUmbilicus),
                 Quaternion.LookRotation(accepted.rotation * Vector3.up, plane.normal));
             patientFrame.localScale = Vector3.one * accepted.scale;
-            Status = "Generic body fit accepted"; return true;
+            Status = "Generic body fit automatically aligned"; return true;
         }
 
         static void Apply(BodyRegistrationMath.Fit fit, Transform root)
@@ -232,14 +269,14 @@ namespace Scalpal.Quest
         public void ResetFit() { epoch++; Accepted = candidateValid = false; stableFrames = 0; Hide(); }
         public void StopTracking()
         {
-            if (EnabledByOperator) { ResetFit(); EnabledByOperator = false; calibrationCount = 0; if (cameraAccess) cameraAccess.enabled = false; }
+            if (EnabledByOperator) { ResetFit(); EnabledByOperator = false; if (cameraAccess) cameraAccess.enabled = false; if (surfaceAccess) surfaceAccess.enabled = false; }
             Status = "Participant agreed? Left stick: enable local body detection";
         }
         void OriginChanged(XRInputSubsystem subsystem)
         {
             if (!EnabledByOperator) return;
-            ResetFit(); calibrationCount = 0;
-            Status = "XR origin changed; set three new torso-plane points";
+            ResetFit();
+            Status = "XR origin changed; automatically reacquiring torso depth";
         }
         void OnApplicationPause(bool paused) { if (paused) StopTracking(); }
         void OnDisable()

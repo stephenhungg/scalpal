@@ -30,19 +30,6 @@ namespace Scalpal.Quest
             return Finite(headPosition) && headPosition.y > .25f;
         }
 
-        public static bool TryPlane(Vector3 a, Vector3 b, Vector3 c, Vector3 observer, out Plane plane)
-        {
-            plane = default;
-            if (!Finite(a) || !Finite(b) || !Finite(c)) return false;
-            var cross = Vector3.Cross(b - a, c - a);
-            if (cross.magnitude < 0.025f) return false;
-            var normal = cross.normalized;
-            if (Vector3.Dot(normal, observer - a) < 0) normal = -normal;
-            // This first slice is a reclining torso, not arbitrary standing-body reconstruction.
-            if (Vector3.Dot(normal, Vector3.up) < 0.7f) return false;
-            plane = new Plane(normal, a); return true;
-        }
-
         public static bool Intersect(Ray ray, Plane plane, Vector3 calibratedCenter, out Vector3 point)
         {
             point = default;
@@ -67,7 +54,7 @@ namespace Scalpal.Quest
         }
 
         // Landmarks 11,12,23,24: left/right shoulders and left/right hips, in that order.
-        // Operator sets an anterior surface; projected joints are a planar teaching approximation.
+        // Measured anterior surface; projected joints remain a planar teaching approximation.
         public static bool TryFit(Vector3[] points, Vector3 anterior, out Fit fit)
         {
             fit = default;
