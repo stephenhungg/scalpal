@@ -133,6 +133,14 @@ describe("FinchNode Connect admissions", () => {
     expect((kase.json.brief as { dataSource: string }).dataSource).toBe("sandbox");
   });
 
+  it("only states chart facts the actual record supports", async () => {
+    // The fake sandbox Priya has one source; the demo record has two.
+    const sandbox = await call("GET", "/patients/u_test_multi_source_overlap/case");
+    expect(String(sandbox.json.presentation)).not.toMatch(/two health systems/);
+    const demo = await call("GET", "/patients/patient-demo-multi-source/case");
+    expect(String(demo.json.presentation)).toMatch(/two health systems/);
+  });
+
   it("flags a patient whose connected sources belong to different people", async () => {
     const { json } = await call("GET", "/patients/u_test_mixed/case");
     expect(json).toMatchObject({ scenarioId: "multi-source-overlap", procedureId: "lap_appendectomy" });

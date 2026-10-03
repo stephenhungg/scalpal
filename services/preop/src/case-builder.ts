@@ -1,5 +1,5 @@
 import { ANATOMY_BY_ID } from "./catalog/anatomy.js";
-import { CASE_PLANS, CHECKLIST_LABELS, CONSIDERATION_NOTES, STEP_ROLES, fallbackPlan } from "./catalog/cases.js";
+import { CASE_PLANS, CHECKLIST_LABELS, CONSIDERATION_NOTES, STEP_ROLES, fallbackPlan, presentationFor } from "./catalog/cases.js";
 import { INSTRUMENTS_BY_ID } from "./catalog/instruments.js";
 import { PROCEDURES_BY_ID } from "./catalog/procedures.js";
 import { DISCLAIMER, buildBrief } from "./brief.js";
@@ -122,7 +122,7 @@ export function buildCase(
     bodyScale: age >= 0 && age < 18 ? Math.round((0.55 + age * 0.025) * 100) / 100 : 1,
     urgency: plan.urgency,
     indication: plan.indication,
-    presentation: plan.presentation,
+    presentation: presentationFor(plan, brief),
     procedureId: procedure.id,
     procedure,
     brief,

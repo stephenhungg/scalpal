@@ -1,14 +1,26 @@
-import type { FlagType, SurgicalCase } from "../types.js";
+import type { FlagType, PreopBrief, SurgicalCase } from "../types.js";
 
 // Authored surgical scenarios layered on top of FinchNode's synthetic patients. The chart (meds, labs,
 // allergies, problems) comes from FinchNode; the acute presentation below is fictional and labeled as such.
 // Each pairing is chosen to be clinically plausible for that patient's age and chart.
 
+// A sentence about the chart is appended to the presentation only when the actual record supports
+// it: sandbox patients can connect fewer sources or different data than the demo record the plan was
+// written against, and the presentation feeds Jarvis's prompt.
+export interface ChartNote {
+  text: string;
+  whenFlags?: FlagType[];
+  whenGaps?: string[];
+  minSources?: number;
+}
+
 export interface CasePlan {
   procedureId: string;
   urgency: SurgicalCase["urgency"];
   indication: string;
+  // Authored clinical story only. No claims about what the chart contains.
   presentation: string;
+  chartNotes?: ChartNote[];
 }
 
 export const CASE_PLANS: Record<string, CasePlan> = {
@@ -17,7 +29,8 @@ export const CASE_PLANS: Record<string, CasePlan> = {
     urgency: "urgent",
     indication: "Acute calculous cholecystitis, moderate (Tokyo grade II)",
     presentation:
-      "Two days of constant right upper quadrant pain, temperature 38.3 C, positive Murphy sign. Ultrasound shows gallstones, a 6 mm gallbladder wall, and pericholecystic fluid. Her anticoagulation and kidney function shape the timing.",
+      "Two days of constant right upper quadrant pain, temperature 38.3 C, positive Murphy sign. Ultrasound shows gallstones, a 6 mm gallbladder wall, and pericholecystic fluid.",
+    chartNotes: [{ text: "Her anticoagulation and kidney function shape the timing.", whenFlags: ["bleeding", "renal"] }],
   },
   "patient-demo-001": {
     procedureId: "lap_cholecystectomy",
@@ -31,14 +44,18 @@ export const CASE_PLANS: Record<string, CasePlan> = {
     urgency: "elective",
     indication: "Interval cholecystectomy after mild gallstone pancreatitis",
     presentation:
-      "Admitted last month with mild gallstone pancreatitis that resolved with supportive care. Lipase has normalized. Returns for gallbladder removal to prevent recurrence. One of her record sources failed to sync.",
+      "Admitted last month with mild gallstone pancreatitis that resolved with supportive care. Lipase has normalized. Returns for gallbladder removal to prevent recurrence.",
+    chartNotes: [{ text: "One of her record sources failed to sync.", whenGaps: ["source_unavailable"] }],
   },
   "patient-demo-consent-partial": {
     procedureId: "lap_cholecystectomy",
     urgency: "elective",
     indication: "Symptomatic cholelithiasis",
     presentation:
-      "Referred for gallbladder removal after recurrent biliary colic. The patient shared only medications and allergies, so identity, problems, and labs must be confirmed directly.",
+      "Referred for gallbladder removal after recurrent biliary colic.",
+    chartNotes: [
+      { text: "The patient shared only medications and allergies, so identity, problems, and labs must be confirmed directly.", whenGaps: ["not_shared_conditions", "not_shared_labs"] },
+    ],
   },
   "patient-demo-pediatric-asthma": {
     procedureId: "lap_appendectomy",
@@ -52,21 +69,26 @@ export const CASE_PLANS: Record<string, CasePlan> = {
     urgency: "urgent",
     indication: "Acute appendicitis",
     presentation:
-      "One day of right lower quadrant pain with rebound tenderness and a temperature of 37.9 C. CT shows an 11 mm appendix with periappendiceal fat stranding and no abscess. Her records come from two health systems that disagree in places.",
+      "One day of right lower quadrant pain with rebound tenderness and a temperature of 37.9 C. CT shows an 11 mm appendix with periappendiceal fat stranding and no abscess.",
+    chartNotes: [{ text: "Her records come from two health systems that disagree in places.", minSources: 2 }],
   },
   "patient-demo-sparse": {
     procedureId: "lap_appendectomy",
     urgency: "emergency",
     indication: "Suspected perforated appendicitis",
     presentation:
-      "Brought in with two days of worsening right lower quadrant pain, now diffuse, with guarding, temperature 38.9 C, and heart rate 118. His record holds only demographics and one visit: medications, allergies, and history are unknown.",
+      "Brought in with two days of worsening right lower quadrant pain, now diffuse, with guarding, temperature 38.9 C, and heart rate 118.",
+    chartNotes: [
+      { text: "His record holds only demographics and one visit: medications, allergies, and history are unknown.", whenGaps: ["missing_medications", "missing_allergies"] },
+    ],
   },
   "patient-demo-messy-coding": {
     procedureId: "lap_sigmoid_colectomy",
     urgency: "elective",
     indication: "Recurrent sigmoid diverticulitis",
     presentation:
-      "Three CT-confirmed episodes of sigmoid diverticulitis in eighteen months, the last with a small contained abscess treated with antibiotics. Colonoscopy after recovery excluded cancer. Her chart has an uncoded blood pressure pill and a creatinine with no result.",
+      "Three CT-confirmed episodes of sigmoid diverticulitis in eighteen months, the last with a small contained abscess treated with antibiotics. Colonoscopy after recovery excluded cancer.",
+    chartNotes: [{ text: "Her chart has an uncoded blood pressure pill and a creatinine with no result.", whenGaps: ["uncoded_medication", "lab_no_value"] }],
   },
 };
 
@@ -133,3 +155,16 @@ export const CHECKLIST_LABELS: Record<FlagType, string> = {
   elderly: "Older adult with reduced reserve",
   incomplete_chart: "Incomplete chart needing confirmation",
 };
+
+// Every listed condition must hold: all flag types present, all gap codes present, enough sources.
+export function presentationFor(plan: CasePlan, brief: PreopBrief): string {
+  const flags = new Set(brief.flags.map((f) => f.type));
+  const gaps = new Set(brief.dataGaps.map((g) => g.code));
+  const notes = (plan.chartNotes ?? []).filter(
+    (n) =>
+      (n.whenFlags ?? []).every((t) => flags.has(t)) &&
+      (n.whenGaps ?? []).every((c) => gaps.has(c)) &&
+      brief.sources.length >= (n.minSources ?? 0),
+  );
+  return [plan.presentation, ...notes.map((n) => n.text)].join(" ");
+}
