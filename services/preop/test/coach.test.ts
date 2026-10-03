@@ -333,3 +333,38 @@ describe("headset relay compatibility", () => {
     expect((await post(`/coach/sessions/${sid}/events`, { event: { type: "place_port", portId: "umbilical" } })).snapshot.eventCount).toBe(1);
   });
 });
+
+describe("headset authority and retries", () => {
+  const app = createApp({ client: fixtureClient(), now: () => NOW, coachTickMs: 0 });
+  const post = async (route: string, body: unknown) =>
+    (await (await app.request(route, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })).json()) as Record<string, any>;
+  const start = async () => (await post("/coach/sessions", { patientId: "patient-demo-pediatric-asthma" })).sessionId as string;
+
+  it("applies a retried event once", async () => {
+    const sid = await start();
+    const event = { type: "place_port", portId: "umbilical", eventId: "evt-1" };
+    expect((await post(`/coach/sessions/${sid}/events`, { event })).results[0]).toMatchObject({ accepted: true, applied: true });
+    const again = await post(`/coach/sessions/${sid}/events`, { event });
+    expect(again.results[0]).toMatchObject({ accepted: true, applied: false, reason: "duplicate" });
+    expect(again.snapshot.eventCount).toBe(1);
+  });
+
+  it("catches up to a headset that is ahead", async () => {
+    const sid = await start();
+    const r = await post(`/coach/sessions/${sid}/events`, { event: { type: "touch", structureId: "mesoappendix", instrumentId: "maryland_dissector", stepId: "mesoappendix_window" } });
+    expect(r.snapshot).toMatchObject({ desynced: false, resyncCount: 1, headsetStepId: "mesoappendix_window" });
+    expect(r.snapshot.step.id).toBe("divide_mesoappendix"); // caught up, then the touch completed the window
+    expect(r.alerts[0].kind).toBe("step_complete");
+  });
+
+  it("flags a headset that is behind and tells Jarvis to trust it", async () => {
+    const sid = await start();
+    await post(`/coach/sessions/${sid}/simulate`, { kind: "complete_step" });
+    await post(`/coach/sessions/${sid}/simulate`, { kind: "complete_step" });
+    const r = await post(`/coach/sessions/${sid}/events`, { event: { type: "place_port", portId: "left_lower", stepId: "working_ports" } });
+    expect(r.snapshot.desynced).toBe(true);
+    expect(r.context).toMatch(/HEADSET DISAGREES/);
+    const back = await post(`/coach/sessions/${sid}/events`, { event: { type: "confirm", stepId: "find_appendix" } });
+    expect(back.snapshot.desynced).toBe(false);
+  });
+});

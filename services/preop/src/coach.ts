@@ -89,6 +89,9 @@ export interface CoachSnapshot {
   version: number;
   mode: PresentationMode;
   eventCount: number;
+  headsetStepId: string;
+  desynced: boolean;
+  resyncCount: number;
   status: "active" | "paused" | "completed";
   caseId: string;
   patientId: string;
@@ -160,6 +163,10 @@ export class CoachSession {
   private tier = 0; // hint tier already delivered on this step
   private hintsUsed = 0;
   private inputCount = 0; // exercise inputs that reached the engine; 0 means an untouched attempt
+  private seenEventIds = new Set<string>();
+  private headsetStepId = "";
+  private desynced = false;
+  private resyncCount = 0;
   private focus = "";
   private trackingValid = true;
   private lastEvent = "Session started.";
@@ -250,6 +257,47 @@ export class CoachSession {
     this.offTarget = 0;
     this.tier = 0;
     this.warnedFocus.clear();
+  }
+
+  // Entry point for headset input. eventId makes retries safe (a repeated clip touch must not count twice);
+  // stepId is the step the headset's own CaseRunner was on, which is the authority for progression.
+  receive(event: CoachEvent, meta: { eventId?: string; stepId?: string } = {}): EventOutcome {
+    if (meta.eventId) {
+      if (this.seenEventIds.has(meta.eventId)) return { accepted: false, reason: "duplicate", alerts: [] };
+      this.seenEventIds.add(meta.eventId);
+      if (this.seenEventIds.size > 10000) this.seenEventIds.delete(this.seenEventIds.values().next().value!);
+    }
+    if (meta.stepId && event.type !== "focus" && event.type !== "tracking") this.reconcile(meta.stepId);
+    return this.handle(event);
+  }
+
+  // The headset's CaseRunner owns progression. If it is ahead, catch up silently; if it is behind or on a
+  // step we do not know, flag the desync so Jarvis trusts the headset instead of coaching the wrong step.
+  private reconcile(headsetStepId: string) {
+    this.headsetStepId = headsetStepId;
+    const steps = this.kase.procedure.steps;
+    const target = steps.findIndex((s) => s.id === headsetStepId);
+    let current = this.engine.current ? steps.findIndex((s) => s.id === this.engine.current!.id) : steps.length;
+    if (target === current) {
+      this.desynced = false;
+      return;
+    }
+    if (target > current) {
+      for (let guard = 0; guard < 500 && this.engine.current && this.engine.current.id !== headsetStepId; guard++) {
+        const before = this.engine.current;
+        const e = this.nextCorrectEvent();
+        if (!e) break;
+        const r = this.engine.handle(e);
+        if (r.advanced) this.completed.push({ stepId: before.id, title: before.title, seconds: 0, mistakes: this.mistakes.filter((m) => m.stepId === before.id).length });
+      }
+      current = this.engine.current ? steps.findIndex((s) => s.id === this.engine.current!.id) : steps.length;
+      this.resetStep();
+      this.resyncCount += 1;
+      this.desynced = current !== target;
+      this.lastEvent = `Resynced to the headset at ${steps[target]?.title.toLowerCase() ?? headsetStepId}.`;
+      return;
+    }
+    this.desynced = true;
   }
 
   handle(event: CoachEvent): EventOutcome {
@@ -518,6 +566,9 @@ export class CoachSession {
       version: this.version,
       mode: this.mode,
       eventCount: this.inputCount,
+      headsetStepId: this.headsetStepId,
+      desynced: this.desynced,
+      resyncCount: this.resyncCount,
       status: !step ? "completed" : this.trackingValid ? "active" : "paused",
       caseId: this.kase.caseId,
       patientId: this.kase.patientId,
@@ -652,7 +703,11 @@ export function renderContext(s: CoachSnapshot): string {
     ].join("\n");
   }
   const st = s.step;
+  const desync = s.desynced
+    ? `HEADSET DISAGREES: the headset reports step "${s.headsetStepId}" while this state shows "${st.id}". Trust the headset; describe progress only in general terms until they agree.`
+    : "";
   const lines = [
+    ...(desync ? [desync] : []),
     `[LIVE SURGERY STATE v${s.version}] ${s.procedureTitle} for ${s.patientLabel}. ${s.status === "paused" ? "PAUSED: tracking lost, anatomy hidden, scoring paused." : ""}`.trim(),
     `Step ${s.stepNumber} of ${s.stepCount}: ${st.title}. ${st.instruction}`,
     `Instrument: ${st.instrumentName}${st.ports.length ? ` via ${st.ports.join(" / ")}` : ""}. Progress: ${st.progressText}. Still needed: ${st.remaining.join(", ") || "nothing"}.`,

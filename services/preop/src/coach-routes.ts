@@ -126,7 +126,10 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
     // catalog doesn't have yet) must not drop the valid events around it.
     const results = raw.map((e) => {
       const parsed = parseEvent(e);
-      return typeof parsed === "string" ? { accepted: false, reason: `invalid: ${parsed}`, alerts: [] } : s.handle(parsed);
+      if (typeof parsed === "string") return { accepted: false, reason: `invalid: ${parsed}`, alerts: [] };
+      const meta = e as { eventId?: unknown; stepId?: unknown };
+      const opt = (v: unknown) => (typeof v === "string" && EVENT_ID.test(v) ? v : undefined);
+      return s.receive(parsed, { eventId: opt(meta.eventId), stepId: opt(meta.stepId) });
     });
     if (results.every((r) => r.reason.startsWith("invalid: "))) {
       return bad(c, 400, "invalid_event", results.map((r, i) => `events[${i}]: ${r.reason.slice(9)}`).join("; "), coachActions(s.id));
@@ -136,6 +139,7 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
       // accepted: well formed and received. applied: it reached scoring (false while tracking is lost or
       // after the case is complete, matching what CaseRunner does on the headset).
       results: results.map((r) => ({ accepted: !r.reason.startsWith("invalid: "), applied: r.accepted, reason: r.reason })),
+      // duplicate (same eventId seen before) is accepted but not applied, so a relay can retry safely.
       alerts: results.flatMap((r) => r.alerts),
       snapshot,
       context: renderContext(snapshot),
