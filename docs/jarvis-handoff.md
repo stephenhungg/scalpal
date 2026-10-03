@@ -78,15 +78,13 @@ Optional, used only to highlight chart risks in the pre-op brief: `anat_heart`, 
 
 "Focus" structures are what the learner works on; "danger" structures are what a mistake touches. Both need clean, separately clickable geometry. Small structures (cystic artery, ducts, ureters) should be modeled slightly thicker than life so a hand-held instrument can hit them.
 
-**Source:** Z-Anatomy is the researched candidate. Its repo is CC BY-SA 4.0 overall but lists components with other terms, including noncommercial ones. Record the exact source file and license of every mesh you use in `assets/anatomy/ATTRIBUTION.md`. Keep `.blend` sources in `assets/anatomy/` (Git LFS for large files).
+**Modeling, export, and budget:** follow [Unity handoff](unity-handoff.md). It is the source of truth for the torso frame, Blender scale and FBX settings, the 150k triangle budget, materials, and the `Scalpal > Validate Selected Anatomy Rig` check. [Unity asset manifest](unity-asset-manifest.md) is the generated full name list.
 
-**Coordinates (the torso frame):** meters, origin at the umbilicus on the skin. In the Unity torso root's local space, `+Z` is toward the head, `+Y` is out of the abdomen (up when supine), and `+X` is the participant's left. Port positions in the catalog already use this frame, so organs must sit in it or the trocars miss. Apply all transforms before export.
-
-**Export:** one prefab per surgery (`case_lap_cholecystectomy`, `case_lap_appendectomy`, `case_lap_sigmoid_colectomy`) containing only that surgery's `anat_` objects, plus the shared set for the selection preview. FBX or glTF with Unity axis conversion (Y up). Quest budget: aim for about 100k triangles for the whole visible set and one simple material per structure. Use conventional colors (arteries red, veins blue, bile ducts green, ureters pale yellow) so "the red one going into the gallbladder" works as a spoken hint.
+**What Jarvis adds:** color by tissue type (arteries red, veins blue, bile ducts green, ureters pale yellow) so a spoken hint like "the red one going into the gallbladder" matches what the learner sees. Every focus and danger structure above must have its own collider, because touches and gaze on them drive Jarvis's warnings.
 
 ## Stephen: Unity
 
-1. **Import** the prefabs under `Assets/Scalpal/`. Keep object names unchanged. Parent the case prefab under the torso root that registration moves. Ports go at `TorsoFrame.PortLocalPosition(port, case.bodyScale)` (already written).
+1. **Import and validate** the rig as described in [Unity handoff](unity-handoff.md). Keep object names unchanged and parent it under the torso root that registration moves.
 2. **Colliders:** every `anat_` object gets a collider (convex MeshCollider or primitives). Every `inst_<id>` instrument prefab gets a small trigger collider on its tip.
 3. **Events.** One place in scene code turns physics and UI into `CaseEvent`s, and every event goes to both the runner and the relay:
 
