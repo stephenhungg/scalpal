@@ -43,9 +43,10 @@ float hand(sampler2D t, vec4 rect, float rot, vec2 c, float side, float h1, floa
   vec4 s = texture(t, uvc);
   float inside = step(0.0, uv.x) * step(uv.x, 1.0) * step(0.0, uv.y) * step(uv.y, 1.0);
   float dark = 1.0 - s.r;
-  float v = s.a * inside * (0.08 + 1.5 * max(dark - 0.22, 0.0));
-  // Stochastic presence leaves the white gaps aeterna has inside the skin.
-  v *= step(h2 * 0.55, v);
+  // Faint floor dot across the whole silhouette, shading on top of it.
+  float v = s.a * inside * (0.13 + 1.45 * max(dark - 0.24, 0.0));
+  // A few random gaps inside the skin, as in the reference.
+  v *= step(h2, 0.86);
   // Dissolve: Adam's forearm breaks up from the wrist (uv.x ~0.66) to the frame edge;
   // the creator's arm only frays right at its outer end.
   float w = side < 0.0 ? 1.0 - smoothstep(0.38, 0.68, uv.x) : smoothstep(0.9, 1.0, uv.x);
@@ -94,10 +95,10 @@ void main() {
 const DEG = Math.PI / 180;
 function layout(w: number, h: number, aspL: number, aspR: number) {
   const k = w / 1200;
-  const lw = 858 * k, rw = 825 * k;
+  const lw = 979 * k, rw = 825 * k;
   const lift = w < 810 ? 55 * (h / 844) : 0; // phones sit the pair a little higher
   return {
-    L: [77 * k, h - 250 * k - lift, lw, lw / aspL, 14 * DEG],
+    L: [-10 * k, h - 215 * k - lift, lw, lw / aspL, 4 * DEG],
     R: [1133 * k, h - 267 * k - lift, rw, rw / aspR, 1 * DEG],
   };
 }

@@ -22,7 +22,7 @@ export default function Home() {
           <p className="lede mt-4 max-w-[660px]">
             <BlurWords text={LEDE} start={wordCount(TITLE)} />
           </p>
-          <FadeIn delay={0.65} className="mt-[26px] min-[810px]:mt-9">
+          <FadeIn delay={0.595} className="mt-[26px] min-[810px]:mt-9">
             <RollButton href="/explore" label="Explore" hoverLabel="Watch the demo" />
           </FadeIn>
         </section>

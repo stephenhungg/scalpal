@@ -10,7 +10,7 @@ export function FadeIn({ children, delay = 0, className = "" }: { children: Reac
       className={className}
       initial={{ opacity: 0.001 }}
       animate={{ opacity: 1 }}
-      transition={{ duration: 0.6, ease: [0.44, 0, 0.56, 1], delay }}
+      transition={{ duration: 0.4, ease: [0.44, 0, 0.56, 1], delay }}
     >
       {children}
     </motion.div>
