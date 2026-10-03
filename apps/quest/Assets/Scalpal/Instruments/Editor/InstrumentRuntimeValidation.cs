@@ -52,6 +52,12 @@ namespace Scalpal.Instruments.Editor
                 Require((tool.gripAnchor.position - hand.transform.position).magnitude < 0.001f, "grip anchor aligns to hand");
                 Require(Vector3.Dot((tool.actionPoint.position - tool.gripAnchor.position).normalized, hand.transform.forward) > 0.999f, "held tool points along controller +Z");
                 Require(toolObject.GetComponent<Rigidbody>().isKinematic, "held body is kinematic");
+                Require(toolObject.GetComponent<Rigidbody>().interpolation == RigidbodyInterpolation.None, "held tracked body disables delayed physics interpolation");
+                var shifted = new Vector3(0.21f, 0.37f, -0.15f);
+                var turned = Quaternion.Euler(25, 70, -15);
+                interactor.SetTrackedPose(shifted, turned, true);
+                Require((tool.gripAnchor.position - shifted).sqrMagnitude < 0.000001f && Quaternion.Angle(tool.gripAnchor.rotation, turned) < 0.001f, "held grip follows a changed tracked pose immediately");
+                interactor.SetTrackedPose(Vector3.zero, Quaternion.identity, true);
                 var patchObject = UnityEngine.Object.Instantiate(AssetDatabase.LoadAssetAtPath<GameObject>(Root + "TrainingPatch.prefab"), scope.transform);
                 patchObject.transform.position = new Vector3(0, 0, 1);
                 var patch = patchObject.GetComponent<TrainingTarget>();
@@ -73,6 +79,7 @@ namespace Scalpal.Instruments.Editor
                 interactor.SetTrackedPose(hand.transform.position, hand.transform.rotation, false);
                 Require(!tool.Held && !tool.TrackingValid && interactor.HeldInstrument == null, "lost tracking releases held tool and disables effects");
                 Require(!toolObject.GetComponent<Rigidbody>().isKinematic && toolObject.GetComponent<Rigidbody>().useGravity, "release restores physics");
+                Require(toolObject.GetComponent<Rigidbody>().interpolation == RigidbodyInterpolation.Interpolate, "release restores the original interpolation policy");
                 interactor.SetTrackedPose(tool.gripAnchor.position, Quaternion.identity, true);
                 interactor.SetGrip(1);
                 Require(interactor.HeldInstrument == null, "tracking recovery requires physical grip release before pickup");
