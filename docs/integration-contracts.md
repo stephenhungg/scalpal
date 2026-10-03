@@ -30,7 +30,7 @@ A command identifies command/session/attempt, expected step/state version, allow
 
 Nathan's allowlist includes preview/rotate/zoom/isolate/restore/confirm/highlight/hint/pause/resume. Matthew's current anatomy command consumer implements only highlight/clear-highlight. Reconcile action names and capability availability; a requested row is not proof of a scene handler. Browser auto-ack and autoplay are test tools and cannot acknowledge a real headset outcome.
 
-Failed event/ack delivery remains retryable. Explicitly publish initial tracking and confirmed state on pairing/reconnect. A server snapshot version alone does not provide inbound event deduplication or expected-version validation.
+Failed event/ack delivery remains retryable. Explicitly publish initial tracking and confirmed state on pairing/reconnect. A server snapshot version alone does not provide inbound event deduplication or expected-version validation. The latest Jarvis HTTP receipt separates `accepted` from `applied` and exposes `eventCount`; the anatomy relay still checks version zero and reads only receipt acceptance. Reconcile late-join freshness and progression confirmation explicitly.
 
 ## Capture Artifact
 
