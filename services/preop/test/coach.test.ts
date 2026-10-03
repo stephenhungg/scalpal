@@ -211,19 +211,27 @@ describe("coach routes", () => {
     expect(ev.json.alerts[0].kind).toBe("step_complete");
     expect(ev.json.snapshot.step.id).toBe("working_ports");
 
-    expect((await call("POST", `/coach/sessions/${sid}/events`, { event: { type: "touch", structureId: "spleen", instrumentId: "x" } })).status).toBe(400);
-    expect((await call("POST", `/coach/sessions/${sid}/events`, { event: { type: "place_port", portId: "left_lower" } })).status).toBe(400);
+    expect((await call("POST", `/coach/sessions/${sid}/events`, { event: { type: "touch", structureId: "Spleen!", instrumentId: "x" } })).status).toBe(400);
+
+    // An atlas part outside the catalog, or another procedure's port, is an off-target attempt, not an error.
+    const rib = await call("POST", `/coach/sessions/${sid}/events`, { event: { type: "touch", structureId: "skeletal__rib_7_l", instrumentId: "trocar_5mm" } });
+    expect(rib.json.results[0]).toMatchObject({ accepted: true, applied: true });
+    expect(rib.json.snapshot.lastEvent).toMatch(/rib 7 l/);
+    expect(rib.json.snapshot.offTargetAttempts).toBe(1);
+    const wrongPort = await call("POST", `/coach/sessions/${sid}/events`, { event: { type: "place_port", portId: "left_lower" } });
+    expect(wrongPort.json.results[0]).toMatchObject({ accepted: true, applied: true });
+    expect(wrongPort.json.snapshot.step.progressText).toBe("0 of 3 ports placed");
 
     // A batch with one unknown instrument still applies the valid events around it.
     const mixed = await call("POST", `/coach/sessions/${sid}/events`, {
       events: [
-        { type: "touch", structureId: "abdominal_wall", instrumentId: "laser_scalpel" },
+        { type: "touch", structureId: "abdominal_wall", instrumentId: "Laser Scalpel!" },
         { type: "place_port", portId: "epigastric" },
       ],
     });
     expect(mixed.status).toBe(200);
     expect(mixed.json.results[0]).toMatchObject({ accepted: false });
-    expect(mixed.json.results[0].reason).toMatch(/unknown instrumentId/);
+    expect(mixed.json.results[0].reason).toMatch(/not a well-formed id/);
     expect(mixed.json.results[1]).toMatchObject({ accepted: true });
     expect(mixed.json.snapshot.step.progressText).toBe("1 of 3 ports placed");
 
@@ -294,5 +302,34 @@ describe("presentation modes", () => {
     const lines = (await (await app.request(`/jarvis/reflex/${vr.sessionId}`)).json()) as { lines: { key: string; text: string }[] };
     expect(lines.lines.find((l) => l.key === "tracking_lost")?.text).toMatch(/headset tracking/);
     expect((await start("hologram")).status).toBe(400);
+  });
+});
+
+describe("headset relay compatibility", () => {
+  const app = createApp({ client: fixtureClient(), now: () => NOW, coachTickMs: 0 });
+  const post = async (route: string, body: unknown) =>
+    (await (await app.request(route, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })).json()) as Record<string, any>;
+
+  it("reports events ignored during tracking loss as received but not applied", async () => {
+    const { sessionId: sid } = await post("/coach/sessions", { patientId: "patient-demo-pediatric-asthma" });
+    const r = await post(`/coach/sessions/${sid}/events`, { events: [{ type: "tracking", valid: false }, { type: "place_port", portId: "umbilical" }] });
+    expect(r.results).toEqual([
+      { accepted: true, applied: true, reason: "" },
+      { accepted: true, applied: false, reason: "tracking_invalid" },
+    ]);
+  });
+
+  it("counts exercise input so the headset can tell an untouched attempt from a busy one", async () => {
+    const created = await post("/coach/sessions", { patientId: "patient-demo-pediatric-asthma" });
+    const sid = created.sessionId;
+    expect(created.snapshot.eventCount).toBe(0);
+    await post(`/coach/sessions/${sid}/hint`, {});
+    await post(`/coach/sessions/${sid}/commands`, { action: "highlight", structure: "cecum" });
+    const busyButUntouched = (await (await app.request(`/coach/sessions/${sid}`)).json()) as Record<string, any>;
+    expect(busyButUntouched.snapshot.version).toBeGreaterThan(0); // hints and highlights change state
+    expect(busyButUntouched.snapshot.eventCount).toBe(0); // but nothing was done to the patient yet
+    const r = await post(`/coach/sessions/${sid}/events`, { event: { type: "focus", structureId: "cecum" } });
+    expect(r.snapshot.eventCount).toBe(0); // looking is not exercise input
+    expect((await post(`/coach/sessions/${sid}/events`, { event: { type: "place_port", portId: "umbilical" } })).snapshot.eventCount).toBe(1);
   });
 });

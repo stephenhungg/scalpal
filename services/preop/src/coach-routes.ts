@@ -125,7 +125,7 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
     // Each event stands alone: the headset batches events, so one unknown id (say, an instrument the
     // catalog doesn't have yet) must not drop the valid events around it.
     const results = raw.map((e) => {
-      const parsed = parseEvent(e, s);
+      const parsed = parseEvent(e);
       return typeof parsed === "string" ? { accepted: false, reason: `invalid: ${parsed}`, alerts: [] } : s.handle(parsed);
     });
     if (results.every((r) => r.reason.startsWith("invalid: "))) {
@@ -133,7 +133,9 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
     }
     const snapshot = s.snapshot();
     return c.json({
-      results: results.map((r) => ({ accepted: r.accepted, reason: r.reason })),
+      // accepted: well formed and received. applied: it reached scoring (false while tracking is lost or
+      // after the case is complete, matching what CaseRunner does on the headset).
+      results: results.map((r) => ({ accepted: !r.reason.startsWith("invalid: "), applied: r.accepted, reason: r.reason })),
       alerts: results.flatMap((r) => r.alerts),
       snapshot,
       context: renderContext(snapshot),
@@ -333,23 +335,27 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
   });
 }
 
-function parseEvent(e: unknown, s: CoachSession): CoachEvent | string {
+// Ids only need to be well formed. The atlas has thousands of parts outside the catalog (a rib, a nerve);
+// touching one is a real off-target attempt the coach should count, not a malformed request. Rejecting it
+// would also make the headset relay stop syncing for the rest of the session.
+const EVENT_ID = /^[a-z0-9][a-z0-9_.:-]{0,119}$/;
+
+function parseEvent(e: unknown): CoachEvent | string {
   if (!e || typeof e !== "object") return "event must be an object";
   const ev = e as Record<string, unknown>;
   const str = (k: string) => (typeof ev[k] === "string" ? (ev[k] as string) : "");
+  const id = (k: string) => (EVENT_ID.test(str(k)) ? "" : `${k} "${str(k)}" is not a well-formed id`);
   switch (ev.type) {
     case "place_port":
-      return s.kase.procedure.ports.some((p) => p.id === str("portId")) ? { type: "place_port", portId: str("portId") } : `unknown portId "${str("portId")}"`;
+      return id("portId") || { type: "place_port", portId: str("portId") };
     case "touch":
-      if (!ANATOMY_BY_ID.has(str("structureId"))) return `unknown structureId "${str("structureId")}"`;
-      if (!INSTRUMENTS_BY_ID.has(str("instrumentId"))) return `unknown instrumentId "${str("instrumentId")}"`;
-      return { type: "touch", structureId: str("structureId"), instrumentId: str("instrumentId") };
+      return id("structureId") || id("instrumentId") || { type: "touch", structureId: str("structureId"), instrumentId: str("instrumentId") };
     case "identify":
-      return ANATOMY_BY_ID.has(str("structureId")) ? { type: "identify", structureId: str("structureId") } : `unknown structureId "${str("structureId")}"`;
+      return id("structureId") || { type: "identify", structureId: str("structureId") };
     case "confirm":
       return { type: "confirm" };
     case "focus":
-      return str("structureId") === "" || ANATOMY_BY_ID.has(str("structureId")) ? { type: "focus", structureId: str("structureId") } : `unknown structureId "${str("structureId")}"`;
+      return str("structureId") === "" ? { type: "focus", structureId: "" } : id("structureId") || { type: "focus", structureId: str("structureId") };
     case "tracking":
       return typeof ev.valid === "boolean" ? { type: "tracking", valid: ev.valid } : "tracking needs a boolean valid";
     default:

@@ -159,3 +159,14 @@ Until this is agreed, the HTTP coach routes stay as the working path.
 `InstrumentTipContact.TouchApplied` fires only when the instrument is activated (trigger at least 0.7). Jarvis can warn before a mistake if it also knows what the tip is hovering over. Please call `relay.Focus(structureId)` when the held instrument's tip enters an `anat_` collider without activation, and `relay.Focus("")` when it leaves. The coach already turns focus on a danger structure into a one-time "careful, that's the common bile duct" warning.
 
 Note: `inst_scalpel` exists in the Unity prefabs but not in the catalog. The coach rejects scalpel touches individually (the rest of the batch still applies). If the scalpel should count in a step, add it to `services/preop/src/catalog/instruments.ts`.
+
+## Coach event contract for the headset relay
+
+Updated after reviewing the relay rewrite on `codex/anatomy-atlas` (6057689). These are the server semantics the relay can rely on:
+
+- **Event results.** `POST /coach/sessions/:id/events` returns one result per event: `{accepted, applied, reason}`.
+  - `accepted: false` only for a malformed event (bad type, an id that does not match `^[a-z0-9][a-z0-9_.:-]{0,119}$`). That is a relay bug worth failing on.
+  - `accepted: true, applied: false` means the coach received it and deliberately ignored it, exactly as `CaseRunner` does locally: `tracking_invalid` (registration lost) or `case_completed`. This is **not** a delivery failure; do not stop syncing on it.
+  - Touches on atlas parts outside the catalog (`skeletal__rib_7_l`) and ports from another procedure are accepted and applied as off-target attempts, which feed Jarvis's stuck detection.
+- **Fresh-attempt check.** Do not require `snapshot.version == 0` before joining. The version changes whenever Jarvis requests a highlight, gives a hint, or the stuck timer fires (20 s after start), so a headset joining late would always be refused. Use `snapshot.eventCount == 0` (no exercise input has reached the coach yet) together with `completedCount == 0` and `stepNumber == 1`.
+- **Retries.** The relay is right not to retry a timed-out batch blindly: a repeated clip touch would double count. If a retry is ever needed, it should carry an idempotency key per event; the coach does not deduplicate today.

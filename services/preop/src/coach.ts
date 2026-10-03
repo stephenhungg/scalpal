@@ -88,6 +88,7 @@ export interface CoachSnapshot {
   sessionId: string;
   version: number;
   mode: PresentationMode;
+  eventCount: number;
   status: "active" | "paused" | "completed";
   caseId: string;
   patientId: string;
@@ -158,6 +159,7 @@ export class CoachSession {
   private offTarget = 0;
   private tier = 0; // hint tier already delivered on this step
   private hintsUsed = 0;
+  private inputCount = 0; // exercise inputs that reached the engine; 0 means an untouched attempt
   private focus = "";
   private trackingValid = true;
   private lastEvent = "Session started.";
@@ -223,7 +225,8 @@ export class CoachSession {
   }
 
   private name(id: string): string {
-    return this.kase.anatomy.find((a) => a.id === id)?.displayName ?? id.replaceAll("_", " ");
+    // Atlas parts outside the catalog look like "skeletal__rib_7_l"; speak the part, not the system prefix.
+    return this.kase.anatomy.find((a) => a.id === id)?.displayName ?? (id.split("__").pop() ?? id).replaceAll("_", " ");
   }
 
   private ref(id: string): StructureRef {
@@ -259,6 +262,7 @@ export class CoachSession {
       return { accepted: false, reason: "tracking_invalid", alerts: [] };
     }
 
+    this.inputCount += 1;
     const before = this.engine.stepProgress;
     const result = this.engine.handle(event);
     const alerts: CoachAlert[] = [];
@@ -513,6 +517,7 @@ export class CoachSession {
       sessionId: this.id,
       version: this.version,
       mode: this.mode,
+      eventCount: this.inputCount,
       status: !step ? "completed" : this.trackingValid ? "active" : "paused",
       caseId: this.kase.caseId,
       patientId: this.kase.patientId,
