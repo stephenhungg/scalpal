@@ -5,9 +5,51 @@ using System.Collections;
 
 namespace UnityEngine
 {
-    public class Object { }
+    public class Object
+    {
+        public string name { get; set; }
+    }
 
-    public class Component : Object { }
+    public class Component : Object
+    {
+        public Transform transform => null;
+        public T GetComponent<T>() => default;
+        public T[] GetComponentsInChildren<T>(bool includeInactive) => new T[0];
+    }
+
+    public class GameObject : Object
+    {
+        public Transform transform => null;
+    }
+
+    public class Transform : Component
+    {
+        public Vector3 position => default;
+        public Vector3 InverseTransformPoint(Vector3 position) => position;
+    }
+
+    public class Collider : Component { }
+
+    public struct Bounds
+    {
+        public Vector3 center => default;
+    }
+
+    public class Renderer : Component
+    {
+        public Bounds bounds => default;
+    }
+
+    public class Mesh : Object
+    {
+        public int[] triangles => new int[0];
+    }
+
+    public class MeshFilter : Component
+    {
+        public Mesh sharedMesh => null;
+    }
+
 
     public class Behaviour : Component { }
 
@@ -45,12 +87,15 @@ namespace UnityEngine
 
     public static class Debug
     {
+        public static void Log(object message) { }
         public static void LogWarning(object message) { }
+        public static void LogError(object message) { }
     }
 
     public static class Mathf
     {
         public static float Max(float a, float b) => Math.Max(a, b);
+        public static float Sign(float f) => f >= 0f ? 1f : -1f;
     }
 
     public struct Vector3
@@ -100,5 +145,19 @@ namespace UnityEngine.Networking
         public void SetRequestHeader(string name, string value) { }
         public UnityWebRequestAsyncOperation SendWebRequest() => new UnityWebRequestAsyncOperation();
         public void Dispose() { }
+    }
+}
+
+namespace UnityEditor
+{
+    [System.AttributeUsage(System.AttributeTargets.Method)]
+    public sealed class MenuItem : System.Attribute
+    {
+        public MenuItem(string itemName) { }
+    }
+
+    public static class Selection
+    {
+        public static UnityEngine.GameObject activeGameObject => null;
     }
 }

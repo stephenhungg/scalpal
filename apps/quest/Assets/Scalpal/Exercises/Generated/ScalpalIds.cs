@@ -79,6 +79,43 @@ namespace Scalpal.Exercises.Generated
         public const string LeftKidney = "anat_left_kidney";
         public const string Heart = "anat_heart";
         public const string Lungs = "anat_lungs";
+
+        public static readonly string[] All =
+        {
+            AbdominalWall,
+            Umbilicus,
+            GreaterOmentum,
+            Liver,
+            Gallbladder,
+            CysticDuct,
+            CysticArtery,
+            CommonHepaticDuct,
+            CommonBileDuct,
+            RightHepaticArtery,
+            Stomach,
+            Duodenum,
+            Pancreas,
+            TransverseColon,
+            SmallBowel,
+            TerminalIleum,
+            Cecum,
+            Appendix,
+            Mesoappendix,
+            AppendicularArtery,
+            RightUreter,
+            DescendingColon,
+            SigmoidColon,
+            SigmoidMesocolon,
+            InferiorMesentericArtery,
+            LeftUreter,
+            LeftGonadalVessels,
+            Rectum,
+            UrinaryBladder,
+            RightKidney,
+            LeftKidney,
+            Heart,
+            Lungs,
+        };
     }
 
     public static class InstrumentIds
@@ -115,6 +152,24 @@ namespace Scalpal.Exercises.Generated
         public const string SuctionIrrigator = "inst_suction_irrigator";
         public const string RetrievalBag = "inst_retrieval_bag";
         public const string FascialClosure = "inst_fascial_closure";
+
+        public static readonly string[] All =
+        {
+            Trocar5mm,
+            Trocar12mm,
+            Laparoscope30,
+            AtraumaticGrasper,
+            MarylandDissector,
+            HookCautery,
+            VesselSealer,
+            ClipApplier,
+            LapScissors,
+            EndoStapler,
+            CircularStapler,
+            SuctionIrrigator,
+            RetrievalBag,
+            FascialClosure,
+        };
     }
 
     public static class ProcedureIds

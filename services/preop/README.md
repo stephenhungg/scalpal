@@ -65,6 +65,8 @@ npm run export:unity   # refresh Resources/scalpal_bundle.json from the live API
 
 ## Unity integration
 
+Setup steps for the Unity project and Blender assets are in [docs/unity-handoff.md](../../docs/unity-handoff.md); every required mesh, prefab, and port is in the generated [docs/unity-asset-manifest.md](../../docs/unity-asset-manifest.md).
+
 Code lives in `apps/quest/Assets/Scalpal/Exercises/`:
 
 | Path | What |
@@ -74,6 +76,7 @@ Code lives in `apps/quest/Assets/Scalpal/Exercises/`:
 | `Engine/PreopScorer.cs` | Offline pre-op check scoring (same rules as the service) |
 | `Preop/ScalpalPreopService.cs` | MonoBehaviour client. Bind UI buttons to returned `ScalpalAction`s and call `Dispatch(action)`. Falls back to the offline bundle when the network drops |
 | `Preop/TorsoFrame.cs` | `Vec3` to `Vector3`, port placement under the torso root |
+| `Editor/ScalpalAssetValidator.cs` | Menu **Scalpal > Validate Selected Anatomy Rig**: names, colliders, axes, triangle budget |
 | `Generated/ScalpalIds.cs` | Generated constants for anatomy, instruments, procedures, steps, flag types, and the route resolver |
 | `Resources/scalpal_bundle.json` | Offline bundle: every case, loads with `Resources.Load` |
 

@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { UNITY_EXERCISES_DIR, generateIds } from "../scripts/gen-unity.js";
+import { MANIFEST_PATH, UNITY_EXERCISES_DIR, generateIds, generateManifest } from "../scripts/gen-unity.js";
 import { createApp } from "../src/app.js";
 import { unitySafetyErrors } from "../src/unity-safe.js";
 import { NOW, fixtureClient } from "./helpers.js";
@@ -115,6 +115,10 @@ describe("Unity DTO contract", () => {
   it("generated ids are current with the catalogs", () => {
     const file = readFileSync(join(UNITY_EXERCISES_DIR, "Generated/ScalpalIds.cs"), "utf8");
     expect(file, "run `npm run gen:unity`").toBe(generateIds());
+  });
+
+  it("the asset manifest is current with the catalogs", () => {
+    expect(readFileSync(MANIFEST_PATH, "utf8"), "run `npm run gen:unity`").toBe(generateManifest());
   });
 
   it("the packaged offline bundle is renderable", () => {
