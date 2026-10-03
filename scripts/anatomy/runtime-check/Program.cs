@@ -183,7 +183,7 @@ static class Program
         Call(binding, "OnDisable");
         relay.Emit("highlight", "heart");
         Check(relay.acks.Count == 6, "disabled binding unsubscribes");
-#if !UNITY_ANDROID && !UNITY_IOS
+#if UNITY_EDITOR || (!UNITY_ANDROID && !UNITY_IOS)
         var searchRoot = new GameObject();
         var searchController = searchRoot.AddComponent<AnatomyController>();
         for (var i = 0; i < 25; i++)

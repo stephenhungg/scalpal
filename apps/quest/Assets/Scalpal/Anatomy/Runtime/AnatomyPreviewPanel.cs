@@ -5,13 +5,14 @@ using UnityEngine;
 namespace Scalpal.Anatomy
 {
     // Optional mouse/keyboard inspector for the generated desktop preview scene only.
-    // Android/iOS builds contain no IMGUI panel. This is not an XR interaction surface.
+    // Android/iOS players contain no IMGUI panel; the Editor keeps it for any build target.
+    // This is not an XR interaction surface.
     [DisallowMultipleComponent]
     public sealed class AnatomyPreviewPanel : MonoBehaviour
     {
         public AnatomyController anatomy;
 
-#if !UNITY_ANDROID && !UNITY_IOS
+#if UNITY_EDITOR || (!UNITY_ANDROID && !UNITY_IOS)
         const int MaximumMatches = 20;
         readonly List<string> systems = new List<string>();
         AnatomyController indexedAnatomy;
