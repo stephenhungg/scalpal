@@ -116,13 +116,15 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
     const b = await body(c);
     const raw = Array.isArray(b.events) ? b.events : b.event ? [b.event] : [];
     if (!raw.length) return bad(c, 400, "no_events", 'Send {"event": {...}} or {"events": [...]}.', coachActions(s.id));
-    const events: CoachEvent[] = [];
-    for (const [i, e] of raw.entries()) {
+    // Each event stands alone: the headset batches events, so one unknown id (say, an instrument the
+    // catalog doesn't have yet) must not drop the valid events around it.
+    const results = raw.map((e) => {
       const parsed = parseEvent(e, s);
-      if (typeof parsed === "string") return bad(c, 400, "invalid_event", `events[${i}]: ${parsed}`, coachActions(s.id));
-      events.push(parsed);
+      return typeof parsed === "string" ? { accepted: false, reason: `invalid: ${parsed}`, alerts: [] } : s.handle(parsed);
+    });
+    if (results.every((r) => r.reason.startsWith("invalid: "))) {
+      return bad(c, 400, "invalid_event", results.map((r, i) => `events[${i}]: ${r.reason.slice(9)}`).join("; "), coachActions(s.id));
     }
-    const results = events.map((e) => s.handle(e));
     const snapshot = s.snapshot();
     return c.json({
       results: results.map((r) => ({ accepted: r.accepted, reason: r.reason })),

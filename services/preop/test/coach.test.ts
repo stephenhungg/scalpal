@@ -214,6 +214,19 @@ describe("coach routes", () => {
     expect((await call("POST", `/coach/sessions/${sid}/events`, { event: { type: "touch", structureId: "spleen", instrumentId: "x" } })).status).toBe(400);
     expect((await call("POST", `/coach/sessions/${sid}/events`, { event: { type: "place_port", portId: "left_lower" } })).status).toBe(400);
 
+    // A batch with one unknown instrument still applies the valid events around it.
+    const mixed = await call("POST", `/coach/sessions/${sid}/events`, {
+      events: [
+        { type: "touch", structureId: "abdominal_wall", instrumentId: "scalpel" },
+        { type: "place_port", portId: "epigastric" },
+      ],
+    });
+    expect(mixed.status).toBe(200);
+    expect(mixed.json.results[0]).toMatchObject({ accepted: false });
+    expect(mixed.json.results[0].reason).toMatch(/unknown instrumentId/);
+    expect(mixed.json.results[1]).toMatchObject({ accepted: true });
+    expect(mixed.json.snapshot.step.progressText).toBe("1 of 3 ports placed");
+
     const mistake = await call("POST", `/coach/sessions/${sid}/simulate`, { kind: "mistake" });
     expect(mistake.json.alerts[0].kind).toBe("mistake");
 
