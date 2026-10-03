@@ -52,7 +52,9 @@ float hand(sampler2D t, vec4 rect, float rot, vec2 c, float side, float h1, floa
   float w = side < 0.0 ? 1.0 - smoothstep(0.38, 0.68, uv.x) : smoothstep(0.9, 1.0, uv.x);
   v *= step(w * 0.92, h1);
   float halo = textureLod(t, uvc, 4.0).a;
-  scatter = step(h2, w * halo * (side < 0.0 ? 0.32 : 0.12 * inside)) * (0.35 + 0.65 * h1);
+  // Strict comparison: step() would fire for cells whose hash is exactly 0, even at zero weight.
+  float thr = w * halo * (side < 0.0 ? 0.32 : 0.12 * inside);
+  scatter = h2 < thr ? 0.35 + 0.65 * h1 : 0.0;
   return v;
 }
 
