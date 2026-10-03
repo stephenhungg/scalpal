@@ -39,6 +39,8 @@ namespace Scalpal.Anatomy.EditorTools
             {
                 var body = (GameObject)PrefabUtility.InstantiatePrefab(prefab, scene);
                 if (body == null) throw new InvalidOperationException("Could not instantiate the body preview prefab.");
+                var controls = body.AddComponent<AnatomyPreviewPanel>();
+                controls.anatomy = body.GetComponent<AnatomyController>();
                 var renderers = body.GetComponentsInChildren<Renderer>(true);
                 if (renderers.Length == 0) throw new InvalidOperationException("The body preview has no renderers to frame.");
                 var bounds = renderers[0].bounds;

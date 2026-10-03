@@ -183,6 +183,26 @@ static class Program
         Call(binding, "OnDisable");
         relay.Emit("highlight", "heart");
         Check(relay.acks.Count == 6, "disabled binding unsubscribes");
+#if !UNITY_ANDROID && !UNITY_IOS
+        var searchRoot = new GameObject();
+        var searchController = searchRoot.AddComponent<AnatomyController>();
+        for (var i = 0; i < 25; i++)
+        {
+            var searchPart = AddPart(searchRoot, "source_" + i, "organs");
+            searchPart.displayName = "Organ " + i;
+        }
+        searchController.RebuildIndex();
+        var panel = searchRoot.AddComponent<AnatomyPreviewPanel>();
+        panel.anatomy = searchController;
+        Check(panel.FindMatches("").Count == 20, "desktop search limits displayed matches to twenty");
+        Check(panel.FindMatches("SOURCE_24").Count == 1, "desktop search matches stable ids case-insensitively");
+        Check(panel.FindMatches(" Organ 24 ").Count == 1, "desktop search matches source labels and trims whitespace");
+        Check(panel.FindMatches("not-present").Count == 0, "desktop search reports no results for unknown labels");
+        Call(panel, "OnGUI");
+        panel.anatomy = null;
+        Call(panel, "OnGUI");
+        Check(panel.FindMatches("").Count == 0, "unassigned desktop panel safely handles search");
+#endif
         EditorChecks.Run();
         Console.WriteLine($"Anatomy runtime: {checks} behavior checks passed. UnityEngine doubles only; no headset/render verification.");
     }
