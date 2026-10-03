@@ -8,7 +8,7 @@ import { buildCase, routes, scorePreopCheck, unavailableCase } from "./case-buil
 import type { StuckPolicy } from "./coach.js";
 import { registerCoachRoutes } from "./coach-routes.js";
 import { FinchNodeError, createFinchNodeClient, type FinchNodeClient } from "./finchnode.js";
-import type { Action, Scenario, SurgicalCase } from "./types.js";
+import type { Action, AdmissionStatus, Scenario, SandboxSession, SurgicalCase } from "./types.js";
 
 export interface AppOptions {
   client?: FinchNodeClient;
@@ -32,7 +32,8 @@ export interface PatientListEntry {
   actions: Action[];
 }
 
-const ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,79}$/;
+const ID_PATTERN = /^[a-z0-9][a-z0-9_-]{0,79}$/;
+const SESSION_PATTERN = /^cs_[a-z0-9]{6,64}$/;
 
 export function createApp(options: AppOptions = {}) {
   const client = options.client ?? createFinchNodeClient();
@@ -40,6 +41,10 @@ export function createApp(options: AppOptions = {}) {
   const app = new Hono();
 
   app.use("*", cors());
+
+  // Sandbox admissions live in memory: sessionId -> scenario, and admitted subject -> scenario.
+  const admissions = new Map<string, string>();
+  const subjectScenario = new Map<string, string>();
 
   const fail = (c: Context, status: 400 | 404 | 409 | 429 | 502, code: string, message: string, actions: Action[]) =>
     c.json({ error: { code, message }, actions: actions.length ? actions : [routes.index()] }, status);
@@ -55,6 +60,8 @@ export function createApp(options: AppOptions = {}) {
   // Accept either a FinchNode subject ("patient-demo-001") or a scenario id ("baseline-adult").
   async function resolve(id: string): Promise<{ subject: string; scenarioId: string } | null> {
     if (!ID_PATTERN.test(id)) return null;
+    const admitted = subjectScenario.get(id);
+    if (admitted) return { subject: id, scenarioId: admitted };
     const list = await scenarios();
     const byScenario = list.find((s) => s.id === id && s.subject);
     if (byScenario?.subject) return { subject: byScenario.subject, scenarioId: byScenario.id };
@@ -63,7 +70,8 @@ export function createApp(options: AppOptions = {}) {
 
   async function loadCase(subject: string, scenarioId: string): Promise<SurgicalCase | FinchNodeError> {
     try {
-      return buildCase(await client.getRecord(subject), scenarioId, now());
+      const planSubject = (await scenarios()).find((s) => s.id === scenarioId)?.subject ?? subject;
+      return buildCase(await client.getRecord(subject), scenarioId, now(), planSubject);
     } catch (err) {
       if (err instanceof FinchNodeError) return err;
       throw err;
@@ -77,9 +85,12 @@ export function createApp(options: AppOptions = {}) {
     return unavailableCase(subject, scenarioId, result, now());
   }
 
+  const scenarioDemoSubject = new Map<string, string>();
+
   async function listPatients(): Promise<PatientListEntry[]> {
     const list = await scenarios();
-    return Promise.all(
+    for (const s of list) if (s.subject) scenarioDemoSubject.set(s.id, s.subject);
+    const entries = await Promise.all(
       list.map(async (s): Promise<PatientListEntry> => {
         if (!s.subject) {
           return {
@@ -108,10 +119,53 @@ export function createApp(options: AppOptions = {}) {
           urgency: kase.urgency,
           status: kase.status,
           flagCount: kase.brief.flags.length,
-          actions: [routes.caseFor(s.subject)],
+          actions: client.sandbox && s.kind !== "session" ? [routes.caseFor(s.subject), routes.admit(s.id)] : [routes.caseFor(s.subject)],
         };
       }),
     );
+    const admitted = await Promise.all(
+      [...subjectScenario].map(async ([subject, scenarioId]): Promise<PatientListEntry> => {
+        const kase = (await caseOrUnavailable(subject, scenarioId)) ?? unavailableCase(subject, scenarioId, new FinchNodeError(404, "patient_not_found", "Patient not found"), now());
+        return {
+          patientId: subject,
+          scenarioId,
+          kind: "sandbox",
+          title: `Admitted via FinchNode Connect (${scenarioId})`,
+          displayLabel: kase.patient.displayLabel,
+          procedureId: kase.procedureId,
+          procedureTitle: kase.procedure.title,
+          urgency: kase.urgency,
+          status: kase.status,
+          flagCount: kase.brief.flags.length,
+          actions: [routes.caseFor(subject)],
+        };
+      }),
+    );
+    return [...entries, ...admitted];
+  }
+
+  function admissionStatus(session: SandboxSession, scenarioId: string): AdmissionStatus {
+    const demoSubject = scenarioDemoSubject.get(scenarioId) ?? "";
+    const demoCase = demoSubject ? [routes.caseFor(demoSubject, "Use the demo record instead")] : [];
+    const simState = session.simulation?.state ?? "";
+    const done = simState === "completed" && !!session.subject;
+    const failed = simState === "failed" || ["canceled", "expired", "abandoned", "failed"].includes(session.status);
+    if (done && session.subject) subjectScenario.set(session.subject, scenarioId);
+    const base = {
+      sessionId: session.id,
+      scenarioId,
+      sessionStatus: session.status,
+      syncStatus: session.sync?.status ?? "",
+      patientId: session.subject ?? "",
+      organization: session.organization ?? "",
+    };
+    if (done) {
+      return { ...base, state: "completed", say: `Records connected from ${session.organization ?? "the health system"} with the patient's consent.`, actions: [routes.caseFor(session.subject ?? ""), routes.patients()] };
+    }
+    if (failed) {
+      return { ...base, state: "failed", say: "The health system connection didn't finish. Try again, or use the demo record.", actions: [routes.admit(scenarioId), ...demoCase, routes.patients()] };
+    }
+    return { ...base, state: "connecting", say: "Connecting to the patient's health system and waiting for their consent.", actions: [routes.admission(session.id), ...demoCase, routes.patients()] };
   }
 
   app.get("/", (c) =>
@@ -186,6 +240,44 @@ export function createApp(options: AppOptions = {}) {
 
   app.get("/anatomy", (c) => c.json({ structures: ANATOMY, actions: [routes.index()] }));
   app.get("/instruments", (c) => c.json({ instruments: INSTRUMENTS, actions: [routes.index()] }));
+
+  // Sandbox Connect: create a real session, let a synthetic patient consent, then poll for the subject.
+  app.post("/admit/:scenarioId", async (c) => {
+    const scenarioId = c.req.param("scenarioId");
+    const scenario = (await scenarios()).find((s) => s.id === scenarioId && s.subject);
+    if (!scenario?.subject) return fail(c, 404, "scenario_not_found", "Unknown or non-patient FinchNode scenario.", [routes.patients()]);
+    scenarioDemoSubject.set(scenarioId, scenario.subject);
+    const demoCase = routes.caseFor(scenario.subject, "Use the demo record instead");
+    if (!client.sandbox) {
+      return c.json({
+        sessionId: "", scenarioId, state: "unavailable", sessionStatus: "", syncStatus: "", patientId: "", organization: "",
+        say: "Live admission needs a FinchNode sandbox key on the server. Using the demo record works the same.",
+        actions: [demoCase, routes.patients()],
+      } satisfies AdmissionStatus);
+    }
+    try {
+      const session = await client.sandbox.admit(scenarioId);
+      admissions.set(session.id, scenarioId);
+      return c.json(admissionStatus(session, scenarioId));
+    } catch (err) {
+      if (!(err instanceof FinchNodeError)) throw err;
+      return fail(c, 502, err.code, err.message, [routes.admit(scenarioId), demoCase, routes.patients()]);
+    }
+  });
+
+  app.get("/admissions/:sessionId", async (c) => {
+    const sessionId = c.req.param("sessionId");
+    const scenarioId = admissions.get(sessionId);
+    if (!SESSION_PATTERN.test(sessionId) || !scenarioId || !client.sandbox) {
+      return fail(c, 404, "admission_not_found", "No admission with that id on this server.", [routes.patients()]);
+    }
+    try {
+      return c.json(admissionStatus(await client.sandbox.getSession(sessionId), scenarioId));
+    } catch (err) {
+      if (!(err instanceof FinchNodeError)) throw err;
+      return fail(c, 502, err.code, err.message, [routes.admission(sessionId), routes.patients()]);
+    }
+  });
 
   app.post("/connect/:scenarioId", async (c) => {
     const scenarioId = c.req.param("scenarioId");

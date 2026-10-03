@@ -58,7 +58,7 @@ function check(value: unknown, type: string, schema: Schema, path: string, error
 
 const dtoSource = readFileSync(join(UNITY_EXERCISES_DIR, "Data/ScalpalCaseData.cs"), "utf8");
 const schema = parseDtos(dtoSource);
-const app = createApp({ client: fixtureClient(), now: () => NOW });
+const app = createApp({ client: fixtureClient({ sandbox: true }), now: () => NOW });
 
 const ENDPOINTS: { method: string; route: string; type: string; body?: unknown }[] = [
   { method: "GET", route: "/", type: "ServiceIndex" },
@@ -78,6 +78,9 @@ const ENDPOINTS: { method: string; route: string; type: string; body?: unknown }
   { method: "GET", route: "/anatomy", type: "AnatomyList" },
   { method: "GET", route: "/instruments", type: "InstrumentList" },
   { method: "POST", route: "/connect/connect-failed", type: "ConnectResult" },
+  { method: "POST", route: "/admit/baseline-adult", type: "AdmissionStatus" },
+  { method: "GET", route: "/admissions/cs_testbaselineadult", type: "AdmissionStatus" },
+  { method: "GET", route: "/patients/u_test_baseline_adult/case", type: "SurgicalCase" },
   { method: "GET", route: "/unity/bundle", type: "ScalpalBundle" },
   { method: "GET", route: "/patients/patient-demo-nobody/case", type: "ErrorResponse" },
   { method: "POST", route: "/patients/patient-demo-consent-revoked/preop-check", type: "ErrorResponse", body: { selected: [] } },

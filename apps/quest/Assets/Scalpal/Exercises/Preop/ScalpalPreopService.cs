@@ -35,12 +35,15 @@ namespace Scalpal.Exercises.Preop
         public event Action<AnatomyList> AnatomyLoaded;
         public event Action<InstrumentList> InstrumentsLoaded;
         public event Action<ConnectResult> ConnectFinished;
+        // FinchNode Connect admission. While state is "connecting", dispatch its check_admission action again after a few seconds.
+        public event Action<AdmissionStatus> AdmissionUpdated;
         public event Action<ScalpalBundle> BundleLoaded;
         public event Action<ErrorResponse> RequestFailed;
         public event Action<bool> OfflineModeChanged;
 
         public void LoadPatients() => Dispatch(Get("/patients"));
         public void LoadCase(string patientId) => Dispatch(Get($"/patients/{patientId}/case"));
+        public void Admit(string scenarioId) => Dispatch(new ScalpalAction { id = "admit_patient", method = "POST", route = $"/admit/{scenarioId}" });
 
         public void SubmitPreopCheck(string patientId, string[] selected) =>
             Dispatch(new ScalpalAction { id = "submit_preop_check", method = "POST", route = $"/patients/{patientId}/preop-check" }, selected);
@@ -165,6 +168,28 @@ namespace Scalpal.Exercises.Preop
                         patientId = "",
                         say = "I'm offline, so I can't connect a new health system. Pick a patient from the list.",
                         actions = new[] { Get("/patients") },
+                    });
+                    break;
+                case RouteKind.Admit:
+                case RouteKind.Admission:
+                    if (json != null)
+                    {
+                        AdmissionUpdated?.Invoke(TryParse<AdmissionStatus>(json));
+                        break;
+                    }
+                    // Offline: no health system connection is possible, so route to the bundled demo record.
+                    var demo = kind == RouteKind.Admit ? bundle.patients.FirstOrDefault(p => p.scenarioId == segment && !string.IsNullOrEmpty(p.patientId)) : null;
+                    AdmissionUpdated?.Invoke(new AdmissionStatus
+                    {
+                        sessionId = "",
+                        scenarioId = kind == RouteKind.Admit ? segment : "",
+                        state = "unavailable",
+                        sessionStatus = "",
+                        syncStatus = "",
+                        patientId = "",
+                        organization = "",
+                        say = "I'm offline, so I can't reach the health system. Opening the demo record instead.",
+                        actions = demo != null ? new[] { Get($"/patients/{demo.patientId}/case"), Get("/patients") } : new[] { Get("/patients") },
                     });
                     break;
                 case RouteKind.Bundle:

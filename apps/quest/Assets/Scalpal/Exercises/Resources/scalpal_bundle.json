@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-10-03T18:55:34.964Z",
+ "generatedAt": "2026-10-03T20:07:22.342Z",
  "anatomy": [
   {
    "id": "abdominal_wall",
@@ -2343,7 +2343,10 @@
    "brief": {
     "patientId": "patient-demo-001",
     "synthetic": true,
-    "generatedAt": "2026-10-03T18:55:34.751Z",
+    "dataSource": "demo",
+    "consentStatus": "simulated",
+    "consentReceipts": [],
+    "generatedAt": "2026-10-03T20:07:19.969Z",
     "dataAsOf": "2026-08-25T17:00:00Z",
     "patient": {
      "name": "Morgan Rivera",
@@ -2453,6 +2456,11 @@
      {
       "section": "Key labs",
       "text": "Hemoglobin: 13.6 g/dL (2026-07-18)",
+      "flagged": false
+     },
+     {
+      "section": "Consent",
+      "text": "FinchNode demo record (consent simulated)",
       "flagged": false
      }
     ],
@@ -3210,7 +3218,10 @@
    "brief": {
     "patientId": "patient-demo-polypharmacy",
     "synthetic": true,
-    "generatedAt": "2026-10-03T18:55:34.963Z",
+    "dataSource": "demo",
+    "consentStatus": "simulated",
+    "consentReceipts": [],
+    "generatedAt": "2026-10-03T20:07:20.187Z",
     "dataAsOf": "2026-09-01T00:00:00Z",
     "patient": {
      "name": "Harriet Lindqvist",
@@ -3716,6 +3727,11 @@
      {
       "section": "Key labs",
       "text": "Platelets: 198 10*3/uL (2026-07-14)",
+      "flagged": false
+     },
+     {
+      "section": "Consent",
+      "text": "FinchNode demo record (consent simulated)",
       "flagged": false
      }
     ],
@@ -4430,7 +4446,10 @@
    "brief": {
     "patientId": "patient-demo-pediatric-asthma",
     "synthetic": true,
-    "generatedAt": "2026-10-03T18:55:34.961Z",
+    "dataSource": "demo",
+    "consentStatus": "simulated",
+    "consentReceipts": [],
+    "generatedAt": "2026-10-03T20:07:20.053Z",
     "dataAsOf": "2026-09-01T00:00:00Z",
     "patient": {
      "name": "Theo Abernathy",
@@ -4567,6 +4586,11 @@
       "section": "Allergies",
       "text": "House dust mite",
       "flagged": true
+     },
+     {
+      "section": "Consent",
+      "text": "FinchNode demo record (consent simulated)",
+      "flagged": false
      }
     ],
     "dataGaps": [
@@ -5185,7 +5209,10 @@
    "brief": {
     "patientId": "patient-demo-multi-source",
     "synthetic": true,
-    "generatedAt": "2026-10-03T18:55:34.959Z",
+    "dataSource": "demo",
+    "consentStatus": "simulated",
+    "consentReceipts": [],
+    "generatedAt": "2026-10-03T20:07:20.186Z",
     "dataAsOf": "2026-09-01T00:00:00Z",
     "patient": {
      "name": "Priya Ramaswamy",
@@ -5295,6 +5322,11 @@
       "section": "Key labs",
       "text": "Hemoglobin: 11.6 g/dL (2025-11-20)",
       "flagged": true
+     },
+     {
+      "section": "Consent",
+      "text": "FinchNode demo record (consent simulated)",
+      "flagged": false
      }
     ],
     "dataGaps": [
@@ -5902,7 +5934,10 @@
    "brief": {
     "patientId": "patient-demo-sparse",
     "synthetic": true,
-    "generatedAt": "2026-10-03T18:55:34.954Z",
+    "dataSource": "demo",
+    "consentStatus": "simulated",
+    "consentReceipts": [],
+    "generatedAt": "2026-10-03T20:07:20.165Z",
     "dataAsOf": "2026-09-01T00:00:00Z",
     "patient": {
      "name": "Jonah Okoye",
@@ -5928,6 +5963,11 @@
      {
       "section": "Patient",
       "text": "Jonah Okoye, 30 M",
+      "flagged": false
+     },
+     {
+      "section": "Consent",
+      "text": "FinchNode demo record (consent simulated)",
       "flagged": false
      }
     ],
@@ -6581,7 +6621,10 @@
    "brief": {
     "patientId": "patient-demo-messy-coding",
     "synthetic": true,
-    "generatedAt": "2026-10-03T18:55:34.960Z",
+    "dataSource": "demo",
+    "consentStatus": "simulated",
+    "consentReceipts": [],
+    "generatedAt": "2026-10-03T20:07:20.047Z",
     "dataAsOf": "2026-09-01T00:00:00Z",
     "patient": {
      "name": "Dolores Marchetti",
@@ -6721,6 +6764,11 @@
      {
       "section": "Key labs",
       "text": "Creatinine: no value (2026-05-12)",
+      "flagged": false
+     },
+     {
+      "section": "Consent",
+      "text": "FinchNode demo record (consent simulated)",
       "flagged": false
      }
     ],
@@ -7487,7 +7535,10 @@
    "brief": {
     "patientId": "patient-demo-rate-limited",
     "synthetic": true,
-    "generatedAt": "2026-10-03T18:55:34.956Z",
+    "dataSource": "demo",
+    "consentStatus": "simulated",
+    "consentReceipts": [],
+    "generatedAt": "2026-10-03T20:07:22.341Z",
     "dataAsOf": "2026-09-01T00:00:00Z",
     "patient": {
      "name": "Samir Haddad",
@@ -7556,6 +7607,11 @@
      {
       "section": "Key labs",
       "text": "Creatinine: 0.9 mg/dL (2026-02-10)",
+      "flagged": false
+     },
+     {
+      "section": "Consent",
+      "text": "FinchNode demo record (consent simulated)",
       "flagged": false
      }
     ],
@@ -7822,7 +7878,10 @@
    "brief": {
     "patientId": "patient-demo-consent-revoked",
     "synthetic": true,
-    "generatedAt": "2026-10-03T18:55:34.955Z",
+    "dataSource": "",
+    "consentStatus": "",
+    "consentReceipts": [],
+    "generatedAt": "2026-10-03T20:07:20.185Z",
     "dataAsOf": "",
     "patient": {
      "name": "",
@@ -8372,7 +8431,12 @@
    "brief": {
     "patientId": "patient-demo-consent-partial",
     "synthetic": true,
-    "generatedAt": "2026-10-03T18:55:34.956Z",
+    "dataSource": "demo",
+    "consentStatus": "simulated",
+    "consentReceipts": [
+     "rcpt_demo_consent_partial"
+    ],
+    "generatedAt": "2026-10-03T20:07:20.263Z",
     "dataAsOf": "2026-09-01T00:00:00Z",
     "patient": {
      "name": "",
@@ -8432,6 +8496,11 @@
       "section": "Allergies",
       "text": "Allergy to penicillin (low)",
       "flagged": true
+     },
+     {
+      "section": "Consent",
+      "text": "Shared by patient consent, receipt rcpt_demo_consent_partial",
+      "flagged": false
      }
     ],
     "dataGaps": [
@@ -9194,7 +9263,10 @@
    "brief": {
     "patientId": "patient-demo-source-unavailable",
     "synthetic": true,
-    "generatedAt": "2026-10-03T18:55:34.958Z",
+    "dataSource": "demo",
+    "consentStatus": "simulated",
+    "consentReceipts": [],
+    "generatedAt": "2026-10-03T20:07:20.186Z",
     "dataAsOf": "2026-09-01T00:00:00Z",
     "patient": {
      "name": "Ingrid Solano",
@@ -9273,6 +9345,11 @@
      {
       "section": "Key labs",
       "text": "Creatinine: 0.9 mg/dL (2026-02-10)",
+      "flagged": false
+     },
+     {
+      "section": "Consent",
+      "text": "FinchNode demo record (consent simulated)",
       "flagged": false
      }
     ],

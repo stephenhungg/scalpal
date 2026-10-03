@@ -55,6 +55,7 @@ export interface HealthRecord {
   synthetic?: boolean;
   environment?: string;
   categories?: string[];
+  consent?: { status?: string; receiptIds?: string[]; receipts?: { id: string; categories?: string[] }[] };
   sources?: { system: string; organization: string; lastSyncedAt?: string | null }[];
   data: {
     demographics?: Demographics;
@@ -149,6 +150,10 @@ export interface ChartLine {
 export interface PreopBrief {
   patientId: string;
   synthetic: boolean;
+  // "demo" (keyless public API) or "sandbox" (real Connect session with a consent receipt).
+  dataSource: string;
+  consentStatus: string;
+  consentReceipts: string[];
   generatedAt: string;
   dataAsOf: string;
   patient: PatientSummary;
@@ -259,6 +264,20 @@ export interface ChecklistOption {
 }
 
 export type CaseStatus = "ready" | "needs_review" | "blocked" | "retry";
+
+export type { SandboxSession } from "./finchnode.js";
+
+export interface AdmissionStatus {
+  sessionId: string;
+  scenarioId: string;
+  state: "connecting" | "completed" | "failed" | "unavailable";
+  sessionStatus: string;
+  syncStatus: string;
+  patientId: string;
+  organization: string;
+  say: string;
+  actions: Action[];
+}
 
 export interface SurgicalCase {
   caseId: string;

@@ -262,6 +262,8 @@ namespace Scalpal.Exercises.Generated
         Instruments,
         Bundle,
         Connect,
+        Admit,
+        Admission,
     }
 
     // Every route the service can return in an action. Unknown means a contract break, not a feature.
@@ -272,15 +274,17 @@ namespace Scalpal.Exercises.Generated
             (RouteKind.Index, "GET", new Regex("^/$", RegexOptions.CultureInvariant)),
             (RouteKind.Health, "GET", new Regex("^/health$", RegexOptions.CultureInvariant)),
             (RouteKind.Patients, "GET", new Regex("^/patients$", RegexOptions.CultureInvariant)),
-            (RouteKind.Case, "GET", new Regex("^/patients/[a-z0-9-]+/case$", RegexOptions.CultureInvariant)),
-            (RouteKind.Brief, "GET", new Regex("^/patients/[a-z0-9-]+/brief$", RegexOptions.CultureInvariant)),
-            (RouteKind.PreopCheck, "POST", new Regex("^/patients/[a-z0-9-]+/preop-check$", RegexOptions.CultureInvariant)),
+            (RouteKind.Case, "GET", new Regex("^/patients/[a-z0-9_-]+/case$", RegexOptions.CultureInvariant)),
+            (RouteKind.Brief, "GET", new Regex("^/patients/[a-z0-9_-]+/brief$", RegexOptions.CultureInvariant)),
+            (RouteKind.PreopCheck, "POST", new Regex("^/patients/[a-z0-9_-]+/preop-check$", RegexOptions.CultureInvariant)),
             (RouteKind.Procedures, "GET", new Regex("^/procedures$", RegexOptions.CultureInvariant)),
             (RouteKind.Procedure, "GET", new Regex("^/procedures/[a-z0-9_]+$", RegexOptions.CultureInvariant)),
             (RouteKind.Anatomy, "GET", new Regex("^/anatomy$", RegexOptions.CultureInvariant)),
             (RouteKind.Instruments, "GET", new Regex("^/instruments$", RegexOptions.CultureInvariant)),
             (RouteKind.Bundle, "GET", new Regex("^/unity/bundle$", RegexOptions.CultureInvariant)),
             (RouteKind.Connect, "POST", new Regex("^/connect/[a-z0-9-]+$", RegexOptions.CultureInvariant)),
+            (RouteKind.Admit, "POST", new Regex("^/admit/[a-z0-9-]+$", RegexOptions.CultureInvariant)),
+            (RouteKind.Admission, "GET", new Regex("^/admissions/cs_[a-z0-9]+$", RegexOptions.CultureInvariant)),
         };
 
         public static RouteKind Resolve(string method, string route)
