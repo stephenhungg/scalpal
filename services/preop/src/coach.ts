@@ -354,8 +354,9 @@ export class CoachSession {
     const coaching = STEP_COACHING[this.kase.procedure.id]?.[step.id];
     const remaining = this.remainingTargets(step);
     if (tier <= 1) {
-      const authored = step.hints[0] ? ` ${step.hints[0]}` : "";
-      return { say: `${coaching?.why ?? step.instruction}${authored}`, highlight: [] };
+      const why = coaching?.why ?? step.instruction;
+      const authored = step.hints[0] && !restates(why, step.hints[0]) ? ` ${step.hints[0]}` : "";
+      return { say: `${why}${authored}`, highlight: [] };
     }
     if (tier === 2) {
       return { say: coaching?.lookHere ?? step.instruction, highlight: remaining.structures.length ? remaining.structures : step.targets };
@@ -533,6 +534,14 @@ export class CoachSession {
       nextTitle: next?.title ?? "",
     };
   }
+}
+
+// True when the authored hint mostly repeats the coaching sentence, so the nudge says it once.
+function restates(a: string, b: string): boolean {
+  const words = (s: string) => new Set(s.toLowerCase().match(/[a-z]{4,}/g) ?? []);
+  const wa = words(a);
+  const wb = [...words(b)];
+  return wb.length > 0 && wb.filter((w) => wa.has(w)).length / wb.length >= 0.5;
 }
 
 function emptyStepView(): CoachStepView {

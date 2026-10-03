@@ -100,5 +100,6 @@ ${anatomy}`;
 
 export function firstMessage(kase: SurgicalCase): string {
   const first = kase.procedure.steps[0];
-  return `Jarvis here. ${kase.patient.displayLabel}, ${kase.procedure.title.toLowerCase()} for ${kase.indication.toLowerCase()}. ${first ? `We start with ${first.title.toLowerCase()}.` : ""} Ask me anything as you go.`;
+  const indication = kase.indication.charAt(0).toLowerCase() + kase.indication.slice(1);
+  return `Jarvis here. ${kase.patient.displayLabel}, ${kase.procedure.title.toLowerCase()} for ${indication}. ${first ? `We start with ${first.title.toLowerCase()}.` : ""} Ask me anything as you go.`;
 }
