@@ -2,14 +2,42 @@
 
 Full-body Z-Anatomy layers and separate high-detail Human Reference Atlas organs for Scalpal's Unity experience. These are generic anatomical models, not participant-specific anatomy or tissue simulation.
 
+## Get this on another computer
+
+Install Git LFS and Blender 4.5 LTS, then:
+
+```sh
+git lfs install
+git clone --branch codex/anatomy-atlas https://github.com/stephenhungg/scalpal.git
+cd scalpal
+git lfs pull
+git lfs fsck
+```
+
+For an existing clone, run `git fetch origin`, `git switch codex/anatomy-atlas`, `git pull --ff-only`, and `git lfs pull`. Preserve any unrelated local work before switching branches. Repository access is required; this does not change collaborator permissions.
+
+Open **[blender/atlas.blend](blender/atlas.blend)** directly in Blender. It contains all 4,020 prepared meshes, organized into system collections, plus separate heart, liver, and vasculature scenes. Covering layers start hidden; enable their collections in the Outliner. Source labels and stable IDs are embedded as mesh-object custom properties. There are no linked external Blender libraries.
+
+| Deliverable | Location | Storage |
+| --- | --- | --- |
+| Editable Blender workspace | `blender/atlas.blend` | Git LFS |
+| All 11 full-resolution source FBX/GLB files | `originals/` | Git LFS |
+| All 11 prepared Unity FBXs and stable metadata | `../../apps/quest/Assets/Scalpal/Anatomy/` | Git |
+| Preview image | `preview.png` | Git |
+| Source checksums, attribution, generation scripts | This directory and `../../scripts/anatomy/` | Git |
+
+`atlas.blend` contains the prepared display geometry. Import the files in `originals/` when editing full-resolution sources. The roughly 255 MB of originals are checked into LFS, not left on one developer's machine. Do not overwrite these pinned originals with edits; save authored work as a new `.blend` under `blender/` and commit it. Blender backup files and temporary build caches remain ignored.
+
+To regenerate the workspace, run Blender in background mode with `--python-exit-code 1 --python scripts/anatomy/create_workspace.py` from the repository root. This overwrites the generated `atlas.blend`, so commit authored edits first. Its generator verifies the saved file by reopening it and checking all structure IDs.
+
 ## Reproduce sources
 
-Run `python3 scripts/anatomy/fetch.py` from the repository. The downloader validates the pinned source files against `sources.json` and caches originals in ignored `assets/anatomy/cache/`. Original full-resolution geometry stays intact. Do not commit the cache.
+Run `python3 scripts/anatomy/fetch.py` from the repository. It validates the tracked originals against `sources.json` and can recover missing files from pinned upstream URLs. Run `git lfs pull` first to hydrate any LFS pointers. Original full-resolution geometry stays intact.
 
 Sources:
 
 - Z-Anatomy Unity FBX exports: https://github.com/LluisV/Z-Anatomy, revision `6c7f9016bd5899ac8edafd31b9900c151df42ed6`. Credit Lluis Vinent, Z-Anatomy, and BodyParts3D / DBCLS. Source project declares CC BY-SA 4.0; upstream model credits include component-specific terms. Preserved notices are in `attribution/`.
-- Human Reference Atlas male heart, liver, and blood vasculature, release 2.5 high-resolution GLBs: https://github.com/cns-iu/hra-organ-gallery-in-vr, revision `92dc604271f1a3e92cc2ce598405ada2daeb9460`. Credit Human Reference Atlas / HuBMAP, the contributing model authors, and the NLM Visible Human Project. Source catalog: https://humanatlas.io/3d-reference-library. Original GLBs remain in the source cache; these files contain exporter metadata but no embedded author attribution.
+- Human Reference Atlas male heart, liver, and blood vasculature, release 2.5 high-resolution GLBs: https://github.com/cns-iu/hra-organ-gallery-in-vr, revision `92dc604271f1a3e92cc2ce598405ada2daeb9460`. Credit Human Reference Atlas / HuBMAP, the contributing model authors, and the NLM Visible Human Project. Source catalog: https://humanatlas.io/3d-reference-library. Original GLBs are in `originals/`; these files contain exporter metadata but no embedded author attribution.
 
 Different atlas sources are not spatially interchangeable. Full-body layers share the Z-Anatomy source frame. HRA detail models are separate inspection assets and must not be automatically attached to the participant torso.
 

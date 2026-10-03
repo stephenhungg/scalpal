@@ -26,6 +26,7 @@ User direction takes precedence over older proposals. In particular:
 - Delegate bounded independent work when useful, with explicit file ownership. Avoid overlapping edits.
 - Coordinate shared schemas and state transitions through `docs/integration-contracts.md`; proposed contracts are not existing APIs.
 - Preserve unrelated work and inspect the final diff. Choose verification based on behavior and risk, and never claim a check passed unless it ran.
+- Anatomy asset handoff (2026-10-03): Commit and push authored Blender files, model exports, Unity metadata, and generation scripts as part of this project. Use Git LFS for `assets/anatomy/originals/` and `assets/anatomy/blender/*.blend`; preserve upstream originals and save authored edits separately. Keep the root README and anatomy guide discoverable so teammates can obtain the complete assets from another computer. Verify LFS upload as well as the Git push; do not treat an ignored local cache as a delivered asset.
 - State whether a result is measured on the headset, reported by a participant, simulated, or merely proposed.
 - Keep camera-image coordinates, camera-relative estimates, Unity world coordinates, and robot coordinates explicit. Do not conceal missing depth, clock synchronization, or registration behind smoothing.
 - Pause scoring and hide misleading anatomy when registration is invalid. Handle missing video landmarks explicitly in replay rather than inventing precise movement.

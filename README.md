@@ -12,7 +12,7 @@ The backend design uses [SpacetimeDB for shared state plus private file storage 
 
 ## Start Here
 
-This repository currently contains documentation, not an implemented Scalpal application. It is a portable handoff for teammates and their agents. Read these in order:
+The repository contains implementation components and team handoff documentation, but not a validated end-to-end Scalpal application. Read these in order:
 
 1. [Thesis and scope](docs/thesis.md): What we are building, for whom, and what the demo must establish.
 2. [End-to-end experience](docs/demo-flow.md): Earlier proposed journey; its reward phase has been removed and awaits reconciliation with Nathan's plan.
@@ -28,12 +28,18 @@ This repository currently contains documentation, not an implemented Scalpal app
 
 ## Status
 
-As of October 3, 2026, native camera acquisition, Unity sample deployment, desktop mirroring, and an immersive bottle-detection overlay have been demonstrated on the headset. Scalpal torso registration, anatomy assets, voice tools, video recording/reconstruction, and robot retargeting are not implemented here.
+As of October 3, 2026, native camera acquisition, Unity sample deployment, desktop mirroring, and an immersive bottle-detection overlay have been demonstrated on the headset. The repository now includes anatomy assets, Unity anatomy controls and exercise code, and the preop service. Scalpal torso registration and the integrated experience are not headset-validated; video recording/reconstruction and robot retargeting remain separate workstreams.
+
+## Anatomy and Blender Files
+
+**[Open the anatomy asset guide](assets/anatomy/README.md)** for teammate setup, the editable Blender workspace, original full-resolution models, Unity exports, and preview. On branch `codex/anatomy-atlas`, run `git lfs install` and `git lfs pull` to download the original models and `.blend` workspace. Runtime FBXs and Unity `.meta` files are also committed. The Blender workspace has 4,020 prepared parts in four scenes; the 11 original FBX/GLB files are included separately. Geometry checks passed; actual Unity import and Quest performance remain unverified.
+
+![Prepared full-body anatomy, rendered in Blender](assets/anatomy/preview.png)
 
 The conversational selection experience was accepted during product exploration. Robotics and recording were subsequent additions; the onchain reward idea was subsequently removed. Older docs preserve the earlier proposal with explicit scope notices. No expanded specification or application acceptance checks have been completed.
 
 ## Collaboration
 
-Follow [AGENTS.md](AGENTS.md) and the [team plan](docs/team-plan.md). Major component folders contain onboarding READMEs; they are scaffolds, not initialized applications. Agree on one supported exercise, one robot-hand model, and component contracts before overlapping implementation. Work on one measurable technical question at a time. Update the docs when a decision or measured result changes; distinguish a proposal from a verified result.
+Follow [AGENTS.md](AGENTS.md) and the [team plan](docs/team-plan.md). Major component folders contain onboarding READMEs; inspect their current code as some older documents still describe scaffolds. Agree on component contracts before overlapping implementation. Work on one measurable technical question at a time. Update the docs when a decision or measured result changes; distinguish a proposal from a verified result.
 
 Keep credentials, participant footage, device identifiers, and raw datasets out of Git. This is an illustrative simulator, not clinical guidance or evidence of surgical competence. Actual recording, processing, sharing, and training rights must be established for each data source and use.

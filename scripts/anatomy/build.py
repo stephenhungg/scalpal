@@ -50,7 +50,7 @@ def main():
     cache.mkdir(exist_ok=True)
     build_hash = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
     for source in SOURCES:
-        path = ROOT / "assets/anatomy/cache" / source["filename"]
+        path = ROOT / "assets/anatomy/originals" / source["filename"]
         if hashlib.sha256(path.read_bytes()).hexdigest() != source["sha256"]:
             raise ValueError(f"Source checksum mismatch: {path}")
         cached_path = cache / (source["id"] + ".json")
