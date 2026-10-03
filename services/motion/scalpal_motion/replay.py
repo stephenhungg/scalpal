@@ -18,6 +18,10 @@ import numpy as np
 
 from .paths import ROBOTS_DIR
 
+VIEWS = {  # (azimuth, elevation); the same presets face the left Shadow hand correctly
+    "palm": (180.0, -10.0),  # palm toward the viewer, like a webcam/selfie clip
+    "back": (0.0, -10.0),  # back of the hand, like a first-person headset view
+}
 VISUAL_GROUP = 1  # MuJoCo's URDF importer puts visual geoms in group 1 (contype 0)
 HAND_CONNECTIONS = [
     (0, 1), (1, 2), (2, 3), (3, 4), (0, 5), (5, 6), (6, 7), (7, 8), (5, 9), (9, 10), (10, 11),
@@ -100,12 +104,15 @@ def render_replay(
     video_path: str | Path | None = None,
     track: dict | None = None,
     size: tuple[int, int] = (640, 480),
-    azimuth: float = 150.0,
-    elevation: float = -20.0,
-    distance: float = 0.5,
+    view: str | None = None,
+    distance: float = 0.45,
 ) -> Path:
     """Write an mp4 of the replay. With video_path (and track), the source clip with
-    detected landmarks is placed to the left for comparison."""
+    detected landmarks is placed to the left for comparison. view defaults to "palm" for
+    mirrored (selfie) tracks and "back" otherwise."""
+    if view is None:
+        view = "palm" if track and track.get("mirrored_input") else "back"
+    azimuth, elevation = VIEWS[view]
     model = load_model(motion["robot"]["urdf"])
     data = mujoco.MjData(model)
     qadr = {mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_JOINT, j): model.jnt_qposadr[j] for j in range(model.njnt)}

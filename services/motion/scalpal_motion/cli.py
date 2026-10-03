@@ -22,6 +22,8 @@ def _print_summary(motion: dict) -> None:
     print(f"valid {s['valid_frames']}/{s['frames']} frames ({100 * s['valid_fraction']:.1f}%)")
     if s["vector_error_m_median"] is not None:
         print(f"vector error median {1000 * s['vector_error_m_median']:.1f} mm, p95 {1000 * s['vector_error_m_p95']:.1f} mm")
+    if s.get("finger_bend_correlation"):
+        print("finger bend correlation (robot vs estimate):", s["finger_bend_correlation"])
     for seg in s["segments"]:
         print(f"  {seg['status']:>16}  frames {seg['start_frame']}-{seg['end_frame']}  "
               f"({seg['start_ms'] / 1000:.2f}s-{seg['end_ms'] / 1000:.2f}s)")
@@ -70,7 +72,7 @@ def cmd_run(args: argparse.Namespace) -> None:
     _print_summary(motion)
     print(f"perception {t1 - t0:.1f}s, retargeting {t2 - t1:.1f}s")
     if not args.no_render:
-        print("wrote", render_replay(motion, out / "replay.mp4", video_path=args.video, track=track))
+        print("wrote", render_replay(motion, out / "replay.mp4", video_path=args.video, track=track, view=args.view))
 
 
 def cmd_replay(args: argparse.Namespace) -> None:
@@ -94,6 +96,17 @@ def cmd_serve(args: argparse.Namespace) -> None:
     serve(args.host, args.port, Path(args.output_root))
 
 
+def cmd_gateway_worker(args: argparse.Namespace) -> None:
+    import os
+
+    from .gateway_worker import run_worker
+
+    token = os.environ.get("WORKER_TOKEN")
+    if not token:
+        raise SystemExit("set WORKER_TOKEN (and GATEWAY_URL) for Nathan's gateway")
+    run_worker(args.gateway, token, lease_ms=args.lease_ms, mirrored=args.mirrored, once=args.once, hand=args.hand)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="scalpal-motion", description=__doc__)
     sub = parser.add_subparsers(required=True)
@@ -112,6 +125,7 @@ def main() -> None:
     p.add_argument("--hand", choices=["Right", "Left"], default="Right")
     p.add_argument("--mirrored", action="store_true", help="input is a mirrored/selfie image")
     p.add_argument("--smooth", type=float, default=None, help="low-pass alpha in (0,1]; default none")
+    p.add_argument("--view", choices=["palm", "back"], default=None, help="robot camera; default from --mirrored")
     p.add_argument("--no-render", action="store_true")
     p.set_defaults(func=cmd_run)
 
@@ -132,6 +146,16 @@ def main() -> None:
     p.add_argument("--port", type=int, default=8765)
     p.add_argument("--output-root", default=default_out / "runs")
     p.set_defaults(func=cmd_serve)
+
+    import os
+
+    p = sub.add_parser("gateway-worker", help="pull jobs from Nathan's gateway (worker-api v1)")
+    p.add_argument("--gateway", default=os.environ.get("GATEWAY_URL", "http://localhost:8788"))
+    p.add_argument("--lease-ms", type=int, default=120_000)
+    p.add_argument("--hand", choices=["Right", "Left"], default="Right")
+    p.add_argument("--mirrored", action="store_true", help="treat clips as mirrored (selfie/webcam test footage)")
+    p.add_argument("--once", action="store_true", help="handle at most one job, then exit")
+    p.set_defaults(func=cmd_gateway_worker)
 
     args = parser.parse_args()
     if getattr(args, "video", None) and args.func is cmd_run and args.out is None:

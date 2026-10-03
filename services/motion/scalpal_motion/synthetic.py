@@ -34,8 +34,10 @@ def ground_truth_qpos(names: list[str], limits: np.ndarray, n_frames: int) -> np
     return q
 
 
-def make_synthetic(n_frames: int = 90, gap: tuple[int, int] | None = (40, 50)) -> tuple[list[dict], dict]:
-    retargeting, cfg = build_retargeter()
+def make_synthetic(
+    n_frames: int = 90, gap: tuple[int, int] | None = (40, 50), hand: str = "Right"
+) -> tuple[list[dict], dict]:
+    retargeting, cfg = build_retargeter(hand=hand)
     robot = retargeting.optimizer.robot
     names = list(retargeting.joint_names)
     q_true = ground_truth_qpos(names, robot.joint_limits, n_frames)
