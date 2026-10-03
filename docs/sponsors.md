@@ -1,6 +1,6 @@
 # MHacks Sponsor Alignment and Submission Context
 
-> Scope update: Solana, wallets, payouts, and monetary completion rewards have been removed. The remaining design and assignments await Nathan's plan. This earlier proposal contains superseded reward/challenge references and work orders; read [current direction](current-direction.md) first and do not implement those removed features.
+> Scope update: Solana, wallets, payouts, and monetary completion rewards are removed. Nathan owns the companion website + SpacetimeDB/routing lane; Matthew continues Jarvis. This earlier proposal contains superseded reward/challenge references. Read [current direction](current-direction.md) and [Nathan's implementation plan](nathan-plan.md) first.
 
 Snapshot: October 3, 2026. Event categories below were read from the live [MHacks 2026 Devpost](https://mhacks-2026.devpost.com/) and official linked resources. Availability and requirements can change; verify before submitting.
 

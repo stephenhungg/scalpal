@@ -1,4 +1,4 @@
-# Current Direction — Awaiting Nathan's Plan
+# Current Direction
 
 Updated October 3, 2026 after the user removed the monetary/onchain component. This page takes precedence over older architecture, flow, research, and team-plan documents where they disagree.
 
@@ -14,6 +14,8 @@ The working experience is: open the Quest app → discuss an exercise with Jarvi
 
 ## Work Status
 
-The user asked to wait for Nathan's plan, then explicitly requested research/planning for data storage and SpacetimeDB realtime coordination, suggesting Nathan own routing. See [data and realtime proposal](data-and-realtime.md). This proposed backend lane is now part of the planning discussion; application implementation and the final work split still await Nathan's plan. No GitHub identity mapping for Nathan is assumed.
+The user previously asked to wait for Nathan's plan, then requested storage/realtime planning and explicitly assigned the updated implementation lane: **Nathan owns the companion website plus SpacetimeDB and routing; Matthew continues to own Jarvis**. See [Nathan's implementation plan](nathan-plan.md) and [data/storage design](data-and-realtime.md). The earlier blanket wait does not block this assigned lane. The latest request updates the work order; no application implementation is performed by this documentation change. The exact shared exercise, robot model, and other unresolved decisions remain open. No GitHub identity mapping for Nathan is assumed.
+
+The companion website is a live observer view, not another voice agent. It combines shared session/coach/processing state with a separately transported composited headset video feed. The existing Mac mirror is a proposed video source to validate, not the final companion website or a verified network stream.
 
 The repo still contains documentation and folder scaffolds, not an implemented Scalpal application. Earlier measured native camera and bottle-overlay results remain valid infrastructure evidence. Recording/reconstruction rights, torso registration, the selected exercise, robot hand, and educational content still require resolution.

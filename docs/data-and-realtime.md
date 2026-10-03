@@ -1,6 +1,6 @@
 # Data Storage, Realtime State, and Nathan's Backend Lane
 
-Research and proposal: October 3, 2026. The user asked whether SpacetimeDB should be the core realtime backend and suggested Nathan own routing. This authorizes this planning handoff; it does not mean a backend, bucket, SDK integration, or recording pipeline is deployed. The overall build still awaits Nathan's plan. Solana and monetary completion rewards remain removed.
+Research and updated assignment: October 3, 2026. The user assigned Nathan the companion website + SpacetimeDB/routing implementation lane. See [Nathan's work order](nathan-plan.md), which supersedes the earlier suggestion to wait for an unspecified backend plan. This document explains the design; no backend, bucket, SDK integration, stream, or recording pipeline is deployed by the documentation change. Solana and monetary completion rewards remain removed.
 
 ## Recommendation
 
@@ -55,7 +55,7 @@ flowchart TD
     C -->|Authorized replay access| O
 ```
 
-The gateway route for local files may proxy a transfer; cloud object storage can accept a direct signed upload. No full-rate video passes through the database. The observer's existing headset mirror remains separate from these storage and state connections.
+The gateway route for local files may proxy a transfer; cloud object storage can accept a direct signed upload. No full-rate video passes through the database. Nathan's live companion video uses a separate media transport, with the existing composited Mac mirror as the first source to validate; it remains distinct from raw clip storage and motion inference.
 
 ## One Session, End to End
 
@@ -78,20 +78,21 @@ The proposed realtime features are shared exercise state, selected structure, pa
 
 Headset camera rendering, body attachment, and virtual-tool interaction remain local. Publish coarse observer state only when useful and measure update load. Do not send every camera frame or wait for a remote database round trip before rendering the next overlay.
 
-Recording, object upload, and clip processing are asynchronous. SpacetimeDB notifications do not supply a low-latency live video transport. If remote raw-camera streaming becomes a real requirement, design and test that separate media path. The existing local mirror covers the initial spectator need.
+Recording, object upload, and clip processing are asynchronous. SpacetimeDB notifications do not supply a low-latency live video transport. The live companion website is now required in Nathan's work order: validate a separate composited-view stream, initially from the Mac mirror, so viewers see virtual organs/tools. Raw camera streaming is not an equivalent spectator view. State and media connection failures must be distinguishable.
 
-## Nathan's Proposed Responsibilities
+## Nathan's Assigned Responsibilities
 
-Nathan is named by the user; this proposal does not assume a mapping to any GitHub account or confirm the entire prior work split.
+Nathan is named by the user; no GitHub account mapping is assumed. Matthew's existing Jarvis agent remains Matthew's responsibility.
 
 - Define the smallest shared schema: sessions/membership, exercise state/events, required command acknowledgements, artifact metadata, and motion jobs/results.
+- Build the companion website, including live composited headset video over a separate media connection and relevant session/coach/processing panels.
 - Build session-scoped subscriptions and authorized state transitions. Specify which client may change each field.
 - Establish the file storage route, authorized upload/download, verified availability, and artifact retention/deletion behavior.
 - Provide the gateway boundary for voice authorization and the motion worker. Coordinate it with Matthew, Stephen, and Silas.
 - Generate compatible Unity/web bindings or adapters and document endpoint/connectivity configuration. Stephen integrates the Unity connection into the runtime; Matthew consumes confirmed experience state; Silas supplies the processor.
 - Handle disconnect/reconnect, stale commands, duplicate upload confirmations, job retries, and late worker responses without corrupting the active attempt.
 
-These are a proposed replacement for the removed payout lane, not a message sent to Nathan or approval to deploy cloud resources. Reconcile them with his incoming plan.
+These tasks replace the removed payout lane. The update is a repository work order, not a message sent to Nathan or an executed deployment. Follow [Nathan's implementation plan](nathan-plan.md) for sequencing and done checks.
 
 ## Suggested Repository Homes
 
@@ -101,7 +102,7 @@ services/api/            # Nathan: thin auth/upload/provider/worker gateway
 services/motion/         # Silas: reconstruction and robot replay
 packages/contracts/     # Agreed IDs, versions, artifact/job/command contracts
 apps/quest/              # Local capture, registration, simulation, state adapter
-apps/companion/          # Observer and result UI using subscriptions
+apps/companion/          # Nathan: live observer video, state panels, results/replay
 ```
 
 Keep generated client bindings with the consuming project or establish a shared generation step; do not invent a language-independent import of one generated SDK. The module language and exact gateway transport remain Nathan's implementation decisions.

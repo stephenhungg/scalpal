@@ -1,8 +1,8 @@
 # Realtime Session State
 
-Proposed owner: Nathan, following the user's storage/routing discussion. Reconcile with his incoming plan before implementation. This is a documentation scaffold, not an initialized or deployed SpacetimeDB module.
+Owner: Nathan, following the user's companion + SpacetimeDB assignment. Follow [Nathan's implementation plan](../../docs/nathan-plan.md). This is a documentation scaffold, not an initialized or deployed module.
 
-Recommended responsibility: authoritative shared session/exercise state, required command acknowledgements, artifact metadata, and motion-job/results. Use identity-scoped access and subscriptions so the Quest, observer, and coach consume consistent state. Video bytes and full motion files belong in private file/object storage; inference belongs in `services/motion/`.
+Responsibility: authoritative shared session/exercise state, required command acknowledgements, artifact metadata, motion jobs/results, and session-scoped media setup/status if needed. Use identity-scoped access and subscriptions so the Quest, companion website, and Matthew's Jarvis consume consistent state. Live video uses a separate media transport; recordings/full motion files use private file storage; inference belongs in `services/motion/`.
 
 The thin gateway in `services/api/` handles signed storage access, provider authorization, and worker integration. Do not perform network/file/video processing inside transactional reducers.
 

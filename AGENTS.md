@@ -8,7 +8,7 @@
 
 ## Read Before Working
 
-Read `README.md` and `docs/current-direction.md` first, then the thesis, decisions, team plan, and your component document. Current direction supersedes older removed-feature proposals. Check the repository before editing: this handoff contains documentation and folder scaffolds, and the hardware results come from a separate official Meta sample. Application implementation and final assignments await Nathan's plan; the user's subsequent storage/realtime planning request is captured in `docs/data-and-realtime.md`.
+Read `README.md` and `docs/current-direction.md` first, then the thesis, decisions, team plan, and your component document. Current direction supersedes older removed-feature proposals. Check the repository before editing: this handoff contains documentation and folder scaffolds, and the hardware results come from a separate official Meta sample. The latest user assigned Nathan the companion website + SpacetimeDB/routing lane; follow `docs/nathan-plan.md` for that implementation work order. Matthew is already working on Jarvis. The earlier blanket wait is superseded for Nathan's assigned lane; do not imply the remaining open product decisions or unbuilt integrations are resolved.
 
 User direction takes precedence over older proposals. In particular:
 
@@ -17,7 +17,7 @@ User direction takes precedence over older proposals. In particular:
 - The robotics input proposal is recorded passthrough video, not Meta SDK hand-joint telemetry.
 - First demonstrate video-derived hand motion retargeting and replay in simulation. Do not describe replay as a learned autonomous policy.
 - Preserve both education and robotics goals. Do not silently replace the project with a pure analytics dashboard or robotics-only collector.
-- Solana, wallets, onchain challenges, payouts, and monetary completion rewards are removed. Do not implement the historical reward lane. Nathan's proposed storage/routing lane is a planning handoff awaiting reconciliation with his plan.
+- Solana, wallets, onchain challenges, payouts, and monetary completion rewards are removed. Do not implement the historical reward lane. Nathan owns the companion/realtime routing assignment; Matthew owns the single Jarvis voice agent.
 
 ## Implementation Discipline
 

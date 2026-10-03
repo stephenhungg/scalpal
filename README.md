@@ -6,9 +6,9 @@ Scalpal is an MHacks project for Meta Quest 3S. A learner talks to a voice coach
 
 The long-term thesis is that human learning can supply useful robot demonstrations. The proposed demo proves a smaller chain: **one guided exercise → feedback → one video-derived movement sequence → one simulated robot replay.** Replay is not autonomous robot learning.
 
-**Latest direction: Solana and monetary completion rewards are removed. Wait for Nathan's plan before application implementation or reassignment.** Read [current direction](docs/current-direction.md) first; it supersedes earlier payout/challenge references and provisional work orders below.
+**Latest direction: Solana and monetary completion rewards are removed. Nathan owns the companion website + SpacetimeDB/routing lane; Matthew continues to own Jarvis.** Read [current direction](docs/current-direction.md) and [Nathan's implementation plan](docs/nathan-plan.md) first. They supersede older payout work and the prior blanket wait instruction for this assigned lane.
 
-The latest backend proposal is [SpacetimeDB for shared state plus private file storage for video](docs/data-and-realtime.md), with Nathan owning routing and Silas owning motion processing. This is researched planning, not a deployed service or finalized work assignment.
+The backend design uses [SpacetimeDB for shared state plus private file storage for video](docs/data-and-realtime.md), with a separate live-video transport to the companion website. Silas owns motion processing. These are documented implementation tasks, not deployed services or a working stream.
 
 ## Start Here
 
@@ -22,8 +22,9 @@ This repository currently contains documentation, not an implemented Scalpal app
 6. [Implementation plan](docs/implementation-plan.md): Bounded workstreams, ordering, and evidence required to proceed.
 7. [Integration contracts](docs/integration-contracts.md): Proposed shared identifiers and records so parallel components can connect.
 8. [Research](docs/research/README.md) and [sponsor alignment](docs/sponsors.md): Primary sources and conditional event integrations.
-9. [Folder structure and team split](docs/team-plan.md): Proposed ownership for Stephen, Matthew, Silas, and Nakim, parallel checkpoints, and copyable agent briefs.
+9. [Folder structure and team split](docs/team-plan.md): Stephen, Matthew, Silas, and Nathan's lanes, parallel checkpoints, and copyable agent briefs.
 10. [Data storage and realtime](docs/data-and-realtime.md): Latest proposed storage split, Nathan's backend lane, and the distinction between session sync and video processing.
+11. [Nathan's implementation plan](docs/nathan-plan.md): Assigned companion website, SpacetimeDB, live-video, storage, and integration milestones.
 
 ## Status
 
