@@ -29,7 +29,7 @@ blender --background --python scripts/instruments/build_instruments.py -- --root
 blender --background --python scripts/instruments/assemble_library.py -- --root .
 ```
 
-In Unity 6000.0.66f2, import the complete Instruments folder preserving `.meta` files, then use **Scalpal → Instruments → Build Prefabs and Sandbox**. The Quest application still needs its configured native XR rig, build settings and registration owner; this package does not initialize the whole project or connect Jarvis automatically.
+Open the committed `apps/quest` project in Unity 6000.0.66f2, or import the complete Instruments folder into another configured project preserving `.meta` files, then use **Scalpal → Instruments → Build Prefabs and Sandbox**. The Quest application still needs its configured native XR rig, build settings and registration owner; this package does not initialize the whole project or connect Jarvis automatically.
 
 Large source/render binaries use Git LFS. Run `git lfs install` before adding or checking out them on another machine. Generated Blender backups are ignored.
 

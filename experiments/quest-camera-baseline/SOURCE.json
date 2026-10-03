@@ -1,0 +1,9 @@
+{
+  "repository": "https://github.com/oculus-samples/Unity-PassthroughCameraApiSamples.git",
+  "revision": "f9c382190907e20232a74c5ecf6513df47bc13b8",
+  "unityVersion": "6000.0.66f2",
+  "upstreamLicense": "UPSTREAM-LICENSE.txt",
+  "localChanges": "sample-changes.patch",
+  "additionalAssets": "overlay/",
+  "status": "Previously tested physical Quest baseline; separate from Scalpal sandbox."
+}

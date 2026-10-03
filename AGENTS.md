@@ -8,7 +8,7 @@
 
 ## Read Before Working
 
-Read `README.md` and `docs/current-direction.md` first, then the thesis, decisions, team plan, and your component document. Current direction supersedes older removed-feature proposals. Check the repository before editing: this handoff contains documentation and folder scaffolds, and the hardware results come from a separate official Meta sample. The latest user assigned Nathan the companion website + SpacetimeDB/routing lane; follow `docs/nathan-plan.md` for that implementation work order. Matthew is already working on Jarvis. The earlier blanket wait is superseded for Nathan's assigned lane; do not imply the remaining open product decisions or unbuilt integrations are resolved.
+Read `README.md` and `docs/current-direction.md` first, then the thesis, decisions, team plan, and your component document. Current direction supersedes older removed-feature proposals. Check the repository before editing: this repository contains documentation, an openable Unity instrument workbench and other component scaffolds. The hardware results come from a separate official Meta sample, with its pinned source and local changes preserved in `experiments/quest-camera-baseline/`. The instrument project has no configured native XR loader or complete surgery environment. The latest user assigned Nathan the companion website + SpacetimeDB/routing lane; follow `docs/nathan-plan.md` for that implementation work order. Matthew is already working on Jarvis. The earlier blanket wait is superseded for Nathan's assigned lane; do not imply the remaining open product decisions or unbuilt integrations are resolved.
 
 User direction takes precedence over older proposals. In particular:
 

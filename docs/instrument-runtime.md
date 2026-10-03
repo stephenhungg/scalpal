@@ -4,7 +4,7 @@ This package is a functional virtual-tool prototype for Unity 6000.0.66f2. It is
 
 ## Build and Open
 
-Import the complete [Instruments](../apps/quest/Assets/Scalpal/Instruments/) folder into the native Quest project's `Assets/Scalpal/` directory, preserving `.meta` files. The current repository's Quest folder is still a scaffold; these assets do not configure its XR loader, Android build settings, camera permission, or main scene.
+Open the committed [Unity project](../apps/quest/README.md) at `apps/quest` in Unity 6000.0.66f2, then open `Assets/Scalpal/Instruments/Samples/InstrumentSandbox.unity`. Its package manifest, lock, project settings and enabled sandbox build scene are committed. The project remains a standalone editor workbench: it does not configure a native XR loader, Android deployment, passthrough permission or headset rig. Alternatively, import the complete [Instruments](../apps/quest/Assets/Scalpal/Instruments/) folder into an existing native Quest project's `Assets/Scalpal/` directory, preserving `.meta` files.
 
 In Unity, use **Scalpal → Instruments → Build Prefabs and Sandbox**. This reads fifteen `Models/inst_<id>.fbx` files, creates PBR materials and pickup prefabs under `Prefabs/`, and creates `Samples/InstrumentSandbox.unity`. Existing open scenes are restored after generation; the menu asks to save modified scenes first. This generator intentionally rebuilds its outputs, so authored customization should be made in separate prefab variants.
 
