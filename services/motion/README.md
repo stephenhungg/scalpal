@@ -13,7 +13,9 @@ Offline pipeline on the Mac: decode a short permitted passthrough clip, estimate
 | Real Quest passthrough clip | **Not run yet.** No clip exists | — |
 | Real-time / headset display | Out of scope for this slice | — |
 
-`uv run pytest` covers the round trip, gap reporting, joint naming, fixed wrist, and joint limits.
+| Worker job/result boundary (`process`, HTTP `serve`) | Success, no-hand, missing input, bad job, and duplicate run_id paths exercised; a duplicate run never overwrites an existing result; HTTP auth, job, and replay download checked locally | Local test, no gateway yet |
+
+`uv run pytest` covers the round trip, gap reporting, joint naming, fixed wrist, joint limits, and the job failure paths.
 
 ## Setup and Use
 
@@ -28,7 +30,25 @@ uv run scalpal-motion run path/to/clip.mp4          # clip -> out/<clip name>/
 uv run scalpal-motion run clip.mp4 --hand Right --smooth 0.3
 ```
 
-`run` writes `hand_track.json`, `motion.json`, and `replay.mp4` (source clip with landmarks next to the robot). Inputs are assumed unmirrored, like Quest passthrough. Pass `--mirrored` for selfie footage, since MediaPipe's handedness label assumes a mirrored image. Smoothing is off by default. With `--smooth`, the low-pass filter resets after every tracking gap. `out/` and `models/` are gitignored. Keep participant clips outside the repo.
+`run` writes `hand_track.json`, `motion.json`, and `replay.mp4` (H.264, plays in browsers when ffmpeg is installed) (source clip with landmarks next to the robot). Inputs are assumed unmirrored, like Quest passthrough. Pass `--mirrored` for selfie footage, since MediaPipe's handedness label assumes a mirrored image. Smoothing is off by default. With `--smooth`, the low-pass filter resets after every tracking gap. `out/` and `models/` are gitignored. Keep participant clips outside the repo.
+
+## Worker Boundary for Nathan's Gateway
+
+The processor is a job-in, result-out worker. Transport and storage stay Nathan's call; both entry points below share the same code.
+
+```sh
+uv run scalpal-motion process examples/job.example.json       # one job file -> out/runs/<run_id>/
+SCALPAL_MOTION_TOKEN=... uv run scalpal-motion serve --port 8765
+#   POST /jobs                body: job JSON -> result JSON (synchronous, one job at a time)
+#   GET  /runs/<run_id>/<f>   hand_track.json | motion.json | replay.mp4 | result.json
+#   GET  /health
+```
+
+- **Job** (`scalpal.motion_job/0`, [example](examples/job.example.json)): `job_id`, `run_id`, optional `attempt_id`, `input.artifact_id`, `input.source` (local path or signed http(s) URL), and optional `config` (`hand`, `mirrored`, `smooth`).
+- **Result** (`scalpal.motion_result/0`, [example](examples/result.example.json)): echoes the job/run/attempt/artifact IDs and has `status` `ready` or `failed`. On failure, `error.code` is one of `bad_job`, `unsupported_config`, `input_unavailable`, `decode_failed`, `no_hand_detected`, `run_exists`, or `processor_error`. The result also carries processor versions, the config used, `quality` (valid fraction, longest valid segment, vector error, segments), and `artifacts` with kind, content type, size, and sha256.
+- **Run isolation:** outputs go to `<output-root>/<run_id>/`. A repeated `run_id` is refused with `run_exists` and never touches the existing files, so a retry needs a new `run_id`. Deciding which run is current stays with SpacetimeDB.
+- **Not decided here:** learning completion and whether a clip counts as a useful contribution. The worker reports quality, and acceptance thresholds should come from measured clips.
+- **For the companion:** `replay.mp4` is the display artifact (source with landmarks next to the robot, H.264). `motion.json` has named joint angles per frame if a 3D web viewer is wanted later.
 
 ## Method and Choices
 
@@ -46,13 +66,13 @@ These are proposals for the capture and replay boundaries in [integration contra
 
 `motion.json` (`scalpal.robot_motion/0`): robot name, URDF, and root frame, plus the retargeting config version, per-vector scales, smoothing, and fixed joints. Also `joint_names` (order of every `qpos`), `units: radians`, `joint_limits`, and `control_mode`. Each frame has `frame`, `t_ms`, `valid`, `qpos` (null when invalid), `at_limit`, and `vector_error_m`. `summary` holds valid frame count and fraction, contiguous valid/invalid `segments` with times, and median/p95 vector error.
 
-`vector_error_m` measures how well the robot reached the *scaled human vectors*. It doesn't measure how accurately MediaPipe reconstructed the real hand. Nakim's verifier can use `valid_fraction`, the longest valid segment, and the vector error as contribution checks. Thresholds should come from measured clips.
+`vector_error_m` measures how well the robot reached the *scaled human vectors*. It doesn't measure how accurately MediaPipe reconstructed the real hand.
 
 ## Needs From Other Lanes
 
 - **Stephen (capture):** a short permitted raw passthrough clip (mp4 is fine) of one hand opening and closing with a simple wrist turn, fingers visible. Also its capture manifest: camera source, crop, intrinsics, frame timestamps and their clock, and dropped frames. The pipeline only uses decoded presentation time until those exist.
-- **Nakim (results):** agreement on the `motion.json` summary fields above and where the job input/output artifacts live.
-- **Team:** where the replay is shown. `replay.mp4` already works on the laptop; a headset panel would need a Unity renderer for the same joint stream.
+- **Nathan (routing/companion):** confirm or change the job/result shapes above, how the gateway reaches the worker (HTTP or job file), and where inputs and outputs are stored. The companion can show `replay.mp4` directly.
+- **Team:** whether a headset replay panel is wanted too. That would need a Unity renderer for the same joint stream.
 
 ## Not Done / Limits
 
