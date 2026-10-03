@@ -54,12 +54,12 @@ export interface Range {
   high: number | null;
 }
 
-// FinchNode ranges come as "0.6 - 1.2 mg/dL", ">= 60 mL/min", "Synthetic reference: 70–99 mg/dL", "below 5.7%".
+// FinchNode ranges come as "0.6 - 1.2 mg/dL", ">= 60 mL/min", "Synthetic reference: 70<en dash>99 mg/dL", "below 5.7%".
 export function parseRange(text: string | null | undefined): Range {
   const out: Range = { low: null, high: null };
   if (!text) return out;
   const t = text.replace(/^synthetic reference:\s*/i, "");
-  const between = t.match(/(\d+(?:\.\d+)?)\s*[-–—]\s*(\d+(?:\.\d+)?)/);
+  const between = t.match(/(\d+(?:\.\d+)?)\s*[-\u2013\u2014]\s*(\d+(?:\.\d+)?)/);
   if (between) return { low: Number(between[1]), high: Number(between[2]) };
   const lower = t.match(/(?:>=?|≥|above|at least)\s*(\d+(?:\.\d+)?)/i);
   if (lower) out.low = Number(lower[1]);

@@ -8,7 +8,7 @@ const gapCodes = (subject: string) => buildBrief(fixture(subject), NOW).dataGaps
 describe("parseRange", () => {
   it("reads every range format FinchNode uses", () => {
     expect(parseRange("0.6 - 1.2 mg/dL")).toEqual({ low: 0.6, high: 1.2 });
-    expect(parseRange("Synthetic reference: 70–99 mg/dL")).toEqual({ low: 70, high: 99 });
+    expect(parseRange("Synthetic reference: 70\u201399 mg/dL")).toEqual({ low: 70, high: 99 });
     expect(parseRange(">= 60 mL/min/{1.73_m2}")).toEqual({ low: 60, high: null });
     expect(parseRange("<= 5.6 %")).toEqual({ low: null, high: 5.6 });
     expect(parseRange("Synthetic reference: below 5.7%")).toEqual({ low: null, high: 5.7 });

@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Compiles the Quest exercise scripts outside Unity (UnityEngine is stubbed) and plays every
+       bundled case through CaseRunner. Run: npm run test:unity -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- Unity suppresses CS0649 for [SerializeField] fields the inspector assigns. -->
+    <NoWarn>CS0649</NoWarn>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../../apps/quest/Assets/Scalpal/Exercises/**/*.cs" />
+    <Compile Include="UnityEngineStubs.cs" />
+    <Compile Include="Program.cs" />
+  </ItemGroup>
+</Project>

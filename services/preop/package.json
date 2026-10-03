@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit",
     "validate": "tsx src/validate-cli.ts",
     "gen:unity": "tsx scripts/gen-unity.ts",
-    "export:unity": "tsx scripts/export-unity-bundle.ts"
+    "export:unity": "tsx scripts/export-unity-bundle.ts",
+    "test:unity": "dotnet run --project unity-check -- ../../apps/quest/Assets/Scalpal/Exercises/Resources/scalpal_bundle.json"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.0",

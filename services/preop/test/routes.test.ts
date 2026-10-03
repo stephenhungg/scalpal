@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createApp } from "../src/app.js";
+import { matchRoute } from "../src/route-patterns.js";
 import { unitySafetyErrors } from "../src/unity-safe.js";
 import type { Action } from "../src/types.js";
 import { NOW, fixtureClient } from "./helpers.js";
@@ -43,6 +44,7 @@ describe("route crawl", () => {
       expect(actions.length, `${key} is a dead end with no actions`).toBeGreaterThan(0);
       for (const a of actions) {
         expect(a.route.startsWith("/"), `${key} offers a non-local route ${a.route}`).toBe(true);
+        expect(matchRoute(a.method, a.route), `${key} offers ${a.method} ${a.route}, which the Unity router cannot handle`).not.toBeNull();
         queue.push(a);
       }
     }
