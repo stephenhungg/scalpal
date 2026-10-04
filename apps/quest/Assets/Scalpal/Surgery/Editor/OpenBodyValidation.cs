@@ -210,8 +210,18 @@ namespace Scalpal.Surgery.Editor
             foreach (var step in procedure.steps.Take(3)) foreach (var e in CaseRunner.PerfectEvents(step)) muscle.Handle(e);
             muscle.Handle(CaseEvent.Surgery(Action("muscle-cut", "cut", "muscle", "scalpel")));
             foreach (var e in CaseRunner.PerfectEvents(procedure.steps.First(s => s.id == "split_muscle"))) muscle.Handle(e);
-            Require(muscle.Body.Get("muscle", "bladeUsed") == 1 && !muscle.Achieved.Contains("split_muscle"),
-                "later retraction cannot erase prior muscle cutting");
+            Require(muscle.Body.Get("muscle", "bladeUsed") == 1 && muscle.Mistakes.Any(m => m.id == "split_dont_cut" && m.trigger == "guardrail"),
+                "later retraction cannot erase prior muscle cutting from the safety record");
+            Require(muscle.Achieved.Contains("split_muscle"), "a blade on muscle is penalised but does not make the split milestone unreachable");
+            var fibers = new CaseRunner(procedure); Expose(fibers, procedure);
+            var transect = Action("transect", "cut", "mesoappendix", "scalpel", distance:5); transect.angleDegrees = 90;
+            fibers.Handle(CaseEvent.Surgery(transect));
+            Require(!fibers.Body.Log.Last().outcomes.Contains("across_fibers"), "a tissue without a declared fiber direction cannot be cut across fibers");
+            var fascia = new CaseRunner(procedure);
+            foreach (var step in procedure.steps.Take(2)) foreach (var e in CaseRunner.PerfectEvents(step)) fascia.Handle(e);
+            var oblique = Action("oblique-fascia", "cut", "fascia", "metzenbaum_scissors"); oblique.lengthMm = 40; oblique.angleDegrees = 40;
+            fascia.Handle(CaseEvent.Surgery(oblique));
+            Require(fascia.Mistakes.Select(m => m.id).SequenceEqual(new[]{ "fiber_direction" }), "fascia declares fibers, so an oblique cut is across them");
         }
 
         // Mirrors services/preop/test/open-body.test.ts: distanceMm runs from the structure's base,
@@ -317,6 +327,10 @@ namespace Scalpal.Surgery.Editor
             Require(runner.Achieved.Contains("ligate_base") && runner.Body.Get("appendix", "stumpLengthMm") == 4,
                 "short tied stump and correct decision complete base independently of expected order");
             Require(runner.Current.id == "deliver_appendix", "earlier delivery guidance remains after base milestone");
+            runner.Handle(CaseEvent.Surgery(new BodyAction { actionId = "changed-decision", verb = "decide", tissueId = "appendix", layer = "appendix",
+                instrumentId = "decision", registered = true, choice = "appendix_tip" }));
+            Require(runner.Body.Get("appendix", "decision_true_base") == 0 &&
+                !procedure.openBody.milestones.First(m => m.id == "ligate_base").predicates.All(runner.Body.Test), "the latest decision answer wins");
         }
     }
 }

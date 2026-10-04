@@ -13,6 +13,9 @@ export interface TissueDefinition {
   id: string; layer: string; order: number; cuttable: boolean; splittable: boolean;
   perfused: boolean; hollow: boolean; critical: boolean; tentable: boolean;
   flowMlPerSecond: number;
+  // Reference axis the tissue's fibers run along ('' = no fiber direction). 'incision_line' means the
+  // registered incision reference line, which is the axis Unity measures cut angleDegrees against.
+  fiberAxis: string;
   structureIds?: string[]; // Explicit source-atlas binding; simulation identity remains id.
 }
 export interface BodyPredicate { tissueId: string; fact: string; op: string; value: number; }
@@ -55,6 +58,7 @@ export class BodyState {
   private seals = new Map<string, number[]>();
   private injuries = new Map<string, Injury[]>();
   private roughAt = new Map<string, number>();
+  private decisions = new Map<string, string>();
   private clock = -1;
   constructor(readonly tissues: TissueDefinition[]) { for(const t of tissues)if(t.splittable)this.set(t.id,'bladeUsed',0); }
   get(tissueId: string, fact: string) { return this.facts.get(`${tissueId}:${fact}`) ?? 0; }
@@ -101,7 +105,7 @@ export class BodyState {
         if(this.get(t.id,'markLengthMm')>0)put('cutCoverage',Math.min(1,this.get(t.id,'cutLengthMm')/this.get(t.id,'markLengthMm')));
         put('cutErrorMm',e.distanceMm);put('cutAngleDegrees',e.angleDegrees);put('cutDepthMm',e.depthMm);
         if(t.splittable) {put('bladeUsed');outcomes.push('muscle_cut');}
-        if(e.angleDegrees>25)outcomes.push('across_fibers');
+        if(t.fiberAxis&&e.angleDegrees>25)outcomes.push('across_fibers');
         if(t.tentable){put('tentedBeforeCut',this.get(t.id,'tented'));if(!this.get(t.id,'tented'))outcomes.push('untented_cut');}
         const positions=[...clamp.values()].sort((a,b)=>a-b);
         const measured=e.choice!=='longitudinal_unmeasured';
@@ -154,7 +158,11 @@ export class BodyState {
         break;
       case 'suction':if(!this.tissues.some(t=>this.get(t.id,'fluidDriven')>0))this.set('','poolMl',Math.max(0,this.get('','poolMl')-e.durationMs*.005));break;
       case 'inspect':put('inspectionMs',Math.max(this.get(t.id,'inspectionMs'),e.durationMs));break;
-      case 'decide':put(`decision_${e.choice}`);break;
+      case 'decide': {
+        // The latest answer wins; an earlier choice no longer satisfies a decision predicate.
+        const previous=this.decisions.get(t.id);if(previous!==undefined&&previous!==e.choice)put(`decision_${previous}`,0);
+        this.decisions.set(t.id,e.choice);put(`decision_${e.choice}`);break;
+      }
       case 'close':put('closed');break;
       case 'place':put('placed');break;
     }

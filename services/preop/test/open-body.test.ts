@@ -57,6 +57,26 @@ describe('case-agnostic body and predicate scorer',()=>{
   lift('other-tool',950,{instrumentInstanceId:'babcock-2'});lift('other-tissue',960,{tissueId:'cecum',layer:'cecum'});
   expect(e.mistakes.filter(m=>m.id==='rough_handling').length).toBe(3);
   lift('after-window',3000);expect(e.mistakes.filter(m=>m.id==='rough_handling').length).toBe(4);});
+ it('only tissues with a declared fiber direction can be cut across their fibers',()=>{const e=exposed();
+  e.handle({type:'surgery',evidence:bodyAction('cut','mesoappendix',{lengthMm:4,distanceMm:5,angleDegrees:90,actionId:'transect'})});
+  expect(e.body!.log.at(-1)!.outcomes).not.toContain('across_fibers'); // A correct 90-degree transection has no fibers to cross.
+  const fascia=new StepEngine(procedure);for(const s of procedure.steps.slice(0,2))for(const a of perfectEvents(s))fascia.handle(a);
+  fascia.handle({type:'surgery',evidence:bodyAction('cut','fascia',{lengthMm:40,angleDegrees:40,instrumentId:'metzenbaum_scissors'})});
+  expect(fascia.mistakes.map(m=>m.id)).toEqual(['fiber_direction']);});
+ it('a blade on muscle stays a recorded guardrail but the muscle can still be split for the milestone',()=>{const e=new StepEngine(procedure);
+  for(const s of procedure.steps.slice(0,3))for(const a of perfectEvents(s))e.handle(a);
+  e.handle({type:'surgery',evidence:bodyAction('cut','muscle',{lengthMm:10,actionId:'blade-on-muscle'})});
+  for(const a of perfectEvents(procedure.steps[3]!))e.handle(a);
+  expect(e.body!.get('muscle','bladeUsed')).toBe(1);expect(e.mistakes.map(m=>m.id)).toContain('split_dont_cut');
+  expect(e.completedMilestones.has('split_muscle')).toBe(true);});
+ it('guardrails are labelled as guardrails, not order deviations',()=>{const e=exposed();
+  e.handle({type:'surgery',evidence:bodyAction('cut','terminal_ileum',{lengthMm:4})});
+  expect(e.mistakes.length).toBeGreaterThan(0);expect(e.mistakes.every(m=>m.trigger==='guardrail')).toBe(true);});
+ it('the latest decision answer wins for milestones',()=>{const e=exposed();for(const a of perfectEvents(procedure.steps[7]!))e.handle(a);
+  expect(e.completedMilestones.has('ligate_base')).toBe(true);
+  e.handle({type:'surgery',evidence:bodyAction('decide','appendix',{instrumentId:'decision',choice:'appendix_tip',actionId:'changed-mind'})});
+  expect(e.body!.get('appendix','decision_true_base')).toBe(0);
+  expect(plan().milestones.find(m=>m.id==='ligate_base')!.predicates.every(p=>e.body!.test(p))).toBe(false);});
  it('rejects invalid registration, replay, old clock, wrong tool, and blocks hidden layers',()=>{const b=new BodyState(OPEN_BODY.tissues);expect(b.apply(bodyAction('cut','skin',{registered:false}))).toBeNull();expect(b.apply(bodyAction('cut','skin',{instrumentId:'skin_marker'}))).toBeNull();const hidden=b.apply(bodyAction('cut','fascia',{timeMs:2}));expect(hidden?.outcomes).toEqual(['not_exposed']);expect(b.get('fascia','opened')).toBe(0);expect(b.apply(bodyAction('cut','fascia',{timeMs:2}))).toBeNull();expect(b.apply(bodyAction('cut','skin',{timeMs:1}))).toBeNull();});
  it('a new bleed invalidates the no-active-bleed milestone without erasing history',()=>{const e=exposed();for(const a of perfectEvents(procedure.steps[6]!))e.handle(a);expect(e.completedMilestones.has('divide_mesoappendix')).toBe(true);e.handle({type:'surgery',evidence:bodyAction('cut','appendicular_artery',{lengthMm:4})});expect(e.body!.test({tissueId:'',fact:'activeBleeds',op:'eq',value:0})).toBe(false);});
 });

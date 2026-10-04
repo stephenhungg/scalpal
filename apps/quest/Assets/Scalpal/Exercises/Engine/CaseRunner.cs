@@ -165,7 +165,7 @@ namespace Scalpal.Exercises.Engine
                     (!string.IsNullOrEmpty(rule.verb) && rule.verb != record.action.verb) ||
                     (!string.IsNullOrEmpty(rule.outcome) && Array.IndexOf(record.outcomes, rule.outcome) < 0) ||
                     !EventPredicate(record.action,rule.eventPredicate)) continue;
-                var mistake = new StepMistake { id = rule.id, trigger = "wrong_order", structure = record.action.tissueId,
+                var mistake = new StepMistake { id = rule.id, trigger = "guardrail", structure = record.action.tissueId,
                     severity = rule.severity, feedback = rule.feedback };
                 mistakes.Add(mistake);
                 if (result.mistake == null) result.mistake = mistake;

@@ -149,6 +149,8 @@ namespace Scalpal.Exercises.Data
         public bool critical;
         public bool tentable;
         public float flowMlPerSecond;
+        // Axis the fibers run along ("" = none); "incision_line" is the registered incision reference line.
+        public string fiberAxis;
         public string[] structureIds;
     }
 

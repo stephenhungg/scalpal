@@ -31,6 +31,7 @@ namespace Scalpal.Exercises.Engine
         readonly Dictionary<string, List<double>> seals = new Dictionary<string, List<double>>();
         readonly Dictionary<string, List<Injury>> injuries = new Dictionary<string, List<Injury>>();
         readonly Dictionary<string, double> roughAt = new Dictionary<string, double>();
+        readonly Dictionary<string, string> decisions = new Dictionary<string, string>();
         double clock = -1;
         public TissueDefinition[] Tissues { get; }
         public IReadOnlyList<BodyRecord> Log => log;
@@ -101,7 +102,7 @@ namespace Scalpal.Exercises.Engine
                     if (Get(tissue.id, "markLengthMm") > 0) Put("cutCoverage", Math.Min(1, Get(tissue.id, "cutLengthMm") / Get(tissue.id, "markLengthMm")));
                     Put("cutErrorMm", e.distanceMm); Put("cutAngleDegrees", e.angleDegrees); Put("cutDepthMm", e.depthMm);
                     if (tissue.splittable) { Put("bladeUsed"); outcomes.Add("muscle_cut"); }
-                    if (e.angleDegrees > 25) outcomes.Add("across_fibers");
+                    if (!string.IsNullOrEmpty(tissue.fiberAxis) && e.angleDegrees > 25) outcomes.Add("across_fibers");
                     if (tissue.tentable) { Put("tentedBeforeCut", Get(tissue.id, "tented")); if (Get(tissue.id, "tented") == 0) outcomes.Add("untented_cut"); }
                     var positions = clamp.Values.OrderBy(v => v).ToArray();
                     bool measured = e.choice != "longitudinal_unmeasured";
@@ -174,7 +175,10 @@ namespace Scalpal.Exercises.Engine
                     break;
                 case "suction": if (!Tissues.Any(t=>Get(t.id,"fluidDriven")>0)) Set("", "poolMl", Math.Max(0, Get("", "poolMl") - e.durationMs * .005)); break;
                 case "inspect": Put("inspectionMs", Math.Max(Get(tissue.id, "inspectionMs"), e.durationMs)); break;
-                case "decide": Put("decision_" + e.choice); break;
+                case "decide":
+                    // The latest answer wins; an earlier choice no longer satisfies a decision predicate.
+                    if (decisions.TryGetValue(tissue.id, out var previous) && previous != e.choice) Put("decision_" + previous, 0);
+                    decisions[tissue.id] = e.choice; Put("decision_" + e.choice); break;
                 case "close": Put("closed"); break;
                 case "place": Put("placed"); break;
             }

@@ -1,16 +1,17 @@
 import type { OpenBodyCase, BodyPredicate, TissueDefinition } from '../open-body.js';
 import type { ProcedureStep } from '../types.js';
 const p=(tissueId:string,fact:string,op:string,value:number):BodyPredicate=>({tissueId,fact,op,value});
-const tissue=(id:string,order:number,extra:Partial<TissueDefinition>={}):TissueDefinition=>({id,layer:id,order,cuttable:true,splittable:false,perfused:false,hollow:false,critical:false,tentable:false,flowMlPerSecond:0,...extra});
+const tissue=(id:string,order:number,extra:Partial<TissueDefinition>={}):TissueDefinition=>({id,layer:id,order,cuttable:true,splittable:false,perfused:false,hollow:false,critical:false,tentable:false,flowMlPerSecond:0,fiberAxis:'',...extra});
 export const OPEN_BODY:OpenBodyCase={version:1,fastPathPremarked:false,
- tissues:[tissue('skin',0),tissue('fat',1),tissue('fascia',2),tissue('muscle',3,{splittable:true,perfused:true,flowMlPerSecond:.3}),tissue('peritoneum',4,{tentable:true}),
+ tissues:[tissue('skin',0),tissue('fat',1),tissue('fascia',2,{fiberAxis:'incision_line'}),tissue('muscle',3,{splittable:true,perfused:true,flowMlPerSecond:.3}),tissue('peritoneum',4,{tentable:true}),
  tissue('appendix',-1,{hollow:true}),tissue('mesoappendix',-1,{perfused:true,flowMlPerSecond:2}),tissue('appendicular_artery',-1,{perfused:true,flowMlPerSecond:2}),
  tissue('cecum',-1,{hollow:true,critical:true}),tissue('terminal_ileum',-1,{hollow:true,critical:true}),tissue('iliac_vessels',-1,{critical:true,perfused:true,flowMlPerSecond:8,structureIds:['cardiovascular__common_iliac_artery_r','cardiovascular__common_iliac_vein_r']}),tissue('ureter',-1,{critical:true,hollow:true,structureIds:['right_ureter']})],
  milestones:[
  {id:'mark_incision',predicates:[p('skin','marked','eq',1),p('skin','markErrorMm','lte',20),p('skin','markLengthMm','gte',50),p('skin','markLengthMm','lte',80),p('skin','markAngleDegrees','lte',25)]},
  {id:'incise_skin',predicates:[p('skin','cutCoverage','gte',.8),p('skin','cutErrorMm','lte',5),p('skin','cutDepthMm','lte',14),p('fat','opened','eq',1)]},
  {id:'open_fascia',predicates:[p('fascia','opened','eq',1),p('fascia','cutAngleDegrees','lte',25)]},
- {id:'split_muscle',predicates:[p('muscle','splitWidthMm','gte',15),p('muscle','bladeUsed','eq',0)]},
+ // Blade use stays a recorded guardrail (split_dont_cut) and tissue penalty; it must not make the split unreachable.
+ {id:'split_muscle',predicates:[p('muscle','splitWidthMm','gte',15)]},
  {id:'open_peritoneum',predicates:[p('peritoneum','opened','eq',1),p('peritoneum','tentedBeforeCut','eq',1)]},
  {id:'deliver_appendix',predicates:[p('appendix','delivered','eq',1)]},
  // cutBetweenClamps records the two measured clamps at division time; clampCount is live and drops when clamps come off.
