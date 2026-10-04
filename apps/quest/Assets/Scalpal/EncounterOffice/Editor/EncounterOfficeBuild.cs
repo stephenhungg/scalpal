@@ -65,14 +65,14 @@ namespace Scalpal.EncounterOffice.Editor
             Button(left,ui,"History","page","history",-.28f,.10f,.25f); Button(left,ui,"Examine","page","exam",0,.10f,.25f); Button(left,ui,"Tests","page","tests",.28f,.10f,.25f);
             ui.options = new EncounterOfficeButton[4];
             for (int i=0;i<4;i++) ui.options[i] = Button(left,ui,"Question","option","",0,-i*.09f,.80f);
+            ui.suggestions = Button(left,ui,"Suggestions","suggestions","",0,0,.80f);
             Button(left,ui,"Back","previous","",-.315f,-.36f,.19f); Button(left,ui,"More","next","",-.105f,-.36f,.19f);
             Button(left,ui,"Voice","voice","",.105f,-.36f,.19f); Button(left,ui,"Stop","stop","",.315f,-.36f,.19f);
             Button(left,ui,"Present to Jarvis","attending","",-.105f,-.46f,.60f); Button(left,ui,"Refresh","refresh","",.315f,-.46f,.19f);
             Text(right,"FindingsTitle","Your findings",new Vector3(-.38f,.49f,-.026f),.034f);
             ui.chart = Text(right,"Chart","No examinations performed.",new Vector3(-.38f,.37f,-.026f),.024f);
             Button(right,ui,"Back","chart_previous","",-.28f,-.09f,.25f); Button(right,ui,"More","chart_next","",0,-.09f,.25f); Button(right,ui,"Findings / score","chart_toggle","",.28f,-.09f,.25f);
-            ui.response = Text(right,"Response","Patient response appears here.",new Vector3(-.38f,-.17f,-.026f),.024f);
-            Button(right,ui,"Back","response_previous","",-.21f,-.42f,.39f); Button(right,ui,"More","response_next","",.21f,-.42f,.39f);
+            // Patient, parent and Jarvis lines appear in the shared lower-middle DialogueBox, not on this panel.
             Button(right,ui,"Summary","summary","",-.21f,-.51f,.39f);
             ui.microphoneMode=Button(right,ui,"Open mic","mic_mode","",.28f,-.51f,.25f);
             var assessment = Panel("AssessmentConsole",new Vector3(0,.70f,.22f),new Vector3(0,1.2f,1.75f),new Vector2(1.15f,.40f)); assessment.SetParent(ui.transform,true);ui.assessment=assessment;
@@ -323,7 +323,7 @@ namespace Scalpal.EncounterOffice.Editor
             fontMaterial.renderQueue=3020;fontMaterial.mainTexture=text.font.material.mainTexture;EditorUtility.SetDirty(fontMaterial);text.GetComponent<Renderer>().sharedMaterial=fontMaterial;text.color=InkColor;
             var fit=text.gameObject.AddComponent<EncounterOfficeText>();fit.preferredCharacterSize=size*.25f;
             fit.maximumWidth=name=="Draft"?.80f:name=="PatientState"?1.1f:.76f;
-            fit.maximumHeight=name=="Draft"?.13f:name=="Chart"?.44f:name=="Response"?.23f:name=="Status"?.12f:.10f;fit.Fit();
+            fit.maximumHeight=name=="Draft"?.13f:name=="Chart"?.44f:name=="Status"?.12f:.10f;fit.Fit();
             return text;
         }
         static EncounterOfficeButton Button(Transform parent,EncounterOfficePanel panel,string label,string command,string argument,float x,float y,float width)

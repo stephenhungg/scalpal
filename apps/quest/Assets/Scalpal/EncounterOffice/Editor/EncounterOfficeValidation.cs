@@ -45,7 +45,7 @@ namespace Scalpal.EncounterOffice.Editor
             Check(session.realtime&&!session.realtime.autoConnect&&session.realtime.gameObject==session.gameObject&&session.State==null,"office binds pairing bridge without automatic networking or automatic case selection");
             Check(rig.head.transform.parent==rig.origin&&rig.left.parent==rig.origin&&rig.right.parent==rig.origin,"head and controllers share one floor tracking origin");
             Check(rig.session==session&&rig.talkHint&&panel&&panel.microphoneMode&&panel.microphoneMode.command=="mic_mode","tracked hold-to-talk rig, first-use hint and explicit microphone mode bind the encounter");
-            Check(panel&&panel.session==session&&panel.options.Length==4&&panel.keyboard&&panel.assessment&&panel.chart&&panel.response&&panel.draft,"visual fallback has paged questions, findings and editable assessment");
+            Check(panel&&panel.session==session&&panel.options.Length==4&&panel.keyboard&&panel.assessment&&panel.chart&&panel.suggestions&&panel.draft,"visual fallback has paged questions, findings and editable assessment");
             Check(session.patient.female&&session.patient.male&&!session.patient.female.activeSelf&&!session.patient.male.activeSelf,"both generic adult presentations bind and remain hidden until authoritative demographics arrive");
             foreach(var patient in new[]{session.patient.female,session.patient.male})
                 Check(patient.GetComponentsInChildren<Transform>(true).Any(t=>t.name=="HeadPivot")&&patient.GetComponentsInChildren<Transform>(true).Any(t=>t.name=="JawPivot"),"licensed weighted human head and jaw animation nodes exist");
@@ -95,9 +95,15 @@ namespace Scalpal.EncounterOffice.Editor
             string finalDraftPage=panel.draft.text;Check(finalDraftPage.Split('\n').Length<=4&&finalDraftPage.Contains("step"),"400-character typed plan is paged into a readable three-line field region");
             panel.Act("draft_previous","");Check(panel.draft.text!=finalDraftPage&&panel.draft.text.Split('\n').Length<=4,"draft back exposes earlier long assessment text without truncating stored plan");
             for(int i=0;i<6;i++)panel.Act("draft_previous","");Check(panel.draft.text.Contains("stepa")&&session.Draft.procedure.Length==400,"learner can review beginning of full stored 400-character plan");
-            Property(session,"LastResponse",string.Join("\n",Enumerable.Range(0,28).Select(n=>"Authored response line "+n)));panel.Refresh();
-            Check(panel.response.text.Split('\n').Length<=7&&!panel.response.text.Contains("line 20"),"long returned patient/summary text stays within paged response region");panel.Act("response_next","");
-            Check(panel.response.text.Contains("line 6")&&!panel.response.text.Contains("line 0"),"ray paging exposes next returned response lines");
+            // The conversation lives in the shared DialogueBox; the findings panel no longer pages a duplicate transcript.
+            Check(panel.suggestions.command=="suggestions"&&!buttons.Any(button=>button.command=="response_next"||button.command=="response_previous")&&!UnityEngine.Object.FindObjectsByType<TextMesh>(FindObjectsInactive.Include,FindObjectsSortMode.None).Any(text=>text.name=="Response"),"office panels carry no duplicate transcript region");
+            panel.Act("page","history");
+            Check(panel.suggestions.gameObject.activeSelf&&panel.options.All(option=>!option.gameObject.activeSelf),"history topics start collapsed behind Suggestions for a voice-first interview");
+            panel.Act("suggestions","");
+            Check(!panel.suggestions.gameObject.activeSelf&&panel.options.All(option=>option.gameObject.activeSelf&&option.command=="option"),"Suggestions expands the paged history questions");
+            panel.Act("page","exam");
+            Check(!panel.suggestions.gameObject.activeSelf&&panel.options.Any(option=>option.gameObject.activeSelf),"examinations stay directly available without the suggestions step");
+            panel.Act("page","assessment");panel.Act("field","procedure");
             Property(session,"Score",new EncounterScore{total=23,max=100,grade="Needs practice",feedback=Enumerable.Range(0,26).Select(n=>"Feedback item "+n).ToArray()});panel.Refresh();
             Check(panel.chart.text.Split('\n').Length<=11&&panel.draft.text.Split('\n').Length<=3,"full score feedback is paged and assessment panel does not overflow controls");
             var fittedTexts=UnityEngine.Object.FindObjectsByType<EncounterOfficeText>(FindObjectsInactive.Include,FindObjectsSortMode.None);
