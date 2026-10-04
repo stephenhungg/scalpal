@@ -111,3 +111,22 @@ describe("coach <-> SpacetimeDB patient condition", () => {
     expect(calls.find((c) => c.op === "baseline")?.args[1]).toMatchObject({ hr: 66, rr: 13, source: "measured" });
   });
 });
+
+describe("one death answer for display, refusals and alerts", () => {
+  it("refuses actions and announces death once when the shared row says the patient died", async () => {
+    let remote: { view: ConditionView; ageMs: number } | null = null;
+    const { sink } = conditionSink(() => remote);
+    const app = createApp({ client: fixtureClient(), now: () => NOW, coachTickMs: 0, realtime: sink as unknown as RealtimeBridge });
+    const sid = (await req(app, "POST", "/coach/sessions", { patientId: "patient-demo-multi-source" })).json.sessionId as string;
+    const live = (await req(app, "GET", `/coach/sessions/${sid}`)).json.snapshot.condition as ConditionView;
+    remote = { view: { ...live, source: "spacetime", outcome: { result: "died", cause: "hemorrhage (52% of blood volume lost, simulated)", at: new Date(NOW).toISOString() } } as ConditionView, ageMs: 500 };
+    const first = await req(app, "POST", `/coach/sessions/${sid}/events`, { event: { type: "contact", instrumentId: "scalpel", structureId: "skin" } });
+    expect(JSON.stringify(first.json)).toMatch(/patient_died/);
+    await req(app, "POST", `/coach/sessions/${sid}/simulate`, { kind: "tracking_lost" });
+    const alerts = (await req(app, "GET", `/coach/sessions/${sid}/alerts?after=0`)).json.alerts.filter((a: any) => a.kind === "patient_died");
+    expect(alerts.length).toBe(1);
+    await req(app, "GET", `/coach/sessions/${sid}/alerts?after=0`);
+    expect((await req(app, "GET", `/coach/sessions/${sid}/alerts?after=0`)).json.alerts.filter((a: any) => a.kind === "patient_died")).toHaveLength(1);
+    expect((await req(app, "POST", `/coach/sessions/${sid}/hint`)).json).toBeTruthy();
+  });
+});

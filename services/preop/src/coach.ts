@@ -431,7 +431,7 @@ export class CoachSession {
   }
 
   handle(event: CoachEvent): EventOutcome {
-    if (this.condition.died) return { accepted: false, reason: "patient_died", alerts: [] };
+    if (this.isDead()) return { accepted: false, reason: "patient_died", alerts: [] };
     if (event.type === "tracking") return this.handleTracking(event.valid);
     if (event.type === "injury") return this.handleInjury(event);
     if (event.type === "bleeding") return this.kase.procedure.openBody
@@ -643,6 +643,11 @@ export class CoachSession {
   tick(): CoachAlert[] {
     if (this.simulated) this.advanceSimulatedBleeding();
     const alerts = this.checkStuck();
+    // A death the shared row reports between learner actions is announced on the next tick.
+    if (!this.deathAnnounced && this.isDead()) {
+      this.changed(alerts);
+      return alerts;
+    }
     const bleeding = this.bleeds.size > 0 || this.condition.view().regions.some((r) => r.bleeding);
     // While anything bleeds the vitals move every tick, so the state is republished.
     if (alerts.length || (bleeding && !this.condition.died)) this.changed(alerts);
@@ -708,8 +713,16 @@ export class CoachSession {
       else this.condition.markEnded("ended before the case goals were reached");
     }
     const out: CoachAlert[] = [];
+    const shared = this.conditionView();
+    if (!this.deathAnnounced && !this.condition.died && shared.outcome.result === "died") {
+      this.deathAnnounced = true;
+      this.note(`The patient died: ${shared.outcome.cause}.`);
+      out.push(this.alert("patient_died", "urgent", `${DEATH_LINE} Cause: ${shared.outcome.cause}.`, [], "", "outcome.died", DEATH_LINE));
+    }
     for (const c of this.condition.update()) {
       if (c.kind === "died") {
+        if (this.deathAnnounced) continue;
+        this.deathAnnounced = true;
         this.note(`The patient died: ${c.cause}.`);
         out.push(this.alert("patient_died", "urgent", `${DEATH_LINE} Cause: ${c.cause}.`, [], "", "outcome.died", DEATH_LINE));
       } else if (c.to >= 2) {
@@ -722,7 +735,7 @@ export class CoachSession {
   }
 
   private stuckLevel(): number {
-    if (this.done || !this.trackingValid || this.condition.died) return 0;
+    if (this.done || !this.trackingValid || this.isDead()) return 0;
     const idle = (this.ms() - this.lastProgressAt) / 1000;
     let level = 0;
     for (let i = 0; i < this.policy.seconds.length; i++) {
@@ -744,7 +757,7 @@ export class CoachSession {
 
   // Learner asked for help: deliver the next tier immediately.
   requestHint(): { tier: number; say: string; highlight: string[] } {
-    if (this.condition.died) return { tier: 0, say: "The patient died, so the case is over. There is no next step.", highlight: [] };
+    if (this.isDead()) return { tier: 0, say: "The patient died, so the case is over. There is no next step.", highlight: [] };
     const step = this.engine.current;
     if (!step) return { tier: 0, say: "The procedure is complete. Nothing left to do.", highlight: [] };
     this.tier = Math.min(this.policy.seconds.length, this.tier + 1);
@@ -975,6 +988,15 @@ export class CoachSession {
       })),
       condition: this.conditionView(),
     };
+  }
+
+  private deathAnnounced = false;
+
+  // One answer for "is the patient dead": the condition shown (shared SpacetimeDB row when fresh, else
+  // local) or the local model. Refusing actions and the death alert follow the same outcome the dashboard
+  // and Scalpal's state card show.
+  private isDead(): boolean {
+    return this.condition.died || this.conditionView().outcome.result === "died";
   }
 
   private conditionView(): ConditionView {
