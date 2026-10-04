@@ -35,7 +35,7 @@ User direction takes precedence over older proposals. In particular:
 
 ## Status and Handoff
 
-Commit and push verified milestones as work progresses; the user has authorized this ongoing workflow. Fetch teammate commits at integration checkpoints and before publishing. Use focused branches and pull requests, preserve unrelated local changes, and report verification and remaining limitations with each handoff.
+Commit and push verified milestones as work progresses; the user has authorized this ongoing workflow. Work directly on `main`: fetch and rebase/merge `origin/main` before each new chunk and before pushing, then push small focused commits to `origin main`. Do not create feature branches or pull requests, and never force-push `main`. Preserve unrelated local changes and report verification and remaining limitations with each handoff. This workflow supersedes older branch/PR instructions.
 
 The repository/context and team-layout requests authorize this handoff and scaffold, not implementation of every proposed component. Follow subsequent user-assigned scope. Before a broad build, reconcile the expanded architecture and unresolved decisions with the owner; do not treat the prior pre-robotics draft review as approval of the current specification.
 
@@ -45,6 +45,6 @@ For every shipping milestone:
 - Trace the changed route through real producer and consumer code. Check IDs/versions, coordinates/clocks, required scene bindings, validity gates and reset/retry behavior. Do not claim an adapter exists because a contract or generated SDK binding exists.
 - Keep one shared tool/anatomy/exercise/coach core across MR and full VR. Presentation mode and lifecycle phase are separate. Use one scored event path and a deliberately chosen step authority; do not add duplicate progression engines.
 - Run the component checks and the affected boundary exchange. State explicitly when a physical-headset or complete-session test has not run. Standalone art, synthetic workers and browser headset substitutes remain component evidence.
-- Update the map, component documentation and required follow-up when behavior or routing changes, then commit/push the verified milestone through a focused PR.
+- Update the map, component documentation and required follow-up when behavior or routing changes, then commit/push the verified milestone directly to `main` using the synchronization workflow above.
 
 For completed work, report changed files, relevant checks, measured limitations, and the next blocked interface or decision. Update the relevant document when evidence changes a premise. Do not add a tracking file for every small task.
