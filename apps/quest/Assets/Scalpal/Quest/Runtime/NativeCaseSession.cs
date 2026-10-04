@@ -340,8 +340,7 @@ namespace Scalpal.Quest
             if (busy) return;
             if (OfficeHandoff != null && candidate != null)
             {
-                if (Phase == "Recap") ReturnToOffice();
-                else Message = "This practice is bound to the scored office attempt. Return to the office for a new case.";
+                ReturnToOffice();
                 return;
             }
             if (tissueSimulation) tissueSimulation.ResetTissues();
@@ -514,6 +513,12 @@ namespace Scalpal.Quest
                 foreach (var flag in candidate.brief.flags ?? Array.Empty<RiskFlag>()) body += "\n" + flag.title;
                 body += "\nB: acknowledge brief and start";
             }
+            else if (Phase == "Recap" && OfficeHandoff != null)
+            {
+                body = "Office: " + OfficeHandoff.scorecard.total + "/" + OfficeHandoff.scorecard.max + " · " + OfficeHandoff.scorecard.grade
+                    + "\nSurgery: " + completedSteps + "/" + candidate.procedure.steps.Length + " steps · " + mistakes + " authored warnings"
+                    + "\nLeft menu: choose another patient";
+            }
             else if (Phase == "Practicing")
             {
                 var step = exercise.Current;
@@ -522,9 +527,13 @@ namespace Scalpal.Quest
             else
             {
                 var layers = preview.GetComponent<Scalpal.Anatomy.Tissue.AnatomyLayerView>();
-                body = "B: review " + (candidate?.procedure?.shortTitle ?? SelectedProcedureId) + " | Y: enable voice | A: reset tools | Left menu: new attempt";
+                body = "B: review " + (candidate?.procedure?.shortTitle ?? SelectedProcedureId) + " | Y: enable voice | A: reset tools | Left menu: " + (OfficeHandoff == null ? "new attempt" : "another patient");
                 if (Phase == "Selecting" && layers) body += "\nX: anatomy layers | Showing: " + layers.Current;
             }
+            if (Phase == "Confirmed" && OfficeHandoff != null)
+                body = "Patient: " + OfficeHandoff.scorecard.patientName + "\nReviewed surgery: " + OfficeHandoff.procedureTitle
+                    + "\nOffice: " + OfficeHandoff.scorecard.total + "/100 · " + OfficeHandoff.scorecard.grade
+                    + "\nLearner proposed: " + OfficeHandoff.assessment.procedure + "\n" + body;
             string registration = presentation && presentation.passthrough ? "\n" + (bodyRegistration ? bodyRegistration.Status : "Body registration missing") : "\nVirtual mannequin fit";
             status.text = $"SCALPAL | {Phase} | {PresentationMode}\n{body}\n{Message}{registration}\nXR: {(workbench.IsReady ? "ready" : "paused")} | Shared: {realtime.Status}\nCoach: {(exercise.CoachMatches ? "synchronized" : coach.SyncFailureReason)} | Voice: {voice.Status}" + (OfficeHandoff == null ? "\nRight stick: AR/VR in selection" : "\nFull VR office practice");
         }

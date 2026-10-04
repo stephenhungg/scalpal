@@ -72,6 +72,10 @@ namespace Scalpal.EncounterOffice
             using (var files = activity.Call<AndroidJavaObject>("getFilesDir"))
                 path = Path.Combine(files.Call<string>("getAbsolutePath"), "session-config.json");
 #endif
+#if UNITY_EDITOR
+            string fixturePath = Environment.GetEnvironmentVariable("SCALPAL_PLAYMODE_CONFIG");
+            if (!string.IsNullOrWhiteSpace(fixturePath)) path = fixturePath;
+#endif
             if (!File.Exists(path)) return;
             try
             {

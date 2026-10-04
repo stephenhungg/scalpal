@@ -73,6 +73,7 @@ namespace SpacetimeDB.Types
         public readonly Table<Session> MySessions = new Table<Session>(row => row.SessionId);
         public readonly Table<Membership> MyMemberships = new Table<Membership>(row => row.SessionId);
         public readonly Table<ExerciseState> SessionExerciseState = new Table<ExerciseState>(row => row.SessionId);
+        public readonly Table<Encounter> SessionEncounters = new Table<Encounter>(row => row.EncounterId);
         public readonly Table<Command> SessionCommands = new Table<Command>(row => row.CommandId);
     }
     public sealed class SubscriptionHandle
