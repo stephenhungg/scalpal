@@ -3,6 +3,7 @@ using System.Collections;
 using System.IO;
 using System.Text;
 using Scalpal.Anatomy;
+using Scalpal.Instruments;
 using Scalpal.Exercises.Coach;
 using Scalpal.Exercises.Data;
 using Scalpal.Exercises.Engine;
@@ -73,19 +74,23 @@ namespace Scalpal.Quest
             if (!workbench || !exercise || !anatomy || !preview || !coach || !realtime || !voice || !status)
             { Message = "Session bindings missing"; enabled = false; return; }
             workbench.externalSessionControls = true;
-            workbench.ResetRequested += Retry;
+            workbench.RetryRequested += Retry;
             ReadDevelopmentConfig();
             coach.ConfigureEndpoint(coachBaseUrl);
             voice.ConfigureEndpoint(coachBaseUrl);
-            input = GetComponent<NativeProcedureInput>() ?? gameObject.AddComponent<NativeProcedureInput>();
+            input = GetComponent<NativeProcedureInput>();
+            if (!input) input = gameObject.AddComponent<NativeProcedureInput>();
             input.portMarkers = patientFrame.GetComponentsInChildren<NativePortMarker>(true);
             patientFrame.gameObject.SetActive(false);
             input.Initialize(exercise, workbench, () => Practicing && SharedMatches && RegistrationReady);
-            tissueSimulation = GetComponent<NativeTissueSimulation>() ?? gameObject.AddComponent<NativeTissueSimulation>();
+            tissueSimulation = GetComponent<NativeTissueSimulation>();
+            if (!tissueSimulation) tissueSimulation = gameObject.AddComponent<NativeTissueSimulation>();
             tissueSimulation.Initialize(anatomy, workbench, () => isActiveAndEnabled && input.InteractionReady);
-            volumeSimulation = GetComponent<NativeVolumeSimulation>() ?? gameObject.AddComponent<NativeVolumeSimulation>();
+            volumeSimulation = GetComponent<NativeVolumeSimulation>();
+            if (!volumeSimulation) volumeSimulation = gameObject.AddComponent<NativeVolumeSimulation>();
             volumeSimulation.Initialize(anatomy.transform.parent, workbench, () => isActiveAndEnabled && input.InteractionReady && anatomy.RegistrationValid);
-            vesselSimulation = GetComponent<NativeVesselSimulation>() ?? gameObject.AddComponent<NativeVesselSimulation>();
+            vesselSimulation = GetComponent<NativeVesselSimulation>();
+            if (!vesselSimulation) vesselSimulation = gameObject.AddComponent<NativeVesselSimulation>();
             vesselSimulation.Initialize(anatomy, workbench, volumeSimulation, () => isActiveAndEnabled && input.InteractionReady);
             exercise.anatomy = anatomy; exercise.coach = coach;
             exercise.presentationMode = PresentationMode; exercise.requireCoachSynchronization = true;
@@ -114,6 +119,11 @@ namespace Scalpal.Quest
             using (var files = activity.Call<AndroidJavaObject>("getFilesDir"))
                 path = Path.Combine(files.Call<string>("getAbsolutePath"), "session-config.json");
 #endif
+#if UNITY_EDITOR
+            // An isolated Editor gate supplies its own ephemeral config, never the operator's pairing file.
+            string fixturePath = Environment.GetEnvironmentVariable("SCALPAL_PLAYMODE_CONFIG");
+            if (!string.IsNullOrWhiteSpace(fixturePath)) path = fixturePath;
+#endif
             if (!File.Exists(path)) return;
             try
             {
@@ -139,7 +149,7 @@ namespace Scalpal.Quest
             if (candidate == null || candidate.patientId != PatientId || candidate.procedureId != ProcedureId ||
                 candidate.procedure == null || candidate.brief == null || !candidate.brief.synthetic ||
                 (candidate.status != "ready" && candidate.status != "needs_review"))
-            { candidate = null; Message = "Case service unavailable or case/assets mismatch. A: retry connection"; yield break; }
+            { candidate = null; Message = "Case service unavailable or case/assets mismatch. Left menu: retry connection"; yield break; }
             Phase = "Selecting"; Message = "Appendectomy preview ready. X: anatomy layers; B: review synthetic case";
         }
 
@@ -151,7 +161,7 @@ namespace Scalpal.Quest
                 sharedAttemptReady = false; attemptFailed = true;
                 exercise.StopAttempt(); voice.Disconnect(); coachSessionId = ""; Phase = "Selecting";
                 preview.gameObject.SetActive(true);
-                Message = "Shared session/attempt changed; A: start a new matching attempt";
+                Message = "Shared session/attempt changed; Left menu: start a new matching attempt";
             }
             bool fitValid = RegistrationReady && Practicing && SharedMatches;
             patientFrame.gameObject.SetActive(fitValid);
@@ -160,11 +170,9 @@ namespace Scalpal.Quest
             if (realtime.Paired && !sharedAttemptReady && !attemptRequested && !attemptFailed) RequestAttempt();
             if (workbench.IsReady)
             {
-                var right = InputDevices.GetDeviceAtXRNode(XRNode.RightHand);
-                var left = InputDevices.GetDeviceAtXRNode(XRNode.LeftHand);
-                right.TryGetFeatureValue(CommonUsages.secondaryButton, out bool b);
-                left.TryGetFeatureValue(CommonUsages.primaryButton, out bool x);
-                left.TryGetFeatureValue(CommonUsages.secondaryButton, out bool y);
+                bool b = XRInput.Button(XRNode.RightHand, XRInputButton.Secondary);
+                bool x = XRInput.Button(XRNode.LeftHand, XRInputButton.Primary);
+                bool y = XRInput.Button(XRNode.LeftHand, XRInputButton.Secondary);
                 if (b && !previousB) ConfirmAction();
                 if (x && !previousX && Phase == "Selecting")
                 {
@@ -271,7 +279,7 @@ namespace Scalpal.Quest
             preview.gameObject.SetActive(true); preview.SetPreviewMode(true); preview.RestoreVisibility();
             preview.SetPreviewRotation(true); rotating = true;
             preview.transform.parent.localScale = previewScale;
-            anatomy.ClearHighlight();
+            anatomy.ClearHighlight(); preview.ClearHighlight();
             var previewLayers = preview.GetComponent<Scalpal.Anatomy.Tissue.AnatomyLayerView>();
             if (previewLayers) previewLayers.Show(Scalpal.Anatomy.Tissue.AnatomyLayerView.Layer.Organs);
             Phase = candidate == null ? "Startup" : "Selecting";
@@ -296,7 +304,7 @@ namespace Scalpal.Quest
             if (result.completed)
             {
                 Phase = "Recap"; anatomy.SetRegistrationValid(false); coach.Tracking(false);
-                Message = $"Complete: {completedSteps}/{candidate.procedure.steps.Length} steps, {mistakes} authored warnings. A: new attempt";
+                Message = $"Complete: {completedSteps}/{candidate.procedure.steps.Length} steps, {mistakes} authored warnings. Left menu: new attempt";
                 realtime.ReportAttemptResult((uint)completedSteps, (uint)candidate.procedure.steps.Length,
                     (uint)mistakes, 0, "Generic appendectomy rehearsal completed; " + PresentationMode);
             }
@@ -378,6 +386,8 @@ namespace Scalpal.Quest
 
         void Publish()
         {
+            var displayed = Phase == "Selecting" || Phase == "Confirmed" ? preview : anatomy;
+            highlighted = displayed ? displayed.HighlightedPartId : "";
             if (!realtime || candidate == null || !SharedMatches) return;
             realtime.PublishSnapshot(Phase, exercise.Current?.id, (uint)completedSteps, (uint)candidate.procedure.steps.Length,
                 selected, highlighted, rotating && Phase == "Selecting", practicePaused || (Phase == "Practicing" && !exercise.CanScore),
@@ -414,7 +424,7 @@ namespace Scalpal.Quest
             else
             {
                 var layers = preview.GetComponent<Scalpal.Anatomy.Tissue.AnatomyLayerView>();
-                body = "B: review appendectomy | Y: enable voice | A: retry";
+                body = "B: review appendectomy | Y: enable voice | A: reset tools | Left menu: new attempt";
                 if (Phase == "Selecting" && layers) body += "\nX: anatomy layers | Showing: " + layers.Current;
             }
             string registration = presentation && presentation.passthrough ? "\n" + (bodyRegistration ? bodyRegistration.Status : "Body registration missing") : "\nVirtual mannequin fit";
@@ -433,7 +443,7 @@ namespace Scalpal.Quest
         void OnDestroy()
         {
             generation++;
-            if (workbench) workbench.ResetRequested -= Retry;
+            if (workbench) workbench.RetryRequested -= Retry;
             if (exercise) exercise.EventHandled -= EventHandled;
             if (coach) coach.CommandRequested -= CoachCommand;
             if (realtime) { realtime.AttemptStarted -= AttemptStarted; realtime.AttemptFailed -= AttemptFailed; realtime.CommandRequested -= SharedCommand; }

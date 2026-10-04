@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.XR;
+using Scalpal.Instruments;
 using UnityEngine.XR.ARFoundation;
 
 namespace Scalpal.Quest
@@ -15,7 +16,7 @@ namespace Scalpal.Quest
         public Renderer virtualMannequin;
         public Transform anatomyFit, patientFrame;
         public NativeCaseSession session;
-        public bool passthrough = true;
+        public bool passthrough;
         bool previousClick;
         Pose authoredFit, authoredFrame;
         Vector3 authoredScale, authoredFrameScale;
@@ -37,8 +38,7 @@ namespace Scalpal.Quest
 
         void Update()
         {
-            var controller = InputDevices.GetDeviceAtXRNode(XRNode.RightHand);
-            controller.TryGetFeatureValue(CommonUsages.primary2DAxisClick, out bool click);
+            bool click = XRInput.Button(XRNode.RightHand, XRInputButton.StickClick);
             if (click && !previousClick && session) session.TryChangePresentation(!passthrough);
             previousClick = click;
         }
