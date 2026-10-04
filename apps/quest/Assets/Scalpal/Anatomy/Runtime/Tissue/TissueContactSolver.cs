@@ -58,7 +58,12 @@ namespace Scalpal.Anatomy.Tissue
             public bool ready, requireBaseline, baselineValid;
         }
         struct Probe { public int vertex, triangle; public Vector3 rest; }
-        struct Contact { public Body a,b; public Vector3 restA,restB,normal; public float depth; }
+        struct Contact
+        {
+            public Body a,b;
+            public Vector3 restA,restB,normal;
+            public float depth, desiredSeparation;
+        }
 
         public void Initialize(IReadOnlyList<DeformableTissue> tissues,bool preserveRestOverlap=false)
         {
@@ -172,14 +177,9 @@ namespace Scalpal.Anatomy.Tissue
                     for(int i=0;i<count;i++)
                     {
                         var contact=contactBuffer[i];MaximumResidualPenetrationMeters=Mathf.Max(MaximumResidualPenetrationMeters,Residual(contact));
-                        float distance=Mathf.Min(contact.depth*.5f,MaximumCorrectionMeters,Mathf.Min(first.scale,second.scale)*.004f);
-                        Vector3 move=contact.normal*distance;
-                        if(contact.a.tissue.Cage.TryContactCandidate(contact.a.tissue.ToMeters(contact.restA),contact.a.tissue.ToMeters(contact.a.tissue.transform.InverseTransformVector(move*.5f)),out var candidateA)
-                            &&contact.b.tissue.Cage.TryContactCandidate(contact.b.tissue.ToMeters(contact.restB),contact.b.tissue.ToMeters(contact.b.tissue.transform.InverseTransformVector(-move*.5f)),out var candidateB))
-                        {
-                            contact.a.tissue.CommitContact(candidateA);contact.b.tissue.CommitContact(candidateB);appliedMask|=1<<pair;AppliedConstraints++;
-                        }
-                        else rejectedMask|=1<<pair;
+                        if(TryProjectContact(contact,out bool rejected))
+                        {appliedMask|=1<<pair;AppliedConstraints++;}
+                        else if(rejected)rejectedMask|=1<<pair;
                     }
                     if(count>0){Refresh(first);Refresh(second);}
                 }
@@ -195,6 +195,24 @@ namespace Scalpal.Anatomy.Tissue
             }
             Status=ActiveBodies!=bodies.Count?"Some contact bodies inactive, hidden or in an unsupported transform":
                 RejectedPairs>0?"Sampled contact unresolved: pinned, capped or unsafe correction":"Sampled contact evaluated; unsampled intersections remain possible";
+        }
+        bool TryProjectContact(Contact contact,out bool rejected)
+        {
+            rejected=false;
+            // Every cage projection moves multiple later probes in this gathered
+            // batch. Re-evaluate their frozen material plane before applying them;
+            // stale initial depths over-project dense surfaces. Deform is linear in
+            // the current cage nodes. The next bounded pass refits geometry/normals.
+            float remaining=contact.desiredSeparation-Vector3.Dot(MaterialPoint(contact.a,contact.restA)-MaterialPoint(contact.b,contact.restB),contact.normal);
+            if(remaining<=1e-7f)return false;
+            float distance=Mathf.Min(remaining*.5f,MaximumCorrectionMeters,Mathf.Min(contact.a.scale,contact.b.scale)*.004f);
+            Vector3 move=contact.normal*distance;
+            if(contact.a.tissue.Cage.TryContactCandidate(contact.a.tissue.ToMeters(contact.restA),contact.a.tissue.ToMeters(contact.a.tissue.transform.InverseTransformVector(move*.5f)),out var candidateA)
+                &&contact.b.tissue.Cage.TryContactCandidate(contact.b.tissue.ToMeters(contact.restB),contact.b.tissue.ToMeters(contact.b.tissue.transform.InverseTransformVector(-move*.5f)),out var candidateB))
+            {
+                contact.a.tissue.CommitContact(candidateA);contact.b.tissue.CommitContact(candidateB);return true;
+            }
+            rejected=true;return false;
         }
         public void Dispose() { foreach(var body in bodies)body.acceleration?.Dispose(); bodies.Clear(); SupportedBodies=0; }
         void ResetStatistics(){ActiveBodies=AppliedPairs=RejectedPairs=TriangleQueries=AppliedConstraints=0;MaximumResidualPenetrationMeters=MaximumSamplingGapMeters=0;MaximumAuthoredOverlapMeters=0;}
@@ -267,8 +285,10 @@ namespace Scalpal.Anatomy.Tissue
             float depth=penetration+padding;
             if(PreservesAuthoredRestOverlap&&allowances!=null)depth-=allowances[i]*from.scale;
             if(depth<=(PreservesAuthoredRestOverlap?1e-6f:1e-7f))return false;
-            contact=new Contact {a=from,b=target,restA=probe.rest,restB=rest,normal=normal,depth=depth};return true;
+            float separation=Vector3.Dot(MaterialPoint(from,probe.rest)-MaterialPoint(target,rest),normal);
+            contact=new Contact {a=from,b=target,restA=probe.rest,restB=rest,normal=normal,depth=depth,desiredSeparation=separation+depth};return true;
         }
+        static Vector3 MaterialPoint(Body body,Vector3 rest) => body.tissue.transform.TransformPoint(body.tissue.DeformSurfacePoint(rest));
         void QueryBatch(Body from,Body target)
         {
             for(int i=0;i<from.probes.Length;i++)from.queryPoints[i]=WorldProbe(from,from.probes[i]);

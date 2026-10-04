@@ -413,6 +413,7 @@ namespace Scalpal.Quest.Editor
             NativeBleedingValidation.Run();
             NativeVesselRuntimeValidation.Run();
             NativeTissueContactValidation.Run();
+            NativeContactMotionValidation.Run();
             NativeAppendectomyValidation.Run();
             NativeSessionBoundaryValidation.Run();
             NativeCoachRelayValidation.Run();
