@@ -1,6 +1,6 @@
 "use client";
 
-// From MatthewKim323/adam (src/components/AsciiAdam.tsx), unchanged apart from this header, both arms set to white, a green spark, and the onTouch / introSpeed props.
+// From MatthewKim323/adam (src/components/AsciiAdam.tsx), unchanged apart from this header, both arms set to white, a green spark, the onTouch / introSpeed props, and pointer reach turned off (glyph scramble kept).
 import { useEffect, useRef } from 'react'
 
 /*
@@ -401,14 +401,15 @@ export function AsciiAdam({ playing = true, time, onTouch, introSpeed = 1 }: Pro
         const baseR = SCENE.rightA.map((v, i) => lerp(v, SCENE.rightB[i], k)) as Xf
 
         // pointer in the gap between the fingers hurries them together
-        const rush = live && pointer ? smooth(REACH.gap, REACH.gap * 0.25, dist(pointer, SCENE.spark as Vec)) : 0
+        // Scalpal site: the pointer only scrambles glyphs; it doesn't move or hurry the arms
+        const rush = 0
         // pointer in the gap: hurry them together, and hold them there on the way back
         const speed = clock < LOOP ? 1 + REACH.rush * rush : 1 - rush
         const intro = touched ? 1 : introSpeedRef.current
         if (live) clock = (clock + dt * speed * intro) % (2 * LOOP)
 
-        const lx = aim(leftArm, baseL, live ? pointer : null, dt)
-        const rx = aim(rightArm, baseR, live ? pointer : null, dt)
+        const lx = aim(leftArm, baseL, null, dt)
+        const rx = aim(rightArm, baseR, null, dt)
         const a = pointOf(lx, leftArm.size, SCENE.leftTip)
         const b = pointOf(rx, rightArm.size, SCENE.rightTip)
 
