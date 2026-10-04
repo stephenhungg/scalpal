@@ -475,6 +475,33 @@ export const simLog = table(
   }
 );
 
+// ---------------------------------------------------------------------------
+// Robot learner verdicts
+// ---------------------------------------------------------------------------
+
+/**
+ * One robot-learner verdict per attempt step: did the policy trained on the
+ * surgeon's demos reproduce the motion, how far off was the path, and how many
+ * human vs synthetic demos it learned from. Written by the coach or gateway.
+ */
+export const robotResult = table(
+  { name: 'robot_result' },
+  {
+    id: t.u64().primaryKey().autoInc(),
+    sessionId: t.string().index('btree'),
+    attemptId: t.string(),
+    stepId: t.string(),
+    success: t.bool(),
+    pathErrorMm: t.option(t.f64()),
+    /** 0..1 success rate of the policy over its evaluation rollouts. */
+    policySuccessRate: t.option(t.f64()),
+    demosHuman: t.u32(),
+    demosSynthetic: t.u32(),
+    videoUrl: t.option(t.string()),
+    at: t.timestamp(),
+  }
+);
+
 const spacetimedb = schema({
   serviceIdentity,
   connection,
@@ -498,6 +525,7 @@ const spacetimedb = schema({
   encounter,
   encounterEvent,
   simLog,
+  robotResult,
 });
 
 export default spacetimedb;

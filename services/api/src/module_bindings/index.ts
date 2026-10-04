@@ -38,6 +38,7 @@ import AckSignalsReducer from "./ack_signals_reducer";
 import AddServiceIdentityReducer from "./add_service_identity_reducer";
 import AppendEncounterEventReducer from "./append_encounter_event_reducer";
 import AppendExerciseEventReducer from "./append_exercise_event_reducer";
+import AppendSimLogReducer from "./append_sim_log_reducer";
 import CancelMotionJobReducer from "./cancel_motion_job_reducer";
 import ClaimMotionJobReducer from "./claim_motion_job_reducer";
 import CompleteMotionJobReducer from "./complete_motion_job_reducer";
@@ -55,6 +56,7 @@ import JoinSessionReducer from "./join_session_reducer";
 import LeaveSessionReducer from "./leave_session_reducer";
 import MarkUploadedReducer from "./mark_uploaded_reducer";
 import PostCoachMessageReducer from "./post_coach_message_reducer";
+import PostRobotResultReducer from "./post_robot_result_reducer";
 import PublishExerciseStateReducer from "./publish_exercise_state_reducer";
 import RegisterJobOutputReducer from "./register_job_output_reducer";
 import RemoveMemberReducer from "./remove_member_reducer";
@@ -101,6 +103,8 @@ import SessionMediaSourceRow from "./session_media_source_table";
 import SessionMembersRow from "./session_members_table";
 import SessionMotionJobsRow from "./session_motion_jobs_table";
 import SessionReplayStateRow from "./session_replay_state_table";
+import SessionRobotResultsRow from "./session_robot_results_table";
+import SessionSimLogsRow from "./session_sim_logs_table";
 
 /** Type-only namespace exports for generated type groups. */
 
@@ -246,6 +250,20 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, SessionReplayStateRow),
+  sessionRobotResults: __table({
+    name: 'session_robot_results',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, SessionRobotResultsRow),
+  sessionSimLogs: __table({
+    name: 'session_sim_logs',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, SessionSimLogsRow),
 });
 
 /** The schema information for all reducers in this module. This is defined the same way as the reducers would have been defined in the server, except the body of the reducer is omitted in code generation. */
@@ -254,6 +272,7 @@ const reducersSchema = __reducers(
   __reducerSchema("add_service_identity", AddServiceIdentityReducer),
   __reducerSchema("append_encounter_event", AppendEncounterEventReducer),
   __reducerSchema("append_exercise_event", AppendExerciseEventReducer),
+  __reducerSchema("append_sim_log", AppendSimLogReducer),
   __reducerSchema("cancel_motion_job", CancelMotionJobReducer),
   __reducerSchema("claim_motion_job", ClaimMotionJobReducer),
   __reducerSchema("complete_motion_job", CompleteMotionJobReducer),
@@ -271,6 +290,7 @@ const reducersSchema = __reducers(
   __reducerSchema("leave_session", LeaveSessionReducer),
   __reducerSchema("mark_uploaded", MarkUploadedReducer),
   __reducerSchema("post_coach_message", PostCoachMessageReducer),
+  __reducerSchema("post_robot_result", PostRobotResultReducer),
   __reducerSchema("publish_exercise_state", PublishExerciseStateReducer),
   __reducerSchema("register_job_output", RegisterJobOutputReducer),
   __reducerSchema("remove_member", RemoveMemberReducer),

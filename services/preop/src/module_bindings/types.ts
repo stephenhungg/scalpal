@@ -244,6 +244,21 @@ export const ReplayState = __t.object("ReplayState", {
 });
 export type ReplayState = __Infer<typeof ReplayState>;
 
+export const RobotResult = __t.object("RobotResult", {
+  id: __t.u64(),
+  sessionId: __t.string(),
+  attemptId: __t.string(),
+  stepId: __t.string(),
+  success: __t.bool(),
+  pathErrorMm: __t.option(__t.f64()),
+  policySuccessRate: __t.option(__t.f64()),
+  demosHuman: __t.u32(),
+  demosSynthetic: __t.u32(),
+  videoUrl: __t.option(__t.string()),
+  at: __t.timestamp(),
+});
+export type RobotResult = __Infer<typeof RobotResult>;
+
 export const RtcSignal = __t.object("RtcSignal", {
   signalId: __t.u64(),
   sessionId: __t.string(),
@@ -357,6 +372,9 @@ export type SessionMotionJobs = __Infer<typeof SessionMotionJobs>;
 
 export const SessionReplayState = __t.object("SessionReplayState", {});
 export type SessionReplayState = __Infer<typeof SessionReplayState>;
+
+export const SessionRobotResults = __t.object("SessionRobotResults", {});
+export type SessionRobotResults = __Infer<typeof SessionRobotResults>;
 
 export const SessionSimLogs = __t.object("SessionSimLogs", {});
 export type SessionSimLogs = __Infer<typeof SessionSimLogs>;

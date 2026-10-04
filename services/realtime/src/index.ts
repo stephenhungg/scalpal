@@ -32,6 +32,7 @@ import spacetimedb, {
   membership,
   motionJob,
   replayState,
+  robotResult,
   rtcSignal,
   session,
   serviceGrant,
@@ -98,7 +99,29 @@ const ACTIONS: Record<string, 'none' | 'target' | 'bool' | 'number'> = {
   requestHint: 'none',
   pausePractice: 'none',
   resumePractice: 'none',
+  // Scrub-nurse actions on the open-case instrument stand. handInstrument's
+  // optional argNumber picks the hand: 0 = left, 1 = right, absent = either.
+  handInstrument: 'target',
+  highlightInstrument: 'target',
 };
+
+/** Actions a viewer (e.g. a browser scrub nurse) may request, besides coach/operator. */
+const INSTRUMENT_ACTIONS = ['handInstrument', 'highlightInstrument'];
+
+/** Instruments on the open-appendectomy stand (targetId of the instrument actions). */
+const OPEN_CASE_INSTRUMENTS = [
+  'skin_marker',
+  'scalpel',
+  'toothed_forceps',
+  'retractor',
+  'babcock',
+  'hemostat',
+  'right_angle_clamp',
+  'metzenbaum_scissors',
+  'suture_tie',
+  'suction_irrigator',
+  'laparoscope_30',
+];
 
 const COMMAND_TTL_MS = 15_000;
 const GRANT_REQUEST_TTL_MS = 30_000;
@@ -983,7 +1006,8 @@ export const requestCommand = spacetimedb.reducer(
     expectedStepVersion: t.u64(),
   },
   (ctx, a) => {
-    const role = requireRole(ctx, a.sessionId, ['coach', 'operator']);
+    const instrument = INSTRUMENT_ACTIONS.includes(a.action);
+    const role = requireRole(ctx, a.sessionId, instrument ? ['coach', 'operator', 'viewer'] : ['coach', 'operator']);
     checkId(a.commandId, 'commandId');
     const existing = ctx.db.command.commandId.find(a.commandId);
     if (existing) {
@@ -996,6 +1020,12 @@ export const requestCommand = spacetimedb.reducer(
     if (kind === 'bool' && a.argBool == null) fail(`${a.action} requires argBool`);
     if (kind === 'number' && a.argNumber == null) fail(`${a.action} requires argNumber`);
     if (a.targetId) checkText(a.targetId, 'targetId', 120);
+    if (instrument) {
+      oneOf(a.targetId ?? '', OPEN_CASE_INSTRUMENTS, 'instrument');
+      if (a.action === 'handInstrument' && a.argNumber != null && a.argNumber !== 0 && a.argNumber !== 1) {
+        fail('handInstrument argNumber must be 0 (left) or 1 (right)');
+      }
+    }
 
     const state = ctx.db.exerciseState.sessionId.find(a.sessionId) ?? fail('no exercise state');
     const stale = a.expectedStepVersion !== state.stepVersion;
@@ -1818,6 +1848,61 @@ export const sessionEncounterEvents = spacetimedb.view(
   t.array(encounterEvent.rowType),
   ctx => [...viewerSessions(ctx.db as ViewDb, ctx.sender)].flatMap(id => [
     ...ctx.db.encounterEvent.sessionId.filter(id),
+  ])
+);
+
+// ---------------------------------------------------------------------------
+// Robot learner verdicts
+// ---------------------------------------------------------------------------
+
+const MAX_ROBOT_RESULTS = 500;
+
+export const postRobotResult = spacetimedb.reducer(
+  {
+    sessionId: t.string(),
+    stepId: t.string(),
+    success: t.bool(),
+    pathErrorMm: t.option(t.f64()),
+    policySuccessRate: t.option(t.f64()),
+    demosHuman: t.u32(),
+    demosSynthetic: t.u32(),
+    videoUrl: t.option(t.string()),
+  },
+  (ctx, a) => {
+    requireRole(ctx, a.sessionId, ['coach', 'operator']);
+    const s = activeSession(ctx, a.sessionId);
+    checkText(a.stepId, 'stepId', 120);
+    if (a.videoUrl) checkText(a.videoUrl, 'videoUrl', 1_000);
+    if (a.policySuccessRate != null && !(a.policySuccessRate >= 0 && a.policySuccessRate <= 1)) {
+      fail('policySuccessRate must be between 0 and 1');
+    }
+    const ids: bigint[] = [];
+    for (const row of ctx.db.robotResult.sessionId.filter(a.sessionId)) ids.push(row.id);
+    if (ids.length >= MAX_ROBOT_RESULTS) {
+      ids.sort((x, y) => (x < y ? -1 : x > y ? 1 : 0));
+      for (const id of ids.slice(0, ids.length - MAX_ROBOT_RESULTS + 1)) ctx.db.robotResult.id.delete(id);
+    }
+    ctx.db.robotResult.insert({
+      id: 0n,
+      sessionId: a.sessionId,
+      attemptId: s.currentAttemptId,
+      stepId: a.stepId,
+      success: a.success,
+      pathErrorMm: a.pathErrorMm,
+      policySuccessRate: a.policySuccessRate,
+      demosHuman: a.demosHuman,
+      demosSynthetic: a.demosSynthetic,
+      videoUrl: a.videoUrl,
+      at: ctx.timestamp,
+    });
+  }
+);
+
+export const sessionRobotResults = spacetimedb.view(
+  { name: 'session_robot_results', public: true },
+  t.array(robotResult.rowType),
+  ctx => [...viewerSessions(ctx.db as ViewDb, ctx.sender)].flatMap(id => [
+    ...ctx.db.robotResult.sessionId.filter(id),
   ])
 );
 
