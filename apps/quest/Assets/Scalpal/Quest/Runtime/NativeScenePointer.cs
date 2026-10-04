@@ -4,6 +4,7 @@ using System.Text;
 using Scalpal.Anatomy;
 using Scalpal.Brand;
 using Scalpal.Instruments;
+using Scalpal.Surgery;
 using TMPro;
 using UnityEngine;
 using UnityEngine.XR;
@@ -49,6 +50,9 @@ namespace Scalpal.Quest
         NativeCaseSession session;
         NativeWorkbench rig;
         AnatomyController anatomy;
+        OpenSurgerySession surgery;
+        Renderer patientSkin;
+        Collider[] patientSkinColliders = Array.Empty<Collider>();
         IReadOnlyList<AnatomyPart> parts;
         InstrumentBehaviour[] tools;
         bool paused;
@@ -62,6 +66,8 @@ namespace Scalpal.Quest
         {
             if (rig) rig.ToolsReset -= Clear;
             session = owner; rig = owner ? owner.workbench : null; anatomy = owner ? owner.anatomy : null;
+            surgery = owner ? owner.GetComponent<OpenSurgerySession>() : null;
+            patientSkin = null; patientSkinColliders = Array.Empty<Collider>();
             parts = null; tools = null; targets.Clear(); Clear();
             if (rig) rig.ToolsReset += Clear;
         }
@@ -73,6 +79,13 @@ namespace Scalpal.Quest
             if (!isActiveAndEnabled || !session || !rig || !rig.IsReady || !rig.trackingOrigin || !rig.headCamera
                 || paused || !XRInput.Source.DisplayRunning || !XRInput.Source.HasFocus || !XRInput.TryPose(XRNode.Head,out _))
             { Clear(); return; }
+            if (!surgery) surgery = session.GetComponent<OpenSurgerySession>();
+            var currentSkin = session.presentation ? session.presentation.virtualMannequin : null;
+            if (patientSkin != currentSkin)
+            {
+                patientSkin = currentSkin;
+                patientSkinColliders = patientSkin ? patientSkin.GetComponentsInChildren<Collider>(true) : Array.Empty<Collider>();
+            }
             RefreshTargets();
             for (int hand = 0; hand < views.Length; hand++)
             {
@@ -130,11 +143,20 @@ namespace Scalpal.Quest
             {
                 var collider=hits[i].collider;
                 if (!collider || hits[i].distance>=distance) continue;
+                if (patientSkin && collider.transform.IsChildOf(patientSkin.transform) && ClipsSkin(hits[i].point)) continue;
                 var tool=collider.GetComponentInParent<InstrumentBehaviour>();
                 // Distal trigger bubbles and the pointer hand's held tool are not pointing targets.
                 if (tool && (tool == held || collider.GetComponent<InstrumentTipContact>())) continue;
                 nearest=collider; distance=hits[i].distance;
             }
+            // The authored patient collision is on Ignore Raycast. Query only that known
+            // skin explicitly rather than including every helper collider on that layer.
+            if (patientSkin && patientSkin.enabled && !patientSkin.forceRenderingOff && patientSkin.gameObject.activeInHierarchy)
+                foreach (var collider in patientSkinColliders)
+                    if (collider && collider.enabled && collider.gameObject.activeInHierarchy
+                        && (Physics.DefaultRaycastLayers & (1 << collider.gameObject.layer)) == 0
+                        && collider.Raycast(ray, out var skinHit, distance) && !ClipsSkin(skinHit.point))
+                    { nearest = collider; distance = skinHit.distance; }
             beamDistance = distance;
             if (count == hits.Length) return false;
             if (!nearest || nearest.GetComponentInParent<IScalpalPressable>() != null) return false;
@@ -153,6 +175,7 @@ namespace Scalpal.Quest
             }
             return any && Finite(bounds.center) && Finite(bounds.size) && bounds.size.sqrMagnitude>0;
         }
+        bool ClipsSkin(Vector3 world) => surgery && surgery.Wound && surgery.Wound.ClipsSkinAt(world);
         static bool Finite(Vector3 value) => float.IsFinite(value.x) && float.IsFinite(value.y) && float.IsFinite(value.z);
         void ShowLaser(View view, Ray ray, float distance)
         {

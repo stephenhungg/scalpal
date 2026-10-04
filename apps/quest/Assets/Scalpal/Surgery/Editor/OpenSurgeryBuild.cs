@@ -22,6 +22,8 @@ namespace Scalpal.Surgery.Editor
             SurgicalClosureAppearanceValidation.Run(); SurgicalWoundPersistenceValidation.Run(); OpenStepVisualsValidation.Run(); VoiceInstrumentValidation.Run(); SharedInstrumentCommandValidation.Run();
             var volume=TissueVolumeFactory.OpenAbdominalWall();
             if(volume.Materials.Length!=5 || string.Join(",",volume.Materials.Select(m=>m.id))!="skin,fat,fascia,muscle,peritoneum")throw new Exception("Open volume material identities missing");
+            NativeOperatingRoomLightingValidation.Run(); NativePatientSurfaceShadingValidation.Run();
+            OrganExposureValidation.Run();
             AuditScene();
             Debug.Log("SCALPAL_OPEN_SURGERY_VERIFY_OK: synthetic component exchange and actual-scene delivery mechanics; physical headset session pending");
         }

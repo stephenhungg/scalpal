@@ -68,7 +68,7 @@ namespace Scalpal.Surgery.Editor
             public readonly Transform wound;
             public readonly List<BodyRecord> records = new List<BodyRecord>();
             public readonly Transform[] parts;
-            public readonly Vector3[] restPositions;
+            public readonly Vector3[] restPositions, rigidCenters;
             public readonly Quaternion[] restRotations;
             public readonly AnatomyPart appendix;
             public readonly NativeTissueSimulation tissue;
@@ -86,6 +86,7 @@ namespace Scalpal.Surgery.Editor
                 input.Submitted += (record, _) => records.Add(record);
                 Require(session.anatomy.TryGetPart("appendix", out appendix), "atlas appendix exists");
                 parts = Group.Parts.ToArray();
+                rigidCenters = parts.Select(p => p.GetComponent<MeshFilter>().sharedMesh.bounds.center).ToArray();
                 restPositions = parts.Select(p => p.localPosition).ToArray(); restRotations = parts.Select(p => p.localRotation).ToArray();
                 Require(parts.Length == 4 && Group.Contains(appendix.transform), "group holds cecum, appendix, mesoappendix and artery");
                 foreach (var tool in session.workbench.tools) if (tool) tool.SetHeld(false);
@@ -128,6 +129,8 @@ namespace Scalpal.Surgery.Editor
             public Vector3[] WorldPositions() => parts.Select(p => p.position).ToArray();
             // Atlas part origins can sit far from their tissue; speed bounds are checked on the tissue.
             public Vector3[] MeshCenters() => parts.Select(p => p.TransformPoint(p.GetComponent<MeshFilter>().sharedMesh.bounds.center)).ToArray();
+            // Rigid-group rate limits do not constrain the cage's independent elastic recovery.
+            public Vector3[] RigidCenters() => parts.Select((p, i) => p.TransformPoint(rigidCenters[i])).ToArray();
             // Linear limit plus the bounded tilt rate acting on tissue up to 10 cm from the group pivot.
             public float Bound(float linearMps) => linearMps * Dt + Group.Definition.maxTiltDegreesPerSecond * Dt * Mathf.Deg2Rad * .1f + .00002f;
             public Vector3 AppendixCenterWound()
@@ -380,20 +383,20 @@ namespace Scalpal.Surgery.Editor
             Require(s.WorldPositions().SequenceEqual(frozen), "invalid practice/registration freezes the group in place");
             s.gate = true;
             float bound = s.Bound(s.Group.Definition.returnSpeedMps), follow = s.Bound(s.Group.Definition.maxSpeedMps);
-            float Moved(Vector3[] before) => s.MeshCenters().Zip(before, Vector3.Distance).Max();
-            var resumed = s.MeshCenters(); s.Step();
+            float Moved(Vector3[] before) => s.RigidCenters().Zip(before, Vector3.Distance).Max();
+            var resumed = s.RigidCenters(); s.Step();
             Require(Moved(resumed) <= follow, "resuming after a freeze does not jump the group");
             // Re-grasp, then lose controller tracking and teleport the tool: release without a jump.
             s.Place(tool, s.AppendixGraspSite()); s.Step(2);
             Require(s.Group.Held, "group re-grasped after freeze");
-            var beforeLoss = s.MeshCenters();
+            var beforeLoss = s.RigidCenters();
             tool.SetTrackingValid(false); s.Place(tool, tool.actionPoint.position - s.wound.forward * .08f); s.Step();
             Require(!s.Group.Held && Moved(beforeLoss) <= bound, "tracking loss releases the group without following the lost pose");
             tool.SetTrackingValid(true); tool.SetActivation(1); s.Place(tool, s.AppendixGraspSite()); s.Step(2);
             Require(s.Group.Held, "group re-grasped after tracking returns");
-            var beforeJump = s.MeshCenters();
+            var beforeJump = s.RigidCenters();
             s.Place(tool, tool.actionPoint.position - s.wound.forward * .08f); s.Step();
-            Require(!s.Group.Held && Moved(beforeJump) <= bound, "a tracked pose jump releases instead of yanking the group");
+            Require(!s.Group.Held && Moved(beforeJump) <= bound, $"a tracked pose jump releases instead of yanking the group: held={s.Group.Held} movedMm={Moved(beforeJump)*1000:F4} boundMm={bound*1000:F4}");
             s.Park(tool);
         }
 

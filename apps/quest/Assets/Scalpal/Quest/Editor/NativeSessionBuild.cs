@@ -480,6 +480,7 @@ namespace Scalpal.Quest.Editor
             NativeTissueContactValidation.Run();
             NativeContactMotionValidation.Run();
             NativeScenePointerValidation.Run();
+            NativeOpenWoundPointerValidation.Run();
             NativeProcedureChecklistValidation.Run();
             NativePatientMonitorValidation.Run();
             NativeAppendectomyValidation.Run();

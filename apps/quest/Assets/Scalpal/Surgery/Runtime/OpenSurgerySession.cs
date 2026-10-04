@@ -21,7 +21,7 @@ namespace Scalpal.Surgery
         // Scene-authored mobilization for this atlas: the cecum is delivered with its appendix,
         // mesentery and artery into the wound. The mechanic itself is organ-agnostic.
         public MobileOrganGroup[] mobileOrganGroups = { new MobileOrganGroup {
-            partIds = new[]{ "cecum", "appendix", "mesoappendix", "appendicular_artery" }, deliveryPartId = "appendix" } };
+            partIds = new[]{ "cecum", "appendix", "mesoappendix", "appendicular_artery" }, deliveryPartId = "appendix", maxGripRotationDegrees = 80 } };
         NativeCaseSession session;
         OpenBodyInteraction interaction;
         OpenWoundView wound;
@@ -35,6 +35,8 @@ namespace Scalpal.Surgery
         SurgicalOrganAppearance organAppearance;
         SurgicalActionAppearance actionAppearance;
         SurgicalClosureAppearance closureAppearance;
+        NativeOperatingRoomLighting surgicalLighting;
+        NativePatientSurfaceShading patientShading;
         Collider patientSkin;
         bool skinProjectionVirtual;
         readonly List<GameObject> hiddenPorts = new List<GameObject>();
@@ -188,6 +190,12 @@ namespace Scalpal.Surgery
             closureAppearance = GetComponent<SurgicalClosureAppearance>();
             if (!closureAppearance) closureAppearance = gameObject.AddComponent<SurgicalClosureAppearance>();
             closureAppearance.Initialize(session, interaction, woundFrame);
+            patientShading = GetComponent<NativePatientSurfaceShading>();
+            if (!patientShading) patientShading = gameObject.AddComponent<NativePatientSurfaceShading>();
+            patientShading.Initialize(session.presentation);
+            surgicalLighting = GetComponent<NativeOperatingRoomLighting>();
+            if (!surgicalLighting) surgicalLighting = gameObject.AddComponent<NativeOperatingRoomLighting>();
+            surgicalLighting.Initialize(session);
             Status = rightAsis && umbilicus ? "Registered landmarks bound" : "Authored landmark proxies; ASIS/umbilicus calibration pending";
             if(!anatomyBound)Status+="; one or more surgical base references missing";
             if(!mobile)Status+="; organ mobilization unavailable: "+mobility;

@@ -34,7 +34,9 @@ namespace Scalpal.Surgery
         public void Show(InstrumentBehaviour tool, string verb, XRNode? hand, Transform head)
         {
             if (!tool || !tool.actionPoint) return;
-            Say(tool.actionPoint, Phrase(verb), hand, head, seconds);
+            string phrase = verb == "grasp" && tool.instrumentId == "babcock"
+                ? "Hold trigger to grasp\nTurn your wrist to expose the base" : Phrase(verb);
+            Say(tool.actionPoint, phrase, hand, head, seconds);
         }
 
         // The same hint line for step guidance or a short reason, above any anchor (a tool tip or a guide).

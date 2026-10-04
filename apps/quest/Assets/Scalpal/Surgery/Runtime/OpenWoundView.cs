@@ -63,6 +63,20 @@ namespace Scalpal.Surgery
         public bool RenderingWound => isActiveAndEnabled && registered && !concealed && skinOpened && surfaces && surfaces.activeInHierarchy;
         public Vector4 SkinOpeningLocal => new Vector4(incisionCenter.x,incisionCenter.y,halfLength+.002f,Mathf.Max(0,previousWidths[0])*.5f+.0035f);
         public Vector2 IncisionAxisLocal => incisionAxis;
+        // Exact finite PatientSkin shader aperture, shared by read-only scene ray consumers.
+        // The actual tissue wall keeps its collider; only visually removed patient skin is skipped.
+        public bool ClipsSkinAt(Vector3 world)
+        {
+            if (!RenderingWound || !OpenSurgeryStroke.Finite(world)) return false;
+            Vector3 p = transform.InverseTransformPoint(world);
+            if (p.z < -.012f || p.z > .045f) return false;
+            var opening = SkinOpeningLocal;
+            Vector2 axis = incisionAxis / Mathf.Max(incisionAxis.magnitude, .000001f);
+            Vector2 delta = new Vector2(p.x - opening.x, p.y - opening.y);
+            float along = Vector2.Dot(delta, axis) / Mathf.Max(opening.z, .001f);
+            float across = Vector2.Dot(delta, new Vector2(-axis.y, axis.x)) / Mathf.Max(opening.w, .001f);
+            return along * along + across * across <= 1;
+        }
         readonly Color[] colors = { new Color(.65f,.44f,.34f), new Color(.94f,.72f,.30f), new Color(.84f,.80f,.72f), new Color(.50f,.13f,.105f), new Color(.79f,.65f,.60f) };
         readonly float[] previousWidths = { -1,-1,-1,-1,-1 };
         readonly float[] previousLifts = { -1,-1,-1,-1,-1 };

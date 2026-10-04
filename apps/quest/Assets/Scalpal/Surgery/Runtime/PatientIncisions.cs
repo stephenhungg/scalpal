@@ -93,15 +93,7 @@ namespace Scalpal.Surgery
             if (!OpenSurgeryStroke.Finite(tip) || reach < .01f || !skin.Raycast(new Ray(tool.gripAnchor.position, along / reach), out var hit, reach)) return;
             // Only the actual live incision aperture belongs to the wound presenter. The former
             // rectangle swallowed nearby punctures even though opaque patient skin was still visible.
-            if (fieldView && fieldView.RenderingWound)
-            {
-                var opening = fieldView.SkinOpeningLocal; var axis = fieldView.IncisionAxisLocal;
-                Vector3 field = wound.InverseTransformPoint(hit.point);
-                var delta = new Vector2(field.x-opening.x, field.y-opening.y);
-                float alongAperture = Vector2.Dot(delta,axis)/Mathf.Max(opening.z,.001f);
-                float across = Vector2.Dot(delta,new Vector2(-axis.y,axis.x))/Mathf.Max(opening.w,.001f);
-                if (alongAperture*alongAperture+across*across <= 1 && field.z >= -.012f && field.z <= .045f) return;
-            }
+            if (fieldView && fieldView.ClipsSkinAt(hit.point)) return;
             float depth = Mathf.Max(0, Vector3.Dot(hit.point - tip, hit.normal));
             Vector3 local = torso.InverseTransformPoint(hit.point), normal = torso.InverseTransformDirection(hit.normal).normalized;
             string region = OpenBodyInteraction.BodyRegion(torso.InverseTransformPoint(tip));

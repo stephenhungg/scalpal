@@ -26,7 +26,7 @@ namespace Scalpal.Surgery
             public readonly OpenSurgeryStroke stroke = new OpenSurgeryStroke();
             public readonly List<Vector3> marker = new List<Vector3>();
             public Vector3 previous, contact, rawSurface, handleOffset, speedOrigin;
-            public bool active, previousValid, committed, grasping, ownsHandle;
+            public bool active, previousValid, committed, grasping, ownsHandle, poseRejected;
             public float strokeSent, dwell, sinceSent, speed, speedClock;
             public BodyAction lastTentMeasurement;
             // Physical wall material grip (0 = none). A latched retractor keeps holding its tissue
@@ -206,8 +206,12 @@ namespace Scalpal.Surgery
             wasReady = true; activeSeconds += seconds; tickClock += seconds;
             // Release invalid grasps before processing any blade, regardless of tool array order.
             foreach (var state in states)
-                if (state.grasping && (!ValidTool(state) || !OpenSurgeryStroke.Finite(state.tool.actionPoint.position)
-                    || (state.previousValid && Vector3.Distance(state.tool.actionPoint.position, state.previous) > .05f))) Release(state);
+            {
+                state.poseRejected = state.grasping && state.previousValid && state.tool && state.tool.actionPoint
+                    && Vector3.Distance(state.tool.actionPoint.position, state.previous) > .05f;
+                if (state.grasping && (!ValidTool(state) || !OpenSurgeryStroke.Finite(state.tool.actionPoint.position) || state.poseRejected))
+                    Release(state);
+            }
             DrainTentReleases();
             // A placed clamp that was picked up again or put away no longer occludes anything.
             foreach (var state in states)
@@ -219,7 +223,9 @@ namespace Scalpal.Surgery
             // stroke history with zero speed; the registered active-time clock still advances.
             if (!frameChanged)
             {
-                foreach (var state in states) SampleTool(state, seconds);
+                // A rejected tracking jump cannot immediately re-grasp at its new location.
+                // The next stable sample may establish a fresh contact.
+                foreach (var state in states) if (!state.poseRejected) SampleTool(state, seconds);
                 // Released groups ease back unless delivered; held groups moved with their tool above.
                 // A fit correction is not organ motion, so a correction frame never settles a group.
                 foreach (var group in mobility) group.Settle(seconds, wound);
@@ -415,7 +421,7 @@ namespace Scalpal.Surgery
                 if (state.target)
                 {
                     var group = mobility.Find(candidate => !candidate.Held && candidate.Contains(state.target.transform));
-                    if (group != null && group.BeginHold(state.contact)) state.mobile = group;
+                    if (group != null && group.BeginHold(state.contact, state.tool.actionPoint.rotation)) state.mobile = group;
                 }
                 if (state.target) state.rawSurface = state.target.transform.InverseTransformPoint(state.contact);
                 // A wall layer is held by an actual material patch at its current exposed surface.
@@ -437,7 +443,7 @@ namespace Scalpal.Surgery
             }
             Vector3 measuredPoint = point;
             // The mobilized group follows the tool first; the cage then deforms about its new pose.
-            if (state.mobile != null) state.mobile.Follow(point, seconds);
+            if (state.mobile != null) state.mobile.Follow(point, state.tool.actionPoint.rotation, seconds);
             if (state.target)
             {
                 var deformable = state.target.Deformable;
