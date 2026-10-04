@@ -48,7 +48,7 @@ namespace Scalpal.Brand
         public static readonly Color GlassTint = new Color(.016f, .016f, .019f, .95f);
         public static readonly Color Hairline = new Color(1, 1, 1, .16f);
         public static readonly Color ButtonTint = new Color(.055f, .055f, .062f, .96f);
-        public static readonly Color ButtonHoverTint = new Color(.115f, .072f, .052f, .95f);
+        public static readonly Color ButtonHoverTint = new Color(.11f, .11f, .115f, .95f);
         public static readonly Color ButtonSelectedTint = new Color(.090f, .085f, .085f, .94f);
         public static readonly Color ButtonDisabledTint = new Color(.040f, .040f, .044f, .70f);
         // Secondary (ghost) actions such as "Skip to surgery": outline only, nearly clear fill.

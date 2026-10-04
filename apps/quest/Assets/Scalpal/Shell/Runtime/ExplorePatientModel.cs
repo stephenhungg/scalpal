@@ -15,15 +15,13 @@ namespace Scalpal.Shell
         bool hasPatientList;
         public int UnavailableCount { get; private set; }
         public PatientListEntry[] Patients => patients;
-        public string ProcedureFilter { get; private set; } = "";
-        public string UrgencyFilter { get; private set; } = "";
         public string SelectedPatientId { get; private set; } = "";
         public PatientListEntry Selected => patients.FirstOrDefault(p => !string.IsNullOrEmpty(SelectedPatientId) && p.patientId == SelectedPatientId);
         public SurgicalCase SelectedCase => CaseFor(SelectedPatientId);
         public PreopBrief SelectedBrief { get; private set; }
         public bool DetailLoading { get; private set; }
         public string DetailError { get; private set; } = "";
-        public bool CanBegin => Selected != null && CanSelect(Selected) &&
+        public bool CanBegin => Selected != null && Listed(Selected) &&
             (Selected.status == "ready" || Selected.status == "needs_review") &&
             Selected.encounterAvailable && EncounterContract.ValidPatientId(Selected.patientId) && !DetailLoading && string.IsNullOrEmpty(DetailError) &&
             SelectedBrief?.patient != null && SelectedBrief.patientId == SelectedPatientId && SelectedBrief.synthetic &&
@@ -32,7 +30,7 @@ namespace Scalpal.Shell
         public string AvailabilityReason => Selected == null ? "Choose a patient" :
             !EncounterContract.ValidPatientId(Selected.patientId) ? "Patient record ID is invalid." :
             !CanSelect(Selected) ? StatusReason(Selected) :
-            Selected.status == "retry" ? "Chart unavailable. Try again." :
+            Selected.status == "retry" ? "Chart unavailable · retrying" :
             !Selected.encounterAvailable ? "Interview coming soon" :
             DetailLoading ? "Loading chart…" :
             !string.IsNullOrEmpty(DetailError) ? DetailError :
@@ -76,7 +74,7 @@ namespace Scalpal.Shell
             entry.urgency = patientCase.urgency;
             entry.displayLabel = patientCase.patient?.displayLabel ?? entry.displayLabel;
             ReplacePatients(allRecords);
-            if (SelectedPatientId == patientCase.patientId && !CanSelect(entry)) ClearSelection();
+            if (SelectedPatientId == patientCase.patientId && !Listed(entry)) ClearSelection();
             return true;
         }
 
@@ -88,25 +86,25 @@ namespace Scalpal.Shell
             UnavailableCount = records.Count(p => p.status == "blocked");
             patients = records.Where(p => p.status != "blocked")
                 .OrderBy(p => StatusOrder(p.status)).ThenBy(p => p.displayLabel, StringComparer.Ordinal).ToArray();
-            if (Selected == null || !CanSelect(Selected)) ClearSelection();
+            if (Selected == null || !Listed(Selected)) ClearSelection();
         }
 
-        public PatientListEntry[] VisiblePatients() => patients.Where(p =>
-            (ProcedureFilter.Length == 0 || p.procedureId == ProcedureFilter ||
-                ProcedureFilter == "appendectomy" && (p.procedureId == "open_appendectomy" || p.procedureId == "lap_appendectomy")) &&
-            (UrgencyFilter.Length == 0 || p.urgency == UrgencyFilter)).ToArray();
-
-        public void SetFilters(string procedureId = "", string urgency = "")
-        {
-            ProcedureFilter = procedureId ?? "";
-            UrgencyFilter = urgency ?? "";
-            if (!VisiblePatients().Any(p => p.patientId == SelectedPatientId)) ClearSelection();
-        }
+        // The explore grid: only rows a clinician can actually open. Connect-only scenarios, blocked
+        // consent, records without a procedure, unnamed placeholders and subjects without an authored
+        // interview stay out of the grid entirely. A retry row stays only while it can still recover.
+        public PatientListEntry[] VisiblePatients() => patients.Where(Listed).ToArray();
+        public bool Listed(PatientListEntry patient) => CanSelect(patient) && EncounterContract.ValidPatientId(patient.patientId) &&
+            patient.encounterAvailable && ProcedureShort(patient).Length > 0 && !Placeholder(Name(patient));
+        // Rows whose case should be re-requested in the background (the grid has no Refresh button).
+        public bool Recoverable(PatientListEntry patient) => patient != null && patient.status == "retry" &&
+            patient.encounterAvailable && EncounterContract.ValidPatientId(patient.patientId);
+        static bool Placeholder(string name) => string.IsNullOrWhiteSpace(name) ||
+            name.StartsWith("Unnamed", StringComparison.OrdinalIgnoreCase) || name.StartsWith("Unavailable", StringComparison.OrdinalIgnoreCase);
 
         public bool Select(string patientId)
         {
             var patient = patients.FirstOrDefault(p => p.patientId == patientId);
-            if (patient == null || !CanSelect(patient))
+            if (patient == null || !Listed(patient))
             {
                 ClearSelection();
                 return false;
@@ -176,6 +174,45 @@ namespace Scalpal.Shell
         }
         public string Complaint(PatientListEntry patient) => NonEmpty(CaseFor(patient?.patientId)?.presentation,
             NonEmpty(patient?.title, "Chart unavailable"));
+        // The one quiet card line: "40 · Appendix" (age is omitted when the record has none).
+        public string CardLine(PatientListEntry patient)
+        {
+            var summary = SelectedBrief?.patientId == patient?.patientId ? SelectedBrief.patient : CaseFor(patient?.patientId)?.patient;
+            string procedure = ProcedureShort(patient);
+            return summary != null && summary.age >= 0 ? summary.age + " · " + procedure : procedure;
+        }
+        public static string ProcedureShort(PatientListEntry patient)
+        {
+            string id = patient?.procedureId ?? "";
+            return id == "open_appendectomy" || id == "lap_appendectomy" ? "Appendix" : id == "lap_cholecystectomy" ? "Gallbladder" :
+                id == "lap_sigmoid_colectomy" ? "Colon" : id.Length > 0 ? NonEmpty(patient.procedureTitle, "") : "";
+        }
+        // Detail panel lines.
+        public string AgeSex(PatientListEntry patient)
+        {
+            var summary = SelectedBrief?.patientId == patient?.patientId ? SelectedBrief.patient : CaseFor(patient?.patientId)?.patient;
+            var parts = new List<string>();
+            if (summary != null && summary.age >= 0) parts.Add(summary.age.ToString());
+            if (!string.IsNullOrWhiteSpace(summary?.sex)) parts.Add(Capitalize(summary.sex));
+            return string.Join(" · ", parts);
+        }
+        public string Presenting(PatientListEntry patient)
+        {
+            string text = Complaint(patient).Trim();
+            int end = text.IndexOf(". ", StringComparison.Ordinal);
+            return end > 0 ? text.Substring(0, end + 1) : text;
+        }
+        public string ProcedureAndUrgency(PatientListEntry patient)
+        {
+            string procedure = NonEmpty(CaseFor(patient?.patientId)?.procedure?.title, NonEmpty(patient?.procedureTitle, ProcedureShort(patient)));
+            return string.IsNullOrWhiteSpace(patient?.urgency) ? procedure : procedure + " · " + Capitalize(patient.urgency);
+        }
+        // First line of each distinct chart section (the patient line repeats the header), at most three.
+        public string[] Highlights(int count = 3) => (SelectedBrief?.chart ?? Array.Empty<ChartLine>())
+            .Where(line => line != null && !string.IsNullOrWhiteSpace(line.text) && !string.Equals(line.section, "Patient", StringComparison.OrdinalIgnoreCase))
+            .GroupBy(line => line.section ?? "").Select(group => group.First()).Take(count)
+            .Select(line => string.IsNullOrWhiteSpace(line.section) ? line.text : line.section + ": " + line.text).ToArray();
+        static string Capitalize(string value) => string.IsNullOrEmpty(value) ? "" : char.ToUpperInvariant(value[0]) + value.Substring(1);
         static string NonEmpty(string value, string fallback) => string.IsNullOrWhiteSpace(value) ? fallback : value;
         static int StatusOrder(string status) => status == "ready" ? 0 : status == "needs_review" ? 1 : status == "retry" ? 2 : 3;
     }
