@@ -221,6 +221,19 @@ const clientTools = Object.fromEntries(
   ]),
 );
 
+// Headset-only tools (the Quest hands over or lights up a stand instrument). On the laptop there is no stand,
+// so they act through the state tracker: a swap is logged as the tool in hand, a highlight is shown in the log.
+clientTools.swap_instrument = async ({ instrument, hand } = {}) => {
+  const h = hand === "left" ? "left" : "right";
+  await api("POST", `/coach/sessions/${sid}/events`, { event: { type: "instrument", instrumentId: String(instrument ?? ""), hand: h, held: true } });
+  log("event", `Handed over: ${instrument} (${h} hand, simulated on the laptop).`);
+  return `Handed the ${instrument} to the ${h} hand.`;
+};
+clientTools.highlight_instrument = async ({ instrument } = {}) => {
+  log("event", `Highlighted on the stand: ${instrument} (simulated on the laptop).`);
+  return `The ${instrument} is lit up on the stand.`;
+};
+
 // ---- voice --------------------------------------------------------------------------------------
 
 async function startVoice() {

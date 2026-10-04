@@ -21,7 +21,7 @@ const REASONING = process.env.SCALPAL_REASONING || process.env.JARVIS_REASONING 
 
 const str = (description: string) => ({ type: "string", description });
 
-const TOOLS = [
+const TOOLS: ToolDef[] = [
   {
     name: "get_surgery_state",
     description: "Fresh live state of the surgery: current step, progress, what is left, danger structures, last event, and how stuck the learner is.",
@@ -64,6 +64,33 @@ TOOLS.push({
   description: "Look at the learner's current point of view (camera frame plus labeled objects) and describe what is there and how to approach it. Use for 'what am I looking at', 'where is it', or 'how do I approach this'.",
   parameters: { type: "object", properties: { question: str("The learner's question, in their words.") }, required: [] },
 } as (typeof TOOLS)[number]);
+
+// Scalpal as scrub nurse in the open case: the headset hands the learner an instrument from the stand, or lights one up.
+// The ids are the open-case instrument stand (OpenSurgerySession.OpenToolSet).
+const OPEN_INSTRUMENTS = [
+  "skin_marker", "scalpel", "toothed_forceps", "retractor", "babcock", "hemostat", "right_angle_clamp",
+  "metzenbaum_scissors", "suture_tie", "suction_irrigator", "laparoscope_30",
+] as const;
+const instrumentParam = { type: "string", enum: [...OPEN_INSTRUMENTS], description: "The instrument on the stand." };
+TOOLS.push(
+  {
+    name: "swap_instrument",
+    description: "Hand the learner an instrument: the headset puts back what that hand holds and puts this instrument in it. Call only when the learner asks to be handed, given, passed or swapped to an instrument.",
+    parameters: {
+      type: "object",
+      properties: {
+        instrument: instrumentParam,
+        hand: { type: "string", enum: ["left", "right", "either"], description: "Which hand. Use either unless the learner names one: the hand already holding a tool, else the right." },
+      },
+      required: ["instrument"],
+    },
+  },
+  {
+    name: "highlight_instrument",
+    description: "Light up an instrument on the stand in orange so the learner can find it. Use to show which tool they need next, for example when they are unsure or reach for the wrong one.",
+    parameters: { type: "object", properties: { instrument: instrumentParam }, required: ["instrument"] },
+  },
+);
 
 // Scalpal as attending during the case presentation, after the patient interview.
 const ATTENDING_TOOLS = [

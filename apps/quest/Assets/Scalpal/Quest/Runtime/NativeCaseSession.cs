@@ -659,10 +659,6 @@ namespace Scalpal.Quest
         }
         public static string ReconnectContext(string context, IReadOnlyList<string> said) => said == null || said.Count == 0 ? context
             : context + "\n[EARLIER THIS SESSION YOU SAID] " + string.Join(" | ", said) + "\nYou already said these. Do not greet again or repeat them; continue from the current step.";
-        void VoiceTool(QuestJarvisVoice.ToolRequest request)
-        {
-            voice.ResolveClientTool(request, "This action is unavailable in the native exercise", true);
-        }
         void VoiceTranscript(string source, string text)
         {
             // Transcripts stay in memory, never in logs or shared exercise event storage.
