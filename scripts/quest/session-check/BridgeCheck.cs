@@ -363,12 +363,38 @@ static class BridgeCheck
             && sid == "" && aid == "" && patient == "" && phase == "");
     }
 
+    static void OwnRequestBoundaries()
+    {
+        var f = new Fixture(); f.State.StepVersion = 7; f.Tick();
+        Check("paired bridge sends own request", f.Bridge.RequestCommand("own-1", "handover", "scalpel", 12));
+        var request = f.Connection.Reducers.Requests[0];
+        Check("own request carries selected session, action, target and observed version",
+            request.CommandId == "own-1" && request.SessionId == "fixture" && request.Action == "handover"
+            && request.TargetId == "scalpel" && request.ArgBool == null && request.ArgNumber == 12
+            && request.ExpectedStepVersion == 7);
+        string reason;
+        Check("own request waits for acknowledgement", f.Bridge.OwnCommandStatus("own-1", out reason) == "sent");
+        Check("own request cannot be duplicated", !f.Bridge.RequestCommand("own-1", "handover", "scalpel", 12)
+            && f.Connection.Reducers.Requests.Count == 1);
+        f.Connection.Reducers.AckRequest(false);
+        Check("refused request exposes reducer failure", f.Bridge.OwnCommandStatus("own-1", out reason) == "refused"
+            && reason == "fixture refusal");
+        f.Bridge.RequestCommand("own-2", "handover", "babcock", null);
+        f.Connection.Reducers.AckRequest(true);
+        Check("committed request waits for shared row", f.Bridge.OwnCommandStatus("own-2", out reason) == "pending");
+        var row = f.Command("own-2"); row.Status = "applied"; row.Reason = "fixture applied";
+        Check("shared outcome wins after commit", f.Bridge.OwnCommandStatus("own-2", out reason) == "applied"
+            && reason == "fixture applied");
+        f.Connection.IsActive = false;
+        Check("disconnected bridge cannot send own request", !f.Bridge.RequestCommand("own-3", "handover", "scalpel", null));
+    }
+
     public static int Main()
     {
         // Connection lifecycle tests persist only a disposable fixture token, never an app token.
         string tokenDirectory = Path.Combine(Path.GetTempPath(), "scalpal-bridge-check-" + Guid.NewGuid().ToString("N"));
         Application.persistentDataPath = tokenDirectory;
-        try { AcknowledgementOrdering(); CommandBoundaries(); ReconnectAndReset(); Results(); EncounterBinding(); RotatedInviteMembership(); AttemptDeadlines(); }
+        try { AcknowledgementOrdering(); CommandBoundaries(); ReconnectAndReset(); Results(); EncounterBinding(); RotatedInviteMembership(); AttemptDeadlines(); OwnRequestBoundaries(); }
         finally { if (Directory.Exists(tokenDirectory)) Directory.Delete(tokenDirectory, true); }
         Console.WriteLine("SCALPAL_NATIVE_BRIDGE_CHECK checks=" + checks + " passed=" + (checks - failures) + " failed=" + failures + "; production bridge with deterministic transport/cache doubles, no Unity or live reducer validation");
         return failures == 0 ? 0 : 1;

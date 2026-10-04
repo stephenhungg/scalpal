@@ -24,10 +24,35 @@ namespace SpacetimeDB
         public override bool Equals(object other) => other is Identity identity && Equals(identity);
         public override int GetHashCode() => value == null ? 0 : value.GetHashCode();
     }
-    public abstract class Status { public sealed class Committed : Status { } public sealed class Failed : Status { } }
+    public abstract class Status
+    {
+        public sealed class Committed : Status { }
+        public sealed class Failed : Status
+        {
+            public string Reason = "fixture refusal";
+            public void Deconstruct(out string reason) { reason = Reason; }
+        }
+    }
 }
 namespace SpacetimeDB.Types
 {
+    // Match the generated RequestCommand reducer used by the production shared-command sender.
+    public abstract class Reducer
+    {
+        public sealed class RequestCommand : Reducer
+        {
+            public string CommandId, SessionId, Action, TargetId;
+            public bool? ArgBool;
+            public double? ArgNumber;
+            public ulong ExpectedStepVersion;
+            public RequestCommand(string commandId, string sessionId, string action, string targetId,
+                bool? argBool, double? argNumber, ulong expectedStepVersion)
+            {
+                CommandId = commandId; SessionId = sessionId; Action = action; TargetId = targetId;
+                ArgBool = argBool; ArgNumber = argNumber; ExpectedStepVersion = expectedStepVersion;
+            }
+        }
+    }
     public sealed class ReducerEventContext
     {
         public EventData Event = new EventData();
@@ -53,7 +78,7 @@ namespace SpacetimeDB.Types
     public sealed class Encounter
     { public string EncounterId, SessionId, AttemptId, PatientId, Phase; }
     public sealed class Command
-    { public string CommandId, SessionId, AttemptId, Status = "pending"; public ulong ExpectedStepVersion = 1; public DateTimeOffset RequestedAt = DateTimeOffset.UtcNow; }
+    { public string CommandId, SessionId, AttemptId, Reason, Status = "pending"; public ulong ExpectedStepVersion = 1; public DateTimeOffset RequestedAt = DateTimeOffset.UtcNow; }
     public sealed class Index<T>
     {
         readonly Func<string, T> find;
@@ -140,12 +165,25 @@ namespace SpacetimeDB.Types
         public delegate void ResolutionHandler(ReducerEventContext ctx, string id, string outcome, string reason);
         public delegate void EventHandler(ReducerEventContext ctx, string session, string attempt, string kind, string step, string structure, string message, double deviceTime);
         public delegate void ResultHandler(ReducerEventContext ctx, string attempt, string status, uint complete, uint total, uint mistakes, uint hints, string summary);
+        public delegate void RequestHandler(ReducerEventContext ctx, string id, string session, string action,
+            string target, bool? argBool, double? argNumber, ulong expected);
         public event JoinHandler OnJoinSession;
         public event AttemptHandler OnStartAttempt;
         public event SnapshotHandler OnPublishExerciseState;
         public event ResolutionHandler OnResolveCommand;
         public event EventHandler OnAppendExerciseEvent;
         public event ResultHandler OnSetAttemptResult;
+        public event RequestHandler OnRequestCommand;
+        public readonly List<Reducer.RequestCommand> Requests = new List<Reducer.RequestCommand>();
+        public void RequestCommand(string id, string session, string action, string target, bool? argBool,
+            double? argNumber, ulong expected)
+        { Requests.Add(new Reducer.RequestCommand(id, session, action, target, argBool, argNumber, expected)); }
+        public void AckRequest(bool committed)
+        {
+            var r = Requests[Requests.Count - 1];
+            OnRequestCommand?.Invoke(ReducerEventContext.Result(committed), r.CommandId, r.SessionId,
+                r.Action, r.TargetId, r.ArgBool, r.ArgNumber, r.ExpectedStepVersion);
+        }
 
         public sealed class SnapshotCall
         {
