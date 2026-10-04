@@ -12,6 +12,7 @@ namespace Scalpal.Quest
     public sealed class NativeTissueSimulation : MonoBehaviour
     {
         readonly List<DeformableTissue> tissues = new List<DeformableTissue>();
+        readonly Dictionary<InstrumentBehaviour,InstrumentTipContact[]> tipCache = new Dictionary<InstrumentBehaviour,InstrumentTipContact[]>();
         readonly TissueContactSolver contactSolver = new TissueContactSolver();
         NativeWorkbench workbench;
         AnatomyController anatomy;
@@ -22,13 +23,14 @@ namespace Scalpal.Quest
         float accumulator, surfaceClock;
         bool wasReady;
         double nextTiming;
-        float peakSurfaceMs;
+        float peakSurfaceMs, peakContactMs;
         int surfaceCommits;
         const float StepSeconds = 1f / 90f;
         public int TissueCount => tissues.Count;
+        public int ContactSteps { get; private set; }
         public void Initialize(AnatomyController controller, NativeWorkbench rig, Func<bool> canInteract)
         {
-            ResetTissues(); tissues.Clear(); anatomy = controller; workbench = rig; ready = canInteract;
+            ResetTissues(); tissues.Clear(); tipCache.Clear(); ContactSteps=0; anatomy = controller; workbench = rig; ready = canInteract;
             Bind("appendix", TissuePreset.Bowel); Bind("mesoappendix", TissuePreset.Mesentery); Bind("appendicular_artery", TissuePreset.Artery);
             contactSolver.Initialize(tissues,true);
             if(contactSolver.SupportedBodies != tissues.Count) Debug.LogWarning("SCALPAL_TISSUE_CONTACT_UNAVAILABLE " + contactSolver.Status);
@@ -41,7 +43,8 @@ namespace Scalpal.Quest
             if(!TissueCage.Finite(meshScale)||!TissueCage.Finite(frameScale)||!(factor>0)||
                 Mathf.Abs(meshScale.y/frameScale.y-factor)>factor*.001f||Mathf.Abs(meshScale.z/frameScale.z-factor)>factor*.001f)return;
             var tissue = part.GetComponent<DeformableTissue>() ?? part.gameObject.AddComponent<DeformableTissue>();
-            if (tissue.Initialize(preset,factor)) tissues.Add(tissue);
+            var posterior=part.transform.InverseTransformDirection(anatomy.transform.TransformDirection(Vector3.forward));
+            if (tissue.Initialize(preset,factor,posterior)) tissues.Add(tissue);
             else { Debug.LogWarning("SCALPAL_TISSUE_UNAVAILABLE id=" + id); Destroy(tissue); }
         }
         void LateUpdate() => Simulate(Time.deltaTime);
@@ -62,21 +65,23 @@ namespace Scalpal.Quest
             {
                 foreach (var tissue in tissues)
                     tissue.Step(StepSeconds, tissue == grabbed ? tissue.ToMeters(tissue.transform.InverseTransformPoint(tool.actionPoint.position)) + localOffset : Vector3.zero);
+                double contactBegin=Time.realtimeSinceStartupAsDouble;
+                contactSolver.Solve(true);ContactSteps++;
+                peakContactMs=Mathf.Max(peakContactMs,(float)((Time.realtimeSinceStartupAsDouble-contactBegin)*1000));
                 accumulator -= StepSeconds;
             }
             surfaceClock += Mathf.Clamp(seconds, 0, .05f);
             if (surfaceClock >= 1f/30f)
             {
                 double begin = Time.realtimeSinceStartupAsDouble;
-                contactSolver.Solve(true);
                 foreach (var tissue in tissues) tissue.CommitSurface();
                 peakSurfaceMs = Mathf.Max(peakSurfaceMs, (float)((Time.realtimeSinceStartupAsDouble - begin) * 1000));
                 surfaceCommits++; surfaceClock %= 1f/30f;
             }
             if (Application.isPlaying && Time.realtimeSinceStartupAsDouble >= nextTiming)
             {
-                Debug.Log($"SCALPAL_NATIVE_TISSUE_TIMING targets={tissues.Count} surfaceCommits={surfaceCommits} peakSurfaceMs={peakSurfaceMs:F2} contactSupported={contactSolver.SupportedBodies} contactPairs={contactSolver.AppliedPairs} excessResidualMm={contactSolver.MaximumResidualPenetrationMeters*1000:F2} authoredOverlapMm={contactSolver.MaximumAuthoredOverlapMeters*1000:F2} samplingGapMm={contactSolver.MaximumSamplingGapMeters*1000:F2}");
-                nextTiming = Time.realtimeSinceStartupAsDouble + 5; peakSurfaceMs=0; surfaceCommits=0;
+                Debug.Log($"SCALPAL_NATIVE_TISSUE_TIMING targets={tissues.Count} surfaceCommits={surfaceCommits} peakSurfaceMs={peakSurfaceMs:F2} peakContactStepMs={peakContactMs:F2} contactTriangleQueries={contactSolver.TriangleQueries} contactSupported={contactSolver.SupportedBodies} contactPairs={contactSolver.AppliedPairs} excessResidualMm={contactSolver.MaximumResidualPenetrationMeters*1000:F2} authoredOverlapMm={contactSolver.MaximumAuthoredOverlapMeters*1000:F2} samplingGapMm={contactSolver.MaximumSamplingGapMeters*1000:F2}");
+                nextTiming = Time.realtimeSinceStartupAsDouble + 5; peakSurfaceMs=peakContactMs=0; surfaceCommits=0;
             }
         }
         bool ValidTool(InstrumentBehaviour item) => workbench && Array.IndexOf(workbench.tools ?? Array.Empty<InstrumentBehaviour>(), item) >= 0 && item && item.isActiveAndEnabled && item.Held && item.TrackingValid &&
@@ -94,8 +99,11 @@ namespace Scalpal.Quest
                     if (!part.IsVisible || !part.HasVisibleGeometry || !collider.enabled) continue;
                     // Require actual tip penetration, same as the scored adapter. Sphere proximity alone is insufficient.
                     bool overlap = false;
-                    foreach (var tip in candidate.GetComponentsInChildren<InstrumentTipContact>())
+                    if(!tipCache.TryGetValue(candidate,out var tips))
+                    {tips=candidate.GetComponentsInChildren<InstrumentTipContact>(true);tipCache.Add(candidate,tips);}
+                    foreach (var tip in tips)
                     {
+                        if(!tip)continue;
                         var shape = tip.GetComponent<Collider>();
                         if (tip.GetComponentInParent<InstrumentBehaviour>() != candidate || !tip.isActiveAndEnabled || !shape || !shape.enabled || !shape.isTrigger ||
                             Vector3.Distance(tip.transform.position,candidate.actionPoint.position) > candidate.contactRadius) continue;

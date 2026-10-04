@@ -15,6 +15,7 @@ namespace Scalpal.Quest.Editor
             checks = 0;
             FlowAndBalance();
             ControlsAndReset();
+            LongPractice();
             InvalidInputs();
             Debug.Log("SCALPAL_NATIVE_BLEEDING_VALIDATION_OK checks=" + checks + " synthetic fluid fixtures; no clinical/headset validation");
         }
@@ -88,6 +89,22 @@ namespace Scalpal.Quest.Editor
             Ledger(model);
         }
 
+        static void LongPractice()
+        {
+            var model = Fixture();
+            bool valid = true;
+            for (int i = 0; i < 72001; i++) valid &= model.Step(.05);
+            Assert(valid && !model.IsFaulted && model.ElapsedSeconds == 0 && model.CumulativeLossMilliliters == 0,
+                "more than one hour of intact practice cannot expire the vessel");
+            Assert(model.OpenInjury(.000001) && model.Step(.1) && model.CumulativeLossMilliliters > 0,
+                "injury still discharges after long intact practice");
+            for (int i = 0; i < 72001; i++) valid &= model.Step(.05);
+            Assert(valid && !model.IsFaulted && model.ElapsedSeconds == model.MaximumSimulationSeconds,
+                "injured/exhausted model remains usable after diagnostic clock cap");
+            Assert(model.RemovePool(1) > 0, "long injury does not disable suction");
+            Ledger(model);
+        }
+
         static void InvalidInputs()
         {
             foreach (double area in new[] { double.NaN, double.PositiveInfinity, -.000001, 0, .000011 })
@@ -112,7 +129,8 @@ namespace Scalpal.Quest.Editor
             var boundedTime = Fixture(duration: .25); boundedTime.OpenInjury(.000001);
             Assert(boundedTime.Step(.1) && boundedTime.Step(.1), "bounded total time admits valid steps");
             double before = boundedTime.CumulativeLossMilliliters;
-            Assert(!boundedTime.Step(.1) && boundedTime.IsFaulted && boundedTime.CumulativeLossMilliliters == before, "total-duration bound blocks emission atomically");
+            Assert(boundedTime.Step(.1) && !boundedTime.IsFaulted && boundedTime.CumulativeLossMilliliters > before && Near(boundedTime.ElapsedSeconds, .25),
+                "diagnostic clock saturates without disabling valid discharge");
             var zeroStep = Fixture(); zeroStep.OpenInjury(.000001);
             Assert(zeroStep.Step(0) && zeroStep.CumulativeLossMilliliters == 0, "zero time is a no-op");
             var empty = Fixture(source: 0); empty.OpenInjury(.000001); empty.Step(.1);

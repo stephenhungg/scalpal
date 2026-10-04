@@ -200,39 +200,76 @@ namespace Scalpal.Quest
             Debug.Log($"SCALPAL_NATIVE_BODY_DEPTH snapshotComplete={complete} hits={count} sampleMs={(Time.realtimeSinceStartup - started) * 1000:F2}");
         }
 
-        IEnumerator Observe(int generation)
+        IEnumerator Observe(int generation) => ObserveSafely(ObserveFrame(generation), generation);
+
+        // Own the entire iterator lifetime, including exceptions after a yielded GPU/HTTP
+        // operation and cancellation/disposal. A failed frame must not wedge acquisition.
+        IEnumerator ObserveSafely(IEnumerator frame, int generation)
         {
             inFlight = true; nextFrame = Time.realtimeSinceStartup + 0.3f;
+            try
+            {
+                while (true)
+                {
+                    bool next = false, failed = false; object current = null;
+                    try { next = frame.MoveNext(); if (next) current = frame.Current; }
+                    catch (Exception)
+                    {
+                        failed = true;
+                        if (generation == epoch) Invalidate("Camera observation failed; automatically retrying");
+                    }
+                    if (failed || !next) yield break;
+                    yield return current;
+                }
+            }
+            finally
+            {
+                // Dispose the inner request even if Unity cancels this outer coroutine.
+                try { (frame as IDisposable)?.Dispose(); }
+                finally { activeRequest = null; inFlight = false; }
+            }
+        }
+
+        void EnsureReadback(Texture texture)
+        {
+            if (!texture || texture.width < 1 || texture.height < 1) throw new ArgumentException("Missing camera texture dimensions");
+            if (readback && readback.width == texture.width && readback.height == texture.height) return;
+            if (readback) { if (Application.isPlaying) Destroy(readback); else DestroyImmediate(readback); }
+            readback = new Texture2D(texture.width, texture.height, TextureFormat.RGBA32, false);
+        }
+
+        IEnumerator ObserveFrame(int generation)
+        {
             yield return new WaitForEndOfFrame();
-            if (generation != epoch || !cameraAccess || !cameraAccess.IsPlaying) { inFlight = false; yield break; }
+            if (generation != epoch || !cameraAccess || !cameraAccess.IsPlaying) { yield break; }
             float captured = Time.realtimeSinceStartup;
             // PCA returns lens pose in tracking space. Apply exactly the rig's existing floor transform.
             Pose lens = cameraAccess.GetCameraPose();
             Pose world = new Pose(workbench.trackingOrigin.TransformPoint(lens.position), workbench.trackingOrigin.rotation * lens.rotation);
             Texture texture = cameraAccess.GetTexture();
             if (!texture || cameraAccess.Timestamp == default || !BodyRegistrationMath.ValidFloorLensPose(lens, cameraAccess.Intrinsics.LensOffset)
-                || !TrackingSpacesAgree()) { Invalidate("Camera pose/reference space unavailable"); inFlight = false; yield break; }
-            if (cameraAccess.Timestamp == lastCameraTimestamp) { inFlight = false; yield break; }
+                || !TrackingSpacesAgree()) { Invalidate("Camera pose/reference space unavailable"); yield break; }
+            if (cameraAccess.Timestamp == lastCameraTimestamp) { yield break; }
             double cameraAge = (DateTime.UtcNow - cameraAccess.Timestamp).TotalSeconds;
-            if (cameraAge < -0.1 || cameraAge > 0.5) { Invalidate("Camera frame timestamp is stale or incompatible"); inFlight = false; yield break; }
+            if (cameraAge < -0.1 || cameraAge > 0.5) { Invalidate("Camera frame timestamp is stale or incompatible"); yield break; }
             lastCameraTimestamp = cameraAccess.Timestamp;
             captured -= (float)Math.Max(0, cameraAge);
-            Vector2Int resolution = cameraAccess.CurrentResolution;
+            Vector2Int resolution = new Vector2Int(texture.width, texture.height);
             // Cache rays at acquisition, before asynchronous inference and subsequent head motion.
             Ray bottomLeft = cameraAccess.ViewportPointToRay(Vector2.zero, world);
             Ray bottomRight = cameraAccess.ViewportPointToRay(Vector2.right, world);
             Ray topLeft = cameraAccess.ViewportPointToRay(Vector2.up, world);
             var surface = CaptureSurface(bottomLeft, bottomRight, topLeft, world.rotation * Vector3.forward, (float)Math.Max(0, cameraAge));
-            if (surface == null) { Invalidate("Waiting for live spatial depth/permission; automatic fit paused"); inFlight = false; yield break; }
+            if (surface == null) { Invalidate("Waiting for live spatial depth/permission; automatic fit paused"); yield break; }
             // Meta explicitly warns that blocking Blit/GetTexture readback can return the
             // preceding image. Queue asynchronous GPU readback with this frame's metadata.
-            if (!SystemInfo.supportsAsyncGPUReadback) { Invalidate("Calibrated camera readback unsupported"); inFlight = false; yield break; }
+            if (!SystemInfo.supportsAsyncGPUReadback) { Invalidate("Calibrated camera readback unsupported"); yield break; }
             var pixels = AsyncGPUReadback.Request(texture, 0, TextureFormat.RGBA32);
             while (!pixels.done) yield return null;
-            if (generation != epoch || pixels.hasError) { if (generation == epoch) Invalidate("Camera readback failed"); inFlight = false; yield break; }
-            if (!readback || readback.width != resolution.x || readback.height != resolution.y)
-            { if (readback) Destroy(readback); readback = new Texture2D(resolution.x, resolution.y, TextureFormat.RGBA32, false); }
-            readback.LoadRawTextureData(pixels.GetData<byte>()); readback.Apply(false);
+            if (generation != epoch || pixels.hasError) { if (generation == epoch) Invalidate("Camera readback failed"); yield break; }
+            EnsureReadback(texture);
+            // Encoding consumes CPU pixel data; no redundant GPU upload via Apply.
+            readback.LoadRawTextureData(pixels.GetData<byte>());
             byte[] jpeg = readback.EncodeToJPG(75);
             string id = generation + "-" + Time.frameCount;
             using (var request = new UnityWebRequest(endpoint.TrimEnd('/') + "/pose", "POST"))
@@ -250,7 +287,6 @@ namespace Scalpal.Quest
                 }
                 activeRequest = null;
             }
-            inFlight = false;
         }
 
         bool TrackingSpacesAgree()

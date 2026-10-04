@@ -20,7 +20,7 @@ namespace Scalpal.Anatomy.Tissue
             materials=new Material[volume.Materials.Length];
             for(int i=0;i<materials.Length;i++)
             {
-                materials[i]=new Material(Shader.Find("Standard")){name=volume.Materials[i].id,color=volume.Materials[i].color};
+                materials[i]=TissueRuntimeMaterial.Create(volume.Materials[i].id,volume.Materials[i].color);
                 materials[i].SetFloat("_Glossiness",i==0?.25f:.45f);
             }
             surfaceRenderer.sharedMaterials=materials;

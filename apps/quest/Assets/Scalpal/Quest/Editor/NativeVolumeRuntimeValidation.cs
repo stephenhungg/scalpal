@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using Scalpal.Anatomy;
 using Scalpal.Anatomy.Tissue;
 using Scalpal.Instruments;
 using UnityEditor;
@@ -20,11 +21,59 @@ namespace Scalpal.Quest.Editor
         public static void Run()
         {
             checks = 0;
+            WallProjection();
+            GraspSurvival();
+            RejectedGraspTrial();
+            WarmedAllocations();
             GatesAndRetry();
             InvalidTools();
             Discontinuities();
             AuthoredScalpel();
             Debug.Log("SCALPAL_NATIVE_VOLUME_RUNTIME_VALIDATION_OK checks=" + checks + " synthetic Editor interaction fixtures; no headset or clinical validation");
+        }
+
+        static void WallProjection()
+        {
+            using(var f=new Fixture())
+            {
+                var model=new GameObject("RotatedAppendixPlacementFixture");model.transform.SetParent(f.frame,false);
+                var mesh=new Mesh();
+                try
+                {
+                    model.transform.localPosition=new Vector3(-.055f,.94f,-.04f);
+                    model.transform.localRotation=Quaternion.Euler(23,71,-18);model.transform.localScale=Vector3.one*.01f;
+                    model.AddComponent<AnatomyPart>().stableId="appendix";
+                    mesh.vertices=new[]{new Vector3(-2,0,0),new Vector3(2,4,1),new Vector3(0,1,2)};mesh.triangles=new[]{0,1,2};mesh.RecalculateBounds();
+                    model.AddComponent<MeshFilter>().sharedMesh=mesh;
+                    Vector3 projection=f.frame.InverseTransformPoint(model.transform.TransformPoint(mesh.bounds.center));
+                    f.simulation.Initialize(f.frame,f.rig,()=>f.ready);
+                    Vector3 low=Vector3.one*float.PositiveInfinity,high=Vector3.one*float.NegativeInfinity;
+                    for(int i=0;i<f.Volume.NodeCount;i++){low=Vector3.Min(low,f.Volume.Rest[i]);high=Vector3.Max(high,f.Volume.Rest[i]);}
+                    Vector3 center=(low+high)*.5f;
+                    Assert(Mathf.Abs(center.x-projection.x)<1e-6f&&Mathf.Abs(center.y-projection.y)<1e-6f,"wall projects appendix through rotated/scaled atlas and world frames");
+                    Assert(Mathf.Abs(low.z+.115287f)<1e-6f&&Mathf.Abs(high.z+.100287f)<1e-6f,"projection preserves authored anterior depths and thickness");
+                    Assert(Mathf.Abs(center.y-CenterY)>.04f,"placement regression moves away from the umbilical default");
+                }
+                finally{UnityEngine.Object.DestroyImmediate(model);UnityEngine.Object.DestroyImmediate(mesh);}
+            }
+            var session=UnityEngine.Object.FindFirstObjectByType<NativeCaseSession>();
+            Assert(session&&session.anatomy,"wall projection checks the authored scene atlas");
+            var source=session.anatomy.GetComponentsInChildren<AnatomyPart>(true).Single(part=>part.stableId=="appendix");
+            var sourceFrame=session.anatomy.transform.parent;
+            Vector3 expected=sourceFrame.InverseTransformPoint(source.transform.TransformPoint(source.GetComponent<MeshFilter>().sharedMesh.bounds.center));
+            using(var f=new Fixture())
+            {
+                var model=UnityEngine.Object.Instantiate(source.gameObject,f.frame);
+                model.transform.SetLocalPositionAndRotation(sourceFrame.InverseTransformPoint(source.transform.position),Quaternion.Inverse(sourceFrame.rotation)*source.transform.rotation);
+                model.transform.localScale=source.transform.lossyScale/sourceFrame.lossyScale.x;
+                f.simulation.Initialize(f.frame,f.rig,()=>f.ready);
+                Vector3 low=Vector3.one*float.PositiveInfinity,high=Vector3.one*float.NegativeInfinity;
+                foreach(var point in f.Volume.Rest){low=Vector3.Min(low,point);high=Vector3.Max(high,point);}
+                var center=(low+high)*.5f;
+                Assert(Mathf.Abs(center.x-expected.x)<1e-6f&&Mathf.Abs(center.y-expected.y)<1e-6f,"actual atlas appendix determines wall field");
+                Assert(center.x<-.01f&&center.y<CenterY-.025f,"actual appendix field is right and caudal of the umbilical coupon");
+                Debug.Log($"SCALPAL_VOLUME_WALL_PROJECTION sourceCenter={expected:F6} wallCenter={center:F6} unscored=true incisionRubric=false");
+            }
         }
 
         sealed class Fixture : IDisposable
@@ -129,14 +178,14 @@ namespace Scalpal.Quest.Editor
         sealed class State
         {
             public readonly int nodes, cutFaces;
-            public readonly float mass, referenceVolume;
+            public readonly NativeVolumeValidation.TopologySnapshot topology;
             public readonly bool[] cuts;
             public readonly int[] binding;
             public readonly Vector3[] positions;
             public State(TissueVolume volume)
             {
                 nodes = volume.NodeCount; cutFaces = volume.CutFaceCount;
-                mass = volume.TotalMass; referenceVolume = volume.ReferenceVolume;
+                topology = new NativeVolumeValidation.TopologySnapshot(volume);
                 cuts = volume.Faces.Select(face => face.cut).ToArray();
                 binding = Enumerable.Range(0, volume.Cells.Length * 4).Select(i => volume.NodeFor(i / 4, i % 4)).ToArray();
                 positions = (Vector3[])volume.Positions.Clone();
@@ -144,9 +193,96 @@ namespace Scalpal.Quest.Editor
             public void AssertTopology(TissueVolume volume, string reason)
             {
                 Assert(volume.NodeCount == nodes && volume.CutFaceCount == cutFaces, reason + ": topology counts");
-                Assert(Near(volume.TotalMass, mass) && Near(volume.ReferenceVolume, referenceVolume), reason + ": reference mass/volume");
+                topology.Validate(volume);
                 Assert(cuts.SequenceEqual(volume.Faces.Select(face => face.cut)), reason + ": fracture flags");
                 Assert(binding.SequenceEqual(Enumerable.Range(0, binding.Length).Select(i => volume.NodeFor(i / 4, i % 4))), reason + ": cell bindings");
+            }
+        }
+
+        static void GraspSurvival()
+        {
+            // The actual layered wall, public instrument route, and 90 Hz solver:
+            // holding the tool identity alone cannot pass; tissue must visibly move.
+            foreach(var direction in new[]{Vector3.forward,Vector3.back,Vector3.left,Vector3.right})
+                using(var f=new Fixture())
+                {
+                    f.blade.SetHeld(false);f.ready=true;
+                    var contact=new Vector3(.02f,CenterY,-.115287f);
+                    f.grasper.transform.position=f.frame.TransformPoint(contact);Enable(f.grasper);f.Tick();
+                    int handle=f.Volume.Handle;
+                    Assert(handle>=0,"layered wall acquires runtime grasp");
+                    Assert(f.Volume.HandleNodeCount>=6,"attachment spreads through a finite neighboring material patch");
+                    var start=f.Volume.HandlePosition;
+                    for(int frame=1;frame<=25;frame++)
+                    {
+                        float travel=frame*.0004f; // 36 mm/s, reaching 10 mm.
+                        f.grasper.transform.position=f.frame.TransformPoint(contact+direction*travel);f.Tick();
+                        Assert(f.Volume.Handle==handle,"5-10 mm push/pull/lateral never drops or reacquires the material handle");
+                        AssertCells(f.Volume,"grasp movement");
+                        if(frame==13)Assert(Vector3.Dot(f.Volume.HandlePosition-start,direction)>.0025f,"5 mm commanded grasp produces at least 2.5 mm tissue motion direction="+direction+" motionMm="+(1000*Vector3.Dot(f.Volume.HandlePosition-start,direction))+" backtracks="+f.Volume.LastStepBacktracks);
+                    }
+                    for(int frame=0;frame<20;frame++){f.Tick();Assert(f.Volume.Handle==handle,"held 10 mm target survives settling");AssertCells(f.Volume,"grasp settling");}
+                    Assert(Vector3.Dot(f.Volume.HandlePosition-start,direction)>.006f,"10 mm commanded grasp produces at least 6 mm tissue motion");
+                    Assert(f.Volume.LastStepAccepted,"settled grasp continues accepting solver steps direction="+direction+" motionMm="+(1000*Vector3.Dot(f.Volume.HandlePosition-start,direction))+" retries="+f.Volume.LastStepRetries+" rejectedJ="+f.Volume.LastRejectedJacobian+" cell="+f.Volume.LastRejectedCell);
+                    f.grasper.SetActivation(0);f.Tick();Assert(f.Volume.Handle<0,"explicit grasper release still detaches");
+                    AssertUnscored(f);
+                }
+        }
+        static void RejectedGraspTrial()
+        {
+            var volume=TissueVolumeFactory.AbdominalWall();
+            Assert(volume.BeginHandle(new Vector3(.02f,CenterY,-.115287f),.02f),"rollback fixture acquires layered grasp");
+            var target=volume.HandlePosition+Vector3.back*.002f;
+            for(int i=0;i<8;i++)volume.Step(Step,target,Vector3.zero);
+            int handle=volume.Handle;var positions=(Vector3[])volume.Positions.Clone();
+            var force=new Vector3[volume.NodeCount];volume.MeasureNodalForces(force);
+            // An impossible *prescribed boundary*, independent of attachment strength,
+            // makes every retry fail, rather than assuming a compliant grip must invert.
+            Assert(volume.SetBoundaryTarget(0,volume.Original[0]+Vector3.right*.3f),"prescribe independently invalid boundary");
+            volume.Step(Step,target+Vector3.forward*.01f,Vector3.zero);
+            Assert(!volume.LastStepAccepted&&volume.LastStepRetries==4,"invalid boundary rejects all bounded attachment retries");
+            Assert(volume.Handle==handle,"rejected trial preserves user's material grasp");
+            AssertPositions(positions,volume.Positions,"rejected trial keeps exactly accepted positions");
+            var after=new Vector3[volume.NodeCount];volume.MeasureNodalForces(after);AssertPositions(force,after,"rejection retains material force cache");
+            Assert(volume.SetBoundaryTarget(0,volume.Original[0]),"restore valid boundary without reacquiring grasp");
+            volume.Step(Step,target,Vector3.zero);
+            Assert(volume.LastStepAccepted&&volume.Handle==handle,"same grasp resumes after rejected pending boundary is corrected");
+            AssertCells(volume,"resumed grasp");
+        }
+        static void AssertCells(TissueVolume volume,string reason)
+        {
+            for(int cell=0;cell<volume.Cells.Length;cell++)
+            {
+                var source=volume.Cells[cell];
+                var dm=new TissueTensor(volume.Original[source.b]-volume.Original[source.a],volume.Original[source.c]-volume.Original[source.a],volume.Original[source.d]-volume.Original[source.a]);
+                var a=volume.Positions[volume.NodeFor(cell,0)];
+                var f=new TissueTensor(volume.Positions[volume.NodeFor(cell,1)]-a,volume.Positions[volume.NodeFor(cell,2)]-a,volume.Positions[volume.NodeFor(cell,3)]-a).Multiply(dm.Inverse());
+                Assert(!float.IsNaN(f.Determinant)&&!float.IsInfinity(f.Determinant)&&f.Determinant>.02f,reason+": finite noninverted cell "+cell);
+            }
+        }
+
+        static void WarmedAllocations()
+        {
+            using(var f=new Fixture())
+            {
+                f.ready=true;f.blade.SetHeld(false);
+                // Activated near-surface grasper stays just outside acquisition distance:
+                // this reproduces the old per-frame Mesh array-copy path.
+                f.grasper.transform.position=f.frame.TransformPoint(new Vector3(.02f,CenterY,-.119287f));Enable(f.grasper);
+                for(int i=0;i<8;i++)f.Tick(Step*.5f);
+                long before=GC.GetAllocatedBytesForCurrentThread();
+                for(int i=0;i<64;i++)f.Tick(Step*.5f);
+                long acquireAllocated=GC.GetAllocatedBytesForCurrentThread()-before;
+                Assert(f.Volume.Handle<0,"warmed acquisition fixture remains outside exact surface distance");
+                Assert(acquireAllocated<=4096,"warmed actual runtime acquisition path avoids mesh-copy GC; bytes="+acquireAllocated);
+                var a=Vector3.one;var b=a+Vector3.right*.01f;var c=a+Vector3.up*.01f;
+                for(int i=0;i<4;i++){f.Volume.CutSweep(a,b,c,.0005f);f.Volume.WriteSurface(f.Wall.Surface);}
+                before=GC.GetAllocatedBytesForCurrentThread();
+                for(int i=0;i<32;i++){f.Volume.CutSweep(a,b,c,.0005f);f.Volume.WriteSurface(f.Wall.Surface);}
+                long geometryAllocated=GC.GetAllocatedBytesForCurrentThread()-before;
+                Assert(geometryAllocated<=4096,"warmed cut-query/surface-write reuses managed buffers; bytes="+geometryAllocated);
+                Debug.Log("SCALPAL_VOLUME_ALLOCATION_VALIDATION acquire64TicksBytes="+acquireAllocated+" geometry32WritesBytes="+geometryAllocated);
+                Assert(f.Volume.CutFaceCount==0,"distant allocation fixture does not trigger topology rebuild");
             }
         }
 
@@ -169,7 +305,7 @@ namespace Scalpal.Quest.Editor
                 Assert(f.Volume.CutFaceCount > 0, "owned finite CutStart/CutEnd sweep fractures the wall");
                 Assert(f.Wall.Surface.triangles.Length == triangles.Length + 6 * f.Volume.CutFaceCount, "each fracture exposes two generated interior triangles");
                 Assert(f.Volume.NodeCount > initial.nodes, "incision creates independently bound cut-side nodes");
-                Assert(Near(f.Volume.TotalMass, initial.mass) && Near(f.Volume.ReferenceVolume, initial.referenceVolume), "blade sweep conserves reference volume and mass");
+                initial.topology.Validate(f.Volume,true);
                 var firstCut = new State(f.Volume);
                 f.Cut(); firstCut.AssertTopology(f.Volume, "repeated blade traversal cannot duplicate an existing incision");
                 foreach (var face in f.Volume.Faces.Where(face => face.cut))

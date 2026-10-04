@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Scalpal.Anatomy;
 using Scalpal.Anatomy.Tissue;
 using Scalpal.Instruments;
@@ -18,7 +19,11 @@ namespace Scalpal.Quest
         MeshFilter vessel;
         MeshCollider vesselContact;
         DeformableTissue deformable;
-        Vector3[] restVertices;
+        Vector3[] restVertices, staticVertices;
+        int[] surfaceTriangles;
+        readonly Dictionary<InstrumentBehaviour, InstrumentTipContact[]> tipCache = new Dictionary<InstrumentBehaviour, InstrumentTipContact[]>();
+        public const float MaximumPoolIndicatorRadius = .04f;
+        public const float PoolIndicatorDepth = .003f;
         Func<bool> ready;
         GameObject pool;
         Material blood;
@@ -31,20 +36,21 @@ namespace Scalpal.Quest
         public void Initialize(AnatomyController controller,NativeWorkbench workbench,NativeVolumeSimulation volume,Func<bool> canInteract)
         {
             if(cutting)cutting.BladeSwept-=BladeSweep;
-            DisposePool();injured=false;injuryPoint=Vector3.zero;artery=null;vessel=null;vesselContact=null;
+            DisposePool();tipCache.Clear();injured=false;injuryPoint=Vector3.zero;artery=null;vessel=null;vesselContact=null;
             anatomy=controller;rig=workbench;cutting=volume;ready=canInteract;Fluid=new VesselBleeding();
             if(!controller||!workbench||!controller.TryGetPart("appendicular_artery",out artery)||!volume)return;
             vessel=artery.GetComponent<MeshFilter>();vesselContact=artery.GetComponent<MeshCollider>();
             if(!vessel||!vesselContact||!vessel.sharedMesh||!vessel.sharedMesh.isReadable)return;
             deformable=artery.GetComponent<DeformableTissue>();
-            restVertices=deformable&&deformable.SourceMesh?deformable.SourceMesh.vertices:vessel.sharedMesh.vertices;
+            restVertices=deformable&&deformable.SourceMesh?deformable.RestVertices:vessel.sharedMesh.vertices;
+            staticVertices=restVertices; surfaceTriangles=deformable&&deformable.SourceMesh?deformable.SurfaceTriangles:vessel.sharedMesh.triangles;
             Vector3 scale=artery.transform.lossyScale,reference=controller.transform.lossyScale;
             sourceUnitScale=scale.x/reference.x;
             if(!TissueCage.Finite(scale)||!TissueCage.Finite(reference)||!(sourceUnitScale>0)||float.IsInfinity(sourceUnitScale)||
                 Mathf.Abs(scale.y/reference.y-sourceUnitScale)>sourceUnitScale*.001f||Mathf.Abs(scale.z/reference.z-sourceUnitScale)>sourceUnitScale*.001f)return;
             pool=GameObject.CreatePrimitive(PrimitiveType.Sphere);pool.name="UnscoredBloodPool";pool.transform.SetParent(artery.transform,false);
             var collider=pool.GetComponent<Collider>();collider.enabled=false;Dispose(collider);
-            blood=new Material(Shader.Find("Standard")){name="TeachingBlood_Uncalibrated",color=new Color(.32f,.006f,.009f)};
+            blood=TissueRuntimeMaterial.Create("TeachingBlood_Uncalibrated",new Color(.32f,.006f,.009f));
             blood.SetFloat("_Glossiness",.8f);pool.GetComponent<Renderer>().sharedMaterial=blood;pool.SetActive(false);
             cutting.BladeSwept+=BladeSweep;
         }
@@ -59,7 +65,7 @@ namespace Scalpal.Quest
             if(!TissueCage.Finite(a)||!TissueCage.Finite(b)||!TissueCage.Finite(c)||Vector3.Cross(b-a,c-a).sqrMagnitude<1e-12f)return;
             var mesh=vessel.sharedMesh;var bounds=new Bounds(a,Vector3.zero);bounds.Encapsulate(b);bounds.Encapsulate(c);bounds.Expand(.001f);
             if(!bounds.Intersects(new Bounds(mesh.bounds.center*sourceUnitScale,mesh.bounds.size*sourceUnitScale)))return;
-            var vertices=mesh.vertices;var triangles=mesh.triangles;
+            var vertices=deformable&&deformable.Cage!=null?deformable.SurfaceVertices:staticVertices;var triangles=surfaceTriangles;
             for(int i=0;i<triangles.Length;i+=3)
             {
                 var p=vertices[triangles[i]]*sourceUnitScale;var q=vertices[triangles[i+1]]*sourceUnitScale;var r=vertices[triangles[i+2]]*sourceUnitScale;
@@ -89,7 +95,7 @@ namespace Scalpal.Quest
                 Vector3 point=artery.transform.InverseTransformPoint(tool.actionPoint.position)*sourceUnitScale;
                 if(!injured)continue;
                 if((tool.action==InstrumentAction.Seal||tool.action==InstrumentAction.Clip)&&(point-injuryPoint).magnitude<=.012f&&TouchesVessel(tool))Fluid.SetOccluded(true);
-                if(tool.action==InstrumentAction.Suction&&pool.activeSelf&&TouchesPool(point,tool.contactRadius))
+                if(tool.action==InstrumentAction.Suction&&pool.activeSelf&&TouchesPool(tool.actionPoint.position,tool.contactRadius))
                     Fluid.RemovePool(SuctionMillilitersPerSecond*dt);
             }
             Fluid.Step(dt);
@@ -97,17 +103,24 @@ namespace Scalpal.Quest
             pool.SetActive(show);
             if(show)
             {
-                // Volume-preserving oblate ellipsoid for a pool indicator, not a fluid surface solver.
-                float depth=.003f;
-                float radius=Mathf.Sqrt((float)(3*Fluid.PooledMilliliters*1e-6/(2*Math.PI*depth)));
-                pool.transform.localPosition=(injuryPoint+Vector3.back*depth*.5f)/sourceUnitScale;
-                pool.transform.localScale=new Vector3(2*radius,2*radius,depth)/sourceUnitScale;
+                // Bounded teaching indicator: the SI ledger remains authoritative; this
+                // deliberately ceases to be volume preserving above its 4 cm radius cap.
+                float radius=Mathf.Min(MaximumPoolIndicatorRadius,Mathf.Sqrt((float)(3*Fluid.PooledMilliliters*1e-6/(2*Math.PI*PoolIndicatorDepth))));
+                Vector3 normal=Physics.gravity.sqrMagnitude>1e-10f?-Physics.gravity.normalized:Vector3.up;
+                Vector3 worldInjury=artery.transform.TransformPoint(injuryPoint/sourceUnitScale);
+                float worldScale=artery.transform.lossyScale.x/sourceUnitScale;
+                pool.transform.position=worldInjury+normal*(PoolIndicatorDepth*.5f*worldScale);
+                pool.transform.rotation=Quaternion.FromToRotation(Vector3.forward,normal);
+                pool.transform.localScale=new Vector3(2*radius,2*radius,PoolIndicatorDepth)/sourceUnitScale;
             }
         }
         bool TouchesVessel(InstrumentBehaviour tool)
         {
-            foreach(var tip in tool.GetComponentsInChildren<InstrumentTipContact>())
+            if(!tipCache.TryGetValue(tool,out var tips))
+            { tips=tool.GetComponentsInChildren<InstrumentTipContact>(true);tipCache.Add(tool,tips); }
+            foreach(var tip in tips)
             {
+                if(!tip)continue;
                 var shape=tip.GetComponent<Collider>();
                 if(tip.GetComponentInParent<InstrumentBehaviour>()!=tool||!shape||!shape.enabled||!shape.isTrigger||!tip.isActiveAndEnabled)continue;
                 if(Vector3.Distance(tip.transform.position,tool.actionPoint.position)>tool.contactRadius)continue;
@@ -115,11 +128,11 @@ namespace Scalpal.Quest
             }
             return false;
         }
-        bool TouchesPool(Vector3 point,float radius)
+        bool TouchesPool(Vector3 worldPoint,float radius)
         {
-            if(!TissueCage.Finite(point)||!(radius>0)||float.IsInfinity(radius)||radius>.05f)return false;
-            Vector3 half=pool.transform.localScale*(.5f*sourceUnitScale)+Vector3.one*radius;
-            Vector3 delta=point-pool.transform.localPosition*sourceUnitScale;
+            if(!TissueCage.Finite(worldPoint)||!(radius>0)||float.IsInfinity(radius)||radius>.05f)return false;
+            Vector3 half=pool.transform.lossyScale*.5f+Vector3.one*radius;
+            Vector3 delta=Quaternion.Inverse(pool.transform.rotation)*(worldPoint-pool.transform.position);
             if(half.x<=0||half.y<=0||half.z<=0)return false;
             return delta.x*delta.x/(half.x*half.x)+delta.y*delta.y/(half.y*half.y)+delta.z*delta.z/(half.z*half.z)<=1;
         }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Scalpal.Anatomy;
 using Scalpal.Anatomy.Tissue;
 using Scalpal.Instruments;
 using UnityEngine;
@@ -29,7 +30,7 @@ namespace Scalpal.Quest
             if(!sourceFrame||!rig) return;
             if(Wall){Wall.SetVisible(false);if(Application.isPlaying)Destroy(Wall.gameObject);else DestroyImmediate(Wall.gameObject);}
             var wall=new GameObject("GenericAbdominalWall_Unscored");wall.transform.SetParent(sourceFrame,false);
-            Wall=wall.AddComponent<VolumetricTissue>();Wall.Initialize(TissueVolumeFactory.AbdominalWall());
+            Wall=wall.AddComponent<VolumetricTissue>();Wall.Initialize(TissueVolumeFactory.AbdominalWall(AppendixProjection(sourceFrame)));
             workbench=rig;ready=canInteract;blades.Clear();
             foreach(var tool in rig.tools??Array.Empty<InstrumentBehaviour>())
             {
@@ -45,6 +46,22 @@ namespace Scalpal.Quest
                 else Debug.LogWarning("SCALPAL_VOLUME_BLADE_UNAVAILABLE id="+tool.instrumentId);
             }
             ClearTransient();
+        }
+        // This remains a generic anterior teaching coupon, not a laparoscopic port/incision model.
+        static Vector2? AppendixProjection(Transform sourceFrame)
+        {
+            AnatomyPart appendix=null;
+            foreach(var part in sourceFrame.GetComponentsInChildren<AnatomyPart>(true))
+            {
+                if(part.stableId!="appendix")continue;
+                if(appendix)return null; // Ambiguous duplicate atlas: retain the standalone coupon position.
+                appendix=part;
+            }
+            if(!appendix)return null;
+            var filter=appendix.GetComponent<MeshFilter>();
+            if(!filter||!filter.sharedMesh)return null;
+            Vector3 center=sourceFrame.InverseTransformPoint(filter.transform.TransformPoint(filter.sharedMesh.bounds.center));
+            return TissueCage.Finite(center)?new Vector2(center.x,center.y):(Vector2?)null;
         }
         bool ValidTool(InstrumentBehaviour tool)=>workbench&&tool&&Array.IndexOf(workbench.tools??Array.Empty<InstrumentBehaviour>(),tool)>=0&&
             tool.isActiveAndEnabled&&tool.Held&&tool.TrackingValid&&tool.Activation>=.7f;
@@ -82,13 +99,15 @@ namespace Scalpal.Quest
                 Wall.Volume.Step(1f/90,grasper?Wall.transform.InverseTransformPoint(grasper.actionPoint.position)+handleOffset:Vector3.zero,Vector3.zero);
                 clock-=1f/90;
             }
+            // Numerical rejection retains the material handle and retries next tick.
+            // Detach only on explicit loss/release or a topology cut invalidating its fan.
             if(grasper&&Wall.Volume.Handle<0)ReleaseHandle();
             surfaceClock+=Mathf.Clamp(seconds,0,.05f);
             if(surfaceClock>=1f/30){Wall.CommitSurface();surfaceClock%=1f/30;}
             peakFrameMs=Mathf.Max(peakFrameMs,(float)((Time.realtimeSinceStartupAsDouble-begin)*1000));
             if(Application.isPlaying&&Time.realtimeSinceStartupAsDouble>=nextTiming)
             {
-                Debug.Log($"SCALPAL_NATIVE_VOLUME_TIMING cells={Wall.Volume.Cells.Length} nodes={Wall.Volume.NodeCount} cuts={Wall.Volume.CutFaceCount} peakCpuMs={peakFrameMs:F2}");
+                Debug.Log($"SCALPAL_NATIVE_VOLUME_TIMING cells={Wall.Volume.Cells.Length} nodes={Wall.Volume.NodeCount} cuts={Wall.Volume.CutFaceCount} graspNodes={Wall.Volume.HandleNodeCount} stepRetries={Wall.Volume.LastStepRetries} stepBacktracks={Wall.Volume.LastStepBacktracks} stepAccepted={Wall.Volume.LastStepAccepted} peakCpuMs={peakFrameMs:F2}");
                 nextTiming=Time.realtimeSinceStartupAsDouble+5;peakFrameMs=0;
             }
         }
@@ -99,11 +118,7 @@ namespace Scalpal.Quest
                 if(!ValidTool(tool)||!tool.actionPoint||(tool.action!=InstrumentAction.Grasp&&tool.action!=InstrumentAction.Retrieve))continue;
                 Vector3 point=Wall.transform.InverseTransformPoint(tool.actionPoint.position);
                 // Actual generated boundary/cut triangles; a distant bounding box is not contact.
-                var vertices=Wall.Surface.vertices;var indices=Wall.Surface.triangles;
-                float nearest=.003f*.003f;
-                for(int i=0;i<indices.Length;i+=3)
-                    nearest=Mathf.Min(nearest,(TissueVolume.ClosestTriangle(point,vertices[indices[i]],vertices[indices[i+1]],vertices[indices[i+2]])-point).sqrMagnitude);
-                if(nearest>=.003f*.003f||!Wall.Volume.BeginHandle(point,.02f))continue;
+                if(Wall.Volume.SurfaceDistanceSquared(point,.003f)>=.003f*.003f||!Wall.Volume.BeginHandle(point,.02f))continue;
                 grasper=tool;handleOffset=Wall.Volume.HandlePosition-point;break;
             }
         }
