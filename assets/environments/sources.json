@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "patientRevision": "728f23ab5eb9d6cb2c8fb39acb3440bd81db0d3e",
+  "sources": [
+    {
+      "path": "operating-theatre/model.glb",
+      "url": "https://cdn.3dassets.dev/assets/23665/v1/model.glb",
+      "bytes": 421936,
+      "sha256": "d4708d3d0297e81ce63a606d5aac2db637613dcc101b88659f19e7c436a7d94d"
+    },
+    {
+      "path": "supine-patient/human_posed.glb",
+      "url": "https://raw.githubusercontent.com/UMRAM-Bilkent/supine-human-model/728f23ab5eb9d6cb2c8fb39acb3440bd81db0d3e/assets/human_posed.glb",
+      "bytes": 162136,
+      "sha256": "e0098c68b09fc10ec3e5bb29da8986de073c6915df29f14a99c3c22f99823b78"
+    },
+    {
+      "path": "supine-patient/LICENSE",
+      "url": "https://raw.githubusercontent.com/UMRAM-Bilkent/supine-human-model/728f23ab5eb9d6cb2c8fb39acb3440bd81db0d3e/LICENSE",
+      "bytes": 7048,
+      "sha256": "2f976aeae6ab25f75a68b01189b58e9be68baac37f1bad7ca34621a82084d835"
+    },
+    {
+      "path": "supine-patient/UPSTREAM-README.md",
+      "url": "https://raw.githubusercontent.com/UMRAM-Bilkent/supine-human-model/728f23ab5eb9d6cb2c8fb39acb3440bd81db0d3e/README.md",
+      "bytes": 5238,
+      "sha256": "2d31c1faa74fdc3cf6d154cff7c3558be96fbc39cebe2927424ec1ad52429d48"
+    }
+  ],
+  "room": {
+    "publisherPage": "https://3dassets.dev/assets/hospital-wards-and-clinic-operations-operating-theatre-83f50a06",
+    "license": "CC0-1.0",
+    "publisherTriangleCount": 8772,
+    "inspectedInstancedTriangles": 12184,
+    "materials": 8,
+    "renderNodes": 173,
+    "description": "Static stylized AI-generated scenery. No patient, organs or surgical behavior."
+  },
+  "patient": {
+    "repository": "https://github.com/UMRAM-Bilkent/supine-human-model",
+    "license": "CC0-1.0",
+    "triangles": 1578,
+    "description": "Static approximate Quaternius-derived human. Raw GLB needs metric scaling and rotation into a reclining pose; no organs."
+  }
+}

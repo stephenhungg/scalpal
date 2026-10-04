@@ -1,6 +1,6 @@
 # Scalpal Instrument Kit
 
-Fifteen generic simulator tools: all fourteen IDs from Matthew's current laparoscopic case catalog, plus a scalpel for the cutting sandbox. This is the simulator's bounded kit, not an exhaustive inventory for every surgical specialty.
+Fifteen generic simulator tools matching Matthew's current instrument catalog, including the scalpel used in the cutting sandbox. This is the simulator's bounded kit, not an exhaustive inventory for every surgical specialty.
 
 - [Importable Unity package](scalpal-instruments.unitypackage): use **Assets → Import Package → Custom Package** in Unity, then open `InstrumentSandbox`.
 - [Blender library](source/scalpal-instrument-library.blend): all fifteen editable tools in separate collections.

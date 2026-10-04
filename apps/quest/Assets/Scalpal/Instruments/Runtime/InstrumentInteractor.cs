@@ -13,6 +13,7 @@ namespace Scalpal.Instruments
         Transform previousParent;
         Rigidbody heldBody;
         bool previousKinematic, previousGravity;
+        RigidbodyInterpolation previousInterpolation;
         bool gripPressed, requireGripRelease;
 
         public void SetTrackedPose(Vector3 position, Quaternion rotation, bool valid)
@@ -74,7 +75,11 @@ namespace Scalpal.Instruments
             {
                 previousKinematic = heldBody.isKinematic;
                 previousGravity = heldBody.useGravity;
+                previousInterpolation = heldBody.interpolation;
                 if (!heldBody.isKinematic) { heldBody.linearVelocity = Vector3.zero; heldBody.angularVelocity = Vector3.zero; }
+                // A tracked transform owns the held pose. Physics interpolation
+                // otherwise replays older fixed-step poses and trails the hand.
+                heldBody.interpolation = RigidbodyInterpolation.None;
                 heldBody.isKinematic = true;
                 heldBody.useGravity = false;
             }
@@ -93,7 +98,14 @@ namespace Scalpal.Instruments
             HeldInstrument.SetHeld(false);
             HeldInstrument.SetTrackingValid(false);
             HeldInstrument.transform.SetParent(previousParent, true);
-            if (heldBody != null) { heldBody.isKinematic = previousKinematic; heldBody.useGravity = previousGravity; }
+            if (heldBody != null)
+            {
+                heldBody.position = HeldInstrument.transform.position;
+                heldBody.rotation = HeldInstrument.transform.rotation;
+                heldBody.isKinematic = previousKinematic;
+                heldBody.useGravity = previousGravity;
+                heldBody.interpolation = previousInterpolation;
+            }
             HeldInstrument = null;
             heldBody = null;
         }

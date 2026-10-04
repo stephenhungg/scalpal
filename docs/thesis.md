@@ -1,6 +1,6 @@
 # Thesis and Product Scope
 
-> Scope update: Solana, wallets, payouts, and monetary completion rewards are removed. Nathan owns the companion website + SpacetimeDB/routing lane; Matthew continues Jarvis. This earlier proposal contains superseded reward/challenge references. Read [current direction](current-direction.md) and [Nathan's implementation plan](nathan-plan.md) first.
+> Current scope: two shared-core MR/full-VR presentations, one Jarvis coach, live companion state/media and video-derived robot replay. Solana and monetary rewards are removed. Read the [system integration map](system-integration.md) for actual implementation status.
 
 Updated October 3, 2026. This is the current product direction for an MHacks demo, not a validated medical product or robotics dataset business.
 
@@ -19,15 +19,15 @@ Surgery is the initial educational setting. A real reclining person gives the sc
 
 ## Immediate Demo Claim
 
-One learner completes one guided, surgery-themed exercise. A short passthrough-camera recording is processed into estimated hand motion. A simulated robot hand replays a supported part of that movement. A verifier accepts a qualifying contribution, and a sponsor-funded Solana Devnet challenge issues a reward receipt.
+One learner completes one guided, surgery-themed exercise. A short passthrough-camera recording is processed into estimated hand motion. A simulated robot hand replays a supported part of that movement. The companion displays confirmed learning feedback and the independently validated motion/replay status.
 
 This demonstrates a connected interaction and contribution flow. It does not establish that the robot learned an autonomous policy, that beginners produced expert surgical data, or that users acquired clinical competence.
 
-The exact exercise and robot model are still open. A shared manipulation subtask, such as moving a virtual instrument between defined targets while avoiding a restricted region, is a candidate. It is not a selected full surgical procedure. Anatomy questions alone do not provide the action examples required for robot manipulation; free-hand motion alone does not specify forces, contacts, or robot-feasible control.
+The first shared exercise remains to be agreed. Silas's branch implements right Shadow-hand kinematic replay; its worker and artifact interfaces still need reconciliation with Nathan. A shared manipulation subtask, such as moving a virtual instrument between defined targets while avoiding a restricted region, is a candidate. It is not a selected full surgical procedure. Anatomy questions alone do not provide the action examples required for robot manipulation; free-hand motion alone does not specify forces, contacts, or robot-feasible control.
 
 ## Long-Term Flywheel
 
-A sponsor requests a defined task and funds a challenge. AI guidance helps people practice it. A verifier admits useful, permitted demonstrations. Robot policies are trained and tested against new task starting conditions. Measured weaknesses motivate the next challenge.
+A lab defines a task it wants demonstrated. AI guidance helps people practice it. A verifier admits useful, permitted demonstrations. Robot policies are trained and tested against new task starting conditions. Measured weaknesses motivate the next task.
 
 Each arrow is a separate hypothesis:
 
@@ -43,23 +43,23 @@ No sponsor has committed to buying or funding a lab dataset. No robot-learning i
 
 The first proposed learner is a medical student or curious novice practicing anatomy and supported simulated decisions or movements. The first physical participant is a consenting teammate reclining on a table. The operator helps fit and recover the demo. Judges or spectators follow the headset mirror on the laptop.
 
-The proposed sponsor role is a lab or organization funding a specific contribution challenge. In the demo, label an invented sponsor as fictional or a demo sponsor. A hackathon prize sponsor is not automatically a customer or a funder of our challenges.
+The long-term potential customer is a lab seeking useful demonstrations for a defined task. No such customer commitment is established; a hackathon prize sponsor is not automatically a dataset customer.
 
 ## The Experience
 
-Conversation replaces a swipe-based surgery catalog. During selection, Jarvis can present and manipulate a rotating 3D anatomy model so the learner understands the target before committing. Practice begins only after the chosen model is fitted to the participant and alignment is accepted. Structured feedback, robot replay, and reward status finish the session.
+Conversation replaces a swipe-based surgery catalog. During selection, Jarvis can present and manipulate a rotating 3D anatomy model so the learner understands the target before committing. Practice begins only after the chosen model is fitted to the participant and alignment is accepted. Structured feedback and robot replay status finish the session. Full VR provides an alternate authored room/patient presentation using the same core.
 
-The headset is the immersive client; the laptop supports observers, wallet pairing, and the proposed first offline video-processing experiment. The learner should see meaningful activity and honest progress, rather than internal model names or controller jargon.
+The headset is the immersive client; the companion website supports observers/results, with a separate composited stream and external video-processing worker. The learner should see meaningful activity and honest progress, rather than internal model names or controller jargon.
 
 ## Scope Boundaries
 
 The initial slice supports one exercise and one simulated robot hand. It uses pretrained models and custom registration/retargeting logic. Model fine-tuning requires a measured recognition problem; training from scratch is not the starting point. Live robot teleoperation is optional later work, since the latest input direction is recording a video and processing it for replay.
 
-The demo uses virtual tools, not an actual procedure on the participant. It has no promised tissue deformation, force feedback, patient-specific anatomical accuracy, real robot operation, or autonomous surgical execution. Rewards use Devnet test tokens, not income. No custom token is required.
+The demo uses virtual tools, not an actual procedure on the participant. It has no promised tissue deformation, force feedback, patient-specific anatomical accuracy, real robot operation, or autonomous surgical execution. No wallet, payment or completion-reward flow exists.
 
 ## What Success Looks Like
 
-The full journey completes repeatedly on the physical Quest. The preview corresponds to the chosen exercise; the anatomy stays acceptably fitted when tracking is valid; uncertainty blocks assessment; the coach responds to actual exercise state; the replay shows video-derived movement on the selected robot hand; and an accepted contribution receives one traceable reward without duplicate payment.
+The full journey completes repeatedly on the physical Quest. The preview corresponds to the chosen exercise; the anatomy stays acceptably fitted when tracking is valid; uncertainty blocks assessment; the coach responds to actual exercise state; the replay shows video-derived movement on the selected robot hand; and the companion reflects the same confirmed attempt with separate learning and motion quality outcomes.
 
 Evidence must identify failures as well as successes. The immediate robotics evidence is motion reconstruction and replay. The later robot-learning evidence would be autonomous task success on unseen initial conditions, evaluated separately from replay.
 

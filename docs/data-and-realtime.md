@@ -1,5 +1,7 @@
 # Data Storage, Realtime State, and Nathan's Backend Lane
 
+> Implementation update: team feature branches now contain component code. Read the [system integration map](system-integration.md) for audited commits, actual routes, missing adapters and verification. The plan below describes intended responsibilities, not proof of a connected deployment.
+
 Research and updated assignment: October 3, 2026. The user assigned Nathan the companion website + SpacetimeDB/routing implementation lane. See [Nathan's work order](nathan-plan.md), which supersedes the earlier suggestion to wait for an unspecified backend plan. This document explains the design; no backend, bucket, SDK integration, stream, or recording pipeline is deployed by the documentation change. Solana and monetary completion rewards remain removed.
 
 ## Recommendation

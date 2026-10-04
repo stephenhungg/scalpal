@@ -13,11 +13,35 @@ namespace Scalpal.Instruments
         InstrumentInteractor interactor;
 
         void Awake() => interactor = GetComponent<InstrumentInteractor>();
+        void OnEnable() => Application.onBeforeRender += RefreshRenderPose;
+        void OnDisable()
+        {
+            Application.onBeforeRender -= RefreshRenderPose;
+            if (interactor != null) interactor.SetTrackedPose(transform.position, transform.rotation, false);
+        }
 
         void Update()
         {
-            if (interactor == null) interactor = GetComponent<InstrumentInteractor>();
             var device = InputDevices.GetDeviceAtXRNode(controller);
+            bool valid = UpdatePose(device);
+            device.TryGetFeatureValue(CommonUsages.grip, out float grip);
+            device.TryGetFeatureValue(CommonUsages.trigger, out float trigger);
+            interactor.SetGrip(valid ? grip : 0);
+            interactor.SetActivation(valid ? trigger : 0);
+        }
+
+        [BeforeRenderOrder(-100)]
+        void RefreshRenderPose()
+        {
+            // Match the head's late pose refresh so a held tool does not remain
+            // at its earlier Update pose while the camera follows a newer pose.
+            // Buttons and simulation effects run only in Update.
+            UpdatePose(InputDevices.GetDeviceAtXRNode(controller));
+        }
+
+        bool UpdatePose(InputDevice device)
+        {
+            if (interactor == null) interactor = GetComponent<InstrumentInteractor>();
             Vector3 position = Vector3.zero;
             Quaternion rotation = Quaternion.identity;
             bool valid = device.isValid && device.TryGetFeatureValue(CommonUsages.devicePosition, out position)
@@ -26,10 +50,7 @@ namespace Scalpal.Instruments
             Vector3 worldPosition = trackingOrigin != null ? trackingOrigin.TransformPoint(position) : position;
             Quaternion worldRotation = trackingOrigin != null ? trackingOrigin.rotation * rotation : rotation;
             interactor.SetTrackedPose(worldPosition, worldRotation, valid);
-            device.TryGetFeatureValue(CommonUsages.grip, out float grip);
-            device.TryGetFeatureValue(CommonUsages.trigger, out float trigger);
-            interactor.SetGrip(valid ? grip : 0);
-            interactor.SetActivation(valid ? trigger : 0);
+            return valid;
         }
     }
 }
