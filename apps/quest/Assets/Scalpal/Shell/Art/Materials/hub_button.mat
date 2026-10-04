@@ -29,7 +29,7 @@ Material:
     - _FrostStrength: 0.75
     - _RimStrength: 0.45
     - _RimWidth: 0.0015
-    - _Sheen: 0.025
+    - _Sheen: 0.012
     m_Colors:
     - _Color: {r: 0.035, g: 0.028, b: 0.055, a: 0.9}
     - _RimColor: {r: 0.78, g: 0.69, b: 0.96, a: 1}
