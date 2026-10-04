@@ -35,6 +35,9 @@ namespace Scalpal.Anatomy
         public BodyState Body => runner?.Body;
         public BodyGrade Grade => runner?.Grade;
         public IReadOnlyList<string> OrderDeviations => runner?.OrderDeviations;
+        // The same historical milestone facts used by the coach checklist. Current
+        // hazards/grade predicates remain separate from having reached a step once.
+        public IReadOnlyCollection<string> CompletedMilestones => runner?.CompletedMilestones;
         public bool Completed => runner != null && runner.Completed;
         public bool CanScore => isActiveAndEnabled && runner != null && anatomy != null &&
             anatomy == selectedAnatomy && anatomy.isActiveAndEnabled && anatomy.RegistrationValid && !anatomy.PreviewMode &&

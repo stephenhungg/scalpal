@@ -113,6 +113,9 @@ namespace Scalpal.Quest.Editor
             exercise.requireCoachSynchronization = true;
             workbench.externalSessionControls = true;
             var session = sessionObject.AddComponent<NativeCaseSession>();
+            sessionObject.AddComponent<NativeScenePointer>();
+            sessionObject.AddComponent<NativeProcedureChecklist>();
+            sessionObject.AddComponent<NativePatientMonitor>().session = session;
             session.workbench = workbench;
             session.exercise = exercise;
             session.anatomy = anatomy;
@@ -262,6 +265,13 @@ namespace Scalpal.Quest.Editor
             var sessions = roots.SelectMany(root => root.GetComponentsInChildren<NativeCaseSession>(true)).ToArray();
             if (sessions.Length != 1) throw new InvalidOperationException("Exactly one native case session is required.");
             var session = sessions[0];
+            if (!session.GetComponent<NativeScenePointer>())
+                throw new InvalidOperationException("Native session is missing the read-only scene identity pointer.");
+            if (!session.GetComponent<NativeProcedureChecklist>())
+                throw new InvalidOperationException("Native session is missing the read-only procedure checklist.");
+            var monitor = session.GetComponent<NativePatientMonitor>();
+            if (!monitor || monitor.session != session)
+                throw new InvalidOperationException("Native session is missing the matched simulated patient monitor.");
             if (!session.workbench || !session.exercise || !session.anatomy || !session.preview || !session.coach
                 || !session.realtime || !session.voice || !session.patientFrame || !session.status)
                 throw new InvalidOperationException("Native session has a missing required binding.");
@@ -414,6 +424,9 @@ namespace Scalpal.Quest.Editor
             NativeVesselRuntimeValidation.Run();
             NativeTissueContactValidation.Run();
             NativeContactMotionValidation.Run();
+            NativeScenePointerValidation.Run();
+            NativeProcedureChecklistValidation.Run();
+            NativePatientMonitorValidation.Run();
             NativeAppendectomyValidation.Run();
             NativeSessionBoundaryValidation.Run();
             NativeCoachRelayValidation.Run();

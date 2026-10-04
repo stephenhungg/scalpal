@@ -90,6 +90,7 @@ namespace Scalpal.Exercises.Coach
     public class CoachSnapshotState
     {
         public BodyGrade bodyGrade;
+        public CoachPatientCondition condition;
         public string sessionId;
         public string patientId;
         public string procedureId;
