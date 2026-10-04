@@ -225,6 +225,11 @@ namespace Scalpal.Quest.Editor
             Assert(active.Select(tool => tool.instrumentId).OrderBy(id => id).SequenceEqual(OpenSurgerySession.OpenToolSet.OrderBy(id => id)),
                 "only the open expected-path tools are active: " + string.Join(",", active.Select(tool => tool.instrumentId)));
             Assert(active.Any(tool => BodyState.ToolVerbs[tool.instrumentId][0] == "clamp"), "a clamp remains for region-injury control");
+            var scopes = session.workbench.tools.Where(tool => tool).Select(tool => tool.GetComponent<LaparoscopeView>()).Where(scope => scope).ToArray();
+            Assert(scopes.Length > 0 && scopes.All(scope => !scope.isActiveAndEnabled && scope.monitor && !scope.monitor.gameObject.activeInHierarchy),
+                "the keyhole laparoscope and its floating view monitor are hidden in the open case");
+            Assert(!UnityEngine.Object.FindObjectsByType<Camera>(FindObjectsInactive.Exclude, FindObjectsSortMode.None)
+                .Any(camera => camera.enabled && camera.targetTexture && camera.name == "VirtualLaparoscopeCamera"), "no laparoscope camera renders in the open case");
             var hand = session.workbench.inputs[0].GetComponent<InstrumentInteractor>();
             foreach (var hidden in session.workbench.tools.Where(tool => tool && !tool.gameObject.activeInHierarchy))
             {

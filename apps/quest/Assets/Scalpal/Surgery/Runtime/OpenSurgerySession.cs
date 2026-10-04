@@ -176,6 +176,12 @@ namespace Scalpal.Surgery
                 tool.gameObject.SetActive(slot >= 0);
             }
             foreach (var target in session.workbench.targets ?? Array.Empty<TrainingTarget>()) if (target) target.gameObject.SetActive(false);
+            // The laparoscope is keyhole-only: its (now inactive) view camera and its floating monitor panel go too.
+            foreach (var tool in session.workbench.tools ?? Array.Empty<InstrumentBehaviour>())
+            {
+                var scope = tool ? tool.GetComponent<LaparoscopeView>() : null;
+                if (scope && scope.monitor) scope.monitor.gameObject.SetActive(false);
+            }
             var stand = session.presentation && session.presentation.virtualRoom
                 ? session.presentation.virtualRoom.transform.Find(InstrumentStandPath)?.GetComponent<BoxCollider>() : null;
             if (!stand) { Status = "Instrument stand missing; open tools left in place"; return; }
