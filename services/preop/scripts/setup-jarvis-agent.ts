@@ -1,4 +1,5 @@
 import "../src/env.js";
+import { EXAM_MANEUVERS, HISTORY_TOPICS, TESTS } from "../src/catalog/encounters.js";
 
 // Creates or updates the Jarvis ElevenLabs agent and its client tools from code, so the agent config is
 // reproducible. The per-case system prompt and first message are sent by the /jarvis page at session
@@ -57,6 +58,58 @@ const TOOLS = [
   },
 ];
 
+// Jarvis's eyes: the latest point-of-view frame, described by a vision model with the scene's labels.
+TOOLS.push({
+  name: "look_at_scene",
+  description: "Look at the learner's current point of view (camera frame plus labeled objects) and describe what is there and how to approach it. Use for 'what am I looking at', 'where is it', or 'how do I approach this'.",
+  parameters: { type: "object", properties: { question: str("The learner's question, in their words.") }, required: [] },
+} as (typeof TOOLS)[number]);
+
+// Jarvis as attending during the case presentation, after the patient interview.
+const ATTENDING_TOOLS = [
+  {
+    name: "get_encounter_summary",
+    description: "What the trainee actually asked, examined, and ordered in the patient interview, with findings and results. The only source of truth about the interview.",
+    parameters: { type: "object", properties: {}, required: [] },
+  },
+  {
+    name: "record_assessment",
+    description: "Record the trainee's final assessment once they have given a diagnosis, differential, procedure, and timing. Returns their score and feedback to deliver.",
+    parameters: {
+      type: "object",
+      properties: {
+        diagnosis: str("The trainee's diagnosis, in their words."),
+        differential: { type: "array", items: str("One alternative diagnosis they named."), description: "Alternatives the trainee named." },
+        procedure: str("The procedure they proposed."),
+        urgency: str("How soon they said to operate, in their words."),
+      },
+      required: ["diagnosis", "differential", "procedure", "urgency"],
+    },
+  },
+];
+
+// The patient (or parent) in the 1-on-1 interview. Facts come only from these tools.
+const enumParam = (values: readonly string[], description: string) => ({ type: "string", enum: [...values], description });
+const PATIENT_TOOLS = [
+  {
+    name: "answer",
+    description: "Look up one fact about yourself before saying it: symptoms, timeline, history, medications, allergies, food, periods, life. Call once per topic.",
+    parameters: { type: "object", properties: { topic: enumParam(HISTORY_TOPICS, "The topic of the clinician's question.") }, required: ["topic"] },
+  },
+  {
+    name: "examine",
+    description: "The clinician is physically examining you. Returns how you react. Never describe clinical findings.",
+    parameters: { type: "object", properties: { maneuver: enumParam(EXAM_MANEUVERS, "The exam being performed.") }, required: ["maneuver"] },
+  },
+  {
+    name: "order_test",
+    description: "The clinician ordered a test. Never state results.",
+    parameters: { type: "object", properties: { test: enumParam(TESTS, "The test ordered.") }, required: ["test"] },
+  },
+];
+
+const PATIENT_BASE_PROMPT = "You are a patient in a surgical teaching simulation. Your character and instructions are supplied when the session starts.";
+
 const BASE_PROMPT =
   "You are Jarvis, a real-time surgical coach in the Scalpal mixed-reality simulator. The full case prompt is supplied when each session starts. Keep replies to one or two spoken sentences.";
 
@@ -71,10 +124,16 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
   return (text ? JSON.parse(text) : {}) as T;
 }
 
-async function upsertTools(): Promise<string[]> {
+interface ToolDef {
+  name: string;
+  description: string;
+  parameters: object;
+}
+
+async function upsertTools(list: ToolDef[]): Promise<string[]> {
   const existing = await call<{ tools?: { id: string; tool_config: { name: string } }[] }>("GET", "/tools");
   const ids: string[] = [];
-  for (const t of TOOLS) {
+  for (const t of list) {
     const tool_config = { type: "client", name: t.name, description: t.description, parameters: t.parameters, expects_response: true, response_timeout_secs: 10 };
     const found = existing.tools?.find((x) => x.tool_config?.name === t.name);
     if (found) {
@@ -90,8 +149,19 @@ async function upsertTools(): Promise<string[]> {
   return ids;
 }
 
+async function upsertAgent(envName: string, agent: object, label: string) {
+  const agentId = process.env[envName];
+  if (agentId) {
+    await call("PATCH", `/agents/${agentId}`, agent);
+    console.log(`updated ${label} ${agentId} (llm ${LLM})`);
+  } else {
+    const created = await call<{ agent_id: string }>("POST", "/agents/create", agent);
+    console.log(`created ${label} (llm ${LLM}). Add this to services/preop/.env:\n${envName}=${created.agent_id}`);
+  }
+}
+
 async function main() {
-  const toolIds = await upsertTools();
+  const toolIds = await upsertTools([...TOOLS, ...ATTENDING_TOOLS]);
   const agent = {
     name: "Scalpal Jarvis",
     tags: ["scalpal"],
@@ -108,14 +178,24 @@ async function main() {
     },
   };
 
-  const agentId = process.env.ELEVENLABS_AGENT_ID;
-  if (agentId) {
-    await call("PATCH", `/agents/${agentId}`, agent);
-    console.log(`updated agent ${agentId} (llm ${LLM})`);
-  } else {
-    const created = await call<{ agent_id: string }>("POST", "/agents/create", agent);
-    console.log(`created agent (llm ${LLM}). Add this to services/preop/.env:\nELEVENLABS_AGENT_ID=${created.agent_id}`);
-  }
+  await upsertAgent("ELEVENLABS_AGENT_ID", agent, "Jarvis agent");
+
+  // The patient agent: its voice changes per patient, so the TTS voice is overridable per session.
+  const patientToolIds = await upsertTools(PATIENT_TOOLS);
+  await upsertAgent(
+    "PATIENT_AGENT_ID",
+    {
+      name: "Scalpal Patient",
+      tags: ["scalpal"],
+      conversation_config: {
+        agent: { first_message: "Hi.", language: "en", prompt: { prompt: PATIENT_BASE_PROMPT, llm: LLM, temperature: 0.6, tool_ids: patientToolIds } },
+      },
+      platform_settings: {
+        overrides: { conversation_config_override: { agent: { prompt: { prompt: true }, first_message: true }, tts: { voice_id: true } } },
+      },
+    },
+    "patient agent",
+  );
 }
 
 main().catch((err) => {

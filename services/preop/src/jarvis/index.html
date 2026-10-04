@@ -56,7 +56,7 @@
   <h1>Jarvis</h1>
   <select id="patient" aria-label="Patient"><option>Loading patients...</option></select>
   <select id="presentation" aria-label="Presentation mode"><option value="mixed_reality">Mixed reality (real person)</option><option value="virtual">Full VR (virtual patient)</option></select>
-  <button id="start" class="primary" disabled>Start surgery</button>
+  <button id="start" class="primary" disabled>Start</button>
   <button id="stop" disabled>End</button>
   <span id="voice" class="pill">voice off</span>
   <span id="mode" class="pill">idle</span>
@@ -64,7 +64,30 @@
   <span id="ctx" class="pill">context n/a</span>
 </header>
 <main>
-  <section>
+  <div id="flow-error" hidden style="grid-column: 1 / -1"><span id="flow-error-text" class="danger"></span> <button id="flow-retry">Retry</button></div>
+  <section id="encounter" hidden>
+    <div class="row" id="stages">
+      <span class="pill" data-stage="interview">1 · Interview</span>
+      <span class="pill" data-stage="attending">2 · Present to attending</span>
+      <span class="pill" data-stage="scored">3 · Scorecard</span>
+      <span class="pill">4 · Surgery</span>
+    </div>
+    <h2 style="margin-top:14px">Patient</h2>
+    <div id="enc-who" class="step-title"></div>
+    <div class="kv">
+      <div>Asked about</div><div id="enc-history"></div>
+    </div>
+    <h2 style="margin-top:14px">Exam findings</h2>
+    <div id="enc-exam"></div>
+    <h2 style="margin-top:14px">Results</h2>
+    <div id="enc-tests"></div>
+    <div class="row" style="margin-top:14px">
+      <button id="to-attending" disabled>Done: present to attending</button>
+      <button id="scrub-in" class="primary" disabled>Scrub in</button>
+    </div>
+    <div id="scorecard" style="margin-top:14px"></div>
+  </section>
+  <section id="surgery">
     <h2 id="caseline">No session</h2>
     <div id="stepno" class="muted"></div>
     <div class="progress"><div id="bar" style="width:0%"></div></div>
@@ -86,6 +109,8 @@
         <button data-sim="look_at_danger">Look at danger</button>
         <button data-sim="tracking_lost">Lose tracking</button>
         <button data-sim="tracking_restored">Restore tracking</button>
+        <button data-sim="bleed">Open a vessel</button>
+        <button data-sim="stop_bleed">Control bleeding</button>
       </div>
       <label class="row muted" style="margin-top:8px;font-size:12px"><input type="checkbox" id="autoack" checked> act as headset: auto-apply highlight requests</label>
     </div>
@@ -95,7 +120,7 @@
   <section>
     <h2>Conversation</h2>
     <div id="log"></div>
-    <form id="say"><input id="sayinput" placeholder="Type to Jarvis (works without a mic)" autocomplete="off"><button>Send</button></form>
+    <form id="say"><input id="sayinput" placeholder="Type instead of talking (works without a mic)" autocomplete="off"><button>Send</button></form>
   </section>
 </main>
 <script type="module" src="/jarvis/app.js"></script>

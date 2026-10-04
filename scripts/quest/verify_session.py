@@ -17,7 +17,7 @@ UNITY_DEFAULT = "/Applications/Unity/Hub/Editor/6000.0.66f2/Unity.app/Contents/M
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--suite", choices=("all", "services", "unity", "voice", "motion"), default="all")
+    parser.add_argument("--suite", choices=("all", "services", "unity", "player", "voice", "encounter", "motion", "registration", "playmode"), default="all")
     parser.add_argument("--headset", action="store_true", help="Also check the installed player over USB.")
     parser.add_argument("--config", type=Path, help="Private development pairing JSON for --headset.")
     args = parser.parse_args()
@@ -75,6 +75,26 @@ def main():
         if api_ready:
             check("real subscription/reconnect/attempt boundaries on throwaway database",
                   [node, str(tsx), str(REPO / "scripts/quest/session-check/live-realtime.ts")])
+            check("authoritative encounters + actual coach bridge on throwaway database",
+                  [node, str(tsx), str(REPO / "scripts/quest/encounter-check/live-exchange.ts")])
+
+    if args.suite in {"all", "encounter"}:
+        service = REPO / "services/preop"
+        if not (service / "node_modules").is_dir():
+            check("encounter fixture dependencies", ["npm", "ci"], service)
+        unity = environment.get("SCALPAL_UNITY", UNITY_DEFAULT)
+        encounter_log = Path(tempfile.gettempdir()) / ("scalpal-encounter-" + uuid.uuid4().hex + ".log")
+        passed = check("floral office scene + native encounter coroutines + isolated HTTP", [unity,
+                       "-batchmode", "-nographics", "-projectPath", str(REPO / "apps/quest"),
+                       "-buildTarget", "Android", "-executeMethod",
+                       "Scalpal.EncounterOffice.Editor.EncounterOfficeBuild.Verify", "-quit", "-logFile", str(encounter_log)], timeout=300)
+        output = encounter_log.read_text(errors="replace") if encounter_log.exists() else ""
+        if passed and "SCALPAL_ENCOUNTER_OFFICE_VERIFY_OK" not in output:
+            failures.append("encounter office verification marker absent")
+        for line in output.splitlines():
+            if line.startswith("SCALPAL_") or "error CS" in line:
+                print(line)
+        print("Encounter diagnostic log:", encounter_log)
 
     if args.suite in {"all", "voice"}:
         check("native voice PCM/protocol", [sys.executable, str(REPO / "scripts/quest/voice-check/run.py")])
@@ -105,15 +125,45 @@ def main():
         command = [unity, "-batchmode", "-nographics", "-projectPath", str(REPO / "apps/quest"),
                    "-buildTarget", "Android", "-executeMethod", "Scalpal.Quest.Editor.NativeSessionBuild.Verify",
                    "-quit", "-logFile", str(log)]
-        passed = check("Unity scene + inputs + playthrough + attempt boundaries", command, timeout=240)
+        passed = check("Editor scene/components + synthetic scoring/attempt fixtures", command, timeout=240)
         output = log.read_text(errors="replace") if log.exists() else ""
         # Require the terminal marker: an editor exit alone is not proof the method ran.
         if passed and "SCALPAL_NATIVE_SESSION_VERIFY_OK" not in output:
             failures.append("Unity verification marker absent")
+        if "Leak Detected : Persistent allocates" in output:
+            failures.append("Unity persistent native allocation leak")
         for line in output.splitlines():
             if line.startswith("SCALPAL_") or "error CS" in line:
                 print(line)
         print("Unity diagnostic log:", log)
+
+    if args.suite in {"all", "player"}:
+        unity = environment.get("SCALPAL_UNITY", UNITY_DEFAULT)
+        player_log = Path(tempfile.gettempdir()) / ("scalpal-player-verify-" + uuid.uuid4().hex + ".log")
+        passed = check("unified Shell/Office/AR-VR OR/Replay-Recap Editor gates", [unity,
+                       "-batchmode", "-nographics", "-projectPath", str(REPO / "apps/quest"),
+                       "-buildTarget", "Android", "-executeMethod",
+                       "Scalpal.Handoff.Editor.ScalpalPlayerBuild.Verify", "-quit", "-logFile", str(player_log)], timeout=360)
+        output = player_log.read_text(errors="replace") if player_log.exists() else ""
+        if passed and "SCALPAL_PLAYER_VERIFY_OK" not in output:
+            failures.append("unified player verification marker absent")
+        if "Leak Detected : Persistent allocates" in output:
+            failures.append("unified player persistent native allocation leak")
+        for line in output.splitlines():
+            if line.startswith("SCALPAL_") or "error CS" in line:
+                print(line)
+        print("Unified player diagnostic log:", player_log)
+
+    if args.suite in {"all", "playmode"}:
+        check("real NativeSession Play Mode lifecycle/buttons/physics + isolated backend",
+              [sys.executable, str(REPO / "scripts/quest/play-mode-check/run.py")], timeout=300)
+
+    if args.suite in {"all", "registration"}:
+        if not shutil.which("uv"):
+            parser.error("registration requires uv with Python 3.11 support")
+        folder = REPO / "services/registration"
+        if check("registration frozen dependencies", ["uv", "sync", "--frozen"], folder, timeout=180):
+            check("local body-pose HTTP/inference failure boundaries", ["uv", "run", "--frozen", "pytest", "-q"], folder)
 
     if args.suite in {"all", "motion"}:
         if not shutil.which("uv"):

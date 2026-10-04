@@ -14,6 +14,16 @@ gen() {
 
 gen typescript "$root/apps/companion/src/module_bindings"
 gen typescript "$root/services/api/src/module_bindings"
-# Unity: Stephen copies or references this folder from apps/quest.
+# Jarvis coach bridge (services/preop): transcript, status, encounters, commands.
+gen typescript "$root/services/preop/src/module_bindings"
 gen csharp "$here/bindings/csharp"
+# Unity: mirror the C# bindings into the Quest project, keeping existing .meta
+# files (stable GUIDs) and dropping .meta files whose generated source is gone.
+unity="$root/apps/quest/Assets/Scalpal/Realtime/Generated"
+mkdir -p "$unity"
+find "$unity" -name '*.cs' -type f -exec rm -f {} +
+cp -R "$here/bindings/csharp/." "$unity/"
+find "$unity" -name '*.cs.meta' -type f | while read -r meta; do
+  [ -f "${meta%.meta}" ] || rm -f "$meta"
+done
 echo "bindings generated"

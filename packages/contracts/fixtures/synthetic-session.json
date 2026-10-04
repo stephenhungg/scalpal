@@ -4,7 +4,7 @@
     "sessionId": "ses_fixture01",
     "label": "Synthetic fixture",
     "status": "active",
-    "exerciseId": "instrument-transfer",
+    "exerciseId": "lap_appendectomy",
     "exerciseVersion": "0.1.0",
     "currentAttemptId": "ses_fixture01-a1",
     "attemptCount": 1

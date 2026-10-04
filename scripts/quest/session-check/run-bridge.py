@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Compile the unchanged QuestSessionBridge and run deterministic failure-boundary checks.
 
-The Unity Mono compiler is used, but no Unity process, SDK socket, provider, or token file is opened.
+The Unity Mono compiler is used, but no Unity process, SDK socket or provider is opened.
+Connection lifecycle checks use a disposable synthetic token directory, never the app's token.
 """
 import os
 from pathlib import Path

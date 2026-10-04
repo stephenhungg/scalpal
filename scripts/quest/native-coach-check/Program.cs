@@ -29,6 +29,7 @@ static class Program
         public int mistakeCount;
         public bool trackingValid;
         public Progress step;
+        public BodyGrade bodyGrade;
     }
     [Serializable] public class Progress : CoachInitialStep { public string progressText; }
 
@@ -41,10 +42,16 @@ static class Program
             throw new Exception("Harness requires an isolated loopback endpoint from run.py");
         Endpoint = Endpoint.TrimEnd('/');
         var bundle = JsonUtility.FromJson<ScalpalBundle>(File.ReadAllText("apps/quest/Assets/Scalpal/Exercises/Resources/scalpal_bundle.json"));
-        candidate = bundle.cases.Single(item => item.patientId == Patient && item.procedureId == "lap_appendectomy");
+        candidate = bundle.cases.Single(item => item.patientId == Patient && item.procedureId == "open_appendectomy");
         var liveCase = JsonUtility.FromJson<SurgicalCase>(Http("GET", "/patients/" + Patient + "/case"));
         Check(liveCase.caseId == candidate.caseId && liveCase.procedure.steps.Select(x => x.id).SequenceEqual(candidate.procedure.steps.Select(x => x.id)),
             "packaged native case matches actual local service case");
+        OpenBodyExchange();
+        // The existing port/clip mechanics and retry suite explicitly uses the advanced fixture.
+        Endpoint += "/advanced";
+        candidate = bundle.cases.Single(item => item.patientId == Patient && item.procedureId == "lap_appendectomy");
+        var advancedCase = JsonUtility.FromJson<SurgicalCase>(Http("GET", "/patients/" + Patient + "/case"));
+        Check(advancedCase.caseId == candidate.caseId, "explicit advanced fixture retains packaged port-scene identity");
         Adoption();
         Playthrough();
         QueuedBatch();
@@ -52,8 +59,67 @@ static class Program
         DeliveryFailures();
         SessionBoundaries();
         AdversarialReceipts();
+        BodyActionDroppedAsTrackingInvalid();
         Console.WriteLine("SCALPAL_NATIVE_COACH_VALIDATION_OK checks=" + checks + " actions=" + actions + " lostResponses=" + lostResponses
             + " production CoachRelay/CaseRunner + isolated actual Hono coach; coroutine/network timing doubles; no Unity/XR/provider execution");
+    }
+
+    static void OpenBodyExchange()
+    {
+        string sid = Create();
+        var relay = Adopt(sid); EnableTracking(relay);
+        var runner = new CaseRunner(candidate.procedure);
+        int preparationActions = 0;
+        // Reach the muscle through actual accessible layers; physical exposure is not a case gate.
+        foreach (var step in candidate.procedure.steps.Take(3))
+            foreach (var action in CaseRunner.PerfectEvents(step))
+            {
+                action.evidence.actionId = "open-prepare-" + (++preparationActions);
+                action.evidence.timeMs = preparationActions * 100;
+                string prior = runner.Current.id;
+                runner.Handle(action); relay.Forward(action, prior); Pump();
+                Deliver(Pending("POST", Path(sid) + "/events")); Pump();
+            }
+        var injury = CaseEvent.Surgery(new BodyAction { actionId = "open-muscle-injury", verb = "cut",
+            tissueId = "muscle", layer = "muscle", instrumentId = "scalpel", instrumentInstanceId = "blade-1",
+            registered = true, timeMs = 1000, lengthMm = 4, depthMm = 2 });
+        string before = runner.Current.id;
+        runner.Handle(injury); relay.Forward(injury, before); Pump();
+        var injuryReply = JsonUtility.FromJson<CoachEventResponse>(Deliver(Pending("POST", Path(sid) + "/events"))); Pump();
+        Check(injuryReply.results[0].accepted && injuryReply.results[0].applied && relay.IsSynchronized,
+            "real open surgery evidence crosses relay and HTTP parser");
+        Check(runner.Body.Get("muscle", "bladeUsed") == 1 && runner.Mistakes.Count > 0
+            && Snapshot(sid).mistakeCount == runner.Mistakes.Count && Snapshot(sid).eventCount == preparationActions + 1,
+            "off-path irreversible harm is scored equally by C# and service: blade=" + runner.Body.Get("muscle", "bladeUsed")
+            + " localMistakes=" + runner.Mistakes.Count + " serverMistakes=" + Snapshot(sid).mistakeCount + " events=" + Snapshot(sid).eventCount);
+        before = runner.Current.id;
+        runner.Handle(CaseEvent.Finish()); relay.Forward(CaseEvent.Finish(), before); Pump();
+        var request = Pending("POST", Path(sid) + "/events");
+        var sent = JsonUtility.FromJson<CoachEventBatch>(Body(request));
+        Check(sent.events.Length == 1 && sent.events[0].type == "finish", "finish uses existing relay event path");
+        string exact = Body(request);
+        Send(request); request.Complete("", false); Pump(true);
+        var retry = Pending("POST", Path(sid) + "/events");
+        Check(Body(retry) == exact, "finish response loss preserves the same event identity");
+        var receipt = JsonUtility.FromJson<CoachEventResponse>(Deliver(retry)); Pump();
+        Check(receipt.results[0].accepted && !receipt.results[0].applied && receipt.results[0].reason == "duplicate",
+            "finish is idempotent across a real HTTP retry");
+        var finished = Snapshot(sid);
+        Check(runner.Completed && finished.status == "completed" && !finished.bodyGrade.complete
+            && finished.bodyGrade.missingMilestones.Length == candidate.procedure.steps.Length - 3
+            && finished.completedCount == 3 && finished.bodyGrade.metMilestones.Length == 3
+            && finished.bodyGrade.missingMilestones.Contains("split_muscle"),
+            "explicit incomplete finish awards no missing milestones");
+        Check(finished.bodyGrade.earnedPoints == runner.Grade.earnedPoints
+            && finished.bodyGrade.actionCount == runner.Grade.actionCount && !finished.bodyGrade.economyMeasured,
+            "local and service grades agree without invented economy metrics");
+        var oldGrade = runner.Grade;
+        runner.Handle(injury); relay.Forward(injury, before); Pump();
+        var frozenReply = JsonUtility.FromJson<CoachEventResponse>(Deliver(Pending("POST", Path(sid) + "/events"))); Pump();
+        Check(frozenReply.results[0].accepted && !frozenReply.results[0].applied
+            && frozenReply.results[0].reason == "case_completed" && Snapshot(sid).bodyGrade.actionCount == oldGrade.actionCount
+            && runner.Grade.actionCount == oldGrade.actionCount,
+            "finished open attempt stays frozen locally and across HTTP");
     }
 
     static void Adoption()
@@ -257,6 +323,22 @@ static class Program
         typeof(CoachRelay).GetMethod("OnDisable", Private).Invoke(relay, null);
         nextPoll.Complete("{\"commands\":[{\"commandId\":\"synthetic-disabled\",\"status\":\"pending\"}]}"); Pump(true);
         Check(!relay.Connected && !relay.IsSynchronized && effects == 0, "disable clears ownership and suppresses delayed commands");
+    }
+
+    // A legacy event can be reconciled by later step metadata; an open-body action cannot (no resync yet).
+    static void BodyActionDroppedAsTrackingInvalid()
+    {
+        string sid = Create(); var relay = Adopt(sid); EnableTracking(relay);
+        int failures = 0; relay.SyncFailed += _ => failures++;
+        relay.Tracking(false); Pump(); Deliver(Pending("POST", Path(sid) + "/events")); Pump();
+        var cut = CaseEvent.Surgery(new BodyAction { actionId = "open-dropped-cut", verb = "cut", tissueId = "skin", layer = "skin",
+            instrumentId = "scalpel", instrumentInstanceId = "blade-1", registered = true, timeMs = 100, lengthMm = 40 });
+        relay.Forward(cut, candidate.procedure.firstStep); Pump();
+        var reply = JsonUtility.FromJson<CoachEventResponse>(Deliver(Pending("POST", Path(sid) + "/events"))); Pump();
+        Check(!reply.results[0].applied && reply.results[0].reason == "tracking_invalid" && Snapshot(sid).eventCount == 0,
+            "coach drops a body action while its tracking is invalid");
+        Check(!relay.IsSynchronized && failures == 1 && relay.SyncFailureReason.Contains("open-dropped-cut"),
+            "a dropped body action is surfaced as a sync failure instead of counted as delivered");
     }
 
     static void AdversarialReceipts()

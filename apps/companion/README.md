@@ -101,6 +101,7 @@ Create a session, open the viewer invite link in another browser profile, press 
 | --- | --- |
 | `VITE_SPACETIMEDB_URI` | `ws://127.0.0.1:3000` locally, `wss://maincloud.spacetimedb.com` in production |
 | `VITE_SPACETIMEDB_DB` | Database name the module was published under |
+| `VITE_API_URL` | Authenticated replay gateway; defaults to `http://127.0.0.1:8788` |
 
 Screen sharing (`getDisplayMedia`) needs a secure context (HTTPS or localhost), a supporting desktop browser, and a click.
 
@@ -117,3 +118,39 @@ These were checked locally with headless Chromium on Oct 3, not on the Quest. Th
 - **Edge states:** viewers cannot see invites or send actions; source stop is shown; the 390 px layout has no horizontal scroll.
 
 Not yet measured: the real Quest mirror window, cross-network viewing through TURN, and end-to-end video delay.
+
+## Judge recap
+
+`/recap` starts with “No result for this run.” Select the sample demo explicitly
+(`/recap?demo=sample`) to preview authored scorecards. The session page links to
+`/s/<sessionId>/recap`, which starts empty and accepts only an imported
+`scalpal.run_result.v1` JSON document for that session. Import is local to the tab;
+the file is not uploaded or persisted. There is currently no live RunResult
+publisher, and the viewer does not reconstruct a surgery grade from old attempt
+counters. It displays the supplied encounter and surgery grades separately.
+
+The two reflection prompts precede the scorecard reveal. Feedback selects at most
+two strengths and two improvements from critical interview facts, milestones and
+guardrail violations, matching the Unity contract. The companion does not run a
+second Jarvis voice agent. Source/replay videos share playback and scrubbing;
+error markers require learner provenance, verified clock alignment and clip bounds.
+Queued, processing and failed states retain their real status when the operator
+chooses the clearly labeled bundled synthetic fallback. Imported demo flags limit
+the replay highlight to 20 seconds near the first clip-valid guardrail hit, or
+first incision/ligation if no guardrail hit exists (three-second lead-in, bounded
+by clip duration). Flags are frozen on import and demo-assisted grades are labeled.
+
+RunResult stores durable artifact IDs. The view uses the existing session token
+to resolve URLs through `GET /v1/sessions/:sessionId/replay/:jobId`; legacy exported
+URLs are discarded. Polling backs off from three to ten seconds and stops on
+ready/failed. Media identity is the artifact ID; expiry/error refresh preserves
+the current time. Unknown capture provenance fails closed. A gateway connection
+and session membership are needed for protected learner/rehearsal artifacts.
+
+`npm test` (also `npm run test:recap`) checks the real
+`EncounterSession.score()` producer against the parser, explicit unavailable
+scorecards, durable replay identities, URL rotation, source/clock gates, highlight
+selection, immutable flags, stale attempts and the shared Unity sample JSON.
+`tests/fixtures/preop-scorecard.json` is generated from the same synthetic chart
+and real producer used by `tests/preop-producer.ts`; it is shared with Unity
+boundary checks. `npm ci && npm run build` builds this view.

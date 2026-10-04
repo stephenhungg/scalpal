@@ -1,0 +1,30 @@
+{
+  "doi": "10.3389/fbioe.2024.1384062",
+  "authors": "Remus, Sure, Selkmann, Uttich and Bender",
+  "license": "CC BY 4.0",
+  "source": "https://www.frontiersin.org/journals/bioengineering-and-biotechnology/articles/10.3389/fbioe.2024.1384062/full",
+  "download": "https://www.ebi.ac.uk/europepmc/webservices/rest/PMC11157078/supplementaryFiles",
+  "archiveMember": "DataSheet1.CSV",
+  "publishedMd5": "8f7b1a1351368d3a0b0213bdd01c96a4",
+  "sha256": "ce9e4039ea5f7d3141c3158c0653dcfb98646cf5b00842fa02357cfa79907e17",
+  "measurement": "Composite human abdominal indentation; polynomial force-displacement coefficients, not raw relaxation traces",
+  "runtimeImported": false,
+  "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+  "byteLength": 19505,
+  "rowCount": 154,
+  "units": {
+    "fitMaxDispl": "mm",
+    "polynomialArgument": "mm",
+    "polynomialOutput": "N",
+    "coefficientOrder": "descending powers, degree from fitModel; unused fields NaN"
+  },
+  "sourceCaveats": [
+    "Composite response; not independent skin/fat/peritoneum measurements",
+    "No stress-relaxation time series",
+    "CSV A2 degree/coefficients and A4 coefficients differ from main article Table 4; do not mix fits"
+  ],
+  "fitMaxDisplRangeMm": [
+    14.0,
+    37.26
+  ]
+}

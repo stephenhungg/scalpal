@@ -14,11 +14,17 @@
     "gen:unity": "tsx scripts/gen-unity.ts",
     "export:unity": "tsx scripts/export-unity-bundle.ts",
     "test:unity": "dotnet run --project unity-check -- ../../apps/quest/Assets/Scalpal/Exercises/Resources/scalpal_bundle.json",
-    "jarvis:setup": "tsx scripts/setup-jarvis-agent.ts"
+    "jarvis:setup": "tsx scripts/setup-jarvis-agent.ts",
+    "realtime:e2e": "tsx scripts/realtime-e2e.ts",
+    "demo:session": "tsx scripts/demo-session.ts",
+    "jarvis:eval": "tsx scripts/jarvis-eval.ts",
+    "jarvis:live-eval": "tsx scripts/jarvis-live-eval.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "0.131.0",
     "@hono/node-server": "^1.19.0",
-    "hono": "^4.13.0"
+    "hono": "^4.13.0",
+    "spacetimedb": "2.10.2"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

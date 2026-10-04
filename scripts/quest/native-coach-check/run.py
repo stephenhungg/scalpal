@@ -15,7 +15,8 @@ unity = Path(os.environ.get("SCALPAL_UNITY_CONTENTS", "/Applications/Unity/Hub/E
 mono = unity / "MonoBleedingEdge/bin/mono"
 framework = unity / "MonoBleedingEdge/lib/mono/4.5"
 sources = [repo / "apps/quest/Assets/Scalpal/Exercises" / item for item in (
-    "Coach/CoachRelay.cs", "Engine/CaseRunner.cs", "Data/ScalpalCaseData.cs")]
+    "Coach/CoachRelay.cs", "Engine/CaseRunner.cs", "Engine/BodyState.cs", "Engine/BodyGrade.cs",
+    "Data/ScalpalCaseData.cs", "Data/BodyAction.cs")]
 helper = Path(__file__).parent
 with tempfile.TemporaryDirectory(prefix="scalpal-native-coach-check-") as temporary:
     binary = Path(temporary) / "NativeCoachCheck.exe"

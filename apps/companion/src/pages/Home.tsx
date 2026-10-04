@@ -12,7 +12,7 @@ export default function Home() {
   const live = useLive();
   const [name, setName] = useState(load(NAME_KEY) ?? '');
   const [label, setLabel] = useState('');
-  const [exerciseId, setExerciseId] = useState('instrument-transfer');
+  const [exerciseId, setExerciseId] = useState('lap_appendectomy');
   const [exerciseVersion, setExerciseVersion] = useState('0.1.0');
   const [code, setCode] = useState('');
   const create = useAction();

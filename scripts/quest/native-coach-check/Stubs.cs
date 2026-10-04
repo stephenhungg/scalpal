@@ -15,6 +15,8 @@ namespace UnityEngine
     public class SerializeField : Attribute { }
     public class TooltipAttribute : Attribute { public TooltipAttribute(string _) { } }
     public class WaitForSeconds { public WaitForSeconds(float _) { } }
+    public class WaitForSecondsRealtime { public WaitForSecondsRealtime(float _) { } }
+    public static class Mathf { public static float Max(float a, float b) => Math.Max(a, b); }
     public static class Debug { public static void LogWarning(object _) { } }
     public static class JsonUtility
     {
@@ -64,7 +66,7 @@ public static class Scheduler
         {
             var request = wait as UnityEngine.Networking.UnityWebRequest;
             if (request != null && request.result == UnityEngine.Networking.UnityWebRequest.Result.InProgress) return true;
-            if (wait is UnityEngine.WaitForSeconds && !clocks) return true;
+            if ((wait is UnityEngine.WaitForSeconds || wait is UnityEngine.WaitForSecondsRealtime) && !clocks) return true;
             wait = null;
             while (stack.Count > 0)
             {

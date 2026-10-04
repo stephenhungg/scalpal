@@ -1,0 +1,194 @@
+{
+  "schema": "scalpal.material_reference.v1",
+  "source_doi": "10.3390/pr10091798",
+  "source_table": "Table 3, p. 8",
+  "kind": "published inverse-FE parameter transcription plus analytic Equation (2) evaluations; not raw measured data",
+  "law_equilibrium": "W_inf = 2*mu/alpha^2 * (sum(isochoric_principal_stretch_i^alpha)-3) + (J-1)^2/D",
+  "law_normalized_force": "R(t) = 1 - sum(gamma_i) + sum(gamma_i*exp(-t/tau_i))",
+  "parameter_mu_interpretation": "Equilibrium Ogden initial shear modulus; do not substitute as instantaneous StVK Young modulus",
+  "D_status": "Printed units preserved literally. K=2/D yields negative Poisson ratios incompatible with VolumeMaterial. No corrected unit verified.",
+  "supports_status": "Rigid frictionless sphere/tissue contact documented; container side/bottom mechanical boundary conditions not sufficiently reported",
+  "geometry_SI": {
+    "specimen_diameter_m": 0.02,
+    "nominal_specimen_height_m": 0.0091,
+    "indenter_sphere_radius_m": 0.005
+  },
+  "experimental_loading": {
+    "preconditioning_cycles": 10,
+    "preconditioning_strain_min": 0,
+    "preconditioning_strain_max": 0.2,
+    "preconditioning_strain_rate_per_second": 0.1,
+    "number_of_ramps": 5,
+    "strain_increment": 0.15,
+    "strain_rate_per_second": 30,
+    "hold_seconds": 300
+  },
+  "FE_loading": {
+    "max_indentation_strain": 0.5,
+    "strain_rate_per_second": 30,
+    "hold_seconds": 300
+  },
+  "tissues": {
+    "VAT": {
+      "mu_kPa": 12.55,
+      "alpha": 7.23,
+      "D_as_printed_kPa_inverse": 64.66,
+      "gamma": [
+        0.63,
+        0.27
+      ],
+      "tau_seconds": [
+        1.21,
+        47.48
+      ],
+      "equilibrium_fraction_derived": 0.09999999999999998,
+      "mu_Pa": 12550.0,
+      "D_literal_Pa_inverse": 0.06466,
+      "literal_bulk_Pa_derived": 30.93102381688834,
+      "literal_poisson_derived": -0.9889905967463543,
+      "analytic_normalized_relaxation_samples": [
+        {
+          "seconds": 0,
+          "ratio": 1.0
+        },
+        {
+          "seconds": 0.005,
+          "ratio": 0.9973736340173854
+        },
+        {
+          "seconds": 0.016666666666666666,
+          "ratio": 0.9912870441566313
+        },
+        {
+          "seconds": 0.1,
+          "ratio": 0.9494592494689688
+        },
+        {
+          "seconds": 1,
+          "ratio": 0.6400618940867056
+        },
+        {
+          "seconds": 2,
+          "ratio": 0.47950497172480716
+        },
+        {
+          "seconds": 5,
+          "ratio": 0.35312251345085144
+        },
+        {
+          "seconds": 10,
+          "ratio": 0.3188854207463838
+        },
+        {
+          "seconds": 30,
+          "ratio": 0.24353472208936444
+        },
+        {
+          "seconds": 60,
+          "ratio": 0.17630450534141834
+        },
+        {
+          "seconds": 100,
+          "ratio": 0.13286052210066027
+        },
+        {
+          "seconds": 150,
+          "ratio": 0.11146383184334915
+        },
+        {
+          "seconds": 200,
+          "ratio": 0.1039993107878814
+        },
+        {
+          "seconds": 300,
+          "ratio": 0.10048673866863919
+        },
+        {
+          "seconds": 600,
+          "ratio": 0.10000087746122793
+        }
+      ]
+    },
+    "SAT": {
+      "mu_kPa": 17.5,
+      "alpha": 10.11,
+      "D_as_printed_kPa_inverse": 65.66,
+      "gamma": [
+        0.6,
+        0.26
+      ],
+      "tau_seconds": [
+        1.41,
+        52.63
+      ],
+      "equilibrium_fraction_derived": 0.14,
+      "mu_Pa": 17500.0,
+      "D_literal_Pa_inverse": 0.06566,
+      "literal_bulk_Pa_derived": 30.459945172098692,
+      "literal_poisson_derived": -0.9922081295182028,
+      "analytic_normalized_relaxation_samples": [
+        {
+          "seconds": 0,
+          "ratio": 1.0
+        },
+        {
+          "seconds": 0.005,
+          "ratio": 0.9978514088486412
+        },
+        {
+          "seconds": 0.016666666666666666,
+          "ratio": 0.9928672300507791
+        },
+        {
+          "seconds": 0.1,
+          "ratio": 0.9584271915318147
+        },
+        {
+          "seconds": 1,
+          "ratio": 0.6903232283619642
+        },
+        {
+          "seconds": 2,
+          "ratio": 0.5355599515026557
+        },
+        {
+          "seconds": 5,
+          "ratio": 0.3937384320585824
+        },
+        {
+          "seconds": 10,
+          "ratio": 0.3555070894903267
+        },
+        {
+          "seconds": 30,
+          "ratio": 0.2870341000268649
+        },
+        {
+          "seconds": 60,
+          "ratio": 0.22315010180481143
+        },
+        {
+          "seconds": 100,
+          "ratio": 0.17888562438762393
+        },
+        {
+          "seconds": 150,
+          "ratio": 0.1550382375646005
+        },
+        {
+          "seconds": 200,
+          "ratio": 0.14581573763082836
+        },
+        {
+          "seconds": 300,
+          "ratio": 0.14086980226557447
+        },
+        {
+          "seconds": 600,
+          "ratio": 0.14000290983069694
+        }
+      ]
+    }
+  },
+  "applicability": "Abdominal SAT/VAT from severe-obesity patients in indentation; no direct appendix, mesoappendix, skin, peritoneum, vessel or orbital-fat mapping"
+}

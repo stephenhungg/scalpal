@@ -32,6 +32,9 @@ namespace Scalpal.Anatomy
         public string SelectedInstrumentId { get; private set; } = "";
         public SurgicalCase SelectedCase => selectedCase;
         public ProcedureStep Current => runner?.Current;
+        public BodyState Body => runner?.Body;
+        public BodyGrade Grade => runner?.Grade;
+        public IReadOnlyList<string> OrderDeviations => runner?.OrderDeviations;
         public bool Completed => runner != null && runner.Completed;
         public bool CanScore => isActiveAndEnabled && runner != null && anatomy != null &&
             anatomy == selectedAnatomy && anatomy.isActiveAndEnabled && anatomy.RegistrationValid && !anatomy.PreviewMode &&
@@ -42,6 +45,7 @@ namespace Scalpal.Anatomy
             coach.SessionCaseId == selectedCase.caseId && coach.SessionMode == selectedPresentationMode &&
             coach.SessionInitialStepId == selectedCase.procedure.firstStep;
         public event Action<ProcedureStep> StepStarted;
+        public event Action<ProcedureStep> StepCompleted;
         public event Action<ProcedureStep, StepMistake> MistakeMade;
         public event Action CaseCompleted;
         public event Action<CaseEvent, CaseResult> EventHandled;
@@ -83,14 +87,14 @@ namespace Scalpal.Anatomy
                 foreach (var mistake in step.mistakes ?? Array.Empty<StepMistake>()) if (mistake != null) required.Add(mistake.structure);
                 var check = step.check;
                 if (check.type != "place_ports" && check.type != "touch_target" && check.type != "identify_targets" &&
-                    check.type != "apply_count" && check.type != "confirm") return Reject("unsupported authored check", out reason);
+                    check.type != "apply_count" && check.type != "confirm" && (check.type != "body_predicate" || procedure.openBody == null)) return Reject("unsupported authored check", out reason);
                 foreach (var target in check.targets ?? Array.Empty<string>())
                 {
                     if (check.type == "place_ports")
                     {
                         if (!allowedPorts.Contains(target)) return Reject("unknown procedure port", out reason);
                     }
-                    else if (check.type != "confirm") required.Add(target);
+                    else if (check.type != "confirm" && check.type != "body_predicate") required.Add(target);
                 }
             }
             var visited = new HashSet<string>(StringComparer.Ordinal);
@@ -111,6 +115,10 @@ namespace Scalpal.Anatomy
             var displayed = new HashSet<string>(required, StringComparer.Ordinal);
             foreach (var id in procedure.structures ?? Array.Empty<string>())
                 if (anatomy.TryGetPart(id, out _)) displayed.Add(id);
+            if(procedure.openBody?.version == 1)
+                foreach(var tissue in procedure.openBody.tissues ?? Array.Empty<TissueDefinition>())
+                    foreach(var id in tissue.structureIds != null && tissue.structureIds.Length > 0 ? tissue.structureIds : new[]{tissue.id})
+                        if(anatomy.TryGetPart(id,out _))displayed.Add(id);
             anatomy.ShowAllSystems();
             anatomy.SetExerciseParts(displayed);
             anatomy.SetPreviewRotation(false);
@@ -128,6 +136,7 @@ namespace Scalpal.Anatomy
             SelectedInstrumentId = "";
             runner = new CaseRunner(procedure);
             runner.StepStarted += step => StepStarted?.Invoke(step);
+            runner.StepCompleted += step => StepCompleted?.Invoke(step);
             runner.MistakeMade += (step, mistake) => MistakeMade?.Invoke(step, mistake);
             runner.CaseCompleted += () => CaseCompleted?.Invoke();
             if (requireCoachSynchronization && coach != null)
@@ -185,7 +194,7 @@ namespace Scalpal.Anatomy
         {
             result = default;
             if (!CanScore) return Reject("practice unavailable, preview active, registration invalid, or coach unsynchronized", out reason);
-            if (runner.Completed) return Reject("case already completed", out reason);
+            if (runner.Completed && runner.Body == null) return Reject("case already completed", out reason);
             if (input.type == CaseEventType.Touch || input.type == CaseEventType.Identify)
             {
                 if (!structures.Contains(input.id ?? "") || !anatomy.TryGetPart(input.id, out var part) ||
@@ -198,9 +207,20 @@ namespace Scalpal.Anatomy
             {
                 if (!ports.Contains(input.id ?? "")) return Reject("unknown port", out reason);
             }
+            else if (input.type == CaseEventType.Surgery)
+            {
+                var evidence = input.evidence;
+                if (runner.Body == null || !BodyState.ValidBodyAction(evidence) || !evidence.registered ||
+                    Array.Find(runner.Body.Tissues, tissue => tissue.id == evidence.tissueId && tissue.layer == evidence.layer) == null)
+                    return Reject("invalid surgical evidence, target, or instrument", out reason);
+            }
+            else if (input.type == CaseEventType.Finish)
+            {
+                if (runner.Body == null) return Reject("finish requires an open body case", out reason);
+            }
             else if (input.type != CaseEventType.Confirm) return Reject("unknown input type", out reason);
             if (liveAttempt && string.IsNullOrEmpty(boundSessionId)) boundSessionId = coach.SessionId;
-            var beforeStepId = runner.Current.id;
+            var beforeStepId = runner.Current?.id ?? "";
             var forwardingCoach = liveAttempt ? coach : null;
             result = runner.Handle(input);
             // Step callbacks may advance Current; send the step which validated this action.

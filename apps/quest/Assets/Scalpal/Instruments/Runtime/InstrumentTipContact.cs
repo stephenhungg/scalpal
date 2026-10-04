@@ -8,6 +8,9 @@ namespace Scalpal.Instruments
     public sealed class InstrumentTipContact : MonoBehaviour
     {
         public Func<bool> RegistrationIsValid;
+        // Native scoring acknowledges acceptance before this adapter consumes the activation.
+        // TouchApplied remains a notification for observers and standalone instrument fixtures.
+        public Func<Collider, string, string, bool> TouchAcceptor;
         public event Action<string, string> TouchApplied;
         readonly HashSet<string> reported = new HashSet<string>(StringComparer.Ordinal);
         InstrumentBehaviour instrument;
@@ -33,7 +36,9 @@ namespace Scalpal.Instruments
             while (structure != null && !structure.name.StartsWith("anat_", StringComparison.Ordinal)) structure = structure.parent;
             if (structure == null) return false;
             string structureId = structure.name.Substring(5);
-            if (!reported.Add(structureId)) return false;
+            if (reported.Contains(structureId)) return false;
+            if (TouchAcceptor != null && !TouchAcceptor(other, structureId, instrument.instrumentId)) return false;
+            reported.Add(structureId);
             TouchApplied?.Invoke(structureId, instrument.instrumentId);
             return true;
         }

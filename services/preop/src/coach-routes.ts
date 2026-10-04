@@ -1,13 +1,19 @@
+import { validBodyAction, type BodyAction } from "./open-body.js";
 import { readFileSync } from "node:fs";
 import type { Context, Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { ANATOMY, ANATOMY_BY_ID } from "./catalog/anatomy.js";
 import { STRUCTURE_FACTS } from "./catalog/coach-knowledge.js";
 import { INSTRUMENTS_BY_ID } from "./catalog/instruments.js";
-import { CoachSession, PRESENTATION_MODES, contextKey, reflexLines, renderContext, type CoachEvent, type StuckPolicy } from "./coach.js";
+import { CoachSession, PRESENTATION_MODES, bleedingStructures, contextKey, reflexLines, renderContext, type CoachEvent, type StuckPolicy } from "./coach.js";
 import { explainStructure, runTool } from "./coach-tools.js";
+import type { Frame, FrameMark, SceneVision } from "./scene-vision.js";
+import type { FrameDetector } from "./frame-detector.js";
 import { ReflexAudio } from "./reflex.js";
+import { NO_REALTIME, type RealtimeBridge, type RealtimeSink } from "./realtime-bridge.js";
 import { buildSystemPrompt, firstMessage } from "./coach-prompt.js";
+import { createContextFeed, type ContextFeed } from "./jarvis/context-feed.js";
+import type { EncounterVoices } from "./encounter-routes.js";
 import type { Action, SurgicalCase } from "./types.js";
 
 // Live coach API. Unity (or the SpacetimeDB bridge) posts exercise events here; the Jarvis voice
@@ -19,13 +25,41 @@ export interface CoachRouteOptions {
   now: () => Date;
   stuckPolicy?: StuckPolicy;
   tickMs?: number; // 0 disables the background stuck timer (tests call tick directly)
-  elevenLabs?: { apiKey: string; agentId: string; voiceId?: string };
+  elevenLabs?: { apiKey: string; agentId: string; voiceId?: string; patientAgentId?: string };
   reflex?: ReflexAudio; // injectable for tests; built from elevenLabs when omitted
   toolAckWaitMs?: number; // how long a highlight tool waits for the headset ack (tests shorten it)
+  realtime?: RealtimeSink;
+  bridge?: RealtimeBridge | null; // the live connection, for /realtime status and join
+  encounters?: EncounterVoices; // live encounters, so /jarvis/connection can bind a voice to one
+  encounterFor?: (id: string) => { kase: SurgicalCase; carryover(): string } | null;
+  vision?: SceneVision | null; // Jarvis's eyes; null when no vision model is configured
+  watchMs?: number; // minimum gap between background scene summaries (0 disables watching)
+  detector?: FrameDetector | null; // real-camera instrument and hand boxes (services/vision); null when not running
+}
+
+const MAX_FRAME_CHARS = 4_000_000; // about 3 MB of JPEG
+const FRAME_FRESH_MS = 8000;
+
+function parseMarks(raw: unknown): FrameMark[] {
+  if (!Array.isArray(raw)) return [];
+  const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? Math.min(Math.max(v, 0), 1) : 0);
+  return raw.slice(0, 50).flatMap((m) => {
+    if (!m || typeof m !== "object") return [];
+    const o = m as Record<string, unknown>;
+    const box = (o.box ?? {}) as Record<string, unknown>;
+    if (typeof o.label !== "string" || !o.label.trim()) return [];
+    return [{
+      label: o.label.slice(0, 80),
+      id: typeof o.id === "string" ? o.id.slice(0, 120) : "",
+      source: o.source === "scene" ? "scene" : "detector",
+      box: { x: num(box.x), y: num(box.y), w: num(box.w), h: num(box.h) },
+    }];
+  });
 }
 
 const MAX_SESSIONS = 50;
 const SESSION_ID = /^coach-[a-z0-9]{6,40}$/;
+const RUN_ID = /^(?:[a-f0-9]{32}|[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12})$/i;
 
 const ALIASES: Record<string, string> = {
   cbd: "common_bile_duct",
@@ -48,6 +82,26 @@ const coachActions = (sid: string): Action[] => [
 
 export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
   const sessions = new Map<string, CoachSession>();
+  // Canonical HandoffTicket run ids survive coach recovery/retry. Bindings share
+  // the bounded live-session lifetime; a service restart intentionally loses them.
+  const runSessions = new Map<string, string>();
+  // Office context for sessions started from a scored encounter, so a later voice connect keeps it.
+  const officeCarryover = new Map<string, string>();
+  // One server-side context feed per session for the native Quest voice, the same feed the laptop
+  // page runs in the browser (jarvis/context-feed.js), so both agents get cards and deltas alike.
+  const voiceFeeds = new Map<string, { feed: ContextFeed; lastKey: string }>();
+  const frames = new Map<string, Frame>();
+  const watching = new Map<string, { inFlight: boolean; lastAt: number }>();
+  // Latest detector boxes per session. Detection runs about once a second, so it trails the newest frame.
+  const detected = new Map<string, { marks: FrameMark[]; at: number; inFlight: boolean }>();
+  const DETECT_FRESH_MS = 4000;
+  const DETECT_GENERIC_LABELS = ["hand", "gloved hand", "scissors", "scalpel", "forceps", "clamp", "needle holder", "suture"];
+  const withDetections = (sid: string, frame: Frame): Frame => {
+    const d = detected.get(sid);
+    if (!d || !d.marks.length || frame.at - d.at > DETECT_FRESH_MS) return frame;
+    return { ...frame, marks: [...frame.marks, ...d.marks] };
+  };
+  const watchMs = options.watchMs ?? 4000;
   const reflex =
     options.reflex ?? (options.elevenLabs?.apiKey && options.elevenLabs.voiceId ? new ReflexAudio({ apiKey: options.elevenLabs.apiKey, voiceId: options.elevenLabs.voiceId }) : null);
   let ticker: ReturnType<typeof setInterval> | null = null;
@@ -77,25 +131,44 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
   const body = async (c: Context) => (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
 
   app.post("/coach/sessions", async (c) => {
-    const { patientId, mode: rawMode } = await body(c);
+    const { patientId, mode: rawMode, encounterId, runId: rawRunId } = await body(c);
+    const runId = rawRunId === undefined || rawRunId === null || rawRunId === "" ? undefined : rawRunId;
+    if (runId !== undefined && (typeof runId !== "string" || !RUN_ID.test(runId)))
+      return bad(c, 400, "invalid_run_id", "runId must be the canonical HandoffTicket UUID.", []);
+    // The operating room is mixed reality on a real reclining person (latest flow); full VR is still supported.
     const mode = rawMode === undefined ? "mixed_reality" : PRESENTATION_MODES.find((m) => m === rawMode);
     if (!mode) return bad(c, 400, "invalid_mode", 'mode must be "mixed_reality" or "virtual".', [{ id: "choose_patient", label: "Choose a patient", method: "GET", route: "/patients" }]);
     const kase = typeof patientId === "string" ? await options.loadCase(patientId) : null;
     if (!kase) return bad(c, 404, "patient_not_found", 'Send {"patientId": "<FinchNode subject>"} for a known patient.', [{ id: "choose_patient", label: "Choose a patient", method: "GET", route: "/patients" }]);
     if (!kase.procedureId) return bad(c, 409, "case_unavailable", kase.statusReason, kase.actions);
+    const priorRun = typeof runId === "string" ? sessions.get(runSessions.get(runId) ?? "") : undefined;
+    if (priorRun && priorRun.kase.patientId !== kase.patientId)
+      return bad(c, 409, "run_patient_mismatch", "This run is already bound to a different patient.", []);
 
-    if (sessions.size >= MAX_SESSIONS) sessions.delete(sessions.keys().next().value!);
+    if (sessions.size >= MAX_SESSIONS) {
+      const oldest = sessions.keys().next().value!;
+      sessions.delete(oldest);
+      officeCarryover.delete(oldest);
+      voiceFeeds.delete(oldest);
+      for (const [run, session] of runSessions) if (session === oldest) runSessions.delete(run);
+    }
     const sid = `coach-${crypto.randomUUID().replaceAll("-", "").slice(0, 16)}`;
     const session = new CoachSession(sid, kase, options.now, options.stuckPolicy, mode);
+    // Office to operating room: the scored encounter for this patient informs the surgery coaching.
+    const office = typeof encounterId === "string" ? options.encounterFor?.(encounterId) : null;
+    const preop = office && office.kase.patientId === kase.patientId ? office.carryover() : "";
     sessions.set(sid, session);
+    if (typeof runId === "string") runSessions.set(runId, sid);
+    if (preop) officeCarryover.set(sid, preop);
     const snapshot = session.snapshot();
     return c.json(
       {
         sessionId: sid,
+        runId,
         snapshot,
         context: renderContext(snapshot), contextKey: contextKey(snapshot),
-        systemPrompt: buildSystemPrompt(kase, mode),
-        firstMessage: firstMessage(kase),
+        systemPrompt: buildSystemPrompt(kase, mode, preop),
+        firstMessage: firstMessage(kase, Boolean(preop)),
         actions: coachActions(sid),
       },
       201,
@@ -117,6 +190,61 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
     const snapshot = s.snapshot();
     return c.json({ snapshot, context: renderContext(snapshot), contextKey: contextKey(snapshot), actions: coachActions(s.id) });
   });
+
+  // Native voice context, mirroring the laptop page's syncContext: nothing unless contextKey changed
+  // (or force after a voice reconnect), then the feed's full card on structural change or ~10 s, else a
+  // one-line [STATE DELTA vN]. kind "none" means send nothing. The feed state advances on each call.
+  app.post("/coach/sessions/:sid/voice-context", async (c) => {
+    const s = getSession(c);
+    if (!s) return missing(c);
+    const force = (await body(c)).force === true;
+    const snapshot = s.snapshot();
+    const key = contextKey(snapshot);
+    let state = voiceFeeds.get(s.id);
+    if (!state) {
+      state = { feed: createContextFeed({ now: () => options.now().getTime() }), lastKey: "" };
+      voiceFeeds.set(s.id, state);
+    }
+    const update = force || key !== state.lastKey ? state.feed.next(snapshot, renderContext(snapshot), { force }) : null;
+    state.lastKey = key;
+    return c.json({ sessionId: s.id, version: snapshot.version, contextKey: key, kind: update?.kind ?? "none", text: update?.text ?? "", actions: coachActions(s.id) });
+  });
+
+  // Recap has no conversational agent, client prompt override, or surgery tools.
+  // Canonical routes resolve only ids bound at session creation; recap request
+  // bodies cannot select another coach or override what Jarvis says.
+  const reactionQuestion = "How did that feel?";
+  const selfAssessmentQuestion = "What is one thing you would do differently?";
+  const recapSession = (c: Context) => {
+    const runId = c.req.param("runId");
+    return runId === undefined ? getSession(c) : sessions.get(runSessions.get(runId) ?? "") ?? null;
+  };
+  const recapMetadata = (c: Context) => {
+    const s = recapSession(c);
+    if (!s) return missing(c);
+    c.header("Cache-Control", "no-store");
+    const runId = c.req.param("runId");
+    const route = runId ? `/coach/runs/${runId}` : `/coach/sessions/${s.id}`;
+    return c.json({ runId: runId ?? s.id, reactionQuestion, selfAssessmentQuestion,
+      reactionAudioRoute: `${route}/recap/reaction.mp3`,
+      voiceConfigured: Boolean(reflex?.configured) });
+  };
+  const recapAudio = async (c: Context) => {
+    const s = recapSession(c);
+    if (!s) return missing(c);
+    if (!reflex?.configured) return bad(c, 503, "recap_voice_unconfigured", "Jarvis speech is unavailable. Use the reflection panel.", []);
+    try {
+      const audio = await reflex.render(reactionQuestion);
+      return c.body(new Uint8Array(audio), 200, { "Content-Type": "audio/mpeg", "Cache-Control": "no-store" });
+    } catch {
+      return bad(c, 503, "recap_voice_failed", "Jarvis speech is unavailable. Use the reflection panel.", []);
+    }
+  };
+  app.post("/coach/runs/:runId/recap", recapMetadata);
+  app.get("/coach/runs/:runId/recap/reaction.mp3", recapAudio);
+  // Compatibility for callers which still use a server-issued coach id.
+  app.post("/coach/sessions/:sid/recap", recapMetadata);
+  app.get("/coach/sessions/:sid/recap/reaction.mp3", recapAudio);
 
   app.post("/coach/sessions/:sid/events", async (c) => {
     const s = getSession(c);
@@ -175,17 +303,109 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
     });
   });
 
+  // Point-of-view frames from the camera rig or the Quest (passthrough plus overlay), with labeled boxes.
+  app.post("/coach/sessions/:sid/frame", async (c) => {
+    const s = getSession(c);
+    if (!s) return missing(c);
+    const b = await body(c);
+    const image = typeof b.image === "string" ? b.image.replace(/^data:image\/jpeg;base64,/, "") : "";
+    if (!image || image.length > MAX_FRAME_CHARS || !/^[A-Za-z0-9+/=]+$/.test(image.slice(0, 200))) {
+      return bad(c, 400, "invalid_frame", 'Send {"image": "<base64 JPEG>", "marks": [...]} under about 3 MB.', coachActions(s.id));
+    }
+    const frame: Frame = { jpegBase64: image, marks: parseMarks(b.marks), source: b.source === "quest" ? "quest" : "camera", at: options.now().getTime() };
+    frames.set(s.id, frame);
+    const d = detected.get(s.id) ?? { marks: [], at: 0, inFlight: false };
+    detected.set(s.id, d);
+    if (options.detector && !d.inFlight) {
+      d.inFlight = true;
+      // Generic tools too, so a wrong instrument in hand still gets named.
+      const labels = [...new Set([...DETECT_GENERIC_LABELS, ...s.kase.instruments.map((i) => i.id)])].slice(0, 32);
+      void options.detector
+        .detect(image, labels)
+        .then((marks) => Object.assign(d, { marks, at: frame.at }))
+        .catch(() => {})
+        .finally(() => (d.inFlight = false));
+    }
+    // Background watcher: a fresh one-line summary at most every watchMs, never two at once.
+    const w = watching.get(s.id) ?? { inFlight: false, lastAt: 0 };
+    watching.set(s.id, w);
+    const due = Boolean(options.vision) && watchMs > 0 && !w.inFlight && frame.at - w.lastAt >= watchMs;
+    if (due && options.vision) {
+      w.inFlight = true;
+      w.lastAt = frame.at;
+      void options.vision
+        .watch(withDetections(s.id, frame), s.snapshot())
+        .then((summary) => s.setScene(summary, frame.source))
+        .catch(() => {})
+        .finally(() => (w.inFlight = false));
+    }
+    return c.json({ stored: true, marks: frame.marks.length, watching: due, actions: coachActions(s.id) });
+  });
+
   // One implementation of Jarvis's client tools for every voice client (laptop page, Quest native voice).
   app.post("/coach/sessions/:sid/tools/:name", async (c) => {
     const s = getSession(c);
     if (!s) return missing(c);
+    if (c.req.param("name") === "look_at_scene") {
+      const { question } = await body(c);
+      const frame = frames.get(s.id);
+      let result: string;
+      if (!options.vision) result = "My vision isn't set up yet, so I can only go by the simulator's state.";
+      else if (!frame || options.now().getTime() - frame.at > FRAME_FRESH_MS) result = "I can't see your view right now. Make sure the camera feed is on.";
+      else result = await options.vision.look(withDetections(s.id, frame), s.snapshot(), typeof question === "string" ? question : "");
+      return c.json({ result, actions: coachActions(s.id) });
+    }
     const result = await runTool(s, c.req.param("name") ?? "", await body(c), {
       renderContext: (x) => renderContext(x.snapshot()),
       resolveStructure,
       ackWaitMs: options.toolAckWaitMs,
+      realtime: options.realtime,
     });
     if (result == null) return bad(c, 404, "unknown_tool", `No Jarvis tool named "${c.req.param("name")}".`, coachActions(s.id));
     return c.json({ result, actions: coachActions(s.id) });
+  });
+
+  // Voice clients mirror what was actually said and the agent's status into the shared session.
+  const SPEAKERS = new Set(["learner", "coach", "system"]);
+  const VOICE_STATUS = new Set(["offline", "connecting", "listening", "thinking", "speaking", "error"]);
+  app.post("/coach/sessions/:sid/transcript", async (c) => {
+    const s = getSession(c);
+    if (!s) return missing(c);
+    const { speaker, text } = await body(c);
+    if (typeof speaker !== "string" || !SPEAKERS.has(speaker) || typeof text !== "string" || !text.trim()) {
+      return bad(c, 400, "invalid_transcript", 'Send {"speaker": "learner" | "coach" | "system", "text": "..."}.', coachActions(s.id));
+    }
+    (options.realtime ?? NO_REALTIME).coachMessage(speaker as "learner" | "coach" | "system", text.trim());
+    return c.json({ ok: true, actions: coachActions(s.id) });
+  });
+
+  app.post("/coach/sessions/:sid/voice-status", async (c) => {
+    const s = getSession(c);
+    if (!s) return missing(c);
+    const { status, detail } = await body(c);
+    if (typeof status !== "string" || !VOICE_STATUS.has(status)) return bad(c, 400, "invalid_status", "Unknown voice status.", coachActions(s.id));
+    (options.realtime ?? NO_REALTIME).coachStatus(status as "listening", typeof detail === "string" ? detail : undefined);
+    return c.json({ ok: true, actions: coachActions(s.id) });
+  });
+
+  // The shared SpacetimeDB session: status, and joining with the session's coach invite code.
+  app.get("/realtime", (c) => c.json({ ...(options.bridge ? options.bridge.status() : { configured: false, connected: false, identity: "", sessionId: "", lastError: "" }), actions: [] }));
+  app.post("/realtime/join", async (c) => {
+    if (!options.bridge) return bad(c, 503, "realtime_unconfigured", "Set SPACETIMEDB_URI (and SPACETIMEDB_DB) for the coach service.", []);
+    const { code, sessionId: existing } = await body(c);
+    // Rebind to a session this coach identity already joined (after a restart).
+    if (typeof existing === "string" && existing) {
+      return options.bridge.bind(existing)
+        ? c.json({ ...options.bridge.status(), actions: [] })
+        : bad(c, 409, "not_a_member", "This coach identity has not joined that session; send its coach invite code.", []);
+    }
+    if (typeof code !== "string" || !/^[A-Za-z0-9]{4,12}$/.test(code.trim())) return bad(c, 400, "invalid_code", "Send the session's coach invite code, or the sessionId it already joined.", []);
+    try {
+      const sessionId = await options.bridge.join(code);
+      return c.json({ ...options.bridge.status(), sessionId, actions: [] });
+    } catch (err) {
+      return bad(c, 409, "join_failed", String(err instanceof Error ? err.message : err), []);
+    }
   });
 
   // Alerts for clients without SSE. Each carries its tier, an optional reflex clip route, and the exact
@@ -194,10 +414,14 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
     const s = getSession(c);
     if (!s) return missing(c);
     const after = Number(c.req.query("after") ?? "0");
-    const { alerts, latestSeq } = s.alertsAfter(Number.isFinite(after) ? after : 0);
+    if (!Number.isSafeInteger(after) || after < 0) return bad(c, 400, "invalid_cursor", "after must be a nonnegative integer.", coachActions(s.id));
+    // Native Quest polling has no SSE listener: advance stall hints on this active poll too.
+    s.tick();
+    const { alerts, latestSeq } = s.alertsAfter(after);
     return c.json({
       alerts: alerts.map((a) => ({ ...a, reflexRoute: a.reflexKey && reflex?.configured ? `/jarvis/reflex/${s.id}/${a.reflexKey}` : "" })),
       latestSeq,
+      snapshot: s.snapshot(),
       actions: coachActions(s.id),
     });
   });
@@ -280,11 +504,21 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
       case "tracking_lost":
         events = [{ type: "tracking", valid: false }];
         break;
+      case "bleed":
+      case "stop_bleed": {
+        // Open (or control) a bleed in the vessel nearest this step: a step target first, else any case vessel.
+        const vessels = bleedingStructures(s.kase).map((v) => v.id);
+        const step = s.engine.current;
+        const vessel = vessels.find((v) => step?.targets.includes(v)) ?? vessels.find((v) => step?.mistakes.some((m) => m.structure === v)) ?? vessels[0];
+        const total = s.snapshot().bloodLossMl;
+        events = vessel ? [{ type: "bleeding", structureId: vessel, active: kind === "bleed", rateMlPerMin: kind === "bleed" ? 45 : 0, totalMl: total + (kind === "bleed" ? 20 : 35) }] : [];
+        break;
+      }
       case "tracking_restored":
         events = [{ type: "tracking", valid: true }];
         break;
       default:
-        return bad(c, 400, "invalid_simulation", "kind must be correct_action, complete_step, mistake, wrong_instrument, off_target, look_at_danger, tracking_lost, or tracking_restored.", coachActions(s.id));
+        return bad(c, 400, "invalid_simulation", "kind must be correct_action, complete_step, mistake, wrong_instrument, off_target, look_at_danger, tracking_lost, tracking_restored, bleed, or stop_bleed.", coachActions(s.id));
     }
     const results = [...stepResults, ...events.map((e) => s.handle(e))];
     const snapshot = s.snapshot();
@@ -335,24 +569,55 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
 
   // Jarvis voice page (laptop browser) and its ElevenLabs connection details.
   app.get("/jarvis", (c) => c.html(readFileSync(new URL("./jarvis/index.html", import.meta.url), "utf8")));
-  for (const file of ["app.js", "arbiter.js"]) {
+  // Camera test rig: a webcam or iPhone (Continuity Camera) stands in for the Quest camera.
+  app.get("/jarvis/camera", (c) => c.html(readFileSync(new URL("./jarvis/camera.html", import.meta.url), "utf8")));
+  for (const file of ["app.js", "arbiter.js", "context-feed.js", "encounter.js", "camera.js", "camera-rig.js", "body-map.js"]) {
     app.get(`/jarvis/${file}`, (c) =>
       c.body(readFileSync(new URL(`./jarvis/${file}`, import.meta.url), "utf8"), 200, { "Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "no-cache" }),
     );
   }
 
+  // A connection is minted only for something live, and the prompt comes from the server:
+  //   ?sessionId=coach-...   Jarvis coaching that surgery session (prompt = the session's system prompt)
+  //   ?encounterId=enc-...   the patient agent during the interview, Jarvis as attending afterwards
+  // Legacy calls without an id (the Quest client: none, or ?agent=patient) still work, but only while a
+  // matching coach session or encounter phase is live; they carry no prompt.
   app.get("/jarvis/connection", async (c) => {
     const el = options.elevenLabs;
-    if (!el?.agentId) {
-      return bad(c, 503, "jarvis_unconfigured", "Set ELEVENLABS_AGENT_ID (and ELEVENLABS_API_KEY for a private agent), then run npm run jarvis:setup.", [{ id: "home", label: "Home", method: "GET", route: "/" }]);
+    const home: Action[] = [{ id: "home", label: "Home", method: "GET", route: "/" }];
+    const sessionId = c.req.query("sessionId");
+    const encounterId = c.req.query("encounterId");
+    let role: "jarvis" | "patient" = c.req.query("agent") === "patient" ? "patient" : "jarvis";
+    let bound: { prompt: string; firstMessage: string; voiceId: string; role: string } | null = null;
+    if (encounterId !== undefined) {
+      const voice = options.encounters?.voiceFor(encounterId) ?? null;
+      if (!voice) return bad(c, 404, "encounter_not_found", "No live encounter with that id. Start one from a patient.", home);
+      if (voice === "scored") return bad(c, 409, "invalid_phase", "This encounter is already scored; there is no conversation left to connect.", home);
+      role = voice.role === "patient" ? "patient" : "jarvis";
+      bound = voice;
+    } else if (sessionId !== undefined) {
+      const s = SESSION_ID.test(sessionId) ? sessions.get(sessionId) : undefined;
+      if (!s) return missing(c);
+      role = "jarvis";
+      const preop = officeCarryover.get(sessionId) ?? "";
+      bound = { role: "coach", prompt: buildSystemPrompt(s.kase, s.mode, preop), firstMessage: firstMessage(s.kase, Boolean(preop)), voiceId: "" };
     }
-    if (!el.apiKey) return c.json({ mode: "public", agentId: el.agentId, signedUrl: "", actions: [] });
-    const res = await fetch(`https://api.elevenlabs.io/v1/convai/conversation/get-signed-url?agent_id=${encodeURIComponent(el.agentId)}`, {
+    const agentId = role === "patient" ? el?.patientAgentId : el?.agentId;
+    if (!el || !agentId) {
+      return bad(c, 503, "jarvis_unconfigured", "Set ELEVENLABS_AGENT_ID and PATIENT_AGENT_ID (and ELEVENLABS_API_KEY for private agents), then run npm run jarvis:setup.", home);
+    }
+    if (!bound) {
+      const live = role === "patient" ? Boolean(options.encounters?.anyLive("patient")) : sessions.size > 0 || Boolean(options.encounters?.anyLive("attending"));
+      if (!live) return bad(c, 409, "no_live_session", "Start a coach session or encounter before connecting voice, and pass its sessionId or encounterId.", home);
+    }
+    const binding = bound ? { role: bound.role, prompt: bound.prompt, firstMessage: bound.firstMessage, voiceId: bound.voiceId } : {};
+    if (!el.apiKey) return c.json({ mode: "public", agentId, signedUrl: "", ...binding, actions: [] });
+    const res = await fetch(`https://api.elevenlabs.io/v1/convai/conversation/get-signed-url?agent_id=${encodeURIComponent(agentId)}`, {
       headers: { "xi-api-key": el.apiKey },
     }).catch(() => null);
-    if (!res?.ok) return bad(c, 503, "elevenlabs_unreachable", `ElevenLabs signed URL request failed${res ? ` (${res.status})` : ""}.`, [{ id: "home", label: "Home", method: "GET", route: "/" }]);
+    if (!res?.ok) return bad(c, 503, "elevenlabs_unreachable", `ElevenLabs signed URL request failed${res ? ` (${res.status})` : ""}.`, home);
     const { signed_url } = (await res.json()) as { signed_url: string };
-    return c.json({ mode: "signed", agentId: el.agentId, signedUrl: signed_url, actions: [] });
+    return c.json({ mode: "signed", agentId, signedUrl: signed_url, ...binding, actions: [] });
   });
 }
 
@@ -375,12 +640,38 @@ function parseEvent(e: unknown): CoachEvent | string {
       return id("structureId") || { type: "identify", structureId: str("structureId") };
     case "confirm":
       return { type: "confirm" };
+    case "finish":
+      return { type: "finish" };
+    case "surgery": {
+      if (!ev.evidence || typeof ev.evidence !== "object" || Array.isArray(ev.evidence)) return "surgery needs evidence";
+      const evidence = ev.evidence as unknown as BodyAction;
+      if (!validBodyAction(evidence)) return "invalid body action measurements, tool verb, or coordinate frame";
+      for (const value of [evidence.actionId, evidence.instrumentId, evidence.instrumentInstanceId, evidence.tissueId, evidence.layer]) {
+        if (!EVENT_ID.test(value)) return "invalid body action identifier";
+      }
+      if (evidence.secondaryInstanceId && !EVENT_ID.test(evidence.secondaryInstanceId)) return "invalid secondary tool instance";
+      if (evidence.choice && !EVENT_ID.test(evidence.choice)) return "invalid body decision choice";
+      return { type: "surgery", evidence };
+    }
     case "focus":
       return str("structureId") === "" ? { type: "focus", structureId: "" } : id("structureId") || { type: "focus", structureId: str("structureId") };
+    case "instrument":
+      if (ev.hand !== "left" && ev.hand !== "right") return 'instrument needs hand "left" or "right"';
+      if (typeof ev.held !== "boolean") return "instrument needs a boolean held";
+      return id("instrumentId") || { type: "instrument", instrumentId: str("instrumentId"), hand: ev.hand, held: ev.held };
+    case "contact":
+      return id("instrumentId") || id("structureId") || { type: "contact", instrumentId: str("instrumentId"), structureId: str("structureId") };
     case "tracking":
       return typeof ev.valid === "boolean" ? { type: "tracking", valid: ev.valid } : "tracking needs a boolean valid";
+    case "bleeding": {
+      const num = (k: string) => (typeof ev[k] === "number" && Number.isFinite(ev[k]) && (ev[k] as number) >= 0 ? (ev[k] as number) : null);
+      if (typeof ev.active !== "boolean") return "bleeding needs a boolean active";
+      const rate = num("rateMlPerMin"), total = num("totalMl");
+      if (rate == null || total == null) return "bleeding needs non-negative rateMlPerMin and totalMl";
+      return id("structureId") || { type: "bleeding", structureId: str("structureId"), active: ev.active, rateMlPerMin: rate, totalMl: total };
+    }
     default:
-      return "type must be place_port, touch, identify, confirm, focus, or tracking";
+      return "type must be place_port, touch, identify, confirm, surgery, instrument, contact, focus, tracking, or bleeding";
   }
 }
 

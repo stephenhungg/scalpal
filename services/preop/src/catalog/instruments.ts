@@ -9,6 +9,14 @@ const instrument = (id: string, displayName: string, kind: string): Instrument =
 });
 
 export const INSTRUMENTS: Instrument[] = [
+  instrument("skin_marker", "Skin marker", "marking"),
+  instrument("toothed_forceps", "Toothed forceps", "grasper"),
+  instrument("retractor", "Hand retractor", "retractor"),
+  instrument("babcock", "Babcock forceps", "grasper"),
+  instrument("hemostat", "Hemostat", "ligation"),
+  instrument("right_angle_clamp", "Right-angle clamp", "ligation"),
+  instrument("metzenbaum_scissors", "Metzenbaum scissors", "cutting"),
+  instrument("suture_tie", "Suture tie", "ligation"),
   instrument("scalpel", "Scalpel", "cutting"),
   instrument("trocar_5mm", "5 mm trocar", "access"),
   instrument("trocar_12mm", "12 mm trocar", "access"),

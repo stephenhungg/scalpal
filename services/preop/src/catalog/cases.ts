@@ -58,14 +58,14 @@ export const CASE_PLANS: Record<string, CasePlan> = {
     ],
   },
   "patient-demo-pediatric-asthma": {
-    procedureId: "lap_appendectomy",
+    procedureId: "open_appendectomy",
     urgency: "urgent",
     indication: "Acute uncomplicated appendicitis",
     presentation:
       "Eighteen hours of pain that started around the umbilicus and moved to the right lower quadrant, with anorexia and one episode of vomiting. Temperature 38.0 C, white count 14.2. Ultrasound shows a noncompressible 9 mm appendix.",
   },
   "patient-demo-multi-source": {
-    procedureId: "lap_appendectomy",
+    procedureId: "open_appendectomy",
     urgency: "urgent",
     indication: "Acute appendicitis",
     presentation:
@@ -73,7 +73,7 @@ export const CASE_PLANS: Record<string, CasePlan> = {
     chartNotes: [{ text: "Her records come from two health systems that disagree in places.", minSources: 2 }],
   },
   "patient-demo-sparse": {
-    procedureId: "lap_appendectomy",
+    procedureId: "open_appendectomy",
     urgency: "emergency",
     indication: "Suspected perforated appendicitis",
     presentation:
@@ -96,7 +96,7 @@ export const CASE_PLANS: Record<string, CasePlan> = {
 export function fallbackPlan(age: number): CasePlan {
   if (age >= 0 && age < 30) {
     return {
-      procedureId: "lap_appendectomy",
+      procedureId: "open_appendectomy",
       urgency: "urgent",
       indication: "Acute appendicitis",
       presentation: "Right lower quadrant pain with fever and leukocytosis. Imaging is consistent with appendicitis. (Generated scenario.)",
@@ -114,6 +114,7 @@ export function fallbackPlan(age: number): CasePlan {
 type StepRole = "entry" | "ports" | "critical" | "bleeding" | "hemostasis";
 
 export const STEP_ROLES: Record<string, Record<StepRole, string>> = {
+  open_appendectomy: { entry: "mark_incision", ports: "incise_skin", critical: "ligate_base", bleeding: "divide_mesoappendix", hemostasis: "inspect_clean" },
   lap_cholecystectomy: { entry: "access_umbilical", ports: "working_ports", critical: "critical_view", bleeding: "liver_bed", hemostasis: "hemostasis" },
   lap_appendectomy: { entry: "access_umbilical", ports: "working_ports", critical: "find_appendix", bleeding: "divide_mesoappendix", hemostasis: "irrigate" },
   lap_sigmoid_colectomy: { entry: "access_umbilical", ports: "working_ports", critical: "identify_ureter", bleeding: "divide_ima", hemostasis: "leak_test" },
@@ -127,14 +128,14 @@ export const CONSIDERATION_NOTES: Record<FlagType, { role: StepRole; note: strin
   allergy: [{ role: "entry", note: "Allergy on file: confirm the prophylactic antibiotic was chosen around it before incision." }],
   latex: [{ role: "entry", note: "Latex allergy: the room, gloves, catheters, and every instrument must be latex free before entry." }],
   contrast: [{ role: "critical", note: "Contrast allergy: an intraoperative contrast study needs an allergy plan. Rely on clear anatomic identification." }],
-  renal: [{ role: "entry", note: "Reduced kidney function: high-pressure pneumoperitoneum lowers renal blood flow. Use the lowest pressure that gives a working view." }],
+  renal: [{ role: "entry", note: "Reduced kidney function: confirm the latest renal results and coordinate fluids and medication dosing with anesthesia." }],
   metformin_renal: [{ role: "entry", note: "Metformin with low eGFR: confirm it was held. Watch for acidosis if the case runs long." }],
   diabetes: [{ role: "entry", note: "Diabetes: glucose checked before incision and monitored through the case." }],
   anemia: [{ role: "hemostasis", note: "Preoperative anemia: little reserve for blood loss. Know the latest hemoglobin and whether blood is available." }],
-  cardiac: [{ role: "entry", note: "Cardiac disease: insufflate slowly and warn anesthesia. Pneumoperitoneum and tilt change venous return." }],
-  airway: [{ role: "entry", note: "Airway disease: bronchospasm risk at induction. Pneumoperitoneum raises airway pressures; watch them as you insufflate." }],
+  cardiac: [{ role: "entry", note: "Cardiac disease: coordinate induction, positioning, and fluid management with anesthesia." }],
+  airway: [{ role: "entry", note: "Airway disease: bronchospasm risk at induction. Review inhalers and monitor airway pressures with anesthesia." }],
   polypharmacy: [{ role: "entry", note: "Many active medications: the reconciliation list should be on the board before the time out." }],
-  pediatric: [{ role: "ports", note: "Pediatric abdomen: less working space. Lower insufflation pressure and watch every trocar enter." }],
+  pediatric: [{ role: "ports", note: "Pediatric abdomen: less working space. Use age-appropriate instruments and watch incision depth and tissue handling." }],
   elderly: [{ role: "entry", note: "Older adult: lower reserve. Keep the case efficient and watch temperature and fluids." }],
   incomplete_chart: [{ role: "entry", note: "Incomplete chart: confirm identity, allergies, and medications directly with the patient or family at the time out." }],
 };

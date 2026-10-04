@@ -137,6 +137,72 @@ namespace Scalpal.Exercises.Data
     }
 
     [Serializable]
+    public class TissueDefinition
+    {
+        public string id;
+        public string layer;
+        public int order;
+        public bool cuttable;
+        public bool splittable;
+        public bool perfused;
+        public bool hollow;
+        public bool critical;
+        public bool tentable;
+        public double flowMlPerSecond; // Double: a float .3 rate made C# blood loss differ from TypeScript.
+        // Axis the fibers run along ("" = none); "incision_line" is the registered incision reference line.
+        public string fiberAxis;
+        public string[] structureIds;
+    }
+
+    [Serializable]
+    public class BodyPredicate
+    {
+        public string tissueId;
+        public string fact;
+        public string op;
+        public double value; // Double, like the TS reducer: (double)0.8f > 0.8 broke 48/60 coverage.
+    }
+
+    [Serializable]
+    public class BodyMilestone
+    {
+        public string id;
+        public BodyPredicate[] predicates;
+    }
+
+    [Serializable]
+    public class BodyGuardrail
+    {
+        public string verb;
+        public BodyPredicate eventPredicate;
+        public string id;
+        public string outcome;
+        public string tissueId;
+        public string severity;
+        public string feedback;
+    }
+
+    [Serializable]
+    public class BodyDecision
+    {
+        public string id;
+        public string prompt;
+        public string correctChoice;
+        public string[] choices;
+    }
+
+    [Serializable]
+    public class OpenBodyCase
+    {
+        public int version;
+        public TissueDefinition[] tissues;
+        public BodyMilestone[] milestones;
+        public BodyGuardrail[] guardrails;
+        public BodyDecision[] decisions;
+        public bool fastPathPremarked;
+    }
+
+    [Serializable]
     public class SuccessCheck
     {
         public string type;
@@ -173,6 +239,7 @@ namespace Scalpal.Exercises.Data
     [Serializable]
     public class Procedure
     {
+        public OpenBodyCase openBody;
         public string id;
         public string title;
         public string shortTitle;
@@ -240,6 +307,7 @@ namespace Scalpal.Exercises.Data
         public string urgency;
         public string status;
         public int flagCount;
+        public bool encounterAvailable;
         public ScalpalAction[] actions;
     }
 
@@ -254,6 +322,8 @@ namespace Scalpal.Exercises.Data
     public class PreopCheckRequest
     {
         public string[] selected;
+        // "surgical" scores only step-pinned risks (the OR Time-Out set); empty means the full chart.
+        public string scope;
     }
 
     [Serializable]
