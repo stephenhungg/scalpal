@@ -12,7 +12,7 @@ import { BlurWords } from "./BlurWords";
 import { FadeIn } from "./FadeIn";
 import { RollButton } from "./RollButton";
 import { TitleMorph } from "./TitleMorph";
-import { MonitorHud } from "./MonitorHud";
+import { Footer } from "./Footer";
 
 const TITLE = "scalpal.";
 const LEDE = "Practice surgery in mixed reality with a voice coach, and turn every rep into motion a robot hand can replay.";
@@ -47,7 +47,7 @@ export function Landing() {
         animate={{ opacity: leaving ? DIM_EXPLORE : launched ? DIM_LANDING : 0 }}
         transition={leaving ? EXIT : { duration: 0.9, ease: [0.44, 0, 0.56, 1] }}
       />
-      <MonitorHud show={titled && !leaving} instant={skip} />
+      <Footer show={titled && !leaving} instant={skip} />
       {launched && (
         <>
           <motion.nav
