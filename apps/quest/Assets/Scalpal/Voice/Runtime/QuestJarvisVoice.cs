@@ -14,7 +14,7 @@ namespace Scalpal.Voice
 {
     // Native transport for Matthew's existing agent, not another coach or progression engine.
     // Protocol: https://elevenlabs.io/docs/eleven-agents/api-reference/eleven-agents/websocket
-    // Configure/Connect must be called on the Unity main thread from an explicit voice UI action.
+    // Configure/Connect must be called on the Unity main thread, from a voice UI action or (office) the start of an encounter role.
     public sealed class QuestJarvisVoice : MonoBehaviour
     {
         public sealed class ToolRequest
@@ -37,6 +37,18 @@ namespace Scalpal.Voice
                 // Starting a talk hold must discard samples captured before the press.
                 if (!value && microphoneClip && microphoneReady)
                 { microphoneCursor = Microphone.GetPosition(microphoneDevice); lastCapture = Time.realtimeSinceStartup; }
+            }
+        }
+        // The output source. The office moves it to the speaking patient's mouth; a live stream follows the move.
+        public AudioSource Speaker
+        {
+            get => speaker;
+            set
+            {
+                if (speaker == value) return;
+                if (speaker) { speaker.Stop(); speaker.clip = null; }
+                speaker = value;
+                if (speaker && playbackClip) { speaker.playOnAwake = false; speaker.loop = true; speaker.clip = playbackClip; speaker.Play(); }
             }
         }
         public string Status { get; private set; } = "disconnected";
@@ -232,7 +244,9 @@ namespace Scalpal.Voice
             if (!encounterMode) patientId = state.snapshot.patientId ?? "";
             if (!string.IsNullOrEmpty(state.context)) initialContext = state.context;
             Reply connection = null;
-            yield return Http("GET", encounterMode && encounterRole == "patient" ? "/jarvis/connection?agent=patient" : "/jarvis/connection", null, r => connection = r);
+            // An encounter connection names its encounter: the service picks the patient agent during the interview
+            // and Jarvis as attending afterwards, and the returned role must match the role this client expects.
+            yield return Http("GET", encounterMode ? "/jarvis/connection?encounterId=" + Uri.EscapeDataString(CoachSessionId) : "/jarvis/connection", null, r => connection = r);
             if (epoch != generation) yield break;
             if (connection == null || !connection.ok)
             {
@@ -240,6 +254,8 @@ namespace Scalpal.Voice
                 Fail("Jarvis connection unavailable (" + code + "); check the existing voice service configuration.");
                 yield break;
             }
+            if (encounterMode && connection.role != encounterRole)
+            { Fail("Voice service bound the " + (string.IsNullOrEmpty(connection.role) ? "wrong" : connection.role) + " agent; expected " + encounterRole + "."); yield break; }
             string url = connection.signedUrl;
             if (string.IsNullOrEmpty(url) && connection.mode == "public" && !string.IsNullOrEmpty(connection.agentId))
                 url = "wss://api.elevenlabs.io/v1/convai/conversation?agent_id=" + Uri.EscapeDataString(connection.agentId);
@@ -703,8 +719,14 @@ namespace Scalpal.Voice
             lock (audioLock) { outputSamples.Clear(); ResetPlaybackLevel(); }
             if (speaker != null && playbackClip != null) { speaker.Stop(); speaker.Play(); }
         }
-        void Fail(string message) { Disconnect(); LastError = message; SetStatus("error"); }
-        void SetStatus(string value) { if (Status != value) { Status = value; StatusChanged?.Invoke(value); } }
+        void Fail(string message) { Disconnect(); LastError = message; Debug.LogWarning("SCALPAL_VOICE_ERROR role=" + encounterRole + " " + message); SetStatus("error"); }
+        void SetStatus(string value)
+        {
+            if (Status == value) return;
+            Status = value;
+            if (Application.isPlaying) Debug.Log("SCALPAL_VOICE_STATUS " + value + " role=" + (encounterMode ? encounterRole : "coach") + " spatial=" + (speaker ? speaker.spatialBlend : -1));
+            StatusChanged?.Invoke(value);
+        }
         void SetMode(string value) { if (Mode != value) { Mode = value; ModeChanged?.Invoke(value); } }
         void OnDisable() => Disconnect();
         // Only an actual outstanding OS permission request survives its permission-dialog suspension.
@@ -792,7 +814,7 @@ namespace Scalpal.Voice
         [Serializable, UnityEngine.Scripting.Preserve] sealed class AgentEvent { public string agent_response; }
         [Serializable, UnityEngine.Scripting.Preserve] sealed class ToolCall { public string tool_name, tool_call_id; public bool expects_response; public ToolParameters parameters; }
         [Serializable, UnityEngine.Scripting.Preserve] sealed class ToolParameters { public string structure; public string[] selected; }
-        [Serializable, UnityEngine.Scripting.Preserve] sealed class Reply { public bool ok; public string signedUrl, agentId, mode, context, result; public Snapshot snapshot; public EncounterState state; public ServiceError error; }
+        [Serializable, UnityEngine.Scripting.Preserve] sealed class Reply { public bool ok; public string signedUrl, agentId, mode, context, result, role; public Snapshot snapshot; public EncounterState state; public ServiceError error; }
         [Serializable, UnityEngine.Scripting.Preserve] sealed class EncounterState { public string encounterId, patientId, phase; }
         [Serializable, UnityEngine.Scripting.Preserve] sealed class ServiceError { public string code; }
         [Serializable, UnityEngine.Scripting.Preserve] sealed class Snapshot { public string sessionId, patientId, mode; }
