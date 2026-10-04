@@ -449,6 +449,32 @@ export const encounterEvent = table(
   }
 );
 
+// ---------------------------------------------------------------------------
+// Operating-room logs (companion dashboard)
+// ---------------------------------------------------------------------------
+
+/**
+ * One line of the operating-room log, posted by the coach: what the state
+ * tracker saw, Jarvis alerts, vitals samples, checklist changes and the case
+ * outcome. Capped per session (oldest rows are dropped first).
+ */
+export const simLog = table(
+  { name: 'sim_log' },
+  {
+    id: t.u64().primaryKey().autoInc(),
+    sessionId: t.string().index('btree'),
+    /** The coach's own session id (services/preop), not the SpacetimeDB session. */
+    coachSessionId: t.string(),
+    /** 'event' | 'alert' | 'vitals' | 'checklist' | 'outcome' */
+    kind: t.string(),
+    /** One human-readable line, at most 2000 chars. */
+    text: t.string(),
+    /** Structured payload as JSON, at most 8000 chars; '' when absent. */
+    dataJson: t.string(),
+    at: t.timestamp(),
+  }
+);
+
 const spacetimedb = schema({
   serviceIdentity,
   connection,
@@ -471,6 +497,7 @@ const spacetimedb = schema({
   sweepTimer,
   encounter,
   encounterEvent,
+  simLog,
 });
 
 export default spacetimedb;
