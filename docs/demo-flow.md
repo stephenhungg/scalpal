@@ -10,7 +10,7 @@ Launch ─Enter─▶ Explore patients ─choose─▶ Diagnosis office ─asses
 
 ## Before the Learner Arrives
 
-The operator confirms the pre-op/encounter service, voice provider and shared-state connectivity, pairs the headset and companion to the same session, and confirms the video capture route for the replay step. The explore hub and office are full VR. For the operating room a real participant reclines on the accepted table, and the operator checks lighting and the space so the headset can see their torso. The virtual activity affects only simulated anatomy and tools.
+The operator confirms the pre-op/encounter service, voice provider and shared-state connectivity, pairs the headset and companion to the same session, and confirms the video capture route for the replay step. The explore hub and office are full VR. The operating room runs in AR or VR, chosen at the handoff. For AR a real participant reclines on the accepted table, and the operator checks lighting and the space so the headset can see their torso. The virtual activity affects only simulated anatomy and tools.
 
 ## 1. Launch
 
@@ -38,7 +38,7 @@ Recommended handoff: see [experience UX](experience-ux.md#4-diagnosis--surgery-h
 
 ## 5. Operating Room
 
-The headset fades from the office into passthrough. The participant is lying on the table; MediaPipe detects their body and the generic teaching anatomy for this case is registered onto it (landmarks plus measured surface depth). The operator confirms the fit before practice. The overlay is scaled to that patient (`bodyScale`), with the case's anatomy, instruments, ports and steps from `GET /patients/:id/case`. Chart risks found in the office (anticoagulation, allergies, incomplete chart) carry into the pre-op check and pinned step considerations.
+The learner chooses the mode. **VR:** fade into the virtual operating room with a virtual patient on the table. **AR:** the headset fades from the office into passthrough; the participant is lying on the table; MediaPipe detects their body and the generic teaching anatomy for this case is registered onto it (landmarks plus measured surface depth). The operator confirms the fit before practice. The overlay is scaled to that patient (`bodyScale`), with the case's anatomy, instruments, ports and steps from `GET /patients/:id/case`. Chart risks found in the office (anticoagulation, allergies, incomplete chart) carry into the pre-op check and pinned step considerations.
 
 Jarvis guides the current authored step. Tracked virtual tools and supported UI actions pass through one local dispatcher; one deliberate action produces one accepted transition. Wrong-tool/contact feedback follows the authored rubric. Controller tracking loss releases tools. Voice/network failure preserves local pause and the attempt; recovery resynchronizes confirmed state.
 
