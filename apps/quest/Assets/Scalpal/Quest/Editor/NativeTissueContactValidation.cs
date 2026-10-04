@@ -351,7 +351,7 @@ namespace Scalpal.Quest.Editor
                     clone.transform.SetLocalPositionAndRotation(session.anatomy.transform.InverseTransformPoint(sourcePart.transform.position),Quaternion.Inverse(session.anatomy.transform.rotation)*sourcePart.transform.rotation);
                     clone.transform.localScale=sourcePart.transform.lossyScale/session.anatomy.transform.lossyScale.x;
                     clone.GetComponent<Scalpal.Anatomy.AnatomyPart>().SetVisible(true);
-                    var body=clone.GetComponent<DeformableTissue>()??clone.AddComponent<DeformableTissue>();
+                    if (!clone.TryGetComponent<DeformableTissue>(out var body)) body=clone.AddComponent<DeformableTissue>();
                     var factor=sourcePart.transform.lossyScale/session.anatomy.transform.lossyScale.x;
                     Assert(factor.x>0&&Mathf.Abs(factor.x-factor.y)<factor.x*.001f&&Mathf.Abs(factor.x-factor.z)<factor.x*.001f,"actual native FBX source units are uniform: "+ids[i]);
                     var posterior=clone.transform.InverseTransformDirection(root.transform.TransformDirection(Vector3.forward));

@@ -101,7 +101,7 @@ namespace Scalpal.Quest.Editor
                 frame.localScale = Vector3.one * .8f;
                 var toolObject = prefab ? UnityEngine.Object.Instantiate(prefab, root.transform) : new GameObject("SyntheticBlade");
                 toolObject.transform.SetParent(root.transform, false);
-                blade = toolObject.GetComponent<InstrumentBehaviour>() ?? toolObject.AddComponent<InstrumentBehaviour>();
+                if (!toolObject.TryGetComponent<InstrumentBehaviour>(out blade)) blade = toolObject.AddComponent<InstrumentBehaviour>();
                 blade.instrumentId = prefab ? blade.instrumentId : "synthetic_volume_blade";
                 if (!prefab) blade.action = InstrumentAction.Cut;
                 if (prefab)

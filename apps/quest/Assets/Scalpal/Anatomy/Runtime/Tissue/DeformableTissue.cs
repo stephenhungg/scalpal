@@ -15,6 +15,7 @@ namespace Scalpal.Anatomy.Tissue
         bool dirty;
         // Read-only source asset reference; contact reads vertices without modifying it.
         public Mesh SourceMesh => source;
+        public int SurfaceRevision { get; private set; }
         // Owned raw-coordinate buffers. Internal consumers must never mutate these arrays.
         internal Vector3[] SurfaceVertices => deformed;
         internal Vector3[] RestVertices => rest;
@@ -48,6 +49,7 @@ namespace Scalpal.Anatomy.Tissue
             rest = source.vertices; surfaceTriangles = source.triangles; deformed = (Vector3[])rest.Clone();
             dynamicMesh = Instantiate(source); dynamicMesh.name = source.name + "_RuntimeTissue"; dynamicMesh.MarkDynamic();
             filter.sharedMesh = dynamicMesh; contact.sharedMesh = dynamicMesh;
+            SurfaceRevision++;
             return true;
         }
         public void Step(float seconds, Vector3 target)
@@ -64,6 +66,7 @@ namespace Scalpal.Anatomy.Tissue
             dynamicMesh.vertices = deformed; dynamicMesh.RecalculateNormals(); dynamicMesh.RecalculateBounds();
             // Bounded low-triangle targets only. Rendering and contact are updated in one commit.
             contact.sharedMesh = null; contact.sharedMesh = dynamicMesh; dirty = false;
+            SurfaceRevision++;
         }
         public void ResetTissue()
         {
@@ -80,6 +83,7 @@ namespace Scalpal.Anatomy.Tissue
             if (contact) contact.sharedMesh = source;
             if (dynamicMesh) { if (Application.isPlaying) Destroy(dynamicMesh); else DestroyImmediate(dynamicMesh); }
             dynamicMesh = null; Cage = null; rest = deformed = null; surfaceTriangles = null; dirty = false; SourceUnitScale = 1;
+            SurfaceRevision++;
         }
     }
 }
