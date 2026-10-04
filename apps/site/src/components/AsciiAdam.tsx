@@ -1,6 +1,6 @@
 "use client";
 
-// From MatthewKim323/adam (src/components/AsciiAdam.tsx), unchanged apart from this header, both arms set to white, the onTouch / introSpeed props, and pointer reach turned off (glyph scramble kept).
+// From MatthewKim323/adam (src/components/AsciiAdam.tsx), unchanged apart from this header, both arms set to white, the onTouch / introSpeed / loopSpeed props, and pointer reach turned off (glyph scramble kept).
 import { useEffect, useRef } from 'react'
 
 /*
@@ -247,20 +247,23 @@ function aim(arm: Arm, base: Xf, pointer: Vec | null, dt: number): Xf {
 }
 
 // Scalpal site additions: onTouch fires once when the fingertips first meet (spark fully lit),
-// and introSpeed speeds up only that first approach so it can work as a loader.
+// introSpeed speeds up only that first approach so it can work as a loader, and loopSpeed sets
+// the pace of the touch/hold/apart loop that follows.
 const TOUCH = 6.6
 
-type Props = { playing?: boolean; time?: number; onTouch?: () => void; introSpeed?: number }
+type Props = { playing?: boolean; time?: number; onTouch?: () => void; introSpeed?: number; loopSpeed?: number }
 
-export function AsciiAdam({ playing = true, time, onTouch, introSpeed = 1 }: Props) {
+export function AsciiAdam({ playing = true, time, onTouch, introSpeed = 1, loopSpeed = 1 }: Props) {
   const ref = useRef<HTMLCanvasElement>(null)
   const playingRef = useRef(playing)
   const onTouchRef = useRef(onTouch)
   const introSpeedRef = useRef(introSpeed)
+  const loopSpeedRef = useRef(loopSpeed)
   useEffect(() => {
     onTouchRef.current = onTouch
     introSpeedRef.current = introSpeed
-  }, [onTouch, introSpeed])
+    loopSpeedRef.current = loopSpeed
+  }, [onTouch, introSpeed, loopSpeed])
   useEffect(() => {
     playingRef.current = playing
   }, [playing])
@@ -404,7 +407,7 @@ export function AsciiAdam({ playing = true, time, onTouch, introSpeed = 1 }: Pro
         const rush = 0
         // pointer in the gap: hurry them together, and hold them there on the way back
         const speed = clock < LOOP ? 1 + REACH.rush * rush : 1 - rush
-        const intro = touched ? 1 : introSpeedRef.current
+        const intro = touched ? loopSpeedRef.current : introSpeedRef.current
         if (live) clock = (clock + dt * speed * intro) % (2 * LOOP)
 
         const lx = aim(leftArm, baseL, null, dt)

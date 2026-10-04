@@ -22,7 +22,7 @@ export function Landing() {
   return (
     <main className="relative h-dvh overflow-hidden">
       <div className="absolute inset-0 z-0">
-        <AdamLayer onTouch={launch} introSpeed={3.3} />
+        <AdamLayer onTouch={launch} introSpeed={3.3} loopSpeed={2.5} />
       </div>
       {/* Once the page launches, dim the hands so the bright glyphs don't fight the text. */}
       <motion.div
