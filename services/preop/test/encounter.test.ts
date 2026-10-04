@@ -107,6 +107,42 @@ describe("scoring", () => {
     expect(card.feedback.join(" ")).toMatch(/emergency/);
   });
 
+  // A learner who explicitly rejects the diagnosis, the operation or the urgency must not be told they were
+  // right: the attending reads this score aloud as feedback.
+  describe("negation", () => {
+    const scored = (subject: string, a: { diagnosis?: string; differential?: string[]; procedure?: string; urgency?: string }) => {
+      const s = encounterFor(subject);
+      s.recordAssessment({ diagnosis: "", differential: [], procedure: "", urgency: "", ...a });
+      return s.score();
+    };
+    const plan = (card: ReturnType<EncounterSession["score"]>) => card.sections.find((x) => x.id === "plan")!;
+
+    it("does not credit a diagnosis the learner negated", () => {
+      for (const diagnosis of ["not appendicitis; ovarian torsion", "I doubt appendicitis", "rule out appendicitis", "appendicitis is unlikely", "less likely appendicitis, probably torsion", "it isn't the appendix"]) {
+        expect(scored("patient-demo-multi-source", { diagnosis }).diagnosisResult, diagnosis).toBe("incorrect");
+      }
+      expect(scored("patient-demo-multi-source", { diagnosis: "acute appendicitis, not ovarian torsion" }).diagnosisResult).toBe("correct");
+      expect(scored("patient-demo-multi-source", { diagnosis: "no fever earlier but appendicitis" }).diagnosisResult).toBe("correct");
+    });
+
+    it("drops to partial when the learner denies the perforation", () => {
+      expect(scored("patient-demo-sparse", { diagnosis: "perforated appendicitis" }).diagnosisResult).toBe("correct");
+      expect(scored("patient-demo-sparse", { diagnosis: "appendicitis without perforation" }).diagnosisResult).toBe("partial");
+    });
+
+    it("does not credit a negated procedure or urgency", () => {
+      const refused = plan(scored("patient-demo-multi-source", { diagnosis: "appendicitis", procedure: "do not take out the appendix", urgency: "not urgent, elective" }));
+      expect(refused.score).toBe(0);
+      expect(refused.found).toEqual([]);
+      const accepted = plan(scored("patient-demo-multi-source", { diagnosis: "appendicitis", procedure: "laparoscopic appendectomy", urgency: "urgent, today" }));
+      expect(accepted.score).toBe(10);
+    });
+
+    it("still counts 'rule out X' as naming X in the differential", () => {
+      expect(scored("patient-demo-multi-source", { differential: ["rule out ectopic pregnancy", "ovarian torsion", "kidney stone"] }).differentialNamed).toHaveLength(3);
+    });
+  });
+
   it("notes CT before ultrasound in a child", () => {
     const s = encounterFor("patient-demo-pediatric-asthma");
     s.orderTest("ct_abdomen_pelvis");
