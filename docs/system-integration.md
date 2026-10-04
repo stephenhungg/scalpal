@@ -1,5 +1,22 @@
 # System Integration Map
 
+## Latest Quest Integration Checkpoint — October 4, 2026, 12:42 AM EDT
+
+Quest integration owner checkpoint Q2, review follow-up to Q1. Source **`e0891da`**, including contact `95d691d` and pairing `66c032e`; development ARM64 IL2CPP APK **`0.6.1-review` / Android code 12**, Unity 6000.0.66f2. The single player retains **Launch → DiagnosisOffice → NativeSession (AR or VR) → RunEnding**. APK **80,409,192 bytes**, SHA256 `8f190aa509c1867716ea94380e834386c0dd28b8fa601fc0d6666ae628db9ffa`; local artifact `../work/builds/scalpal-unified-0.6.1-review-e0891da.apk` (outside Git).
+
+| Check | Result / actual evidence |
+| --- | --- |
+| Unified Editor gate | `verify_session.py --suite player` passed, and the build reran it successfully. Four-scene ordering and Shell/Office/native/Surgery/Handoff/Recap gates passed. No complete physical run inferred. |
+| Imported buried-tip contact | 335 geometry/input assertions passed against all nine committed practice meshes, including the four strict-helper failures identified in the review. Independent ray-parity fixtures test inward/outward points, asset origin/count, transformed frames, BVH bounds, repeated-query cache and real artery deformation revision. Nearest-normal fallback remains approximate near holes/concavities; actual Quest initialization/query timing is unmeasured. |
+| Pairing and timeout | Production bridge with deterministic cache/transport doubles passed 77/77. Stale-membership and timeout-order mutation controls fail. The native scene boundary gate passed 96 synthetic assertions, including generated-row and temporary-file pairing tests. No live rotated-invite headset test claimed. |
+| Real Play Mode boundary | `verify_session.py --suite playmode` passed 86 checks with real Start/Update, reset/retry button callbacks, actual reset-frame tray pose, head/focus freeze/recovery, subscribed highlight polling and PhysX triggers in both OR modes. Throwaway local SpacetimeDB and isolated coach; tracking/body/compositor input is synthetic. |
+| Android build/install | Unified build succeeded; `aapt` confirmed package `com.scalpal.nativeworkbench`, version/code and ARM64. `adb install -r` succeeded; before/after private configuration equality passed and existing loopback routes were restored. App data was preserved. |
+| Physical startup | **Blocked at Quest's controllers-required launch dialog**, exit 2 in the 20-second app-scoped smoke. No Launch rendering/XR or later stage was established physically. Owner: operator/headset input; wear Quest, wake both controllers and accept the prompt. No participant acquisition or recording started. |
+
+The review follow-up also fixes fake-null component creation, stale A/retry copy, and fast reach/scale recovery within tracking grace with trigger rearm. [Native session](native-session.md#quest-core-review-follow-up) records the source route and approximation limits. The pre-practice handoff mode API already preserves the same shared attempt, invalidates old AR registration and refuses switching during active/paused practice; its merged consumer and mode/handoff gates were inspected rather than replaced. The paused-practice “new attempt → VR” caller recovery remains the handoff owner's existing boundary described in that component document. Shared preop service restoration and its GUID remain preserved.
+
+Physical body fit, held-tool feel/performance, spoken provider behavior, consented surgery video and actual robot replay remain separate acceptance checks. Generated Editor changes were backed up outside Git and restored; unrelated local files were preserved. This Q2 checkpoint supersedes Q1's APK/startup summary below without upgrading its physical evidence.
+
 ## Shared Preop Service Dependency Correction
 
 Restoration `9fbfbbc` is present at audited main `075bb38`. `ScalpalPreopService.cs` retains GUID `7e5d1bd4423a946858e02b36d170c73e`; Shell's `HubController` and `ShellBuild` consume it on main and in all four active sibling worktrees (`scalpal-shell`, `scalpal-handoff`, `scalpal-surgery`, `scalpal-recap`). The earlier cleanup `5668231` missed the then-unpublished Shell dependency. Preserve this service. Before future shared-code removal, search both symbols and Unity GUID references across those working trees, not just committed main or scene bindings; defer removal when the reference check is incomplete. This correction was verified by source/reference inspection; no new Unity or hardware test was run for this documentation change. The Q1 build evidence below remains unchanged.
