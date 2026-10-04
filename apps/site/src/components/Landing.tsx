@@ -16,7 +16,7 @@ import { Footer } from "./Footer";
 import { TitleHeartbeat } from "./TitleHeartbeat";
 
 const TITLE = "scalpal.";
-const LEDE = "A mixed reality operating room experience guided by Jarvis, your all-knowing assistant.";
+const LEDE = "A mixed reality operating room experience guided by Scalpal, your all-knowing assistant.";
 
 // Loader: only the hands are on screen until the fingertips touch. Then the Scalpal mark dithers
 // in where the title goes, holds, and dithers into "Scalpal."; after that the nav, subtitle
