@@ -10,6 +10,7 @@ namespace Scalpal.Quest
     public sealed class ClosedMeshInterior
     {
         public const int MaximumTriangles = 32768;
+        public bool SurfaceFallbackEligible { get; private set; }
         readonly List<Vector3> vertices = new List<Vector3>();
         readonly List<int> indices = new List<int>();
         readonly List<int> submesh = new List<int>();
@@ -27,10 +28,19 @@ namespace Scalpal.Quest
 
         public bool Contains(MeshCollider collider, Vector3 worldPoint)
         {
+            SurfaceFallbackEligible = false;
             if (!collider || !collider.enabled || !collider.gameObject.activeInHierarchy || collider.convex ||
                 !collider.sharedMesh || !collider.sharedMesh.isReadable || !Finite(worldPoint)) return false;
             var mesh = collider.sharedMesh;
-            if (mesh.vertexCount > MaximumTriangles * 3 || mesh.subMeshCount > 16) return false;
+            if (mesh.subMeshCount > 16) return false;
+            ulong indexCount = 0;
+            for (int i = 0; i < mesh.subMeshCount; i++)
+            {
+                if (mesh.GetTopology(i) != MeshTopology.Triangles) return false;
+                indexCount += mesh.GetIndexCount(i);
+            }
+            if (mesh.vertexCount > MaximumTriangles * 3 || indexCount > MaximumTriangles * 3)
+            { SurfaceFallbackEligible = true; return false; }
             mesh.GetVertices(vertices); indices.Clear();
             for (int i = 0; i < mesh.subMeshCount; i++)
             {
@@ -45,7 +55,9 @@ namespace Scalpal.Quest
                 source = mesh; topologyHash = hash;
                 closed = BuildTopology();
             }
-            if (!closed) return false;
+            // Import defects include zero-area faces as well as open/non-manifold seams.
+            // The approximate BVH skips zero-area faces and validates finite/indexed input.
+            if (!closed) { SurfaceFallbackEligible = true; return false; }
             var point = collider.transform.InverseTransformPoint(worldPoint);
             if (!Finite(point)) return false;
             Vector3 minimum = vertices[0], maximum = minimum;

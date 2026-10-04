@@ -6,6 +6,7 @@ using Scalpal.Anatomy.Tissue;
 using Scalpal.Exercises.Data;
 using Scalpal.Exercises.Engine;
 using Scalpal.Instruments;
+using Scalpal.Quest;
 using UnityEditor;
 using UnityEngine;
 
@@ -43,9 +44,12 @@ namespace Scalpal.Surgery.Editor
             VerifyFluid(procedure);
             int fixtureChecks = checks;
             // Actual native-scene atlas: mobilize, deliver, then measure the base on the moved anatomy.
-            checks += OpenBodyDeliveryValidation.Run();
+            int delivery = OpenBodyDeliveryValidation.Run();
+            // Actual native-scene open wall: cuts, paired muscle split and peritoneal tenting from the volume.
+            int wall = OpenWallCouplingValidation.Run();
+            checks += delivery + wall;
             Debug.Log("SCALPAL_OPEN_BODY_INTERACTION_VALIDATION_OK: " + checks + " checks (" + fixtureChecks + " synthetic actual-adapter and real-vessel snapshot, "
-                + (checks - fixtureChecks) + " actual-scene delivery); no headset test");
+                + delivery + " actual-scene delivery, " + wall + " actual-scene wall coupling); no headset test");
         }
         sealed class Fixture : IDisposable
         {
@@ -56,8 +60,13 @@ namespace Scalpal.Surgery.Editor
             public readonly OpenBodyInteraction input;
             public readonly InstrumentBehaviour[] tools;
             public readonly List<BodyRecord> submitted = new List<BodyRecord>();
+            public readonly NativeVolumeSimulation volume;
+            GameObject rigObject;
             public bool gate = true;
-            public Fixture(ScalpalBundle bundle, Procedure procedure, params string[] ids)
+            public Fixture(ScalpalBundle bundle, Procedure procedure, params string[] ids) : this(bundle, procedure, false, ids) { }
+            // withWall: the actual five-layer open-wall volume in the wound frame, stepped after the adapter
+            // as at runtime (Update then LateUpdate); the fixture's blades are its registered cutting tools.
+            public Fixture(ScalpalBundle bundle, Procedure procedure, bool withWall, params string[] ids)
             {
                 root = new GameObject("SyntheticOpenBodyAdapterFixture");
                 root.transform.SetPositionAndRotation(new Vector3(3, 2, -1), Quaternion.Euler(0, 21, 0));
@@ -85,6 +94,14 @@ namespace Scalpal.Surgery.Editor
                 tools = ids.Select(CreateTool).ToArray();
                 input = root.AddComponent<OpenBodyInteraction>();
                 input.Initialize(binding, tools, root.transform, wound, () => gate);
+                if (withWall)
+                {
+                    rigObject = new GameObject("InactiveWallFixtureRig"); rigObject.SetActive(false);
+                    var rig = rigObject.AddComponent<NativeWorkbench>(); rig.tools = tools;
+                    volume = root.AddComponent<NativeVolumeSimulation>();
+                    volume.Initialize(wound, rig, () => gate && anatomy.RegistrationValid, true);
+                    input.BindWall(volume);
+                }
                 input.Submitted += (record, _) => submitted.Add(record);
                 Physics.SyncTransforms();
                 Require(input.Ready, "adapter ready only after valid selected registration");
@@ -98,6 +115,7 @@ namespace Scalpal.Surgery.Editor
                 tool.actionPoint = tip; tool.gripAnchor = go.transform; tool.contactRadius = .004f;
                 if (id == "scalpel")
                 {
+                    tool.action = InstrumentAction.Cut; // A wall volume sweeps only cutting tools.
                     var first = new GameObject("CutStart").transform; first.SetParent(go.transform, false); first.localPosition = Vector3.left * .002f;
                     var last = new GameObject("CutEnd").transform; last.SetParent(go.transform, false); last.localPosition = Vector3.right * .002f;
                 }
@@ -110,6 +128,16 @@ namespace Scalpal.Surgery.Editor
                 tools[index].transform.position += wound.TransformPoint(local) - tools[index].actionPoint.position;
                 Physics.SyncTransforms();
             }
+            // Blade edge along the wound's inward axis, its deep end at local.
+            public void MoveBlade(int index, Vector3 local)
+            {
+                var end = tools[index].GetComponentsInChildren<Transform>(true).First(t => t.name == "CutEnd");
+                tools[index].transform.rotation = wound.rotation * Quaternion.FromToRotation(Vector3.right, Vector3.forward);
+                tools[index].transform.position += wound.TransformPoint(local) - end.position;
+                Physics.SyncTransforms();
+            }
+            // Runtime order: scored adapter (Update), then the wall solver/blade sweep (LateUpdate).
+            public void Step(float seconds = .02f) { input.Simulate(seconds); if (volume) volume.Simulate(seconds); }
             public void Expose(Procedure procedure, int steps)
             {
                 foreach (var step in procedure.steps.Take(steps)) foreach (var e in CaseRunner.PerfectEvents(step))
@@ -118,9 +146,9 @@ namespace Scalpal.Surgery.Editor
             // The trigger is released for one frame: the blade leaves the tissue and the stroke ends.
             public void EndStroke(int index)
             {
-                tools[index].SetActivation(0); input.Simulate(.02f); tools[index].SetActivation(1);
+                tools[index].SetActivation(0); Step(); tools[index].SetActivation(1);
             }
-            public void Dispose() { UnityEngine.Object.DestroyImmediate(root); }
+            public void Dispose() { UnityEngine.Object.DestroyImmediate(root); if (rigObject) UnityEngine.Object.DestroyImmediate(rigObject); }
         }
         static void VerifyStroke(ScalpalBundle bundle, Procedure procedure)
         {
@@ -213,63 +241,78 @@ namespace Scalpal.Surgery.Editor
         }
         static void VerifyTentRelease(ScalpalBundle bundle, Procedure procedure)
         {
-            void Lift(Fixture f, int index)
+            // The actual membrane is gripped and lifted by the wall solver; its accepted lift tents it.
+            void Lift(Fixture f, int index, float x = .02f)
             {
-                f.Move(index, new Vector3(.02f, 0, .027f));
-                for (int i = 0; i < 6; i++) f.input.Simulate(.02f);
-                f.Move(index, new Vector3(.02f, 0, .017f));
-                for (int i = 0; i < 6; i++) f.input.Simulate(.02f);
-                Require(f.binding.Body.Get("peritoneum", "tented") == 1, "measured forceps lift tents exposed peritoneum");
+                f.Move(index, new Vector3(x, 0, .027f));
+                for (int i = 0; i < 6; i++) f.Step();
+                for (int i = 1; i <= 15; i++) { f.Move(index, new Vector3(x, 0, .027f - i * .001f)); f.Step(); }
+                for (int i = 0; i < 10; i++) f.Step();
+                Require(f.binding.Body.Get("peritoneum", "tented") == 1 && f.binding.Body.Get("peritoneum", "liftMm") >= 8,
+                    "accepted membrane lift tents exposed peritoneum (tool " + index + " lift " + f.binding.Body.Get("peritoneum", "liftMm") + " mm, grasps "
+                    + f.submitted.Count(r => r.action.verb == "grasp") + ", " + f.input.LastRejection + ")");
             }
-            using (var f = new Fixture(bundle, procedure, "scalpel", "toothed_forceps"))
+            using (var f = new Fixture(bundle, procedure, true, "scalpel", "toothed_forceps"))
             {
                 f.Expose(procedure, 4); Lift(f, 1);
                 var mistakes = new List<string>(); f.binding.MistakeMade += (_, mistake) => mistakes.Add(mistake.id);
-                f.Move(0, new Vector3(-.01f, 0, .027f)); f.input.Simulate(.02f);
+                // Far from the held membrane, so the blade crosses the resting peritoneum.
+                f.MoveBlade(0, new Vector3(-.045f, 0, .0295f)); f.Step();
                 // Arrival from the parked tool exceeds the jump bound; the next stable pose
                 // establishes contact before we test a real stroke in the release frame.
-                f.input.Simulate(.02f);
+                f.Step();
                 f.tools[1].SetHeld(false);
-                f.Move(0, new Vector3(-.005f, 0, .027f)); f.input.Simulate(.02f); f.EndStroke(0);
+                f.MoveBlade(0, new Vector3(-.04f, 0, .0295f)); f.Step(); f.EndStroke(0);
                 var release = f.submitted.FindLastIndex(r => r.action.choice == "release");
-                var cut = f.submitted.FindLastIndex(r => r.action.verb == "cut");
+                var cut = f.submitted.FindLastIndex(r => r.action.verb == "cut" && r.action.tissueId == "peritoneum");
                 Require(release >= 0 && cut > release && f.submitted[release].action.depthMm == 0,
-                    "last forceps release scores zero lift before a blade earlier in tool order");
+                    "last forceps release scores zero lift before a blade earlier in tool order: " + string.Join(",", f.submitted.Skip(4).Select(r => r.action.verb + ":" + r.action.tissueId + ":" + r.action.choice + ":" + r.action.depthMm)) + " rejection=" + f.input.LastRejection);
                 Require(f.binding.Body.Get("peritoneum", "tentedBeforeCut") == 0 && mistakes.Contains("lift_first"),
                     "cut after release records untented guardrail instead of stale tent success");
             }
-            using (var f = new Fixture(bundle, procedure, "toothed_forceps"))
+            using (var f = new Fixture(bundle, procedure, true, "toothed_forceps"))
             {
                 f.Expose(procedure, 4); Lift(f, 0);
                 int records = f.binding.Body.Log.Count; double clock = f.input.ActiveSeconds;
-                f.anatomy.SetRegistrationValid(false); f.input.Simulate(.02f);
+                f.anatomy.SetRegistrationValid(false); f.Step();
                 f.tools[0].SetHeld(false); f.input.ClearPlacements();
                 Require(f.binding.Body.Log.Count == records && f.input.ActiveSeconds == clock && f.binding.Body.Get("peritoneum", "tented") == 1,
                     "registration loss queues release without mutating frozen body or clock");
-                f.anatomy.SetRegistrationValid(true); f.input.Simulate(.02f);
+                f.anatomy.SetRegistrationValid(true); f.Step();
                 Require(f.binding.Body.Get("peritoneum", "tented") == 0 && f.submitted.Any(r => r.action.choice == "release"),
                     "first valid sample drains queued release through the scored path");
-                f.tools[0].SetHeld(true); f.tools[0].SetActivation(1); Lift(f, 0);
+                for (int i = 0; i < 90; i++) f.Step(); // The released membrane relaxes before the next grasp.
+                f.tools[0].SetHeld(true); f.tools[0].SetActivation(1); Lift(f, 0, -.03f);
                 f.input.ClearPlacements();
                 var selected = f.binding.SelectedCase;
                 Require(f.binding.SelectCase(new ScalpalBundle { cases = new[] { selected } }, selected.caseId, true, out _), "retry selects fresh attempt");
                 f.anatomy.SetRegistrationValid(true); f.tools[0].SetHeld(false);
                 int releases = f.submitted.Count(r => r.action.choice == "release");
-                f.input.Simulate(.02f);
+                f.Step();
                 Require(f.submitted.Count(r => r.action.choice == "release") == releases && f.binding.Body.Log.Count == 0,
                     "retry discards queued previous-attempt releases");
             }
-            using (var f = new Fixture(bundle, procedure, "toothed_forceps", "toothed_forceps"))
+            using (var f = new Fixture(bundle, procedure, true, "toothed_forceps", "toothed_forceps"))
             {
                 f.Expose(procedure, 4);
-                f.Move(0, new Vector3(-.02f, 0, .027f)); Lift(f, 1);
-                Require(f.binding.Body.Get("peritoneum", "tented") == 1, "lower second grasp does not erase another forceps' current measured lift");
-                f.tools[0].SetHeld(false); f.input.Simulate(.02f);
+                f.Move(0, new Vector3(-.05f, 0, .027f)); Lift(f, 1);
+                Require(f.binding.Body.Get("peritoneum", "tented") == 1, "an unlifted second grip does not erase another forceps' accepted lift");
+                f.tools[0].SetHeld(false); f.Step();
                 Require(f.binding.Body.Get("peritoneum", "tented") == 1 && f.submitted.Last(r => r.action.choice == "release").action.depthMm >= 8,
-                    "one release retains the other forceps' measured lift");
-                f.tools[1].SetTrackingValid(false); f.input.Simulate(.02f);
+                    "one release retains the other forceps' accepted lift");
+                f.tools[1].SetTrackingValid(false); f.Step();
                 Require(f.binding.Body.Get("peritoneum", "tented") == 0,
                     "last forceps tracking loss releases tent through a scored event");
+            }
+            using (var f = new Fixture(bundle, procedure, "toothed_forceps"))
+            {
+                // No wall volume: lifting the controller is not tissue motion, so nothing is tented.
+                f.Expose(procedure, 4);
+                f.Move(0, new Vector3(.02f, 0, .027f)); for (int i = 0; i < 6; i++) f.Step();
+                for (int i = 1; i <= 15; i++) { f.Move(0, new Vector3(.02f, 0, .027f - i * .001f)); f.Step(); }
+                Require(f.submitted.Any(r => r.action.verb == "grasp" && r.action.tissueId == "peritoneum") &&
+                    f.binding.Body.Get("peritoneum", "tented") == 0 && f.submitted.All(r => r.action.depthMm == 0),
+                    "controller travel without a gripped membrane never tents");
             }
         }
         static void VerifyDeformedReferences()
@@ -350,10 +393,9 @@ namespace Scalpal.Surgery.Editor
                     f.Move(0,new Vector3(0,-.003f-i*.001f,.019f));
                     f.Move(1,new Vector3(0,.003f+i*.001f,.019f)); f.input.Simulate(.02f);
                 }
-                Require(f.binding.Body.Get("muscle","splitWidthMm") >= 15 && f.binding.Body.Get("muscle","opened") == 1,
-                    "two held retractors produce measured muscle separation");
-                Require(f.submitted.Any(r=>r.action.tissueId=="muscle" && r.action.separationMm>=15 &&
-                    !string.IsNullOrEmpty(r.action.secondaryInstanceId) && r.action.secondaryInstanceId!=r.action.instrumentInstanceId), "split evidence contains distinct measured tool instances");
+                // Paired physical splitting is verified on the actual wall in OpenWallCouplingValidation.
+                Require(f.submitted.Any(r=>r.action.tissueId=="muscle" && r.action.verb=="retract") && f.binding.Body.Get("muscle","opened") == 0 &&
+                    f.submitted.All(r=>r.action.separationMm == 0), "without a wall volume, retractor travel alone cannot split the muscle");
                 Require(!f.input.Choose("appendix","invented_answer"), "unknown decision choice rejected");
                 Require(f.input.Choose("appendix","true_base") && f.binding.Body.Get("appendix","decision_true_base") == 1,
                     "authored choice follows the existing scored event path");

@@ -10,3 +10,4 @@ function resolve(envUrl: string | undefined, publicFile: string) {
 
 export const APK_URL = resolve(process.env.NEXT_PUBLIC_APK_URL, "scalpal.apk");
 export const DEMO_VIDEO_URL = resolve(process.env.NEXT_PUBLIC_DEMO_VIDEO_URL, "demo.mp4");
+

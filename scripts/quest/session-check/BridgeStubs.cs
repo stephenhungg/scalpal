@@ -105,6 +105,7 @@ namespace SpacetimeDB.Types
         public bool IsActive = true;
         public SpacetimeDB.Identity? Identity = new SpacetimeDB.Identity("headset");
         public int DisconnectCount, FrameTickCount;
+        public Action NextFrameTick;
         public readonly Cache Db = new Cache();
         public readonly RemoteReducers Reducers = new RemoteReducers();
         public static DbConnection LastBuilt;
@@ -112,7 +113,7 @@ namespace SpacetimeDB.Types
         public readonly List<string[]> SubscriptionQueries = new List<string[]>();
         Action<DbConnection, object, string> connected;
         public void FireConnected() => connected?.Invoke(this, null, "fixture-token");
-        public void FrameTick() { FrameTickCount++; }
+        public void FrameTick() { FrameTickCount++; var deliver = NextFrameTick; NextFrameTick = null; deliver?.Invoke(); }
         public void Disconnect() { DisconnectCount++; IsActive = false; }
         public SubscribeBuilder SubscriptionBuilder() => new SubscribeBuilder(this);
         public static ConnectionBuilder Builder() => new ConnectionBuilder();
@@ -159,12 +160,18 @@ namespace SpacetimeDB.Types
         public readonly List<AttemptCall> Attempts = new List<AttemptCall>();
         public int Events, Results;
         public int Joins;
-        public bool JoinCommitted = true;
+        public bool JoinCommitted = true, DeferJoin;
+        string pendingJoinCode, pendingJoinName;
         public DateTimeOffset AttemptTimestamp;
         string resultAttempt;
         uint resultComplete, resultTotal, resultMistakes, resultHints;
         string resultSummary, resultStatus;
-        public void JoinSession(string code, string name) { Joins++; OnJoinSession?.Invoke(ReducerEventContext.Result(JoinCommitted), code, name); }
+        public void JoinSession(string code, string name)
+        {
+            Joins++; pendingJoinCode = code; pendingJoinName = name;
+            if (!DeferJoin) AckJoin(JoinCommitted);
+        }
+        public void AckJoin(bool committed) => OnJoinSession?.Invoke(ReducerEventContext.Result(committed), pendingJoinCode, pendingJoinName);
         public void StartAttempt(string session, string exercise, string version)
         { Attempts.Add(new AttemptCall { Session = session, Exercise = exercise, Version = version }); }
         public void AckAttempt(bool committed, DateTimeOffset? timestamp = null)

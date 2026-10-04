@@ -55,3 +55,12 @@ body {
   width: 100%;
   height: 100%;
 }
+
+@keyframes track-wheel {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}

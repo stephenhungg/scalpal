@@ -42,7 +42,7 @@ namespace Scalpal.Quest
             float factor=meshScale.x/frameScale.x;
             if(!TissueCage.Finite(meshScale)||!TissueCage.Finite(frameScale)||!(factor>0)||
                 Mathf.Abs(meshScale.y/frameScale.y-factor)>factor*.001f||Mathf.Abs(meshScale.z/frameScale.z-factor)>factor*.001f)return;
-            var tissue = part.GetComponent<DeformableTissue>() ?? part.gameObject.AddComponent<DeformableTissue>();
+            if (!part.TryGetComponent<DeformableTissue>(out var tissue)) tissue = part.gameObject.AddComponent<DeformableTissue>();
             var posterior=part.transform.InverseTransformDirection(anatomy.transform.TransformDirection(Vector3.forward));
             if (tissue.Initialize(preset,factor,posterior)) tissues.Add(tissue);
             else { Debug.LogWarning("SCALPAL_TISSUE_UNAVAILABLE id=" + id); Destroy(tissue); }

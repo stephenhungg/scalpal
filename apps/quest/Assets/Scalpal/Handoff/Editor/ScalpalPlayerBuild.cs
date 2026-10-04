@@ -6,6 +6,7 @@ using Scalpal.EncounterOffice.Editor;
 using Scalpal.Quest.Editor;
 using UnityEditor;
 using UnityEditor.Build.Reporting;
+using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.XR.OpenXR;
 using UnityEngine.XR.OpenXR.Features.CompositionLayers;
@@ -102,6 +103,22 @@ namespace Scalpal.Handoff.Editor
             Debug.Log("SCALPAL_PLAYER_SCENES_OK scenes=" + string.Join(",", actual.Where(scene => scene.enabled).Select(scene => scene.path)));
         }
 
+        [MenuItem("Scalpal/Player/Verify Unified Player")]
+        public static void Verify()
+        {
+            Prepare();
+            EncounterOfficeBuild.Verify();
+            Scalpal.Shell.Editor.ShellValidation.Run();
+            NativeSessionBuild.Verify();
+            Scalpal.Surgery.Editor.OpenSurgeryBuild.Verify();
+            // Includes authoritative grade/export, replay/media, recap reset and the full handoff gate.
+            Scalpal.Recap.Editor.RecapReviewValidation.All();
+            ValidateSceneOrder();
+            // Component fixtures mutate/open scenes. Return to the committed startup scene before packaging.
+            EditorSceneManager.OpenScene(EditorBuildSettings.scenes.First(scene => scene.enabled).path);
+            Debug.Log("SCALPAL_PLAYER_VERIFY_OK version=" + PlayerSettings.bundleVersion + " code=" + PlayerSettings.Android.bundleVersionCode);
+        }
+
         [MenuItem("Scalpal/Player/Build Unified Android Player")]
         public static void Build()
         {
@@ -110,12 +127,7 @@ namespace Scalpal.Handoff.Editor
             string output = Environment.GetEnvironmentVariable("SCALPAL_QUEST_APK");
             if (string.IsNullOrWhiteSpace(output) || !Path.IsPathRooted(output))
                 throw new InvalidOperationException("SCALPAL_QUEST_APK must be an absolute output path.");
-            Prepare();
-            EncounterOfficeBuild.Verify();
-            Scalpal.Shell.Editor.ShellValidation.Run();
-            NativeSessionBuild.Verify();
-            HandoffValidation.Verify();
-            ValidateSceneOrder();
+            Verify();
             Directory.CreateDirectory(Path.GetDirectoryName(output));
             EditorUserBuildSettings.buildAppBundle = false;
             var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions {
@@ -124,7 +136,7 @@ namespace Scalpal.Handoff.Editor
             });
             if (report.summary.result != BuildResult.Succeeded)
                 throw new InvalidOperationException("Unified Android build failed: " + report.summary.result);
-            Debug.Log("SCALPAL_PLAYER_BUILD_OK bytes=" + report.summary.totalSize + " package=" + NativeQuestBuild.PackageId);
+            Debug.Log("SCALPAL_PLAYER_BUILD_OK bytes=" + report.summary.totalSize + " package=" + NativeQuestBuild.PackageId + " version=" + PlayerSettings.bundleVersion + " code=" + PlayerSettings.Android.bundleVersionCode);
         }
     }
 }

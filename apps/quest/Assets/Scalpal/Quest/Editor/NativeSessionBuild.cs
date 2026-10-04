@@ -151,7 +151,7 @@ namespace Scalpal.Quest.Editor
             session.status = workbench.status;
             workbench.status.transform.position = new Vector3(-0.15f, 1.65f, 0.3f);
             workbench.status.characterSize = 0.012f;
-            workbench.status.text = "SCALPAL | APPENDECTOMY REHEARSAL\nReview the case and confirm selection\nGrip: pick up   Trigger: use   B: review / confirm\nX: identify   Y: voice   A: retry";
+            workbench.status.text = "SCALPAL | APPENDECTOMY REHEARSAL\nReview the case and confirm selection\nGrip: pick up   Trigger: use   B: review / confirm\nX: identify   Y: voice   A: reset tools   Left menu: retry";
 
             // AnatomyPart captures these enabled flags as authored defaults at runtime Awake.
             // The practice controller then hides geometry until its explicit validity gate opens.

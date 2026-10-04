@@ -116,6 +116,8 @@ namespace Scalpal.Surgery
             bool anatomyBound = OpenSurgeryAnatomy.Bind(session.anatomy,interaction);
             var volume = GetComponent<NativeVolumeSimulation>();
             if(volume)volume.Initialize(woundFrame,session.workbench,()=>Ready,true);
+            // Wall layer contact, grips, tent lift, muscle split and cut evidence come from this volume.
+            interaction.BindWall(volume);
             session.workbench.ToolsReset-=ClearPlacements; session.workbench.ToolsReset+=ClearPlacements;
             interaction.Submitted += Applied; interaction.MarkerChanged += Marked;
             if(rightAsis && umbilicus) interaction.SetLandmarks(rightAsis.position,umbilicus.position,woundFrame.right);

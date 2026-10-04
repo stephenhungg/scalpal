@@ -25,7 +25,7 @@ namespace Scalpal.Quest
         readonly Collider[] overlaps = new Collider[48];
         readonly List<Collider> anatomyColliders = new List<Collider>();
         readonly Dictionary<AnatomyPart, string> targetKeys = new Dictionary<AnatomyPart, string>();
-        readonly Dictionary<MeshCollider, ClosedMeshInterior> interiors = new Dictionary<MeshCollider, ClosedMeshInterior>();
+        readonly Dictionary<MeshCollider, MeshTipInterior> interiors = new Dictionary<MeshCollider, MeshTipInterior>();
         IReadOnlyList<AnatomyPart> cachedParts;
         float nextInteriorPoll;
 
@@ -136,7 +136,8 @@ namespace Scalpal.Quest
                 if (Physics.ComputePenetration(tip, tip.transform.position, tip.transform.rotation,
                     target, target.transform.position, target.transform.rotation, out _, out _)) return true;
                 // A non-convex shell has no PhysX overlap when the whole tip is inside it.
-                // Only selected, visible, closed, outward-wound anatomy gets this fallback.
+                // Only selected, visible anatomy gets this fallback; import holes/large meshes
+                // use the bounded nearest-surface approximation instead of silent no-contact.
                 if (target is MeshCollider shell && OwnedPart(shell) && InteriorContains(shell, tip.bounds.center)) return true;
             }
             return false;
@@ -149,7 +150,7 @@ namespace Scalpal.Quest
         {
             var parts = exercise && exercise.anatomy ? exercise.anatomy.Parts : null;
             if (ReferenceEquals(parts, cachedParts)) return;
-            cachedParts = parts; anatomyColliders.Clear(); interiors.Clear(); targetKeys.Clear();
+            cachedParts = parts; anatomyColliders.Clear(); ClearInteriors(); targetKeys.Clear();
             if (parts == null) return;
             foreach (var part in parts)
             {
@@ -163,8 +164,14 @@ namespace Scalpal.Quest
         bool InteriorContains(MeshCollider shell, Vector3 point)
         {
             if (!shell.bounds.Contains(point)) return false;
-            if (!interiors.TryGetValue(shell, out var interior)) interiors.Add(shell, interior = new ClosedMeshInterior());
-            return interior.Contains(shell, point);
+            if (!interiors.TryGetValue(shell, out var interior)) interiors.Add(shell, interior = new MeshTipInterior());
+            return interior.Contains(shell, point, Application.isPlaying ? Time.frameCount : -1);
+        }
+
+        void ClearInteriors()
+        {
+            foreach (var interior in interiors.Values) interior.Dispose();
+            interiors.Clear();
         }
 
         // Same callback and acceptance path as OnTriggerStay; never a second score producer.
@@ -308,7 +315,7 @@ namespace Scalpal.Quest
                 if (item.contact.TouchAcceptor == item.handler) item.contact.TouchAcceptor = null;
                 if (item.contact.RegistrationIsValid == item.gate) item.contact.RegistrationIsValid = null;
             }
-            contacts.Clear(); reported.Clear(); anatomyColliders.Clear(); interiors.Clear(); targetKeys.Clear(); cachedParts = null; nextInteriorPoll = 0;
+            contacts.Clear(); reported.Clear(); anatomyColliders.Clear(); ClearInteriors(); targetKeys.Clear(); cachedParts = null; nextInteriorPoll = 0;
         }
         static bool Reject(string value, out string reason) { reason = value; return false; }
     }

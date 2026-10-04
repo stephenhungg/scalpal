@@ -18,6 +18,7 @@ Use technologies because they support that flow. ElevenLabs, Gemini API, and Sol
 | MLH Best Use of ElevenLabs | Wireless earbuds | Same voice integration | Demonstrate the implemented experience; do not confuse this with the subscription award |
 | MLH Best Use of Gemini API | Swag kits | State-grounded coach reasoning and tool selection | Actual Gemini API calls grounded in supported exercise state and reviewed content |
 | MLH Best Use of Solana | SenseCAP Card Tracker | Funded challenge, contribution acceptance receipt, unique Devnet payout | Show onchain state and a confirmed authorized reward transaction |
+| MLH Best Use of Presage | Fitbit Inspire + Presage perks | Real volunteer breathing/pulse from a mounted phone: breathing-synced AR overlay, physiology-synced demonstration data, volunteer comfort guard ([proposal](presage/README.md), parked) | Live Presage readings above confidence on a real volunteer, overlay motion and logged samples on the session clock |
 | MLH Best Use of Tiger Data | Stream Deck Mini | Store timestamped permitted recordings/robot commands and retrieve them for replay | Write a real session, retrieve it, and use it to reconstruct the replay |
 | Neon | $1,000 / $500 / $100 in AI Gateway credits | Alternative persistent backend for sessions, rubric versions, and reward claims | A functional backend making substantial use of Neon tooling |
 | Spacetime | $1,000 / $500 / $200 | Shared live state between headset, companion view, and robot view | Meaningful use as the core real-time backend |
