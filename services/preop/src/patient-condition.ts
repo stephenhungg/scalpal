@@ -69,6 +69,10 @@ export class PatientCondition {
     private readonly scale = DEMO_HEMORRHAGE_SCALE,
   ) {}
 
+  get bloodVolumeMlPerKg() {
+    return this.mlPerKg;
+  }
+
   get currentBaseline(): Baseline {
     return { ...this.baseline };
   }

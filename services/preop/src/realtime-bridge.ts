@@ -22,6 +22,8 @@ export interface RealtimeSink {
   // Operating-room logs for the companion dashboard (docs/operation-flow.md "Dashboard"): what the state
   // tracker saw, alerts, vitals samples, checklist changes and the case outcome. Fire and forget.
   simLog?(entry: SimLogEntry): void;
+  // Feeds the shared patient_condition (SpacetimeDB advances it at 1 Hz for the dashboard's Live OR panel).
+  patientCondition?(update: PatientConditionUpdate): void;
   // The robot learner's verdict for a step, as a robot_result row every member subscribes to. Fire and forget.
   robotResult?(entry: RobotResultEntry): void;
   // Resolves to the headset's resolution, or null when the shared session cannot carry the command.
@@ -44,6 +46,16 @@ export interface RobotResultEntry {
   demosSynthetic: number;
   videoUrl: string | null;
 }
+
+export type PatientConditionUpdate =
+  | { kind: "start"; coachSessionId: string; baseline: { hr: number; rr: number; sys: number; dia: number; spo2: number; source: string }; weightKg: number; mlPerKg: number }
+  | { kind: "baseline"; baseline: { hr: number; rr: number; sys: number; dia: number; source: string } }
+  | { kind: "body"; bloodLostMl: number; bleeds: { name: string; rateMlPerMin: number }[] }
+  | { kind: "injury"; region: string; controlled: boolean }
+  | { kind: "end"; result: "completed" | "ended"; cause: string };
+
+// patient_condition accepts these baseline sources; "chart+authored" (a partly charted baseline) counts as chart.
+const baselineSource = (s: string) => (["chart", "measured", "demo", "authored"].includes(s) ? s : s.startsWith("chart") ? "chart" : "authored");
 
 export const NO_REALTIME: RealtimeSink = {
   bound: false,
@@ -207,6 +219,23 @@ export class RealtimeBridge implements RealtimeSink {
       this.lastError = `${name}: ${String(err)}`;
       this.log(`${name} failed`, String(err));
     });
+  }
+
+  patientCondition(u: PatientConditionUpdate) {
+    const sessionId = this.sessionId;
+    if (u.kind === "start") {
+      const b = u.baseline;
+      this.call("startPatientCondition", (c) => c.reducers.startPatientCondition({ sessionId, coachSessionId: u.coachSessionId, baselineHr: b.hr, baselineRr: b.rr, baselineSys: b.sys, baselineDia: b.dia, baselineSpo2: b.spo2, baselineSource: baselineSource(b.source), weightKg: u.weightKg, mlPerKg: u.mlPerKg }));
+    } else if (u.kind === "baseline") {
+      const b = u.baseline;
+      this.call("setPatientBaseline", (c) => c.reducers.setPatientBaseline({ sessionId, baselineHr: b.hr, baselineRr: b.rr, baselineSys: b.sys, baselineDia: b.dia, baselineSource: baselineSource(b.source) }));
+    } else if (u.kind === "body") {
+      this.call("reportBodyState", (c) => c.reducers.reportBodyState({ sessionId, bloodLostMl: u.bloodLostMl, activeBleedsJson: JSON.stringify(u.bleeds.slice(0, 32)) }));
+    } else if (u.kind === "injury") {
+      this.call("reportInjury", (c) => c.reducers.reportInjury({ sessionId, region: u.region, controlled: u.controlled }));
+    } else {
+      this.call("endPatientCondition", (c) => c.reducers.endPatientCondition({ sessionId, result: u.result, cause: u.cause.slice(0, 200) }));
+    }
   }
 
   coachMessage(speaker: "learner" | "coach" | "system" | "patient", text: string) {
