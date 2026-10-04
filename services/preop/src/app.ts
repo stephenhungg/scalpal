@@ -8,6 +8,7 @@ import { buildCase, routes, scorePreopCheck, unavailableCase } from "./case-buil
 import type { StuckPolicy } from "./coach.js";
 import { registerCoachRoutes } from "./coach-routes.js";
 import { registerEncounterRoutes } from "./encounter-routes.js";
+import { ENCOUNTERS_BY_PLAN } from "./catalog/encounters.js";
 import type { RealtimeBridge } from "./realtime-bridge.js";
 import type { SceneVision } from "./scene-vision.js";
 import type { FrameDetector } from "./frame-detector.js";
@@ -59,6 +60,8 @@ export interface PatientListEntry {
   urgency: string;
   status: string;
   flagCount: number;
+  // True when an authored diagnosis-office interview exists for this patient (explore page "Begin encounter").
+  encounterAvailable: boolean;
   actions: Action[];
 }
 
@@ -178,6 +181,7 @@ export function createApp(options: AppOptions = {}) {
             urgency: "",
             status: "connect",
             flagCount: 0,
+            encounterAvailable: false,
             actions: [routes.connect(s.id, "Start health system connection"), routes.patients()],
           };
         }
@@ -193,6 +197,7 @@ export function createApp(options: AppOptions = {}) {
           urgency: kase.urgency,
           status: kase.status,
           flagCount: kase.brief.flags.length,
+          encounterAvailable: ENCOUNTERS_BY_PLAN.has(s.subject) && kase.status !== "blocked",
           actions: client.sandbox && s.kind !== "session" ? [routes.caseFor(s.subject), routes.admit(s.id)] : [routes.caseFor(s.subject)],
         };
       }),
@@ -221,6 +226,8 @@ export function createApp(options: AppOptions = {}) {
           urgency: kase.urgency,
           status: kase.status,
           flagCount: kase.brief.flags.length,
+          // Sandbox patients use the encounter of the demo patient their scenario mirrors.
+          encounterAvailable: ENCOUNTERS_BY_PLAN.has(scenarioDemoSubject.get(scenarioId) ?? subject) && kase.status !== "blocked",
           actions: [routes.caseFor(subject)],
         };
       }),

@@ -302,6 +302,7 @@ namespace Scalpal.Exercises.Data
         public string urgency;
         public string status;
         public int flagCount;
+        public bool encounterAvailable;
         public ScalpalAction[] actions;
     }
 
