@@ -23,7 +23,7 @@ describe("state tracker feed", () => {
     advance(2);
     for (const evidence of idealBodyActions("mark_incision")) s.receive({ type: "surgery", evidence }, { eventId: evidence.actionId });
     const snap = s.snapshot();
-    expect(snap.held).toEqual([{ hand: "right", instrumentId: "scalpel", name: expect.any(String) }]);
+    expect(snap.held).toEqual([expect.objectContaining({ hand: "right", instrumentId: "scalpel", touching: { id: "skin", name: expect.any(String) } })]);
     expect(snap.timeline[0]).toMatchObject({ atSeconds: 0, text: expect.stringMatching(/^Picked up the .* \(right hand\)\.$/) });
     expect(snap.timeline.map((t) => t.text).join(" ")).toMatch(/touched the skin\..*marked the incision line.*Milestone reached: mark mcburney incision\./);
     const context = renderContext(snap);
@@ -40,5 +40,19 @@ describe("state tracker feed", () => {
     expect(s.receive({ type: "contact", instrumentId: "babcock", structureId: "cecum" }).alerts).toEqual([]);
     s.receive({ type: "surgery", evidence: bodyAction("cut", "cecum", { actionId: "cut-cecum", lengthMm: 5 }) }, { eventId: "cut-cecum" });
     expect(s.snapshot().lastEvent).toMatch(/cut the cecum, 5 mm \(blocked: that layer is not exposed yet\)/);
+  });
+});
+
+describe("salient state card", () => {
+  it("says what the current milestone still needs in words, including negatives, and shows tool tips", () => {
+    const { s } = session();
+    s.receive({ type: "instrument", instrumentId: "skin_marker", hand: "right", held: true });
+    s.receive({ type: "contact", instrumentId: "skin_marker", structureId: "skin" });
+    const card = renderContext(s.snapshot());
+    expect(card).toMatch(/Still needed: skin: NOT yet incision line marked; skin: mark distance from McBurney's point not measured yet, needs at most 20 mm/);
+    expect(card).toMatch(/In hand: right .* \(tip on the skin\)/);
+    expect(card).not.toMatch(/Body facts:/);
+    s.receive({ type: "surgery", evidence: bodyAction("mark", "skin", { actionId: "short-mark", instrumentId: "skin_marker", lengthMm: 30, distanceMm: 5 }) }, { eventId: "short-mark" });
+    expect(renderContext(s.snapshot())).toMatch(/mark length is 30 mm, needs at least 50 mm/);
   });
 });

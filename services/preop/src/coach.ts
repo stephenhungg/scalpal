@@ -1,7 +1,7 @@
 import { STEP_COACHING, STRUCTURE_FACTS } from "./catalog/coach-knowledge.js";
 import { INSTRUMENTS_BY_ID } from "./catalog/instruments.js";
 import { StepEngine, perfectEvents, type EngineEvent } from "./engine.js";
-import type { BodyAction } from "./open-body.js";
+import type { BodyAction, BodyPredicate, BodyState } from "./open-body.js";
 import type { ProcedureStep, Severity, StepAction, SurgicalCase } from "./types.js";
 
 // Live coaching state for one surgery attempt. Wraps the reference StepEngine (same semantics as
@@ -137,7 +137,7 @@ export interface CoachSnapshot {
   trackingValid: boolean;
   lastEvent: string;
   timeline: { atSeconds: number; text: string }[]; // oldest first, session clock
-  held: { hand: "left" | "right"; instrumentId: string; name: string }[];
+  held: { hand: "left" | "right"; instrumentId: string; name: string; touching: StructureRef }[];
   recentMistakes: CoachMistakeView[];
   completedSteps: StepCheckpoint[];
   bloodLossMl: number;
@@ -210,6 +210,7 @@ export class CoachSession {
   // Rolling plain-language log of what physically happened, so Jarvis knows the recent sequence.
   private timeline: { atMs: number; text: string }[] = [];
   private held = new Map<"left" | "right", string>(); // hand -> instrument id
+  private touching = new Map<string, string>(); // instrument id -> structure its tip last touched
   private warnedFocus = new Set<string>();
   private mistakes: CoachMistakeView[] = [];
   private completed: StepCheckpoint[] = [];
@@ -545,6 +546,7 @@ export class CoachSession {
       this.note(`Picked up the ${name} (${e.hand} hand).`);
     } else {
       if (this.held.get(e.hand) === e.instrumentId) this.held.delete(e.hand);
+      this.touching.delete(e.instrumentId);
       this.note(`Put down the ${name}.`);
     }
     this.changed([]);
@@ -554,6 +556,7 @@ export class CoachSession {
   // A tool tip touching tissue. It never scores; it tells Jarvis where the tool is, and warns once per
   // critical structure in open surgery before anything is cut.
   private handleContact(instrumentId: string, structureId: string): EventOutcome {
+    this.touching.set(instrumentId, structureId);
     this.note(`${this.instrumentName(instrumentId)} touched the ${this.name(structureId).toLowerCase()}.`);
     const critical = this.kase.procedure.openBody?.tissues.some((t) => t.id === structureId && t.critical);
     if (critical && !this.warnedFocus.has(structureId)) {
@@ -666,8 +669,11 @@ export class CoachSession {
         const labels = [`${left} more on the ${this.name(target).toLowerCase()}`];
         return { text: `${verb} the ${this.name(target).toLowerCase()} ${left} more time${left === 1 ? "" : "s"}`, structures: [target], labels };
       }
-      case "body_predicate":
-        return { text: step.instruction, structures: step.targets, labels: [step.instruction] };
+      case "body_predicate": {
+        const milestone = this.kase.procedure.openBody?.milestones.find((m) => m.id === step.id);
+        const unmet = milestone && this.engine.body ? unmetPredicates(this.engine.body, milestone.predicates, (id) => this.name(id)) : [];
+        return { text: step.instruction, structures: step.targets, labels: unmet.length ? unmet : [step.instruction] };
+      }
       case "confirm":
         return { text: "confirm when the step is finished", structures: [], labels: ["confirmation"] };
       default: {
@@ -815,7 +821,7 @@ export class CoachSession {
       trackingValid: this.trackingValid,
       lastEvent: this.lastEvent,
       timeline: this.timeline.map((t) => ({ atSeconds: Math.round((t.atMs - this.startedAt) / 1000), text: t.text })),
-      held: [...this.held].map(([hand, instrumentId]) => ({ hand, instrumentId, name: this.instrumentName(instrumentId) })),
+      held: [...this.held].map(([hand, instrumentId]) => ({ hand, instrumentId, name: this.instrumentName(instrumentId), touching: this.ref(this.touching.get(instrumentId) ?? "") })),
       recentMistakes: this.mistakes.slice(-5),
       completedSteps: [...this.completed],
       bloodLossMl: Math.round(this.bloodLossMl),
@@ -963,6 +969,56 @@ export function contextKey(s: CoachSnapshot): string {
 }
 
 // Compact text for the voice agent's contextual updates. Short lines, facts only.
+// Plain names for body facts, so unmet milestone predicates read as coaching facts, including negatives.
+const FACT_LABELS: Record<string, [string, string]> = {
+  // fact: [label, unit]
+  marked: ["incision line marked", ""],
+  markErrorMm: ["mark distance from McBurney's point", "mm"],
+  markLengthMm: ["mark length", "mm"],
+  markAngleDegrees: ["mark angle off the skin lines", "deg"],
+  cutCoverage: ["share of the marked line cut", ""],
+  cutErrorMm: ["cut distance off the line", "mm"],
+  cutDepthMm: ["cut depth", "mm"],
+  opened: ["opened", ""],
+  cutAngleDegrees: ["cut angle off the fibers", "deg"],
+  splitWidthMm: ["split width", "mm"],
+  bladeUsed: ["blade used on it", ""],
+  tentedBeforeCut: ["tented before cutting", ""],
+  delivered: ["delivered into the wound", ""],
+  clampCount: ["clamps on", ""],
+  cutBetweenClamps: ["cut between the clamps", ""],
+  tieCount: ["ties on", ""],
+  tiedBothSides: ["tied on both sides of the cut", ""],
+  activeBleeds: ["active bleeds", ""],
+  decision_true_base: ["true base identified", ""],
+  crushed: ["base crushed", ""],
+  tieDistanceMm: ["tie distance from the cecum", "mm"],
+  stumpLengthMm: ["stump length", "mm"],
+  cutAboveTie: ["cut above the tie", ""],
+  cutBetweenTieAndClamp: ["cut between tie and clamp", ""],
+  removed: ["removed", ""],
+  poolMl: ["blood pool", "ml"],
+  inspectionMs: ["inspected", "ms"],
+  closed: ["closed", ""],
+};
+
+// Each predicate of a milestone that the body state does not yet satisfy, in words.
+export function unmetPredicates(body: BodyState, predicates: BodyPredicate[], name: (id: string) => string): string[] {
+  return predicates
+    .filter((p) => !body.test(p))
+    .map((p) => {
+      const [label, unit] = FACT_LABELS[p.fact] ?? [p.fact.replace(/([A-Z])/g, " $1").toLowerCase(), ""];
+      const who = p.tissueId ? `${name(p.tissueId).toLowerCase()}: ` : "";
+      const has = body.facts.has(`${p.tissueId}:${p.fact}`);
+      const now = body.get(p.tissueId, p.fact);
+      const u = unit ? ` ${unit}` : "";
+      if (p.op === "eq" && p.value === 1) return `${who}NOT yet ${label}`;
+      if (p.op === "eq") return `${who}${label} must be ${p.value} (now ${now})`;
+      const need = `${p.op === "gte" ? "at least" : "at most"} ${p.value}${u}`;
+      return `${who}${label} ${has ? `is ${Math.round(now * 100) / 100}${u}` : "not measured yet"}, needs ${need}`;
+    });
+}
+
 const TIMELINE_MAX = 20;
 const TIMELINE_IN_CONTEXT = 8;
 const clockText = (sec: number) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
@@ -1019,12 +1075,12 @@ export function renderContext(s: CoachSnapshot): string {
     ...(desync ? [desync] : []),
     `[LIVE SURGERY STATE v${s.version}] ${s.procedureTitle} for ${s.patientLabel}. ${s.status === "paused" ? "PAUSED: tracking lost, anatomy hidden, scoring paused." : ""}`.trim(),
     `${s.openBody ? "Suggested milestone" : "Step"} ${s.stepNumber} of ${s.stepCount}: ${st.title}. ${st.instruction}`,
-    `Instrument: ${st.instrumentName}${st.ports.length ? ` via ${st.ports.join(" / ")}` : ""}. Progress: ${st.progressText}. Still needed: ${st.remaining.join(", ") || "nothing"}.`,
+    `Instrument: ${st.instrumentName}${st.ports.length ? ` via ${st.ports.join(" / ")}` : ""}. Progress: ${st.progressText}. Still needed: ${st.remaining.join("; ") || "nothing"}.`,
   ];
   if (s.openBody) {
     lines.push("Open body: expected order is guidance, never an action gate. Only report measured facts and detected guardrails.");
     lines.push(`Achieved milestones: ${s.achievedMilestones.join(", ") || "none"}. Expected-order deviations: ${s.orderDeviations.join(", ") || "none"}.`);
-    lines.push(`Body facts: ${s.bodyFacts.map(f => `${f.key}=${f.value}`).join("; ") || "no measurements yet"}.`);
+    // Only what the current milestone still needs (Still needed above); the full fact table is in get_surgery_state.
     for (const d of s.decisionPrompts) lines.push(`Authored decision ${d.id}: ${d.prompt} Choices: ${d.choices.join(", ")}.`);
   }
   if (s.activeBleeds.length) {
@@ -1038,7 +1094,7 @@ export function renderContext(s: CoachSnapshot): string {
   if (st.patientNotes.length) lines.push(`Patient-specific: ${st.patientNotes.join(" ")}`);
   if (s.scene.summary) lines.push(`In view (${s.scene.source || "camera"}): ${s.scene.summary}`);
   if (s.focusStructure.id) lines.push(`Learner is looking at: ${s.focusStructure.name}.`);
-  if (s.held.length) lines.push(`In hand: ${s.held.map((h) => `${h.hand} ${h.name}`).join("; ")}.`);
+  if (s.held.length) lines.push(`In hand: ${s.held.map((h) => `${h.hand} ${h.name}${h.touching.id ? ` (tip on the ${h.touching.name.toLowerCase()})` : ""}`).join("; ")}.`);
   const trail = s.timeline.slice(-TIMELINE_IN_CONTEXT);
   if (trail.length > 1) lines.push(`Recent, oldest first (session clock, now ${clockText(s.elapsedSeconds)}): ${trail.map((t) => `${clockText(t.atSeconds)} ${t.text}`).join(" ")}`);
   lines.push(`Last event: ${s.lastEvent}`);
