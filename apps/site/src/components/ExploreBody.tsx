@@ -8,6 +8,7 @@ import { FadeIn } from "./FadeIn";
 import { HandsBackdrop } from "./HandsBackdrop";
 import { RollButton } from "./RollButton";
 import { Shell } from "./Shell";
+import { TrackWheel } from "./TrackWheel";
 import { useLeave } from "./useLeave";
 import { EXIT } from "@/lib/scene";
 import { session } from "@/lib/session";
@@ -62,6 +63,10 @@ export function ExploreBody({ apkUrl, videoUrl }: { apkUrl: string; videoUrl: st
               <RollButton href="/" variant="secondary" label="Back" hoverLabel="Home" onClick={go("/")} />
             </div>
             <p className="text-[14px] leading-[22px] text-white/50">Meta Quest 3 and 3S. Install with SideQuest or adb.</p>
+          </FadeIn>
+
+          <FadeIn delay={0.95} className="mt-12 w-full">
+            <TrackWheel />
           </FadeIn>
         </motion.section>
       </Shell>
