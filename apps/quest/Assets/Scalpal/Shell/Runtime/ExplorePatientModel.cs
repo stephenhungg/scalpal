@@ -43,7 +43,15 @@ namespace Scalpal.Shell
             if (bundle == null) return;
             cases.Clear();
             foreach (var item in bundle.cases ?? Array.Empty<SurgicalCase>())
-                if (item != null && !string.IsNullOrEmpty(item.patientId)) cases[item.patientId] = item;
+                if (item != null && !string.IsNullOrEmpty(item.patientId))
+                {
+                    // Bundles may append an advanced offline variant for the same subject.
+                    // Prefer the catalog's primary procedure, independent of variant ordering.
+                    var row = patients.FirstOrDefault(p => p.patientId == item.patientId)
+                        ?? (bundle.patients ?? Array.Empty<PatientListEntry>()).FirstOrDefault(p => p != null && p.patientId == item.patientId);
+                    if (!cases.ContainsKey(item.patientId) || item.procedureId == row?.procedureId)
+                        cases[item.patientId] = item;
+                }
             // A slower bundle response cannot overwrite a fresher /patients response.
             if (!hasPatientList) ReplacePatients(bundle.patients);
         }
@@ -84,7 +92,8 @@ namespace Scalpal.Shell
         }
 
         public PatientListEntry[] VisiblePatients() => patients.Where(p =>
-            (ProcedureFilter.Length == 0 || p.procedureId == ProcedureFilter) &&
+            (ProcedureFilter.Length == 0 || p.procedureId == ProcedureFilter ||
+                ProcedureFilter == "appendectomy" && (p.procedureId == "open_appendectomy" || p.procedureId == "lap_appendectomy")) &&
             (UrgencyFilter.Length == 0 || p.urgency == UrgencyFilter)).ToArray();
 
         public void SetFilters(string procedureId = "", string urgency = "")

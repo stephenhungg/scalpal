@@ -164,7 +164,7 @@ namespace Scalpal.Shell
         void RenderFilters()
         {
             ShellView.Clear(filters);
-            string[] labels={"All","Appendix","Gallbladder","Colon"}; string[] ids={"","lap_appendectomy","lap_cholecystectomy","lap_sigmoid_colectomy"};
+            string[] labels={"All","Appendix","Gallbladder","Colon"}; string[] ids={"","appendectomy","lap_cholecystectomy","lap_sigmoid_colectomy"};
             for(int i=0;i<labels.Length;i++) { string id=ids[i]; ShellView.Button(filters,(Model.ProcedureFilter==id?"• ":"")+labels[i],new Vector3(-.89f+i*.275f,.565f,-.006f),new Vector2(.26f,.052f),()=>Filter(id,Model.UrgencyFilter)); }
             string[] urgencies={"","emergency","urgent","elective"};
             for(int i=0;i<urgencies.Length;i++) { string id=urgencies[i]; ShellView.Button(filters,(Model.UrgencyFilter==id?"• ":"")+(id==""?"Any urgency":id),new Vector3(.20f+i*.245f,.565f,-.006f),new Vector2(.23f,.052f),()=>Filter(Model.ProcedureFilter,id)); }
@@ -206,7 +206,7 @@ namespace Scalpal.Shell
             var shown=lines.Take(count).ToArray();shown[count-1]=Short(shown[count-1],width-1).TrimEnd('…')+"…";return string.Join("\n",shown);
         }
         static string Short(string text,int max) => string.IsNullOrEmpty(text)?"Unavailable":text.Length>max?text.Substring(0,max-1)+"…":text;
-        static string ProcedureLabel(string id) => id=="lap_appendectomy"?"Appendix":id=="lap_cholecystectomy"?"Gallbladder":id=="lap_sigmoid_colectomy"?"Colon":"No procedure";
+        static string ProcedureLabel(string id) => (id=="lap_appendectomy" || id=="open_appendectomy")?"Appendix":id=="lap_cholecystectomy"?"Gallbladder":id=="lap_sigmoid_colectomy"?"Colon":"No procedure";
         static void Icon(Transform parent,string status,Vector3 at)
         {
             // Geometry icons avoid missing glyphs in Inter: check, flag, lock, or retry arrow.

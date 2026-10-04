@@ -155,7 +155,7 @@ namespace Scalpal.Shell.Editor
                 client.PatientsLoaded += value => patientResponseOffline = client.LastResponseOffline;
                 client.BriefLoaded += value => briefResponseOffline = client.LastResponseOffline;
                 client.LoadCachedBundle();
-                Check(bundle?.cases?.Length == 10 && bundleResponseOffline, "cached bundle metadata loads locally with an explicit per-response offline marker");
+                Check(bundle?.cases?.Length == 11 && bundle.cases.Select(item => item.patientId).Distinct().Count() == 10 && bundleResponseOffline, "cached bundle metadata loads locally with an explicit per-response offline marker");
                 bool nestedMetadataRestoredLive = false;
                 Action<PatientList> nestedMetadata = value =>
                 {
@@ -261,7 +261,7 @@ namespace Scalpal.Shell.Editor
                 Send(client, "/patients").Run();
                 Check(client.IsOffline && patients?.patients?.Length == 12, "network loss loads bundled patient list and signals Offline data");
                 Send(client, "/unity/bundle").Run();
-                Check(bundle?.cases?.Length == 10, "offline bundle request loads packaged complete case metadata");
+                Check(bundle?.cases?.Length == 11 && bundle.cases.Any(item => item.caseId == "case_patient-demo-multi-source_lap_appendectomy"), "offline bundle retains primary case metadata and the owner's advanced variant");
                 Send(client, "/patients/" + Female + "/brief").Run();
                 Check(brief?.patientId == Female && brief.synthetic && brief.chart.Length > 0, "offline selected detail comes from packaged matching brief");
                 brief = null; error = null;
@@ -346,7 +346,20 @@ namespace Scalpal.Shell.Editor
             hub.Reload();
             var appendixChip = hub.content.GetComponentsInChildren<ShellButton>(true).Single(button => button.label && button.label.text == "Appendix");
             appendixChip.Press();
-            Check(hub.Model.VisiblePatients().All(patient => patient.procedureId == "lap_appendectomy") && hub.Model.ProcedureFilter == "lap_appendectomy", "actual procedure chip action filters rendered patient set");
+            Check(hub.Model.VisiblePatients().Length == 3 && hub.Model.VisiblePatients().All(patient => patient.procedureId == "open_appendectomy") && hub.Model.ProcedureFilter == "appendectomy", "actual Appendix chip admits all three current open appendix patients and excludes other procedures");
+            Check(hub.Model.CaseFor(Female).procedureId == "open_appendectomy" && !hub.Model.Complaint(adult).StartsWith("Advanced offline"), "packaged advanced variant cannot overwrite the catalog primary display case");
+            var variantModel = new ExplorePatientModel();
+            var variantRows = new[] { Entry(Female, "ready", "open_appendectomy", "urgent") };
+            var primary = new SurgicalCase { patientId=Female, procedureId="open_appendectomy" };
+            var advanced = new SurgicalCase { patientId=Female, procedureId="lap_appendectomy" };
+            foreach (var variants in new[] { new[] { primary, advanced }, new[] { advanced, primary } })
+            {
+                variantModel.ApplyBundle(new ScalpalBundle { patients=variantRows, cases=variants });
+                Check(variantModel.CaseFor(Female) == primary, "primary metadata remains selected in either bundle variant order");
+            }
+            variantModel.ApplyPatients(new PatientList { patients=new[] { variantRows[0], Entry(Male,"ready","lap_appendectomy","urgent"), Entry("patient-validation-colon","ready","lap_sigmoid_colectomy","elective") } });
+            variantModel.SetFilters("appendectomy");
+            Check(variantModel.VisiblePatients().Length == 2, "Appendix category includes open and advanced laparoscopic subjects but excludes colon");
             hub.Filter();
             hub.Select(Female);
             Check(ShellTransition.TryStageSelection(hub.Model.SelectedPatientId, hub.service.BaseUrl), "the production Begin handoff contract accepts supported selected patient plus explicit endpoint");
