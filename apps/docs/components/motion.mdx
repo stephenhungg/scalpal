@@ -28,7 +28,7 @@ uv run scalpal-motion run clip.mp4 --hand Right --smooth 0.3
 GATEWAY_URL=https://<gateway> WORKER_TOKEN=<token> uv run scalpal-motion gateway-worker
 ```
 
-It claims jobs from the [gateway](/api/gateway), downloads the clip, runs the pipeline and uploads four outputs: a `scalpal.robot_trajectory.v1` trajectory (what the companion replay reads), the replay video, the hand estimates and a quality report. No hand found fails without retry. Network errors retry.
+It claims jobs from the [gateway](/api/gateway), downloads the clip, runs the pipeline and uploads four outputs: a `scalpal.robot_trajectory.v1` trajectory (what the dashboard replay reads), the replay video, the hand estimates and a quality report. No hand found fails without retry. Network errors retry.
 
 ## What's been measured
 

@@ -37,7 +37,7 @@
         "href": "https://scalpal.vercel.app"
       },
       {
-        "label": "Companion",
+        "label": "Dashboard",
         "href": "https://scalpal-companion.vercel.app"
       }
     ]
@@ -56,7 +56,7 @@
             "pages": [
               "components/quest",
               "components/scalpal",
-              "components/companion",
+              "components/dashboard",
               "components/realtime",
               "components/vitals",
               "components/motion",
