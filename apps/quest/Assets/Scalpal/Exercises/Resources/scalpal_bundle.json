@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-10-04T03:23:58.730Z",
+ "generatedAt": "2026-10-04T03:44:32.527Z",
  "anatomy": [
   {
    "id": "abdominal_wall",
@@ -1664,7 +1664,8 @@
       "hollow": false,
       "critical": false,
       "tentable": false,
-      "flowMlPerSecond": 0
+      "flowMlPerSecond": 0,
+      "fiberAxis": ""
      },
      {
       "id": "fat",
@@ -1676,7 +1677,8 @@
       "hollow": false,
       "critical": false,
       "tentable": false,
-      "flowMlPerSecond": 0
+      "flowMlPerSecond": 0,
+      "fiberAxis": ""
      },
      {
       "id": "fascia",
@@ -1688,7 +1690,8 @@
       "hollow": false,
       "critical": false,
       "tentable": false,
-      "flowMlPerSecond": 0
+      "flowMlPerSecond": 0,
+      "fiberAxis": "incision_line"
      },
      {
       "id": "muscle",
@@ -1700,7 +1703,8 @@
       "hollow": false,
       "critical": false,
       "tentable": false,
-      "flowMlPerSecond": 0.3
+      "flowMlPerSecond": 0.3,
+      "fiberAxis": ""
      },
      {
       "id": "peritoneum",
@@ -1712,7 +1716,8 @@
       "hollow": false,
       "critical": false,
       "tentable": true,
-      "flowMlPerSecond": 0
+      "flowMlPerSecond": 0,
+      "fiberAxis": ""
      },
      {
       "id": "appendix",
@@ -1724,7 +1729,8 @@
       "hollow": true,
       "critical": false,
       "tentable": false,
-      "flowMlPerSecond": 0
+      "flowMlPerSecond": 0,
+      "fiberAxis": ""
      },
      {
       "id": "mesoappendix",
@@ -1736,7 +1742,8 @@
       "hollow": false,
       "critical": false,
       "tentable": false,
-      "flowMlPerSecond": 2
+      "flowMlPerSecond": 2,
+      "fiberAxis": ""
      },
      {
       "id": "appendicular_artery",
@@ -1748,7 +1755,8 @@
       "hollow": false,
       "critical": false,
       "tentable": false,
-      "flowMlPerSecond": 2
+      "flowMlPerSecond": 2,
+      "fiberAxis": ""
      },
      {
       "id": "cecum",
@@ -1760,7 +1768,8 @@
       "hollow": true,
       "critical": true,
       "tentable": false,
-      "flowMlPerSecond": 0
+      "flowMlPerSecond": 0,
+      "fiberAxis": ""
      },
      {
       "id": "terminal_ileum",
@@ -1772,7 +1781,8 @@
       "hollow": true,
       "critical": true,
       "tentable": false,
-      "flowMlPerSecond": 0
+      "flowMlPerSecond": 0,
+      "fiberAxis": ""
      },
      {
       "id": "iliac_vessels",
@@ -1785,6 +1795,7 @@
       "critical": true,
       "tentable": false,
       "flowMlPerSecond": 8,
+      "fiberAxis": "",
       "structureIds": [
        "cardiovascular__common_iliac_artery_r",
        "cardiovascular__common_iliac_vein_r"
@@ -1801,6 +1812,7 @@
       "critical": true,
       "tentable": false,
       "flowMlPerSecond": 0,
+      "fiberAxis": "",
       "structureIds": [
        "right_ureter"
       ]
@@ -1896,12 +1908,6 @@
         "fact": "splitWidthMm",
         "op": "gte",
         "value": 15
-       },
-       {
-        "tissueId": "muscle",
-        "fact": "bladeUsed",
-        "op": "eq",
-        "value": 0
        }
       ]
      },
@@ -1936,12 +1942,6 @@
      {
       "id": "divide_mesoappendix",
       "predicates": [
-       {
-        "tissueId": "mesoappendix",
-        "fact": "clampCount",
-        "op": "gte",
-        "value": 2
-       },
        {
         "tissueId": "mesoappendix",
         "fact": "cutBetweenClamps",
@@ -3200,7 +3200,7 @@
     "dataSource": "demo",
     "consentStatus": "simulated",
     "consentReceipts": [],
-    "generatedAt": "2026-10-04T03:23:58.726Z",
+    "generatedAt": "2026-10-04T03:44:32.524Z",
     "dataAsOf": "2026-08-25T17:00:00Z",
     "patient": {
      "name": "Morgan Rivera",
@@ -4075,7 +4075,7 @@
     "dataSource": "demo",
     "consentStatus": "simulated",
     "consentReceipts": [],
-    "generatedAt": "2026-10-04T03:23:58.728Z",
+    "generatedAt": "2026-10-04T03:44:32.525Z",
     "dataAsOf": "2026-09-01T00:00:00Z",
     "patient": {
      "name": "Harriet Lindqvist",
@@ -4974,7 +4974,8 @@
        "hollow": false,
        "critical": false,
        "tentable": false,
-       "flowMlPerSecond": 0
+       "flowMlPerSecond": 0,
+       "fiberAxis": ""
       },
       {
        "id": "fat",
@@ -4986,7 +4987,8 @@
        "hollow": false,
        "critical": false,
        "tentable": false,
-       "flowMlPerSecond": 0
+       "flowMlPerSecond": 0,
+       "fiberAxis": ""
       },
       {
        "id": "fascia",
@@ -4998,7 +5000,8 @@
        "hollow": false,
        "critical": false,
        "tentable": false,
-       "flowMlPerSecond": 0
+       "flowMlPerSecond": 0,
+       "fiberAxis": "incision_line"
       },
       {
        "id": "muscle",
@@ -5010,7 +5013,8 @@
        "hollow": false,
        "critical": false,
        "tentable": false,
-       "flowMlPerSecond": 0.3
+       "flowMlPerSecond": 0.3,
+       "fiberAxis": ""
       },
       {
        "id": "peritoneum",
@@ -5022,7 +5026,8 @@
        "hollow": false,
        "critical": false,
        "tentable": true,
-       "flowMlPerSecond": 0
+       "flowMlPerSecond": 0,
+       "fiberAxis": ""
       },
       {
        "id": "appendix",
@@ -5034,7 +5039,8 @@
        "hollow": true,
        "critical": false,
        "tentable": false,
-       "flowMlPerSecond": 0
+       "flowMlPerSecond": 0,
+       "fiberAxis": ""
       },
       {
        "id": "mesoappendix",
@@ -5046,7 +5052,8 @@
        "hollow": false,
        "critical": false,
        "tentable": false,
-       "flowMlPerSecond": 2
+       "flowMlPerSecond": 2,
+       "fiberAxis": ""
       },
       {
        "id": "appendicular_artery",
@@ -5058,7 +5065,8 @@
        "hollow": false,
        "critical": false,
        "tentable": false,
-       "flowMlPerSecond": 2
+       "flowMlPerSecond": 2,
+       "fiberAxis": ""
       },
       {
        "id": "cecum",
@@ -5070,7 +5078,8 @@
        "hollow": true,
        "critical": true,
        "tentable": false,
-       "flowMlPerSecond": 0
+       "flowMlPerSecond": 0,
+       "fiberAxis": ""
       },
       {
        "id": "terminal_ileum",
@@ -5082,7 +5091,8 @@
        "hollow": true,
        "critical": true,
        "tentable": false,
-       "flowMlPerSecond": 0
+       "flowMlPerSecond": 0,
+       "fiberAxis": ""
       },
       {
        "id": "iliac_vessels",
@@ -5095,6 +5105,7 @@
        "critical": true,
        "tentable": false,
        "flowMlPerSecond": 8,
+       "fiberAxis": "",
        "structureIds": [
         "cardiovascular__common_iliac_artery_r",
         "cardiovascular__common_iliac_vein_r"
@@ -5111,6 +5122,7 @@
        "critical": true,
        "tentable": false,
        "flowMlPerSecond": 0,
+       "fiberAxis": "",
        "structureIds": [
         "right_ureter"
        ]
@@ -5206,12 +5218,6 @@
          "fact": "splitWidthMm",
          "op": "gte",
          "value": 15
-        },
-        {
-         "tissueId": "muscle",
-         "fact": "bladeUsed",
-         "op": "eq",
-         "value": 0
         }
        ]
       },
@@ -5246,12 +5252,6 @@
       {
        "id": "divide_mesoappendix",
        "predicates": [
-        {
-         "tissueId": "mesoappendix",
-         "fact": "clampCount",
-         "op": "gte",
-         "value": 2
-        },
         {
          "tissueId": "mesoappendix",
          "fact": "cutBetweenClamps",
@@ -5732,7 +5732,7 @@
     "dataSource": "demo",
     "consentStatus": "simulated",
     "consentReceipts": [],
-    "generatedAt": "2026-10-04T03:23:58.729Z",
+    "generatedAt": "2026-10-04T03:44:32.526Z",
     "dataAsOf": "2026-09-01T00:00:00Z",
     "patient": {
      "name": "Theo Abernathy",
@@ -6156,7 +6156,8 @@
        "hollow": false,
        "critical": false,
        "tentable": false,
-       "flowMlPerSecond": 0
+       "flowMlPerSecond": 0,
+       "fiberAxis": ""
       },
       {
        "id": "fat",
@@ -6168,7 +6169,8 @@
        "hollow": false,
        "critical": false,
        "tentable": false,
-       "flowMlPerSecond": 0
+       "flowMlPerSecond": 0,
+       "fiberAxis": ""
       },
       {
        "id": "fascia",
@@ -6180,7 +6182,8 @@
        "hollow": false,
        "critical": false,
        "tentable": false,
-       "flowMlPerSecond": 0
+       "flowMlPerSecond": 0,
+       "fiberAxis": "incision_line"
       },
       {
        "id": "muscle",
@@ -6192,7 +6195,8 @@
        "hollow": false,
        "critical": false,
        "tentable": false,
-       "flowMlPerSecond": 0.3
+       "flowMlPerSecond": 0.3,
+       "fiberAxis": ""
       },
       {
        "id": "peritoneum",
@@ -6204,7 +6208,8 @@
        "hollow": false,
        "critical": false,
        "tentable": true,
-       "flowMlPerSecond": 0
+       "flowMlPerSecond": 0,
+       "fiberAxis": ""
       },
       {
        "id": "appendix",
@@ -6216,7 +6221,8 @@
        "hollow": true,
        "critical": false,
        "tentable": false,
-       "flowMlPerSecond": 0
+       "flowMlPerSecond": 0,
+       "fiberAxis": ""
       },
       {
        "id": "mesoappendix",
@@ -6228,7 +6234,8 @@
        "hollow": false,
        "critical": false,
        "tentable": false,
-       "flowMlPerSecond": 2
+       "flowMlPerSecond": 2,
+       "fiberAxis": ""
       },
       {
        "id": "appendicular_artery",
@@ -6240,7 +6247,8 @@
        "hollow": false,
        "critical": false,
        "tentable": false,
-       "flowMlPerSecond": 2
+       "flowMlPerSecond": 2,
+       "fiberAxis": ""
       },
       {
        "id": "cecum",
@@ -6252,7 +6260,8 @@
        "hollow": true,
        "critical": true,
        "tentable": false,
-       "flowMlPerSecond": 0
+       "flowMlPerSecond": 0,
+       "fiberAxis": ""
       },
       {
        "id": "terminal_ileum",
@@ -6264,7 +6273,8 @@
        "hollow": true,
        "critical": true,
        "tentable": false,
-       "flowMlPerSecond": 0
+       "flowMlPerSecond": 0,
+       "fiberAxis": ""
       },
       {
        "id": "iliac_vessels",
@@ -6277,6 +6287,7 @@
        "critical": true,
        "tentable": false,
        "flowMlPerSecond": 8,
+       "fiberAxis": "",
        "structureIds": [
         "cardiovascular__common_iliac_artery_r",
         "cardiovascular__common_iliac_vein_r"
@@ -6293,6 +6304,7 @@
        "critical": true,
        "tentable": false,
        "flowMlPerSecond": 0,
+       "fiberAxis": "",
        "structureIds": [
         "right_ureter"
        ]
@@ -6388,12 +6400,6 @@
          "fact": "splitWidthMm",
          "op": "gte",
          "value": 15
-        },
-        {
-         "tissueId": "muscle",
-         "fact": "bladeUsed",
-         "op": "eq",
-         "value": 0
         }
        ]
       },
@@ -6428,12 +6434,6 @@
       {
        "id": "divide_mesoappendix",
        "predicates": [
-        {
-         "tissueId": "mesoappendix",
-         "fact": "clampCount",
-         "op": "gte",
-         "value": 2
-        },
         {
          "tissueId": "mesoappendix",
          "fact": "cutBetweenClamps",
@@ -6914,7 +6914,7 @@
     "dataSource": "demo",
     "consentStatus": "simulated",
     "consentReceipts": [],
-    "generatedAt": "2026-10-04T03:23:58.729Z",
+    "generatedAt": "2026-10-04T03:44:32.526Z",
     "dataAsOf": "2026-09-01T00:00:00Z",
     "patient": {
      "name": "Priya Ramaswamy",
@@ -7300,7 +7300,8 @@
        "hollow": false,
        "critical": false,
        "tentable": false,
-       "flowMlPerSecond": 0
+       "flowMlPerSecond": 0,
+       "fiberAxis": ""
       },
       {
        "id": "fat",
@@ -7312,7 +7313,8 @@
        "hollow": false,
        "critical": false,
        "tentable": false,
-       "flowMlPerSecond": 0
+       "flowMlPerSecond": 0,
+       "fiberAxis": ""
       },
       {
        "id": "fascia",
@@ -7324,7 +7326,8 @@
        "hollow": false,
        "critical": false,
        "tentable": false,
-       "flowMlPerSecond": 0
+       "flowMlPerSecond": 0,
+       "fiberAxis": "incision_line"
       },
       {
        "id": "muscle",
@@ -7336,7 +7339,8 @@
        "hollow": false,
        "critical": false,
        "tentable": false,
-       "flowMlPerSecond": 0.3
+       "flowMlPerSecond": 0.3,
+       "fiberAxis": ""
       },
       {
        "id": "peritoneum",
@@ -7348,7 +7352,8 @@
        "hollow": false,
        "critical": false,
        "tentable": true,
-       "flowMlPerSecond": 0
+       "flowMlPerSecond": 0,
+       "fiberAxis": ""
       },
       {
        "id": "appendix",
@@ -7360,7 +7365,8 @@
        "hollow": true,
        "critical": false,
        "tentable": false,
-       "flowMlPerSecond": 0
+       "flowMlPerSecond": 0,
+       "fiberAxis": ""
       },
       {
        "id": "mesoappendix",
@@ -7372,7 +7378,8 @@
        "hollow": false,
        "critical": false,
        "tentable": false,
-       "flowMlPerSecond": 2
+       "flowMlPerSecond": 2,
+       "fiberAxis": ""
       },
       {
        "id": "appendicular_artery",
@@ -7384,7 +7391,8 @@
        "hollow": false,
        "critical": false,
        "tentable": false,
-       "flowMlPerSecond": 2
+       "flowMlPerSecond": 2,
+       "fiberAxis": ""
       },
       {
        "id": "cecum",
@@ -7396,7 +7404,8 @@
        "hollow": true,
        "critical": true,
        "tentable": false,
-       "flowMlPerSecond": 0
+       "flowMlPerSecond": 0,
+       "fiberAxis": ""
       },
       {
        "id": "terminal_ileum",
@@ -7408,7 +7417,8 @@
        "hollow": true,
        "critical": true,
        "tentable": false,
-       "flowMlPerSecond": 0
+       "flowMlPerSecond": 0,
+       "fiberAxis": ""
       },
       {
        "id": "iliac_vessels",
@@ -7421,6 +7431,7 @@
        "critical": true,
        "tentable": false,
        "flowMlPerSecond": 8,
+       "fiberAxis": "",
        "structureIds": [
         "cardiovascular__common_iliac_artery_r",
         "cardiovascular__common_iliac_vein_r"
@@ -7437,6 +7448,7 @@
        "critical": true,
        "tentable": false,
        "flowMlPerSecond": 0,
+       "fiberAxis": "",
        "structureIds": [
         "right_ureter"
        ]
@@ -7532,12 +7544,6 @@
          "fact": "splitWidthMm",
          "op": "gte",
          "value": 15
-        },
-        {
-         "tissueId": "muscle",
-         "fact": "bladeUsed",
-         "op": "eq",
-         "value": 0
         }
        ]
       },
@@ -7572,12 +7578,6 @@
       {
        "id": "divide_mesoappendix",
        "predicates": [
-        {
-         "tissueId": "mesoappendix",
-         "fact": "clampCount",
-         "op": "gte",
-         "value": 2
-        },
         {
          "tissueId": "mesoappendix",
          "fact": "cutBetweenClamps",
@@ -8058,7 +8058,7 @@
     "dataSource": "demo",
     "consentStatus": "simulated",
     "consentReceipts": [],
-    "generatedAt": "2026-10-04T03:23:58.729Z",
+    "generatedAt": "2026-10-04T03:44:32.526Z",
     "dataAsOf": "2026-09-01T00:00:00Z",
     "patient": {
      "name": "Jonah Okoye",
@@ -8735,7 +8735,7 @@
     "dataSource": "demo",
     "consentStatus": "simulated",
     "consentReceipts": [],
-    "generatedAt": "2026-10-04T03:23:58.729Z",
+    "generatedAt": "2026-10-04T03:44:32.527Z",
     "dataAsOf": "2026-09-01T00:00:00Z",
     "patient": {
      "name": "Dolores Marchetti",
@@ -9170,7 +9170,7 @@
     "dataSource": "",
     "consentStatus": "",
     "consentReceipts": [],
-    "generatedAt": "2026-10-04T03:23:58.726Z",
+    "generatedAt": "2026-10-04T03:44:32.523Z",
     "dataAsOf": "",
     "patient": {
      "name": "",
@@ -9244,7 +9244,7 @@
     "dataSource": "",
     "consentStatus": "",
     "consentReceipts": [],
-    "generatedAt": "2026-10-04T03:23:58.726Z",
+    "generatedAt": "2026-10-04T03:44:32.524Z",
     "dataAsOf": "",
     "patient": {
      "name": "",
@@ -9799,7 +9799,7 @@
     "consentReceipts": [
      "rcpt_demo_consent_partial"
     ],
-    "generatedAt": "2026-10-04T03:23:58.729Z",
+    "generatedAt": "2026-10-04T03:44:32.527Z",
     "dataAsOf": "2026-09-01T00:00:00Z",
     "patient": {
      "name": "",
@@ -10629,7 +10629,7 @@
     "dataSource": "demo",
     "consentStatus": "simulated",
     "consentReceipts": [],
-    "generatedAt": "2026-10-04T03:23:58.730Z",
+    "generatedAt": "2026-10-04T03:44:32.527Z",
     "dataAsOf": "2026-09-01T00:00:00Z",
     "patient": {
      "name": "Ingrid Solano",
@@ -11339,7 +11339,7 @@
     "dataSource": "demo",
     "consentStatus": "simulated",
     "consentReceipts": [],
-    "generatedAt": "2026-10-04T03:23:58.729Z",
+    "generatedAt": "2026-10-04T03:44:32.526Z",
     "dataAsOf": "2026-09-01T00:00:00Z",
     "patient": {
      "name": "Priya Ramaswamy",

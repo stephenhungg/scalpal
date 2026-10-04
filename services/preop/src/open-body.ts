@@ -13,6 +13,9 @@ export interface TissueDefinition {
   id: string; layer: string; order: number; cuttable: boolean; splittable: boolean;
   perfused: boolean; hollow: boolean; critical: boolean; tentable: boolean;
   flowMlPerSecond: number;
+  // Reference axis the tissue's fibers run along ('' = no fiber direction). 'incision_line' means the
+  // registered incision reference line, which is the axis Unity measures cut angleDegrees against.
+  fiberAxis: string;
   structureIds?: string[]; // Explicit source-atlas binding; simulation identity remains id.
 }
 export interface BodyPredicate { tissueId: string; fact: string; op: string; value: number; }
@@ -27,10 +30,12 @@ export interface BodyRecord { action: BodyAction; outcomes: string[]; }
 export const TOOL_VERBS: Record<string, string[]> = {
   scalpel: ['cut'], metzenbaum_scissors: ['cut'], skin_marker: ['mark'],
   toothed_forceps: ['grasp','retract'], retractor: ['retract'], babcock: ['grasp','retract'],
-  atraumatic_grasper: ['grasp','retract'], hemostat: ['clamp'], right_angle_clamp: ['clamp'],
+  atraumatic_grasper: ['grasp','retract'], hemostat: ['clamp','release'], right_angle_clamp: ['clamp','release'],
   suture_tie: ['tie','place'], hook_cautery: ['seal'], vessel_sealer: ['seal'],
   suction_irrigator: ['suction','inspect'], decision: ['decide'], assistant: ['close','tick','fluid'],
 };
+// Assistant clock ticks and measured fluid snapshots keep the body current; they are not learner actions.
+export function isBodyTelemetry(e: BodyAction): boolean { return e.instrumentId==='assistant'&&(e.verb==='tick'||e.verb==='fluid'); }
 export function validBodyAction(e: BodyAction): boolean {
   return !!e && [e.actionId,e.instrumentId,e.instrumentInstanceId,e.secondaryInstanceId,e.verb,e.tissueId,e.layer,e.coordinateFrame,e.choice].every(v=>typeof v==='string') &&
     !!e.actionId && e.coordinateFrame==='registered_torso_m' && typeof e.registered==='boolean' && !!e.position &&
@@ -38,12 +43,24 @@ export function validBodyAction(e: BodyAction): boolean {
     [e.timeMs,e.speedMps,e.forceProxy,e.distanceMm,e.lengthMm,e.angleDegrees,e.depthMm,e.durationMs,e.separationMm,e.bloodLostMl,e.poolMl,e.flowMlPerSecond].every(v=>Number.isFinite(v)&&v>=0) &&
     !!TOOL_VERBS[e.instrumentId]?.includes(e.verb);
 }
+// Clamps/ties control an injury at or proximal to it (smaller distance from the base); a seal
+// controls only its own point. Unmeasured occluders cannot control a measured injury.
+export const HEMOSTASIS_TOLERANCE_MM = 3;
+// One rough-handling outcome per tool instance and tissue in this window, however often a held tool reports.
+export const ROUGH_HANDLING_COOLDOWN_MS = 3000;
+interface Injury { positionMm: number; measured: boolean; }
 export class BodyState {
   readonly facts = new Map<string, number>();
   readonly log: BodyRecord[] = [];
   private seen = new Set<string>();
   private clamps = new Map<string, Map<string,number>>();
   private ties = new Map<string, number[]>();
+  private looseClamps = new Map<string, Set<string>>(); // Clamp instances without a longitudinal measurement.
+  private looseControls = new Map<string, number>(); // Unmeasured ties and seals.
+  private seals = new Map<string, number[]>();
+  private injuries = new Map<string, Injury[]>();
+  private roughAt = new Map<string, number>();
+  private decisions = new Map<string, string>();
   private clock = -1;
   constructor(readonly tissues: TissueDefinition[]) { for(const t of tissues)if(t.splittable)this.set(t.id,'bladeUsed',0); }
   get(tissueId: string, fact: string) { return this.facts.get(`${tissueId}:${fact}`) ?? 0; }
@@ -90,7 +107,7 @@ export class BodyState {
         if(this.get(t.id,'markLengthMm')>0)put('cutCoverage',Math.min(1,this.get(t.id,'cutLengthMm')/this.get(t.id,'markLengthMm')));
         put('cutErrorMm',e.distanceMm);put('cutAngleDegrees',e.angleDegrees);put('cutDepthMm',e.depthMm);
         if(t.splittable) {put('bladeUsed');outcomes.push('muscle_cut');}
-        if(e.angleDegrees>25)outcomes.push('across_fibers');
+        if(t.fiberAxis&&e.angleDegrees>25)outcomes.push('across_fibers');
         if(t.tentable){put('tentedBeforeCut',this.get(t.id,'tented'));if(!this.get(t.id,'tented'))outcomes.push('untented_cut');}
         const positions=[...clamp.values()].sort((a,b)=>a-b);
         const measured=e.choice!=='longitudinal_unmeasured';
@@ -99,7 +116,8 @@ export class BodyState {
         const proximal=measured?ties.filter(p=>p<e.distanceMm):[];
         put('cutBetweenTieAndClamp',proximal.length>0&&positions.some(p=>p>e.distanceMm)?1:0);
         put('tiedBothSides',ties.some(p=>p<e.distanceMm)&&ties.some(p=>p>e.distanceMm)?1:0);
-        if(t.perfused&&!between&&proximal.length===0&&!this.get(t.id,'sealed')) {put('bleeding');outcomes.push('cut_unsecured');}
+        if(t.perfused){const injury={positionMm:e.distanceMm,measured};this.injuries.set(t.id,[...this.injuries.get(t.id)??[],injury]);
+          this.refreshBleeding(t);if(!this.controlled(t.id,injury))outcomes.push('cut_unsecured');}
         if(t.hollow){
           put('removed');
           const secured=proximal.length>0;
@@ -108,32 +126,62 @@ export class BodyState {
         }
         if(t.critical)outcomes.push('critical_injury');
         break;
-      case 'clamp':
+      case 'clamp': {
         if(!e.instrumentInstanceId){outcomes.push('missing_instance');break;}
-        if(e.choice==='longitudinal_unmeasured'){put('bleeding',0);break;}
-        clamp.set(e.instrumentInstanceId,e.distanceMm);this.clamps.set(t.id,clamp);put('clampCount',clamp.size);put('bleeding',0);
-        if(e.instrumentId==='right_angle_clamp')put('crushed');break;
+        const loose=this.looseClamps.get(t.id)??new Set<string>();
+        if(e.choice==='longitudinal_unmeasured'){clamp.delete(e.instrumentInstanceId);loose.add(e.instrumentInstanceId);this.looseClamps.set(t.id,loose);}
+        else {loose.delete(e.instrumentInstanceId);clamp.set(e.instrumentInstanceId,e.distanceMm);this.clamps.set(t.id,clamp);if(e.instrumentId==='right_angle_clamp')put('crushed');}
+        put('clampCount',clamp.size);this.refreshBleeding(t);break;
+      }
+      case 'release': {
+        const loose=this.looseClamps.get(t.id);
+        const removed=clamp.delete(e.instrumentInstanceId)||!!loose?.delete(e.instrumentInstanceId);
+        if(!removed){outcomes.push('not_clamped');break;}
+        const before=this.get(t.id,'bleeding');put('clampCount',clamp.size);this.refreshBleeding(t);
+        if(!before&&this.get(t.id,'bleeding'))outcomes.push('rebleed');break;
+      }
       case 'tie':
-        if(e.choice==='longitudinal_unmeasured'){put('bleeding',0);break;}
+        if(e.choice==='longitudinal_unmeasured'){this.looseControls.set(t.id,(this.looseControls.get(t.id)??0)+1);put('leaking',0);this.refreshBleeding(t);break;}
         if(!ties.some(p=>Math.abs(p-e.distanceMm)<1))ties.push(e.distanceMm);
         this.ties.set(t.id,ties);put('tieCount',ties.length);
         if(this.get(t.id,'divided'))put('tiedBothSides',ties.some(p=>p<this.get(t.id,'cutPositionMm'))&&ties.some(p=>p>this.get(t.id,'cutPositionMm'))?1:0);
-        put('tieDistanceMm',Math.min(...ties));put('bleeding',0);put('leaking',0);break;
-      case 'seal': put('sealed');put('bleeding',0);break;
+        put('tieDistanceMm',Math.min(...ties));put('leaking',0);this.refreshBleeding(t);break;
+      case 'seal':
+        put('sealed');
+        if(e.choice==='longitudinal_unmeasured')this.looseControls.set(t.id,(this.looseControls.get(t.id)??0)+1);
+        else this.seals.set(t.id,[...this.seals.get(t.id)??[],e.distanceMm]);
+        this.refreshBleeding(t);break;
       case 'grasp': case 'retract':
         put('liftMm',e.depthMm);if(t.tentable)put('tented',e.depthMm>=8?1:0);
         if(e.depthMm>=15)put('delivered');
         if(t.splittable&&e.instrumentInstanceId&&e.secondaryInstanceId&&e.instrumentInstanceId!==e.secondaryInstanceId&&e.separationMm>=15&&e.angleDegrees<=25){put('opened');put('splitWidthMm',e.separationMm);}
-        if(e.speedMps>.1||e.forceProxy>1)outcomes.push('rough_handling');break;
+        if(e.speedMps>.1||e.forceProxy>1){const key=`${e.instrumentInstanceId}|${t.id}`,last=this.roughAt.get(key);
+          if(last===undefined||e.timeMs-last>=ROUGH_HANDLING_COOLDOWN_MS){this.roughAt.set(key,e.timeMs);outcomes.push('rough_handling');}}
+        break;
       case 'suction':if(!this.tissues.some(t=>this.get(t.id,'fluidDriven')>0))this.set('','poolMl',Math.max(0,this.get('','poolMl')-e.durationMs*.005));break;
       case 'inspect':put('inspectionMs',Math.max(this.get(t.id,'inspectionMs'),e.durationMs));break;
-      case 'decide':put(`decision_${e.choice}`);break;
+      case 'decide': {
+        // The latest answer wins; an earlier choice no longer satisfies a decision predicate.
+        const previous=this.decisions.get(t.id);if(previous!==undefined&&previous!==e.choice)put(`decision_${previous}`,0);
+        this.decisions.set(t.id,e.choice);put(`decision_${e.choice}`);break;
+      }
       case 'close':put('closed');break;
       case 'place':put('placed');break;
     }
     this.set('','activeBleeds',this.tissues.filter(t=>this.get(t.id,'bleeding')>0).length);
     // Snapshot prevents callers from rewriting history after submission.
     const record={action:{...e,position:{...e.position}},outcomes};this.log.push(record);return record;
+  }
+  private controlled(tissueId: string, injury: Injury): boolean {
+    const clamps=[...this.clamps.get(tissueId)?.values()??[]], ties=this.ties.get(tissueId)??[], seals=this.seals.get(tissueId)??[];
+    // Without injury geometry, any control on the structure is the best available evidence.
+    if(!injury.measured)return clamps.length+ties.length+seals.length+(this.looseClamps.get(tissueId)?.size??0)+(this.looseControls.get(tissueId)??0)>0;
+    return [...clamps,...ties].some(p=>p<=injury.positionMm+HEMOSTASIS_TOLERANCE_MM)||seals.some(p=>Math.abs(p-injury.positionMm)<=HEMOSTASIS_TOLERANCE_MM);
+  }
+  private refreshBleeding(t: TissueDefinition) {
+    if(!t.perfused)return;
+    const open=(this.injuries.get(t.id)??[]).filter(i=>!this.controlled(t.id,i)).length;
+    this.set(t.id,'openInjuries',open);this.set(t.id,'bleeding',open>0?1:0);
   }
 }
 export function bodyAction(verb:string,tissueId:string,values:Partial<BodyAction>={}):BodyAction {

@@ -18,15 +18,15 @@ namespace Scalpal.Surgery
         {
             public InstrumentBehaviour tool;
             public Transform bladeStart, bladeEnd;
-            public string instance, tissueId = "";
+            public string instance, tissueId = "", clampedTissueId = "";
             public SurgeryTissueTarget target;
             public SurgeryInstrumentLatch latch;
             public OrganMobilization mobile;
             public readonly OpenSurgeryStroke stroke = new OpenSurgeryStroke();
             public readonly List<Vector3> marker = new List<Vector3>();
-            public Vector3 previous, anchor, contact, rawSurface, handleOffset;
+            public Vector3 previous, anchor, contact, rawSurface, handleOffset, speedOrigin;
             public bool active, previousValid, committed, grasping, ownsHandle;
-            public float strokeSent, dwell, sinceSent, speed;
+            public float strokeSent, dwell, sinceSent, speed, speedClock;
             public BodyAction lastTentMeasurement;
         }
         static readonly string[] WallIds = { "skin", "fat", "fascia", "muscle", "peritoneum" };
@@ -123,7 +123,7 @@ namespace Scalpal.Surgery
         }
         public void ResetInteractions()
         {
-            ClearTransient(); foreach (var state in states) if (state.latch) state.latch.Clear();
+            ClearTransient(); foreach (var state in states) { if (state.latch) state.latch.Clear(); state.clampedTissueId = ""; }
             foreach (var group in mobility) group.RestoreRest(); // A retry starts from the authored anatomy.
             pendingTentReleases.Clear(); // A previous attempt's measurements cannot enter its replacement.
             attemptBody = exercise ? exercise.Body : null;
@@ -148,13 +148,17 @@ namespace Scalpal.Surgery
             Matrix4x4 torsoFrame = torso.localToWorldMatrix, woundFrame = wound.localToWorldMatrix;
             bool frameChanged = frameKnown && (torsoFrame != lastTorsoFrame || woundFrame != lastWoundFrame);
             lastTorsoFrame = torsoFrame; lastWoundFrame = woundFrame; frameKnown = true;
-            if (frameChanged) ClearTransient();
+            // A stroke measured before a fit correction is still one real stroke; commit it, then restart.
+            if (frameChanged) { foreach (var state in states) FlushStroke(state); ClearTransient(); }
             wasReady = true; activeSeconds += seconds; tickClock += seconds;
             // Release invalid grasps before processing any blade, regardless of tool array order.
             foreach (var state in states)
                 if (state.grasping && (!ValidTool(state) || !OpenSurgeryStroke.Finite(state.tool.actionPoint.position)
                     || (state.previousValid && Vector3.Distance(state.tool.actionPoint.position, state.previous) > .05f))) Release(state);
             DrainTentReleases();
+            // A placed clamp that was picked up again or put away no longer occludes anything.
+            foreach (var state in states)
+                if (state.clampedTissueId != "" && (!state.latch || !state.latch.Attached)) ReleaseClamp(state);
             // A fit correction is not tool travel. The next stable sample starts new anchors and
             // stroke history with zero speed; the registered active-time clock still advances.
             if (!frameChanged)
@@ -164,9 +168,11 @@ namespace Scalpal.Surgery
                 // A fit correction is not organ motion, so a correction frame never settles a group.
                 foreach (var group in mobility) group.Settle(seconds, wound);
             }
-            if (tickClock >= .25f)
+            // Blood loss accrues during stalls through a 1 Hz tick, only while a bleed is active.
+            if (exercise.Body.Get("", "activeBleeds") <= 0) tickClock = 0;
+            else if (tickClock >= 1)
             {
-                tickClock %= .25f;
+                tickClock %= 1;
                 var tissue = FirstTissue();
                 if (tissue != null) SubmitMeasured(Action("assistant", "clock", "tick", tissue, wound.position), null);
             }
@@ -185,7 +191,7 @@ namespace Scalpal.Surgery
             Vector3 point = state.tool.actionPoint.position;
             if (!OpenSurgeryStroke.Finite(point)) { Release(state); return; }
             state.speed = state.previousValid ? Vector3.Distance(point, state.previous) / seconds : 0;
-            if (state.previousValid && Vector3.Distance(point, state.previous) > .05f) { Release(state); return; }
+            if (state.previousValid && Vector3.Distance(point, state.previous) > .05f) { FlushStroke(state); Release(state); return; }
             state.previous = point; state.previousValid = true; state.active = true;
             string verb = BodyState.ToolVerbs[state.tool.instrumentId][0];
             if (!state.grasping)
@@ -212,8 +218,9 @@ namespace Scalpal.Surgery
                 int layer = Array.IndexOf(WallIds, tissue.id);
                 if (state.stroke.Sample(local, seconds, layer >= 0 ? WallDepths[layer] : local.z))
                 {
+                    // One committed action per stroke (per layer): FlushStroke runs when contact ends,
+                    // so guardrails see the finished stroke once instead of every millimetre.
                     if (verb == "mark" && (state.marker.Count == 0 || Vector3.Distance(state.marker[state.marker.Count - 1], local) > .001f)) state.marker.Add(local);
-                    if (state.stroke.PathLengthMm >= 1 && (state.target ? state.stroke.PathLengthMm : state.stroke.LengthMm) - state.strokeSent >= (verb == "mark" ? 5 : 1)) FlushStroke(state);
                 }
                 return;
             }
@@ -231,12 +238,21 @@ namespace Scalpal.Surgery
             }
             if (state.committed) return;
             var action = Action(state.tool.instrumentId, state.instance, verb, tissue, point);
-            if ((verb == "clamp" || verb == "tie") && state.target && !state.target.DistanceFromBase(point, out action.distanceMm))
-                action.choice = "longitudinal_unmeasured";
+            // Hemostasis is positional, so a seal's place along the structure is measured like a clamp's.
+            if ((verb == "clamp" || verb == "tie" || verb == "seal") && state.target)
+            {
+                bool measured = state.target.DistanceFromBase(point, out float along); action.distanceMm = along;
+                if (!measured) action.choice = "longitudinal_unmeasured";
+            }
             if (SubmitMeasured(action, state.tool))
             {
                 state.committed = true;
-                if (verb == "clamp" && EffectApplied(action.actionId)) Latch(state);
+                if (verb == "clamp" && EffectApplied(action.actionId))
+                {
+                    // One physical clamp: applying it to another tissue first takes it off the previous one.
+                    if (state.clampedTissueId != "" && state.clampedTissueId != state.tissueId) ReleaseClamp(state);
+                    Latch(state); state.clampedTissueId = state.tissueId;
+                }
             }
         }
 
@@ -251,7 +267,7 @@ namespace Scalpal.Surgery
             action.lengthMm = state.target ? state.stroke.PathLengthMm : state.stroke.LengthMm; action.distanceMm = state.stroke.ErrorMm;
             action.angleDegrees = state.stroke.AngleDegrees; action.depthMm = state.stroke.DepthMm;
             action.durationMs = state.stroke.DurationMs; action.speedMps = state.speed;
-            if (state.target && !state.target.DistanceFromBase(point, out action.distanceMm)) action.choice = "longitudinal_unmeasured";
+            if (state.target) { bool measured = state.target.DistanceFromBase(point, out float along); action.distanceMm = along; if (!measured) action.choice = "longitudinal_unmeasured"; }
             if (verb == "mark")
             {
                 Vector3 midpoint = (state.stroke.Start + state.stroke.End) * .5f;
@@ -284,7 +300,7 @@ namespace Scalpal.Surgery
             }
             if (!state.grasping)
             {
-                state.grasping = true; state.anchor = point;
+                state.grasping = true; state.anchor = point; state.speedOrigin = point; state.speedClock = 0;
                 if (state.target)
                 {
                     var group = mobility.Find(candidate => !candidate.Held && candidate.Contains(state.target.transform));
@@ -320,12 +336,15 @@ namespace Scalpal.Surgery
                 }
                 else measuredPoint = state.target.transform.TransformPoint(state.rawSurface);
             }
+            state.speedClock += seconds;
             if (state.sinceSent < .1f) return;
             var action = Action(state.tool.instrumentId, state.instance, BodyState.ToolVerbs[state.tool.instrumentId][0], tissue, measuredPoint);
-            action.speedMps = state.speed;
+            // Net hand travel over at least 100 ms, so per-frame tracking jitter cancels instead of reading as speed.
+            action.speedMps = Vector3.Distance(point, state.speedOrigin) / Mathf.Max(state.speedClock, .1f);
+            state.speedOrigin = point; state.speedClock = 0;
             action.depthMm = tissue.tentable ? Mathf.Max(0, -Vector3.Dot(measuredPoint - state.anchor, wound.forward)) * 1000
                 : Mathf.Max(0, -wound.InverseTransformPoint(measuredPoint).z) * 1000;
-            if (tissue.tentable) action.depthMm = Mathf.Max(action.depthMm, CurrentTentLift(tissue.id));
+            if (tissue.tentable) action.depthMm = Math.Max(action.depthMm, CurrentTentLift(tissue.id));
             if (tissue.splittable)
             {
                 foreach (var other in states)
@@ -345,6 +364,13 @@ namespace Scalpal.Surgery
                 if (tissue.splittable && action.separationMm >= 15 && EffectApplied(action.actionId)) Latch(state);
             }
             state.sinceSent = 0;
+        }
+        void ReleaseClamp(ToolState state)
+        {
+            var tissue = Definition(state.clampedTissueId); state.clampedTissueId = "";
+            if (tissue == null || !state.tool) return;
+            Vector3 point = state.tool.actionPoint && OpenSurgeryStroke.Finite(state.tool.actionPoint.position) ? state.tool.actionPoint.position : wound.position;
+            SubmitMeasured(Action(state.tool.instrumentId, state.instance, "release", tissue, point), state.tool);
         }
         bool EffectApplied(string actionId)
         {
@@ -448,6 +474,7 @@ namespace Scalpal.Surgery
         {
             if (!Ready || !BodyState.ValidBodyAction(action) || !action.registered || action.timeMs > activeSeconds * 1000 + .01)
             { LastRejection = "Practice unavailable or invalid measured body action."; return false; }
+            action.Quantize(); // Event boundary: the body applies exactly the rounded values the coach receives.
             if (action.verb == "cut") DrainTentReleases();
             int count = exercise.Body.Log.Count;
             if (!exercise.Submit(CaseEvent.Surgery(action), out _, out var reason)) { LastRejection = reason; return false; }

@@ -56,3 +56,20 @@ describe("salient state card", () => {
     expect(renderContext(s.snapshot())).toMatch(/mark length is 30 mm, needs 50 to 80 mm/);
   });
 });
+
+describe("uncontrolled bleeding", () => {
+  it("warns again once a bleed stays active for 30 s of headset time, and only once", () => {
+    const { s } = session();
+    for (const step of ["incise_skin", "open_fascia"]) for (const evidence of idealBodyActions(step)) s.receive({ type: "surgery", evidence }, { eventId: evidence.actionId });
+    const cut = s.receive({ type: "surgery", evidence: bodyAction("cut", "muscle", { actionId: "cut-muscle", lengthMm: 20, timeMs: 100000 }) }, { eventId: "cut-muscle" });
+    expect(cut.alerts.some((a) => a.kind === "bleeding")).toBe(true);
+    const tick = (t: number) => s.receive({ type: "surgery", evidence: bodyAction("tick", "skin", { instrumentId: "assistant", actionId: `tick-${t}`, timeMs: t }) }, { eventId: `tick-${t}` });
+    expect(tick(120000).alerts.filter((a) => a.reflexKey.startsWith("bleeding_uncontrolled"))).toEqual([]);
+    const late = tick(131000).alerts.filter((a) => a.reflexKey === "bleeding_uncontrolled.muscle");
+    expect(late).toHaveLength(1);
+    expect(late[0]!.tier).toBe("warning");
+    expect(tick(140000).alerts.filter((a) => a.reflexKey.startsWith("bleeding_uncontrolled"))).toEqual([]);
+    expect(s.snapshot().timeline.at(-1)?.text ?? "").not.toBe("");
+    expect(s.snapshot().timeline.map((t) => t.text).join(" ")).toMatch(/uncontrolled for 31 s/);
+  });
+});

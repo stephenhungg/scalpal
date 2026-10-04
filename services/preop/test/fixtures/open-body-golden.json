@@ -1,0 +1,1775 @@
+{
+ "description": "Shared golden open-body event log. Replayed through services/preop/src/open-body.ts (test/open-body-golden.test.ts) and apps/quest BodyState/CaseRunner (OpenBodyValidation.VerifyGoldenLog); both must reproduce these exact facts, outcomes, milestones and guardrails. Measurements are already rounded as at the Unity event boundary (BodyAction.Quantize).",
+ "procedureId": "open_appendectomy",
+ "actions": [
+  {
+   "actionId": "golden-1",
+   "instrumentId": "skin_marker",
+   "instrumentInstanceId": "tool-1",
+   "secondaryInstanceId": "",
+   "verb": "mark",
+   "tissueId": "skin",
+   "layer": "skin",
+   "coordinateFrame": "registered_torso_m",
+   "timeMs": 1000,
+   "position": {
+    "x": 0.0123,
+    "y": -0.0045,
+    "z": 0.2
+   },
+   "registered": true,
+   "speedMps": 0,
+   "forceProxy": 0,
+   "distanceMm": 3,
+   "lengthMm": 60,
+   "angleDegrees": 4,
+   "depthMm": 0,
+   "durationMs": 0,
+   "separationMm": 0,
+   "choice": "",
+   "bloodLostMl": 0,
+   "poolMl": 0,
+   "flowMlPerSecond": 0
+  },
+  {
+   "actionId": "golden-2",
+   "instrumentId": "scalpel",
+   "instrumentInstanceId": "tool-1",
+   "secondaryInstanceId": "",
+   "verb": "cut",
+   "tissueId": "skin",
+   "layer": "skin",
+   "coordinateFrame": "registered_torso_m",
+   "timeMs": 4000,
+   "position": {
+    "x": 0.0123,
+    "y": -0.0045,
+    "z": 0.2
+   },
+   "registered": true,
+   "speedMps": 0.027,
+   "forceProxy": 0,
+   "distanceMm": 2,
+   "lengthMm": 48,
+   "angleDegrees": 2,
+   "depthMm": 3,
+   "durationMs": 1800,
+   "separationMm": 0,
+   "choice": "",
+   "bloodLostMl": 0,
+   "poolMl": 0,
+   "flowMlPerSecond": 0
+  },
+  {
+   "actionId": "golden-3",
+   "instrumentId": "scalpel",
+   "instrumentInstanceId": "tool-1",
+   "secondaryInstanceId": "",
+   "verb": "cut",
+   "tissueId": "fat",
+   "layer": "fat",
+   "coordinateFrame": "registered_torso_m",
+   "timeMs": 6000,
+   "position": {
+    "x": 0.0123,
+    "y": -0.0045,
+    "z": 0.2
+   },
+   "registered": true,
+   "speedMps": 0,
+   "forceProxy": 0,
+   "distanceMm": 0,
+   "lengthMm": 50,
+   "angleDegrees": 0,
+   "depthMm": 9,
+   "durationMs": 0,
+   "separationMm": 0,
+   "choice": "",
+   "bloodLostMl": 0,
+   "poolMl": 0,
+   "flowMlPerSecond": 0
+  },
+  {
+   "actionId": "golden-4",
+   "instrumentId": "metzenbaum_scissors",
+   "instrumentInstanceId": "tool-1",
+   "secondaryInstanceId": "",
+   "verb": "cut",
+   "tissueId": "fascia",
+   "layer": "fascia",
+   "coordinateFrame": "registered_torso_m",
+   "timeMs": 9000,
+   "position": {
+    "x": 0.0123,
+    "y": -0.0045,
+    "z": 0.2
+   },
+   "registered": true,
+   "speedMps": 0,
+   "forceProxy": 0,
+   "distanceMm": 0,
+   "lengthMm": 40,
+   "angleDegrees": 31,
+   "depthMm": 0,
+   "durationMs": 0,
+   "separationMm": 0,
+   "choice": "",
+   "bloodLostMl": 0,
+   "poolMl": 0,
+   "flowMlPerSecond": 0
+  },
+  {
+   "actionId": "golden-5",
+   "instrumentId": "scalpel",
+   "instrumentInstanceId": "tool-1",
+   "secondaryInstanceId": "",
+   "verb": "cut",
+   "tissueId": "muscle",
+   "layer": "muscle",
+   "coordinateFrame": "registered_torso_m",
+   "timeMs": 12000,
+   "position": {
+    "x": 0.0123,
+    "y": -0.0045,
+    "z": 0.2
+   },
+   "registered": true,
+   "speedMps": 0,
+   "forceProxy": 0,
+   "distanceMm": 0,
+   "lengthMm": 6,
+   "angleDegrees": 0,
+   "depthMm": 0,
+   "durationMs": 0,
+   "separationMm": 0,
+   "choice": "",
+   "bloodLostMl": 0,
+   "poolMl": 0,
+   "flowMlPerSecond": 0
+  },
+  {
+   "actionId": "golden-6",
+   "instrumentId": "assistant",
+   "instrumentInstanceId": "tool-1",
+   "secondaryInstanceId": "",
+   "verb": "tick",
+   "tissueId": "skin",
+   "layer": "skin",
+   "coordinateFrame": "registered_torso_m",
+   "timeMs": 13000,
+   "position": {
+    "x": 0.0123,
+    "y": -0.0045,
+    "z": 0.2
+   },
+   "registered": true,
+   "speedMps": 0,
+   "forceProxy": 0,
+   "distanceMm": 0,
+   "lengthMm": 0,
+   "angleDegrees": 0,
+   "depthMm": 0,
+   "durationMs": 0,
+   "separationMm": 0,
+   "choice": "",
+   "bloodLostMl": 0,
+   "poolMl": 0,
+   "flowMlPerSecond": 0
+  },
+  {
+   "actionId": "golden-7",
+   "instrumentId": "hook_cautery",
+   "instrumentInstanceId": "tool-1",
+   "secondaryInstanceId": "",
+   "verb": "seal",
+   "tissueId": "muscle",
+   "layer": "muscle",
+   "coordinateFrame": "registered_torso_m",
+   "timeMs": 14000,
+   "position": {
+    "x": 0.0123,
+    "y": -0.0045,
+    "z": 0.2
+   },
+   "registered": true,
+   "speedMps": 0,
+   "forceProxy": 0,
+   "distanceMm": 0,
+   "lengthMm": 0,
+   "angleDegrees": 0,
+   "depthMm": 0,
+   "durationMs": 0,
+   "separationMm": 0,
+   "choice": "",
+   "bloodLostMl": 0,
+   "poolMl": 0,
+   "flowMlPerSecond": 0
+  },
+  {
+   "actionId": "golden-8",
+   "instrumentId": "retractor",
+   "instrumentInstanceId": "retractor-1",
+   "secondaryInstanceId": "retractor-2",
+   "verb": "retract",
+   "tissueId": "muscle",
+   "layer": "muscle",
+   "coordinateFrame": "registered_torso_m",
+   "timeMs": 16000,
+   "position": {
+    "x": 0.0123,
+    "y": -0.0045,
+    "z": 0.2
+   },
+   "registered": true,
+   "speedMps": 0,
+   "forceProxy": 0,
+   "distanceMm": 0,
+   "lengthMm": 0,
+   "angleDegrees": 7,
+   "depthMm": 0,
+   "durationMs": 0,
+   "separationMm": 18,
+   "choice": "",
+   "bloodLostMl": 0,
+   "poolMl": 0,
+   "flowMlPerSecond": 0
+  },
+  {
+   "actionId": "golden-9",
+   "instrumentId": "toothed_forceps",
+   "instrumentInstanceId": "tool-1",
+   "secondaryInstanceId": "",
+   "verb": "grasp",
+   "tissueId": "peritoneum",
+   "layer": "peritoneum",
+   "coordinateFrame": "registered_torso_m",
+   "timeMs": 18000,
+   "position": {
+    "x": 0.0123,
+    "y": -0.0045,
+    "z": 0.2
+   },
+   "registered": true,
+   "speedMps": 0,
+   "forceProxy": 0,
+   "distanceMm": 0,
+   "lengthMm": 0,
+   "angleDegrees": 0,
+   "depthMm": 10,
+   "durationMs": 0,
+   "separationMm": 0,
+   "choice": "",
+   "bloodLostMl": 0,
+   "poolMl": 0,
+   "flowMlPerSecond": 0
+  },
+  {
+   "actionId": "golden-10",
+   "instrumentId": "scalpel",
+   "instrumentInstanceId": "tool-1",
+   "secondaryInstanceId": "",
+   "verb": "cut",
+   "tissueId": "peritoneum",
+   "layer": "peritoneum",
+   "coordinateFrame": "registered_torso_m",
+   "timeMs": 19000,
+   "position": {
+    "x": 0.0123,
+    "y": -0.0045,
+    "z": 0.2
+   },
+   "registered": true,
+   "speedMps": 0,
+   "forceProxy": 0,
+   "distanceMm": 0,
+   "lengthMm": 4,
+   "angleDegrees": 0,
+   "depthMm": 0,
+   "durationMs": 0,
+   "separationMm": 0,
+   "choice": "",
+   "bloodLostMl": 0,
+   "poolMl": 0,
+   "flowMlPerSecond": 0
+  },
+  {
+   "actionId": "golden-11",
+   "instrumentId": "babcock",
+   "instrumentInstanceId": "babcock-1",
+   "secondaryInstanceId": "",
+   "verb": "grasp",
+   "tissueId": "appendix",
+   "layer": "appendix",
+   "coordinateFrame": "registered_torso_m",
+   "timeMs": 21000,
+   "position": {
+    "x": 0.0123,
+    "y": -0.0045,
+    "z": 0.2
+   },
+   "registered": true,
+   "speedMps": 0.31,
+   "forceProxy": 0,
+   "distanceMm": 0,
+   "lengthMm": 0,
+   "angleDegrees": 0,
+   "depthMm": 6,
+   "durationMs": 0,
+   "separationMm": 0,
+   "choice": "",
+   "bloodLostMl": 0,
+   "poolMl": 0,
+   "flowMlPerSecond": 0
+  },
+  {
+   "actionId": "golden-12",
+   "instrumentId": "babcock",
+   "instrumentInstanceId": "babcock-1",
+   "secondaryInstanceId": "",
+   "verb": "grasp",
+   "tissueId": "appendix",
+   "layer": "appendix",
+   "coordinateFrame": "registered_torso_m",
+   "timeMs": 21100,
+   "position": {
+    "x": 0.0123,
+    "y": -0.0045,
+    "z": 0.2
+   },
+   "registered": true,
+   "speedMps": 0.29,
+   "forceProxy": 0,
+   "distanceMm": 0,
+   "lengthMm": 0,
+   "angleDegrees": 0,
+   "depthMm": 12,
+   "durationMs": 0,
+   "separationMm": 0,
+   "choice": "",
+   "bloodLostMl": 0,
+   "poolMl": 0,
+   "flowMlPerSecond": 0
+  },
+  {
+   "actionId": "golden-13",
+   "instrumentId": "babcock",
+   "instrumentInstanceId": "babcock-1",
+   "secondaryInstanceId": "",
+   "verb": "grasp",
+   "tissueId": "appendix",
+   "layer": "appendix",
+   "coordinateFrame": "registered_torso_m",
+   "timeMs": 24200,
+   "position": {
+    "x": 0.0123,
+    "y": -0.0045,
+    "z": 0.2
+   },
+   "registered": true,
+   "speedMps": 0.12,
+   "forceProxy": 0.43,
+   "distanceMm": 0,
+   "lengthMm": 0,
+   "angleDegrees": 0,
+   "depthMm": 17,
+   "durationMs": 0,
+   "separationMm": 0,
+   "choice": "",
+   "bloodLostMl": 0,
+   "poolMl": 0,
+   "flowMlPerSecond": 0
+  },
+  {
+   "actionId": "golden-14",
+   "instrumentId": "metzenbaum_scissors",
+   "instrumentInstanceId": "tool-1",
+   "secondaryInstanceId": "",
+   "verb": "cut",
+   "tissueId": "mesoappendix",
+   "layer": "mesoappendix",
+   "coordinateFrame": "registered_torso_m",
+   "timeMs": 26000,
+   "position": {
+    "x": 0.0123,
+    "y": -0.0045,
+    "z": 0.2
+   },
+   "registered": true,
+   "speedMps": 0,
+   "forceProxy": 0,
+   "distanceMm": 10,
+   "lengthMm": 4,
+   "angleDegrees": 88,
+   "depthMm": 0,
+   "durationMs": 0,
+   "separationMm": 0,
+   "choice": "",
+   "bloodLostMl": 0,
+   "poolMl": 0,
+   "flowMlPerSecond": 0
+  },
+  {
+   "actionId": "golden-15",
+   "instrumentId": "assistant",
+   "instrumentInstanceId": "tool-1",
+   "secondaryInstanceId": "",
+   "verb": "tick",
+   "tissueId": "skin",
+   "layer": "skin",
+   "coordinateFrame": "registered_torso_m",
+   "timeMs": 27000,
+   "position": {
+    "x": 0.0123,
+    "y": -0.0045,
+    "z": 0.2
+   },
+   "registered": true,
+   "speedMps": 0,
+   "forceProxy": 0,
+   "distanceMm": 0,
+   "lengthMm": 0,
+   "angleDegrees": 0,
+   "depthMm": 0,
+   "durationMs": 0,
+   "separationMm": 0,
+   "choice": "",
+   "bloodLostMl": 0,
+   "poolMl": 0,
+   "flowMlPerSecond": 0
+  },
+  {
+   "actionId": "golden-16",
+   "instrumentId": "hemostat",
+   "instrumentInstanceId": "clamp-distal",
+   "secondaryInstanceId": "",
+   "verb": "clamp",
+   "tissueId": "mesoappendix",
+   "layer": "mesoappendix",
+   "coordinateFrame": "registered_torso_m",
+   "timeMs": 27500,
+   "position": {
+    "x": 0.0123,
+    "y": -0.0045,
+    "z": 0.2
+   },
+   "registered": true,
+   "speedMps": 0,
+   "forceProxy": 0,
+   "distanceMm": 20,
+   "lengthMm": 0,
+   "angleDegrees": 0,
+   "depthMm": 0,
+   "durationMs": 0,
+   "separationMm": 0,
+   "choice": "",
+   "bloodLostMl": 0,
+   "poolMl": 0,
+   "flowMlPerSecond": 0
+  },
+  {
+   "actionId": "golden-17",
+   "instrumentId": "assistant",
+   "instrumentInstanceId": "tool-1",
+   "secondaryInstanceId": "",
+   "verb": "tick",
+   "tissueId": "skin",
+   "layer": "skin",
+   "coordinateFrame": "registered_torso_m",
+   "timeMs": 28500,
+   "position": {
+    "x": 0.0123,
+    "y": -0.0045,
+    "z": 0.2
+   },
+   "registered": true,
+   "speedMps": 0,
+   "forceProxy": 0,
+   "distanceMm": 0,
+   "lengthMm": 0,
+   "angleDegrees": 0,
+   "depthMm": 0,
+   "durationMs": 0,
+   "separationMm": 0,
+   "choice": "",
+   "bloodLostMl": 0,
+   "poolMl": 0,
+   "flowMlPerSecond": 0
+  },
+  {
+   "actionId": "golden-18",
+   "instrumentId": "hemostat",
+   "instrumentInstanceId": "clamp-a",
+   "secondaryInstanceId": "",
+   "verb": "clamp",
+   "tissueId": "mesoappendix",
+   "layer": "mesoappendix",
+   "coordinateFrame": "registered_torso_m",
+   "timeMs": 29000,
+   "position": {
+    "x": 0.0123,
+    "y": -0.0045,
+    "z": 0.2
+   },
+   "registered": true,
+   "speedMps": 0,
+   "forceProxy": 0,
+   "distanceMm": 5,
+   "lengthMm": 0,
+   "angleDegrees": 0,
+   "depthMm": 0,
+   "durationMs": 0,
+   "separationMm": 0,
+   "choice": "",
+   "bloodLostMl": 0,
+   "poolMl": 0,
+   "flowMlPerSecond": 0
+  },
+  {
+   "actionId": "golden-19",
+   "instrumentId": "hemostat",
+   "instrumentInstanceId": "clamp-b",
+   "secondaryInstanceId": "",
+   "verb": "clamp",
+   "tissueId": "mesoappendix",
+   "layer": "mesoappendix",
+   "coordinateFrame": "registered_torso_m",
+   "timeMs": 29500,
+   "position": {
+    "x": 0.0123,
+    "y": -0.0045,
+    "z": 0.2
+   },
+   "registered": true,
+   "speedMps": 0,
+   "forceProxy": 0,
+   "distanceMm": 15,
+   "lengthMm": 0,
+   "angleDegrees": 0,
+   "depthMm": 0,
+   "durationMs": 0,
+   "separationMm": 0,
+   "choice": "",
+   "bloodLostMl": 0,
+   "poolMl": 0,
+   "flowMlPerSecond": 0
+  },
+  {
+   "actionId": "golden-20",
+   "instrumentId": "hemostat",
+   "instrumentInstanceId": "clamp-distal",
+   "secondaryInstanceId": "",
+   "verb": "release",
+   "tissueId": "mesoappendix",
+   "layer": "mesoappendix",
+   "coordinateFrame": "registered_torso_m",
+   "timeMs": 30000,
+   "position": {
+    "x": 0.0123,
+    "y": -0.0045,
+    "z": 0.2
+   },
+   "registered": true,
+   "speedMps": 0,
+   "forceProxy": 0,
+   "distanceMm": 0,
+   "lengthMm": 0,
+   "angleDegrees": 0,
+   "depthMm": 0,
+   "durationMs": 0,
+   "separationMm": 0,
+   "choice": "",
+   "bloodLostMl": 0,
+   "poolMl": 0,
+   "flowMlPerSecond": 0
+  },
+  {
+   "actionId": "golden-21",
+   "instrumentId": "metzenbaum_scissors",
+   "instrumentInstanceId": "tool-1",
+   "secondaryInstanceId": "",
+   "verb": "cut",
+   "tissueId": "mesoappendix",
+   "layer": "mesoappendix",
+   "coordinateFrame": "registered_torso_m",
+   "timeMs": 31000,
+   "position": {
+    "x": 0.0123,
+    "y": -0.0045,
+    "z": 0.2
+   },
+   "registered": true,
+   "speedMps": 0,
+   "forceProxy": 0,
+   "distanceMm": 10,
+   "lengthMm": 4,
+   "angleDegrees": 0,
+   "depthMm": 0,
+   "durationMs": 0,
+   "separationMm": 0,
+   "choice": "",
+   "bloodLostMl": 0,
+   "poolMl": 0,
+   "flowMlPerSecond": 0
+  },
+  {
+   "actionId": "golden-22",
+   "instrumentId": "suture_tie",
+   "instrumentInstanceId": "tool-1",
+   "secondaryInstanceId": "",
+   "verb": "tie",
+   "tissueId": "mesoappendix",
+   "layer": "mesoappendix",
+   "coordinateFrame": "registered_torso_m",
+   "timeMs": 32000,
+   "position": {
+    "x": 0.0123,
+    "y": -0.0045,
+    "z": 0.2
+   },
+   "registered": true,
+   "speedMps": 0,
+   "forceProxy": 0,
+   "distanceMm": 5,
+   "lengthMm": 0,
+   "angleDegrees": 0,
+   "depthMm": 0,
+   "durationMs": 0,
+   "separationMm": 0,
+   "choice": "",
+   "bloodLostMl": 0,
+   "poolMl": 0,
+   "flowMlPerSecond": 0
+  },
+  {
+   "actionId": "golden-23",
+   "instrumentId": "suture_tie",
+   "instrumentInstanceId": "tool-1",
+   "secondaryInstanceId": "",
+   "verb": "tie",
+   "tissueId": "mesoappendix",
+   "layer": "mesoappendix",
+   "coordinateFrame": "registered_torso_m",
+   "timeMs": 33000,
+   "position": {
+    "x": 0.0123,
+    "y": -0.0045,
+    "z": 0.2
+   },
+   "registered": true,
+   "speedMps": 0,
+   "forceProxy": 0,
+   "distanceMm": 15,
+   "lengthMm": 0,
+   "angleDegrees": 0,
+   "depthMm": 0,
+   "durationMs": 0,
+   "separationMm": 0,
+   "choice": "",
+   "bloodLostMl": 0,
+   "poolMl": 0,
+   "flowMlPerSecond": 0
+  },
+  {
+   "actionId": "golden-24",
+   "instrumentId": "hemostat",
+   "instrumentInstanceId": "clamp-a",
+   "secondaryInstanceId": "",
+   "verb": "release",
+   "tissueId": "mesoappendix",
+   "layer": "mesoappendix",
+   "coordinateFrame": "registered_torso_m",
+   "timeMs": 33500,
+   "position": {
+    "x": 0.0123,
+    "y": -0.0045,
+    "z": 0.2
+   },
+   "registered": true,
+   "speedMps": 0,
+   "forceProxy": 0,
+   "distanceMm": 0,
+   "lengthMm": 0,
+   "angleDegrees": 0,
+   "depthMm": 0,
+   "durationMs": 0,
+   "separationMm": 0,
+   "choice": "",
+   "bloodLostMl": 0,
+   "poolMl": 0,
+   "flowMlPerSecond": 0
+  },
+  {
+   "actionId": "golden-25",
+   "instrumentId": "hemostat",
+   "instrumentInstanceId": "clamp-b",
+   "secondaryInstanceId": "",
+   "verb": "release",
+   "tissueId": "mesoappendix",
+   "layer": "mesoappendix",
+   "coordinateFrame": "registered_torso_m",
+   "timeMs": 33600,
+   "position": {
+    "x": 0.0123,
+    "y": -0.0045,
+    "z": 0.2
+   },
+   "registered": true,
+   "speedMps": 0,
+   "forceProxy": 0,
+   "distanceMm": 0,
+   "lengthMm": 0,
+   "angleDegrees": 0,
+   "depthMm": 0,
+   "durationMs": 0,
+   "separationMm": 0,
+   "choice": "",
+   "bloodLostMl": 0,
+   "poolMl": 0,
+   "flowMlPerSecond": 0
+  },
+  {
+   "actionId": "golden-26",
+   "instrumentId": "assistant",
+   "instrumentInstanceId": "vessel-model",
+   "secondaryInstanceId": "",
+   "verb": "fluid",
+   "tissueId": "appendicular_artery",
+   "layer": "appendicular_artery",
+   "coordinateFrame": "registered_torso_m",
+   "timeMs": 34000,
+   "position": {
+    "x": 0.0123,
+    "y": -0.0045,
+    "z": 0.2
+   },
+   "registered": true,
+   "speedMps": 0,
+   "forceProxy": 0,
+   "distanceMm": 0,
+   "lengthMm": 0,
+   "angleDegrees": 0,
+   "depthMm": 0,
+   "durationMs": 0,
+   "separationMm": 0,
+   "choice": "",
+   "bloodLostMl": 0,
+   "poolMl": 0,
+   "flowMlPerSecond": 0
+  },
+  {
+   "actionId": "golden-27",
+   "instrumentId": "scalpel",
+   "instrumentInstanceId": "tool-1",
+   "secondaryInstanceId": "",
+   "verb": "cut",
+   "tissueId": "appendicular_artery",
+   "layer": "appendicular_artery",
+   "coordinateFrame": "registered_torso_m",
+   "timeMs": 34500,
+   "position": {
+    "x": 0.0123,
+    "y": -0.0045,
+    "z": 0.2
+   },
+   "registered": true,
+   "speedMps": 0,
+   "forceProxy": 0,
+   "distanceMm": 30,
+   "lengthMm": 3,
+   "angleDegrees": 0,
+   "depthMm": 0,
+   "durationMs": 0,
+   "separationMm": 0,
+   "choice": "",
+   "bloodLostMl": 0,
+   "poolMl": 0,
+   "flowMlPerSecond": 0
+  },
+  {
+   "actionId": "golden-28",
+   "instrumentId": "assistant",
+   "instrumentInstanceId": "vessel-model",
+   "secondaryInstanceId": "",
+   "verb": "fluid",
+   "tissueId": "appendicular_artery",
+   "layer": "appendicular_artery",
+   "coordinateFrame": "registered_torso_m",
+   "timeMs": 35500,
+   "position": {
+    "x": 0.0123,
+    "y": -0.0045,
+    "z": 0.2
+   },
+   "registered": true,
+   "speedMps": 0,
+   "forceProxy": 0,
+   "distanceMm": 0,
+   "lengthMm": 0,
+   "angleDegrees": 0,
+   "depthMm": 0,
+   "durationMs": 0,
+   "separationMm": 0,
+   "choice": "",
+   "bloodLostMl": 0.07,
+   "poolMl": 0.07,
+   "flowMlPerSecond": 0.113
+  },
+  {
+   "actionId": "golden-29",
+   "instrumentId": "assistant",
+   "instrumentInstanceId": "vessel-model",
+   "secondaryInstanceId": "",
+   "verb": "fluid",
+   "tissueId": "appendicular_artery",
+   "layer": "appendicular_artery",
+   "coordinateFrame": "registered_torso_m",
+   "timeMs": 36500,
+   "position": {
+    "x": 0.0123,
+    "y": -0.0045,
+    "z": 0.2
+   },
+   "registered": true,
+   "speedMps": 0,
+   "forceProxy": 0,
+   "distanceMm": 0,
+   "lengthMm": 0,
+   "angleDegrees": 0,
+   "depthMm": 0,
+   "durationMs": 0,
+   "separationMm": 0,
+   "choice": "",
+   "bloodLostMl": 0.19,
+   "poolMl": 0.17,
+   "flowMlPerSecond": 0.121
+  },
+  {
+   "actionId": "golden-30",
+   "instrumentId": "suture_tie",
+   "instrumentInstanceId": "tool-1",
+   "secondaryInstanceId": "",
+   "verb": "tie",
+   "tissueId": "appendicular_artery",
+   "layer": "appendicular_artery",
+   "coordinateFrame": "registered_torso_m",
+   "timeMs": 37000,
+   "position": {
+    "x": 0.0123,
+    "y": -0.0045,
+    "z": 0.2
+   },
+   "registered": true,
+   "speedMps": 0,
+   "forceProxy": 0,
+   "distanceMm": 20,
+   "lengthMm": 0,
+   "angleDegrees": 0,
+   "depthMm": 0,
+   "durationMs": 0,
+   "separationMm": 0,
+   "choice": "",
+   "bloodLostMl": 0,
+   "poolMl": 0,
+   "flowMlPerSecond": 0
+  },
+  {
+   "actionId": "golden-31",
+   "instrumentId": "assistant",
+   "instrumentInstanceId": "vessel-model",
+   "secondaryInstanceId": "",
+   "verb": "fluid",
+   "tissueId": "appendicular_artery",
+   "layer": "appendicular_artery",
+   "coordinateFrame": "registered_torso_m",
+   "timeMs": 37500,
+   "position": {
+    "x": 0.0123,
+    "y": -0.0045,
+    "z": 0.2
+   },
+   "registered": true,
+   "speedMps": 0,
+   "forceProxy": 0,
+   "distanceMm": 0,
+   "lengthMm": 0,
+   "angleDegrees": 0,
+   "depthMm": 0,
+   "durationMs": 0,
+   "separationMm": 0,
+   "choice": "",
+   "bloodLostMl": 0.23,
+   "poolMl": 0.21,
+   "flowMlPerSecond": 0
+  },
+  {
+   "actionId": "golden-32",
+   "instrumentId": "decision",
+   "instrumentInstanceId": "tool-1",
+   "secondaryInstanceId": "",
+   "verb": "decide",
+   "tissueId": "appendix",
+   "layer": "appendix",
+   "coordinateFrame": "registered_torso_m",
+   "timeMs": 38000,
+   "position": {
+    "x": 0.0123,
+    "y": -0.0045,
+    "z": 0.2
+   },
+   "registered": true,
+   "speedMps": 0,
+   "forceProxy": 0,
+   "distanceMm": 0,
+   "lengthMm": 0,
+   "angleDegrees": 0,
+   "depthMm": 0,
+   "durationMs": 0,
+   "separationMm": 0,
+   "choice": "appendix_tip",
+   "bloodLostMl": 0,
+   "poolMl": 0,
+   "flowMlPerSecond": 0
+  },
+  {
+   "actionId": "golden-33",
+   "instrumentId": "decision",
+   "instrumentInstanceId": "tool-1",
+   "secondaryInstanceId": "",
+   "verb": "decide",
+   "tissueId": "appendix",
+   "layer": "appendix",
+   "coordinateFrame": "registered_torso_m",
+   "timeMs": 39000,
+   "position": {
+    "x": 0.0123,
+    "y": -0.0045,
+    "z": 0.2
+   },
+   "registered": true,
+   "speedMps": 0,
+   "forceProxy": 0,
+   "distanceMm": 0,
+   "lengthMm": 0,
+   "angleDegrees": 0,
+   "depthMm": 0,
+   "durationMs": 0,
+   "separationMm": 0,
+   "choice": "true_base",
+   "bloodLostMl": 0,
+   "poolMl": 0,
+   "flowMlPerSecond": 0
+  },
+  {
+   "actionId": "golden-34",
+   "instrumentId": "right_angle_clamp",
+   "instrumentInstanceId": "rac-1",
+   "secondaryInstanceId": "",
+   "verb": "clamp",
+   "tissueId": "appendix",
+   "layer": "appendix",
+   "coordinateFrame": "registered_torso_m",
+   "timeMs": 40000,
+   "position": {
+    "x": 0.0123,
+    "y": -0.0045,
+    "z": 0.2
+   },
+   "registered": true,
+   "speedMps": 0,
+   "forceProxy": 0,
+   "distanceMm": 3,
+   "lengthMm": 0,
+   "angleDegrees": 0,
+   "depthMm": 0,
+   "durationMs": 0,
+   "separationMm": 0,
+   "choice": "",
+   "bloodLostMl": 0,
+   "poolMl": 0,
+   "flowMlPerSecond": 0
+  },
+  {
+   "actionId": "golden-35",
+   "instrumentId": "suture_tie",
+   "instrumentInstanceId": "tool-1",
+   "secondaryInstanceId": "",
+   "verb": "tie",
+   "tissueId": "appendix",
+   "layer": "appendix",
+   "coordinateFrame": "registered_torso_m",
+   "timeMs": 41000,
+   "position": {
+    "x": 0.0123,
+    "y": -0.0045,
+    "z": 0.2
+   },
+   "registered": true,
+   "speedMps": 0,
+   "forceProxy": 0,
+   "distanceMm": 3,
+   "lengthMm": 0,
+   "angleDegrees": 0,
+   "depthMm": 0,
+   "durationMs": 0,
+   "separationMm": 0,
+   "choice": "",
+   "bloodLostMl": 0,
+   "poolMl": 0,
+   "flowMlPerSecond": 0
+  },
+  {
+   "actionId": "golden-36",
+   "instrumentId": "right_angle_clamp",
+   "instrumentInstanceId": "rac-1",
+   "secondaryInstanceId": "",
+   "verb": "clamp",
+   "tissueId": "appendix",
+   "layer": "appendix",
+   "coordinateFrame": "registered_torso_m",
+   "timeMs": 42000,
+   "position": {
+    "x": 0.0123,
+    "y": -0.0045,
+    "z": 0.2
+   },
+   "registered": true,
+   "speedMps": 0,
+   "forceProxy": 0,
+   "distanceMm": 8,
+   "lengthMm": 0,
+   "angleDegrees": 0,
+   "depthMm": 0,
+   "durationMs": 0,
+   "separationMm": 0,
+   "choice": "",
+   "bloodLostMl": 0,
+   "poolMl": 0,
+   "flowMlPerSecond": 0
+  },
+  {
+   "actionId": "golden-37",
+   "instrumentId": "scalpel",
+   "instrumentInstanceId": "tool-1",
+   "secondaryInstanceId": "",
+   "verb": "cut",
+   "tissueId": "appendix",
+   "layer": "appendix",
+   "coordinateFrame": "registered_torso_m",
+   "timeMs": 43000,
+   "position": {
+    "x": 0.0123,
+    "y": -0.0045,
+    "z": 0.2
+   },
+   "registered": true,
+   "speedMps": 0,
+   "forceProxy": 0,
+   "distanceMm": 4,
+   "lengthMm": 4,
+   "angleDegrees": 0,
+   "depthMm": 0,
+   "durationMs": 0,
+   "separationMm": 0,
+   "choice": "",
+   "bloodLostMl": 0,
+   "poolMl": 0,
+   "flowMlPerSecond": 0
+  },
+  {
+   "actionId": "golden-38",
+   "instrumentId": "suction_irrigator",
+   "instrumentInstanceId": "tool-1",
+   "secondaryInstanceId": "",
+   "verb": "suction",
+   "tissueId": "mesoappendix",
+   "layer": "mesoappendix",
+   "coordinateFrame": "registered_torso_m",
+   "timeMs": 44000,
+   "position": {
+    "x": 0.0123,
+    "y": -0.0045,
+    "z": 0.2
+   },
+   "registered": true,
+   "speedMps": 0,
+   "forceProxy": 0,
+   "distanceMm": 0,
+   "lengthMm": 0,
+   "angleDegrees": 0,
+   "depthMm": 0,
+   "durationMs": 1200,
+   "separationMm": 0,
+   "choice": "",
+   "bloodLostMl": 0,
+   "poolMl": 0,
+   "flowMlPerSecond": 0
+  },
+  {
+   "actionId": "golden-39",
+   "instrumentId": "suction_irrigator",
+   "instrumentInstanceId": "tool-1",
+   "secondaryInstanceId": "",
+   "verb": "inspect",
+   "tissueId": "mesoappendix",
+   "layer": "mesoappendix",
+   "coordinateFrame": "registered_torso_m",
+   "timeMs": 45000,
+   "position": {
+    "x": 0.0123,
+    "y": -0.0045,
+    "z": 0.2
+   },
+   "registered": true,
+   "speedMps": 0,
+   "forceProxy": 0,
+   "distanceMm": 0,
+   "lengthMm": 0,
+   "angleDegrees": 0,
+   "depthMm": 0,
+   "durationMs": 1000,
+   "separationMm": 0,
+   "choice": "",
+   "bloodLostMl": 0,
+   "poolMl": 0,
+   "flowMlPerSecond": 0
+  },
+  {
+   "actionId": "golden-40",
+   "instrumentId": "suction_irrigator",
+   "instrumentInstanceId": "tool-1",
+   "secondaryInstanceId": "",
+   "verb": "inspect",
+   "tissueId": "appendix",
+   "layer": "appendix",
+   "coordinateFrame": "registered_torso_m",
+   "timeMs": 46000,
+   "position": {
+    "x": 0.0123,
+    "y": -0.0045,
+    "z": 0.2
+   },
+   "registered": true,
+   "speedMps": 0,
+   "forceProxy": 0,
+   "distanceMm": 0,
+   "lengthMm": 0,
+   "angleDegrees": 0,
+   "depthMm": 0,
+   "durationMs": 1100,
+   "separationMm": 0,
+   "choice": "",
+   "bloodLostMl": 0,
+   "poolMl": 0,
+   "flowMlPerSecond": 0
+  },
+  {
+   "actionId": "golden-41",
+   "instrumentId": "assistant",
+   "instrumentInstanceId": "tool-1",
+   "secondaryInstanceId": "",
+   "verb": "close",
+   "tissueId": "skin",
+   "layer": "skin",
+   "coordinateFrame": "registered_torso_m",
+   "timeMs": 47000,
+   "position": {
+    "x": 0.0123,
+    "y": -0.0045,
+    "z": 0.2
+   },
+   "registered": true,
+   "speedMps": 0,
+   "forceProxy": 0,
+   "distanceMm": 0,
+   "lengthMm": 0,
+   "angleDegrees": 0,
+   "depthMm": 0,
+   "durationMs": 0,
+   "separationMm": 0,
+   "choice": "",
+   "bloodLostMl": 0,
+   "poolMl": 0,
+   "flowMlPerSecond": 0
+  }
+ ],
+ "expected": {
+  "outcomes": [
+   "",
+   "",
+   "",
+   "across_fibers",
+   "muscle_cut,cut_unsecured",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "rough_handling",
+   "",
+   "rough_handling",
+   "cut_unsecured",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "cut_unsecured",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   "",
+   ""
+  ],
+  "facts": [
+   {
+    "key": ":activeBleedSeconds",
+    "value": 7.5
+   },
+   {
+    "key": ":activeBleeds",
+    "value": 0
+   },
+   {
+    "key": ":bloodLostMl",
+    "value": 6.83
+   },
+   {
+    "key": ":poolMl",
+    "value": 6.81
+   },
+   {
+    "key": "appendicular_artery:bleeding",
+    "value": 0
+   },
+   {
+    "key": "appendicular_artery:cutAngleDegrees",
+    "value": 0
+   },
+   {
+    "key": "appendicular_artery:cutBetweenClamps",
+    "value": 0
+   },
+   {
+    "key": "appendicular_artery:cutBetweenTieAndClamp",
+    "value": 0
+   },
+   {
+    "key": "appendicular_artery:cutDepthMm",
+    "value": 0
+   },
+   {
+    "key": "appendicular_artery:cutErrorMm",
+    "value": 30
+   },
+   {
+    "key": "appendicular_artery:cutLengthMm",
+    "value": 3
+   },
+   {
+    "key": "appendicular_artery:cutPositionMm",
+    "value": 30
+   },
+   {
+    "key": "appendicular_artery:divided",
+    "value": 1
+   },
+   {
+    "key": "appendicular_artery:fluidDriven",
+    "value": 1
+   },
+   {
+    "key": "appendicular_artery:leaking",
+    "value": 0
+   },
+   {
+    "key": "appendicular_artery:measuredFlowMlPerSecond",
+    "value": 0
+   },
+   {
+    "key": "appendicular_artery:measuredLossMl",
+    "value": 0.23
+   },
+   {
+    "key": "appendicular_artery:measuredPoolMl",
+    "value": 0.21
+   },
+   {
+    "key": "appendicular_artery:openInjuries",
+    "value": 0
+   },
+   {
+    "key": "appendicular_artery:opened",
+    "value": 1
+   },
+   {
+    "key": "appendicular_artery:tieCount",
+    "value": 1
+   },
+   {
+    "key": "appendicular_artery:tieDistanceMm",
+    "value": 20
+   },
+   {
+    "key": "appendicular_artery:tiedBothSides",
+    "value": 0
+   },
+   {
+    "key": "appendix:clampCount",
+    "value": 1
+   },
+   {
+    "key": "appendix:crushed",
+    "value": 1
+   },
+   {
+    "key": "appendix:cutAboveTie",
+    "value": 1
+   },
+   {
+    "key": "appendix:cutAngleDegrees",
+    "value": 0
+   },
+   {
+    "key": "appendix:cutBetweenClamps",
+    "value": 0
+   },
+   {
+    "key": "appendix:cutBetweenTieAndClamp",
+    "value": 1
+   },
+   {
+    "key": "appendix:cutDepthMm",
+    "value": 0
+   },
+   {
+    "key": "appendix:cutErrorMm",
+    "value": 4
+   },
+   {
+    "key": "appendix:cutLengthMm",
+    "value": 4
+   },
+   {
+    "key": "appendix:cutPositionMm",
+    "value": 4
+   },
+   {
+    "key": "appendix:decision_appendix_tip",
+    "value": 0
+   },
+   {
+    "key": "appendix:decision_true_base",
+    "value": 1
+   },
+   {
+    "key": "appendix:delivered",
+    "value": 1
+   },
+   {
+    "key": "appendix:divided",
+    "value": 1
+   },
+   {
+    "key": "appendix:inspectionMs",
+    "value": 1100
+   },
+   {
+    "key": "appendix:leaking",
+    "value": 0
+   },
+   {
+    "key": "appendix:liftMm",
+    "value": 17
+   },
+   {
+    "key": "appendix:opened",
+    "value": 1
+   },
+   {
+    "key": "appendix:removed",
+    "value": 1
+   },
+   {
+    "key": "appendix:stumpLengthMm",
+    "value": 4
+   },
+   {
+    "key": "appendix:tieCount",
+    "value": 1
+   },
+   {
+    "key": "appendix:tieDistanceMm",
+    "value": 3
+   },
+   {
+    "key": "appendix:tiedBothSides",
+    "value": 0
+   },
+   {
+    "key": "fascia:cutAngleDegrees",
+    "value": 31
+   },
+   {
+    "key": "fascia:cutBetweenClamps",
+    "value": 0
+   },
+   {
+    "key": "fascia:cutBetweenTieAndClamp",
+    "value": 0
+   },
+   {
+    "key": "fascia:cutDepthMm",
+    "value": 0
+   },
+   {
+    "key": "fascia:cutErrorMm",
+    "value": 0
+   },
+   {
+    "key": "fascia:cutLengthMm",
+    "value": 40
+   },
+   {
+    "key": "fascia:cutPositionMm",
+    "value": 0
+   },
+   {
+    "key": "fascia:divided",
+    "value": 1
+   },
+   {
+    "key": "fascia:opened",
+    "value": 1
+   },
+   {
+    "key": "fascia:tiedBothSides",
+    "value": 0
+   },
+   {
+    "key": "fat:cutAngleDegrees",
+    "value": 0
+   },
+   {
+    "key": "fat:cutBetweenClamps",
+    "value": 0
+   },
+   {
+    "key": "fat:cutBetweenTieAndClamp",
+    "value": 0
+   },
+   {
+    "key": "fat:cutDepthMm",
+    "value": 9
+   },
+   {
+    "key": "fat:cutErrorMm",
+    "value": 0
+   },
+   {
+    "key": "fat:cutLengthMm",
+    "value": 50
+   },
+   {
+    "key": "fat:cutPositionMm",
+    "value": 0
+   },
+   {
+    "key": "fat:divided",
+    "value": 1
+   },
+   {
+    "key": "fat:opened",
+    "value": 1
+   },
+   {
+    "key": "fat:tiedBothSides",
+    "value": 0
+   },
+   {
+    "key": "mesoappendix:bleeding",
+    "value": 0
+   },
+   {
+    "key": "mesoappendix:clampCount",
+    "value": 0
+   },
+   {
+    "key": "mesoappendix:cutAngleDegrees",
+    "value": 0
+   },
+   {
+    "key": "mesoappendix:cutBetweenClamps",
+    "value": 1
+   },
+   {
+    "key": "mesoappendix:cutBetweenTieAndClamp",
+    "value": 0
+   },
+   {
+    "key": "mesoappendix:cutDepthMm",
+    "value": 0
+   },
+   {
+    "key": "mesoappendix:cutErrorMm",
+    "value": 10
+   },
+   {
+    "key": "mesoappendix:cutLengthMm",
+    "value": 4
+   },
+   {
+    "key": "mesoappendix:cutPositionMm",
+    "value": 10
+   },
+   {
+    "key": "mesoappendix:divided",
+    "value": 1
+   },
+   {
+    "key": "mesoappendix:inspectionMs",
+    "value": 1000
+   },
+   {
+    "key": "mesoappendix:leaking",
+    "value": 0
+   },
+   {
+    "key": "mesoappendix:openInjuries",
+    "value": 0
+   },
+   {
+    "key": "mesoappendix:opened",
+    "value": 1
+   },
+   {
+    "key": "mesoappendix:tieCount",
+    "value": 2
+   },
+   {
+    "key": "mesoappendix:tieDistanceMm",
+    "value": 5
+   },
+   {
+    "key": "mesoappendix:tiedBothSides",
+    "value": 1
+   },
+   {
+    "key": "muscle:bladeUsed",
+    "value": 1
+   },
+   {
+    "key": "muscle:bleeding",
+    "value": 0
+   },
+   {
+    "key": "muscle:cutAngleDegrees",
+    "value": 0
+   },
+   {
+    "key": "muscle:cutBetweenClamps",
+    "value": 0
+   },
+   {
+    "key": "muscle:cutBetweenTieAndClamp",
+    "value": 0
+   },
+   {
+    "key": "muscle:cutDepthMm",
+    "value": 0
+   },
+   {
+    "key": "muscle:cutErrorMm",
+    "value": 0
+   },
+   {
+    "key": "muscle:cutLengthMm",
+    "value": 6
+   },
+   {
+    "key": "muscle:cutPositionMm",
+    "value": 0
+   },
+   {
+    "key": "muscle:divided",
+    "value": 1
+   },
+   {
+    "key": "muscle:liftMm",
+    "value": 0
+   },
+   {
+    "key": "muscle:openInjuries",
+    "value": 0
+   },
+   {
+    "key": "muscle:opened",
+    "value": 1
+   },
+   {
+    "key": "muscle:sealed",
+    "value": 1
+   },
+   {
+    "key": "muscle:splitWidthMm",
+    "value": 18
+   },
+   {
+    "key": "muscle:tiedBothSides",
+    "value": 0
+   },
+   {
+    "key": "peritoneum:cutAngleDegrees",
+    "value": 0
+   },
+   {
+    "key": "peritoneum:cutBetweenClamps",
+    "value": 0
+   },
+   {
+    "key": "peritoneum:cutBetweenTieAndClamp",
+    "value": 0
+   },
+   {
+    "key": "peritoneum:cutDepthMm",
+    "value": 0
+   },
+   {
+    "key": "peritoneum:cutErrorMm",
+    "value": 0
+   },
+   {
+    "key": "peritoneum:cutLengthMm",
+    "value": 4
+   },
+   {
+    "key": "peritoneum:cutPositionMm",
+    "value": 0
+   },
+   {
+    "key": "peritoneum:divided",
+    "value": 1
+   },
+   {
+    "key": "peritoneum:liftMm",
+    "value": 10
+   },
+   {
+    "key": "peritoneum:opened",
+    "value": 1
+   },
+   {
+    "key": "peritoneum:tented",
+    "value": 1
+   },
+   {
+    "key": "peritoneum:tentedBeforeCut",
+    "value": 1
+   },
+   {
+    "key": "peritoneum:tiedBothSides",
+    "value": 0
+   },
+   {
+    "key": "skin:closed",
+    "value": 1
+   },
+   {
+    "key": "skin:cutAngleDegrees",
+    "value": 2
+   },
+   {
+    "key": "skin:cutBetweenClamps",
+    "value": 0
+   },
+   {
+    "key": "skin:cutBetweenTieAndClamp",
+    "value": 0
+   },
+   {
+    "key": "skin:cutCoverage",
+    "value": 0.8
+   },
+   {
+    "key": "skin:cutDepthMm",
+    "value": 3
+   },
+   {
+    "key": "skin:cutErrorMm",
+    "value": 2
+   },
+   {
+    "key": "skin:cutLengthMm",
+    "value": 48
+   },
+   {
+    "key": "skin:cutPositionMm",
+    "value": 2
+   },
+   {
+    "key": "skin:divided",
+    "value": 1
+   },
+   {
+    "key": "skin:markAngleDegrees",
+    "value": 4
+   },
+   {
+    "key": "skin:markErrorMm",
+    "value": 3
+   },
+   {
+    "key": "skin:markLengthMm",
+    "value": 60
+   },
+   {
+    "key": "skin:marked",
+    "value": 1
+   },
+   {
+    "key": "skin:opened",
+    "value": 1
+   },
+   {
+    "key": "skin:tiedBothSides",
+    "value": 0
+   }
+  ],
+  "milestones": [
+   "close",
+   "deliver_appendix",
+   "divide_mesoappendix",
+   "incise_skin",
+   "ligate_base",
+   "mark_incision",
+   "open_peritoneum",
+   "split_muscle"
+  ],
+  "mistakes": [
+   "fiber_direction",
+   "cut_before_control",
+   "split_dont_cut",
+   "rough_handling",
+   "rough_handling",
+   "cut_before_control",
+   "cut_before_control"
+  ],
+  "completed": false,
+  "currentStep": "open_fascia"
+ }
+}

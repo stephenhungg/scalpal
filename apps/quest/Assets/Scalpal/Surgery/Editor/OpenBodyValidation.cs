@@ -45,6 +45,8 @@ namespace Scalpal.Surgery.Editor
             VerifyInputBoundary(procedure);
             VerifyBase(procedure);
             VerifySpatialControl(procedure);
+            VerifyPositionalHemostasis(procedure);
+            VerifyGoldenLog(procedure);
             VerifyFinish(procedure);
             Debug.Log("SCALPAL_OPEN_BODY_VALIDATION_OK: " + checks + " synthetic body, case, off-path, timing and reset assertions; no physical headset test");
         }
@@ -209,8 +211,99 @@ namespace Scalpal.Surgery.Editor
             foreach (var step in procedure.steps.Take(3)) foreach (var e in CaseRunner.PerfectEvents(step)) muscle.Handle(e);
             muscle.Handle(CaseEvent.Surgery(Action("muscle-cut", "cut", "muscle", "scalpel")));
             foreach (var e in CaseRunner.PerfectEvents(procedure.steps.First(s => s.id == "split_muscle"))) muscle.Handle(e);
-            Require(muscle.Body.Get("muscle", "bladeUsed") == 1 && !muscle.Achieved.Contains("split_muscle"),
-                "later retraction cannot erase prior muscle cutting");
+            Require(muscle.Body.Get("muscle", "bladeUsed") == 1 && muscle.Mistakes.Any(m => m.id == "split_dont_cut" && m.trigger == "guardrail"),
+                "later retraction cannot erase prior muscle cutting from the safety record");
+            Require(muscle.Achieved.Contains("split_muscle"), "a blade on muscle is penalised but does not make the split milestone unreachable");
+            var fibers = new CaseRunner(procedure); Expose(fibers, procedure);
+            var transect = Action("transect", "cut", "mesoappendix", "scalpel", distance:5); transect.angleDegrees = 90;
+            fibers.Handle(CaseEvent.Surgery(transect));
+            Require(!fibers.Body.Log.Last().outcomes.Contains("across_fibers"), "a tissue without a declared fiber direction cannot be cut across fibers");
+            var fascia = new CaseRunner(procedure);
+            foreach (var step in procedure.steps.Take(2)) foreach (var e in CaseRunner.PerfectEvents(step)) fascia.Handle(e);
+            var oblique = Action("oblique-fascia", "cut", "fascia", "metzenbaum_scissors"); oblique.lengthMm = 40; oblique.angleDegrees = 40;
+            fascia.Handle(CaseEvent.Surgery(oblique));
+            Require(fascia.Mistakes.Select(m => m.id).SequenceEqual(new[]{ "fiber_direction" }), "fascia declares fibers, so an oblique cut is across them");
+        }
+
+        // Mirrors services/preop/test/open-body.test.ts: distanceMm runs from the structure's base,
+        // where inflow enters, so only control at or proximal to an injury stops it.
+        static void VerifyPositionalHemostasis(Procedure procedure)
+        {
+            var runner = new CaseRunner(procedure); Expose(runner, procedure);
+            BodyAction Clamp(string id, string instance, double time, float distance)
+            { var a = Action(id, "clamp", "mesoappendix", "hemostat", time, distance); a.instrumentInstanceId = instance; return a; }
+            runner.Handle(CaseEvent.Surgery(Action("meso-cut", "cut", "mesoappendix", "scalpel", 0, 10)));
+            runner.Handle(CaseEvent.Surgery(Clamp("distal-clamp", "clamp-distal", 1000, 20)));
+            Require(runner.Body.Get("mesoappendix", "bleeding") == 1, "a clamp distal to the injury does not stop its bleeding");
+            runner.Handle(CaseEvent.Surgery(Clamp("clamp-at-cut", "clamp-at-cut", 2000, 10)));
+            Require(runner.Body.Get("", "activeBleeds") == 0 && Math.Abs(runner.Body.Get("", "bloodLostMl") - 4) < .0001, "a clamp at the injury stops it after two seconds of flow");
+            runner.Handle(CaseEvent.Surgery(Action("artery-cut", "cut", "appendicular_artery", "scalpel", 2000, 30)));
+            runner.Handle(CaseEvent.Surgery(Action("artery-tie", "tie", "appendicular_artery", "suture_tie", 3000, 20)));
+            Require(runner.Body.Get("", "activeBleeds") == 0, "a tie proximal to the injury stops it");
+
+            var seal = new CaseRunner(procedure); Expose(seal, procedure);
+            seal.Handle(CaseEvent.Surgery(Action("iliac-seal", "seal", "iliac_vessels", "hook_cautery", 0, 10)));
+            seal.Handle(CaseEvent.Surgery(Action("iliac-cut", "cut", "iliac_vessels", "scalpel", 1, 40)));
+            Require(seal.Body.Get("iliac_vessels", "bleeding") == 1 && seal.Mistakes.Any(m => m.id == "cut_before_control"), "an earlier seal elsewhere does not make the vessel bloodless");
+            seal.Handle(CaseEvent.Surgery(Action("iliac-seal-at-cut", "seal", "iliac_vessels", "hook_cautery", 2, 41)));
+            Require(seal.Body.Get("iliac_vessels", "bleeding") == 0, "a seal at the injury controls it");
+
+            var loose = new CaseRunner(procedure); Expose(loose, procedure);
+            loose.Handle(CaseEvent.Surgery(Action("loose-cut", "cut", "mesoappendix", "scalpel", 0, 10)));
+            var unmeasured = Clamp("loose-clamp", "clamp-a", 1, 0); unmeasured.choice = "longitudinal_unmeasured";
+            loose.Handle(CaseEvent.Surgery(unmeasured));
+            Require(loose.Body.Get("mesoappendix", "bleeding") == 1, "an unmeasured clamp cannot control a measured injury");
+
+            var release = new CaseRunner(procedure); Expose(release, procedure);
+            release.Handle(CaseEvent.Surgery(Clamp("a", "clamp-a", 0, 5))); release.Handle(CaseEvent.Surgery(Clamp("b", "clamp-b", 0, 15)));
+            release.Handle(CaseEvent.Surgery(Action("between", "cut", "mesoappendix", "scalpel", 0, 10)));
+            Require(release.Body.Get("mesoappendix", "bleeding") == 0, "cut between clamps is controlled");
+            var off = Action("release-a", "release", "mesoappendix", "hemostat", 1000); off.instrumentInstanceId = "clamp-a";
+            release.Handle(CaseEvent.Surgery(off));
+            Require(release.Body.Get("mesoappendix", "clampCount") == 1 && release.Body.Get("mesoappendix", "bleeding") == 1 &&
+                release.Body.Log.Last().outcomes.SequenceEqual(new[]{ "rebleed" }), "releasing the proximal clamp of an untied cut re-bleeds");
+            release.Handle(CaseEvent.Surgery(Action("tie", "tie", "mesoappendix", "suture_tie", 2000, 5)));
+            off = Action("release-b", "release", "mesoappendix", "hemostat", 3000); off.instrumentInstanceId = "clamp-b";
+            release.Handle(CaseEvent.Surgery(off));
+            Require(release.Body.Get("mesoappendix", "clampCount") == 0 && release.Body.Get("mesoappendix", "bleeding") == 0, "a tied cut stays controlled after its clamps are removed");
+            off = Action("release-again", "release", "mesoappendix", "hemostat", 3000); off.instrumentInstanceId = "clamp-b";
+            release.Handle(CaseEvent.Surgery(off));
+            Require(release.Body.Log.Last().outcomes.SequenceEqual(new[]{ "not_clamped" }), "a clamp cannot be removed twice");
+            var tidy = new CaseRunner(procedure); Expose(tidy, procedure);
+            foreach (var e in CaseRunner.PerfectEvents(procedure.steps.First(st => st.id == "divide_mesoappendix"))) tidy.Handle(e);
+            foreach (var instance in new[]{ "clamp-a", "clamp-b" })
+            { off = Action("off-" + instance, "release", "mesoappendix", "hemostat"); off.instrumentInstanceId = instance; tidy.Handle(CaseEvent.Surgery(off)); }
+            var divide = procedure.openBody.milestones.First(m => m.id == "divide_mesoappendix");
+            Require(tidy.Body.Get("mesoappendix", "clampCount") == 0 && divide.predicates.All(tidy.Body.Test), "removing clamps after tying both sides keeps the mesoappendix milestone");
+        }
+
+        [Serializable] class GoldenFact { public string key; public double value; }
+        [Serializable] class GoldenExpected { public string[] outcomes; public GoldenFact[] facts; public string[] milestones; public string[] mistakes; public bool completed; public string currentStep; }
+        [Serializable] class GoldenLog { public string procedureId; public BodyAction[] actions; public GoldenExpected expected; }
+        // Shared with services/preop/test/open-body-golden.test.ts: the TypeScript and C# reducers must
+        // reproduce the same exact facts, outcomes, milestones and guardrails from one event log.
+        static void VerifyGoldenLog(Procedure procedure)
+        {
+            var path = System.IO.Path.GetFullPath(System.IO.Path.Combine(Application.dataPath, "../../../services/preop/test/fixtures/open-body-golden.json"));
+            Require(System.IO.File.Exists(path), "shared golden log exists at " + path);
+            var golden = JsonUtility.FromJson<GoldenLog>(System.IO.File.ReadAllText(path));
+            Require(golden.procedureId == procedure.id && golden.actions.Length == golden.expected.outcomes.Length, "golden log targets the packaged procedure");
+            var runner = new CaseRunner(procedure);
+            for (int i = 0; i < golden.actions.Length; i++)
+            {
+                var action = golden.actions[i];
+                runner.Handle(CaseEvent.Surgery(action));
+                var last = runner.Body.Log.Count > 0 ? runner.Body.Log[runner.Body.Log.Count - 1] : null;
+                string outcomes = last != null && last.action.actionId == action.actionId ? string.Join(",", last.outcomes) : "REJECTED";
+                Require(outcomes == golden.expected.outcomes[i], $"golden action {i} ({action.verb} {action.tissueId}) outcomes '{outcomes}' match TypeScript '{golden.expected.outcomes[i]}'");
+            }
+            var mismatched = golden.expected.facts.Where(f => !runner.Body.Facts.TryGetValue(f.key, out var v) || v != f.value)
+                .Select(f => f.key + "=" + (runner.Body.Facts.TryGetValue(f.key, out var v) ? v.ToString("R") : "missing") + " (ts " + f.value.ToString("R") + ")").ToArray();
+            Require(mismatched.Length == 0 && runner.Body.Facts.Count == golden.expected.facts.Length,
+                "golden facts identical to TypeScript: " + string.Join("; ", mismatched) + $" [{runner.Body.Facts.Count} vs {golden.expected.facts.Length}]");
+            Require(runner.Achieved.OrderBy(id => id, StringComparer.Ordinal).SequenceEqual(golden.expected.milestones), "golden milestones identical to TypeScript");
+            Require(runner.Mistakes.Select(m => m.id).SequenceEqual(golden.expected.mistakes), "golden guardrails identical to TypeScript");
+            Require(runner.Completed == golden.expected.completed && (runner.Current?.id ?? "") == golden.expected.currentStep, "golden live step identical to TypeScript");
         }
 
         static void VerifyFinish(Procedure procedure)
@@ -264,6 +357,10 @@ namespace Scalpal.Surgery.Editor
             Require(runner.Achieved.Contains("ligate_base") && runner.Body.Get("appendix", "stumpLengthMm") == 4,
                 "short tied stump and correct decision complete base independently of expected order");
             Require(runner.Current.id == "deliver_appendix", "earlier delivery guidance remains after base milestone");
+            runner.Handle(CaseEvent.Surgery(new BodyAction { actionId = "changed-decision", verb = "decide", tissueId = "appendix", layer = "appendix",
+                instrumentId = "decision", registered = true, choice = "appendix_tip" }));
+            Require(runner.Body.Get("appendix", "decision_true_base") == 0 &&
+                !procedure.openBody.milestones.First(m => m.id == "ligate_base").predicates.All(runner.Body.Test), "the latest decision answer wins");
         }
     }
 }

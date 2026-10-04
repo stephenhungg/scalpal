@@ -15,11 +15,23 @@ namespace Scalpal.Exercises.Engine
     // Physical exposure can reject an effect; expected case order never can.
     public sealed class BodyState
     {
+        // Clamps/ties control an injury at or proximal to it (smaller distance from the base); a seal
+        // controls only its own point. Unmeasured occluders cannot control a measured injury.
+        public const double HemostasisToleranceMm = 3;
+        // One rough-handling outcome per tool instance and tissue in this window, however often a held tool reports.
+        public const double RoughHandlingCooldownMs = 3000;
+        struct Injury { public double positionMm; public bool measured; }
         readonly Dictionary<string, double> facts = new Dictionary<string, double>();
         readonly List<BodyRecord> log = new List<BodyRecord>();
         readonly HashSet<string> seen = new HashSet<string>();
-        readonly Dictionary<string, Dictionary<string, float>> clamps = new Dictionary<string, Dictionary<string, float>>();
-        readonly Dictionary<string, List<float>> ties = new Dictionary<string, List<float>>();
+        readonly Dictionary<string, Dictionary<string, double>> clamps = new Dictionary<string, Dictionary<string, double>>();
+        readonly Dictionary<string, List<double>> ties = new Dictionary<string, List<double>>();
+        readonly Dictionary<string, HashSet<string>> looseClamps = new Dictionary<string, HashSet<string>>(); // No longitudinal measurement.
+        readonly Dictionary<string, int> looseControls = new Dictionary<string, int>(); // Unmeasured ties and seals.
+        readonly Dictionary<string, List<double>> seals = new Dictionary<string, List<double>>();
+        readonly Dictionary<string, List<Injury>> injuries = new Dictionary<string, List<Injury>>();
+        readonly Dictionary<string, double> roughAt = new Dictionary<string, double>();
+        readonly Dictionary<string, string> decisions = new Dictionary<string, string>();
         double clock = -1;
         public TissueDefinition[] Tissues { get; }
         public IReadOnlyList<BodyRecord> Log => log;
@@ -41,10 +53,12 @@ namespace Scalpal.Exercises.Engine
             ["scalpel"] = new[]{"cut"}, ["metzenbaum_scissors"] = new[]{"cut"}, ["skin_marker"] = new[]{"mark"},
             ["toothed_forceps"] = new[]{"grasp","retract"}, ["retractor"] = new[]{"retract"},
             ["babcock"] = new[]{"grasp","retract"}, ["atraumatic_grasper"] = new[]{"grasp","retract"},
-            ["hemostat"] = new[]{"clamp"}, ["right_angle_clamp"] = new[]{"clamp"}, ["suture_tie"] = new[]{"tie","place"},
+            ["hemostat"] = new[]{"clamp","release"}, ["right_angle_clamp"] = new[]{"clamp","release"}, ["suture_tie"] = new[]{"tie","place"},
             ["hook_cautery"] = new[]{"seal"}, ["vessel_sealer"] = new[]{"seal"},
             ["suction_irrigator"] = new[]{"suction","inspect"}, ["decision"] = new[]{"decide"}, ["assistant"] = new[]{"close","tick","fluid"},
         };
+        // Assistant clock ticks and measured fluid snapshots keep the body current; they are not learner actions.
+        public static bool IsTelemetry(BodyAction e) => e != null && e.instrumentId == "assistant" && (e.verb == "tick" || e.verb == "fluid");
         static bool Finite(double v) => !double.IsNaN(v) && !double.IsInfinity(v);
         public static bool ValidBodyAction(BodyAction e)
         {
@@ -70,8 +84,8 @@ namespace Scalpal.Exercises.Engine
             Set("", "activeBleedSeconds", Get("", "activeBleedSeconds") + (active > 0 ? dt : 0));
             var outcomes = new List<string>();
             void Put(string fact, double value = 1) => Set(tissue.id, fact, value);
-            if (!clamps.TryGetValue(tissue.id, out var clamp)) clamp = new Dictionary<string, float>();
-            if (!ties.TryGetValue(tissue.id, out var tied)) tied = new List<float>();
+            if (!clamps.TryGetValue(tissue.id, out var clamp)) clamp = new Dictionary<string, double>();
+            if (!ties.TryGetValue(tissue.id, out var tied)) tied = new List<double>();
             bool blocked = Tissues.Any(t => t.order >= 0 && (tissue.order < 0 || t.order < tissue.order) && Get(t.id, "opened") == 0);
             if (blocked && e.verb != "decide" && e.verb != "tick" && e.verb != "close" && e.verb != "fluid") outcomes.Add("not_exposed");
             else switch (e.verb)
@@ -90,7 +104,7 @@ namespace Scalpal.Exercises.Engine
                     if (Get(tissue.id, "markLengthMm") > 0) Put("cutCoverage", Math.Min(1, Get(tissue.id, "cutLengthMm") / Get(tissue.id, "markLengthMm")));
                     Put("cutErrorMm", e.distanceMm); Put("cutAngleDegrees", e.angleDegrees); Put("cutDepthMm", e.depthMm);
                     if (tissue.splittable) { Put("bladeUsed"); outcomes.Add("muscle_cut"); }
-                    if (e.angleDegrees > 25) outcomes.Add("across_fibers");
+                    if (!string.IsNullOrEmpty(tissue.fiberAxis) && e.angleDegrees > 25) outcomes.Add("across_fibers");
                     if (tissue.tentable) { Put("tentedBeforeCut", Get(tissue.id, "tented")); if (Get(tissue.id, "tented") == 0) outcomes.Add("untented_cut"); }
                     var positions = clamp.Values.OrderBy(v => v).ToArray();
                     bool measured = e.choice != "longitudinal_unmeasured";
@@ -100,7 +114,13 @@ namespace Scalpal.Exercises.Engine
                     Put("tiedBothSides", tied.Any(p => p < e.distanceMm) && tied.Any(p => p > e.distanceMm) ? 1 : 0);
                     bool proximal = measured && tied.Any(p => p < e.distanceMm);
                     Put("cutBetweenTieAndClamp", proximal && positions.Any(p => p > e.distanceMm) ? 1 : 0);
-                    if (tissue.perfused && !between && !proximal && Get(tissue.id, "sealed") == 0) { Put("bleeding"); outcomes.Add("cut_unsecured"); }
+                    if (tissue.perfused)
+                    {
+                        var injury = new Injury { positionMm = e.distanceMm, measured = measured };
+                        if (!injuries.TryGetValue(tissue.id, out var open)) injuries[tissue.id] = open = new List<Injury>();
+                        open.Add(injury); RefreshBleeding(tissue);
+                        if (!Controlled(tissue.id, injury)) outcomes.Add("cut_unsecured");
+                    }
                     if (tissue.hollow)
                     {
                         Put("removed");
@@ -110,36 +130,80 @@ namespace Scalpal.Exercises.Engine
                     if (tissue.critical) outcomes.Add("critical_injury");
                     break;
                 case "clamp":
+                {
                     if (string.IsNullOrEmpty(e.instrumentInstanceId)) { outcomes.Add("missing_instance"); break; }
-                    if(e.choice == "longitudinal_unmeasured") { Put("bleeding",0); break; }
-                    clamp[e.instrumentInstanceId] = e.distanceMm; clamps[tissue.id] = clamp;
-                    Put("clampCount", clamp.Count); Put("bleeding", 0);
-                    if (e.instrumentId == "right_angle_clamp") Put("crushed"); break;
+                    if (!looseClamps.TryGetValue(tissue.id, out var loose)) loose = new HashSet<string>();
+                    if (e.choice == "longitudinal_unmeasured") { clamp.Remove(e.instrumentInstanceId); loose.Add(e.instrumentInstanceId); looseClamps[tissue.id] = loose; }
+                    else
+                    {
+                        loose.Remove(e.instrumentInstanceId); clamp[e.instrumentInstanceId] = e.distanceMm; clamps[tissue.id] = clamp;
+                        if (e.instrumentId == "right_angle_clamp") Put("crushed");
+                    }
+                    Put("clampCount", clamp.Count); RefreshBleeding(tissue); break;
+                }
+                case "release":
+                {
+                    bool removed = clamp.Remove(e.instrumentInstanceId) || (looseClamps.TryGetValue(tissue.id, out var loose) && loose.Remove(e.instrumentInstanceId));
+                    if (!removed) { outcomes.Add("not_clamped"); break; }
+                    double before = Get(tissue.id, "bleeding"); Put("clampCount", clamp.Count); RefreshBleeding(tissue);
+                    if (before == 0 && Get(tissue.id, "bleeding") > 0) outcomes.Add("rebleed");
+                    break;
+                }
                 case "tie":
-                    if(e.choice == "longitudinal_unmeasured") { Put("bleeding",0); break; }
+                    if (e.choice == "longitudinal_unmeasured") { looseControls[tissue.id] = LooseControls(tissue.id) + 1; Put("leaking", 0); RefreshBleeding(tissue); break; }
                     if (!tied.Any(p => Math.Abs(p - e.distanceMm) < 1)) tied.Add(e.distanceMm);
-                    ties[tissue.id] = tied; Put("tieCount", tied.Count); Put("tieDistanceMm", tied.Min()); Put("bleeding", 0); Put("leaking", 0);
+                    ties[tissue.id] = tied; Put("tieCount", tied.Count);
                     if (Get(tissue.id, "divided") > 0)
                     {
                         double cut = Get(tissue.id, "cutPositionMm");
                         Put("tiedBothSides", tied.Any(p => p < cut) && tied.Any(p => p > cut) ? 1 : 0);
                     }
+                    Put("tieDistanceMm", tied.Min()); Put("leaking", 0); RefreshBleeding(tissue);
                     break;
-                case "seal": Put("sealed"); Put("bleeding", 0); break;
+                case "seal":
+                    Put("sealed");
+                    if (e.choice == "longitudinal_unmeasured") looseControls[tissue.id] = LooseControls(tissue.id) + 1;
+                    else { if (!seals.TryGetValue(tissue.id, out var points)) seals[tissue.id] = points = new List<double>(); points.Add(e.distanceMm); }
+                    RefreshBleeding(tissue); break;
                 case "grasp": case "retract":
                     Put("liftMm", e.depthMm); if (tissue.tentable) Put("tented", e.depthMm >= 8 ? 1 : 0);
                     if (e.depthMm >= 15) Put("delivered");
                     if (tissue.splittable && !string.IsNullOrEmpty(e.instrumentInstanceId) && !string.IsNullOrEmpty(e.secondaryInstanceId) && e.instrumentInstanceId != e.secondaryInstanceId && e.separationMm >= 15 && e.angleDegrees <= 25) { Put("opened"); Put("splitWidthMm", e.separationMm); }
-                    if (e.speedMps > .1f || e.forceProxy > 1) outcomes.Add("rough_handling"); break;
+                    if (e.speedMps > .1 || e.forceProxy > 1)
+                    {
+                        string key = e.instrumentInstanceId + "|" + tissue.id;
+                        if (!roughAt.TryGetValue(key, out var last) || e.timeMs - last >= RoughHandlingCooldownMs) { roughAt[key] = e.timeMs; outcomes.Add("rough_handling"); }
+                    }
+                    break;
                 case "suction": if (!Tissues.Any(t=>Get(t.id,"fluidDriven")>0)) Set("", "poolMl", Math.Max(0, Get("", "poolMl") - e.durationMs * .005)); break;
                 case "inspect": Put("inspectionMs", Math.Max(Get(tissue.id, "inspectionMs"), e.durationMs)); break;
-                case "decide": Put("decision_" + e.choice); break;
+                case "decide":
+                    // The latest answer wins; an earlier choice no longer satisfies a decision predicate.
+                    if (decisions.TryGetValue(tissue.id, out var previous) && previous != e.choice) Put("decision_" + previous, 0);
+                    decisions[tissue.id] = e.choice; Put("decision_" + e.choice); break;
                 case "close": Put("closed"); break;
                 case "place": Put("placed"); break;
             }
             Set("", "activeBleeds", Tissues.Count(t => Get(t.id, "bleeding") > 0));
             var record = new BodyRecord { action = e.Copy(), outcomes = outcomes.ToArray() };
             log.Add(record); return record;
+        }
+        int LooseControls(string tissueId) => looseControls.TryGetValue(tissueId, out var count) ? count : 0;
+        bool Controlled(string tissueId, Injury injury)
+        {
+            var clamped = clamps.TryGetValue(tissueId, out var c) ? c.Values.ToList() : new List<double>();
+            if (ties.TryGetValue(tissueId, out var t)) clamped.AddRange(t);
+            var sealedAt = seals.TryGetValue(tissueId, out var s) ? s : new List<double>();
+            // Without injury geometry, any control on the structure is the best available evidence.
+            if (!injury.measured)
+                return clamped.Count + sealedAt.Count + (looseClamps.TryGetValue(tissueId, out var loose) ? loose.Count : 0) + LooseControls(tissueId) > 0;
+            return clamped.Any(p => p <= injury.positionMm + HemostasisToleranceMm) || sealedAt.Any(p => Math.Abs(p - injury.positionMm) <= HemostasisToleranceMm);
+        }
+        void RefreshBleeding(TissueDefinition tissue)
+        {
+            if (!tissue.perfused) return;
+            int open = injuries.TryGetValue(tissue.id, out var list) ? list.Count(i => !Controlled(tissue.id, i)) : 0;
+            Set(tissue.id, "openInjuries", open); Set(tissue.id, "bleeding", open > 0 ? 1 : 0);
         }
     }
 }

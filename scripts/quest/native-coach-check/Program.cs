@@ -59,6 +59,7 @@ static class Program
         DeliveryFailures();
         SessionBoundaries();
         AdversarialReceipts();
+        BodyActionDroppedAsTrackingInvalid();
         Console.WriteLine("SCALPAL_NATIVE_COACH_VALIDATION_OK checks=" + checks + " actions=" + actions + " lostResponses=" + lostResponses
             + " production CoachRelay/CaseRunner + isolated actual Hono coach; coroutine/network timing doubles; no Unity/XR/provider execution");
     }
@@ -322,6 +323,22 @@ static class Program
         typeof(CoachRelay).GetMethod("OnDisable", Private).Invoke(relay, null);
         nextPoll.Complete("{\"commands\":[{\"commandId\":\"synthetic-disabled\",\"status\":\"pending\"}]}"); Pump(true);
         Check(!relay.Connected && !relay.IsSynchronized && effects == 0, "disable clears ownership and suppresses delayed commands");
+    }
+
+    // A legacy event can be reconciled by later step metadata; an open-body action cannot (no resync yet).
+    static void BodyActionDroppedAsTrackingInvalid()
+    {
+        string sid = Create(); var relay = Adopt(sid); EnableTracking(relay);
+        int failures = 0; relay.SyncFailed += _ => failures++;
+        relay.Tracking(false); Pump(); Deliver(Pending("POST", Path(sid) + "/events")); Pump();
+        var cut = CaseEvent.Surgery(new BodyAction { actionId = "open-dropped-cut", verb = "cut", tissueId = "skin", layer = "skin",
+            instrumentId = "scalpel", instrumentInstanceId = "blade-1", registered = true, timeMs = 100, lengthMm = 40 });
+        relay.Forward(cut, candidate.procedure.firstStep); Pump();
+        var reply = JsonUtility.FromJson<CoachEventResponse>(Deliver(Pending("POST", Path(sid) + "/events"))); Pump();
+        Check(!reply.results[0].applied && reply.results[0].reason == "tracking_invalid" && Snapshot(sid).eventCount == 0,
+            "coach drops a body action while its tracking is invalid");
+        Check(!relay.IsSynchronized && failures == 1 && relay.SyncFailureReason.Contains("open-dropped-cut"),
+            "a dropped body action is surfaced as a sync failure instead of counted as delivered");
     }
 
     static void AdversarialReceipts()
