@@ -28,7 +28,7 @@ export function ExploreBody({ apkUrl, videoUrl }: { apkUrl: string; videoUrl: st
   return (
     <main className="relative">
       <HandsBackdrop />
-      <Shell className="z-10 flex flex-col">
+      <Shell className="z-10 flex flex-col" onLogoClick={go("/")}>
         <motion.section
           className="relative z-10 flex flex-col items-center px-[15px] pb-4 pt-6 text-center min-[810px]:px-[30px] min-[810px]:pt-12"
           animate={leaving ? { opacity: 0, filter: "blur(6px)", y: -10 } : { opacity: 1, filter: "blur(0px)", y: 0 }}
