@@ -1,6 +1,7 @@
 using System;
 using System.Reflection;
 using Scalpal.Anatomy.Tissue;
+using Scalpal.Exercises.Data;
 using UnityEditor;
 using UnityEngine;
 
@@ -24,6 +25,7 @@ namespace Scalpal.Quest.Editor
             checks = 0;
             ValidateDescriptors();
             ValidateGenericProperties();
+            ValidatePackagedProperties();
             ValidateGenericVerbs(.8f);
             ValidateGenericVerbs(1.2f);
             ValidateLayerGeometry();
@@ -130,6 +132,44 @@ namespace Scalpal.Quest.Editor
                 Assert(sim.TryGetLayerProperties("skin", out copied) && copied.HasConsequenceProperties && !sim.TryContactLayer("skin", f.World(Vector3.zero), .001f, out _),
                     "metadata access is not evidence of valid practice contact");
             }
+        }
+
+        static void ValidatePackagedProperties()
+        {
+            var asset = Resources.Load<TextAsset>("scalpal_bundle");
+            Assert(asset, "packaged semantic definitions available for the actual property boundary");
+            var bundle = JsonUtility.FromJson<ScalpalBundle>(asset.text);
+            Assert(bundle?.procedures != null, "actual packaged procedures deserialize");
+            int boundBodies = 0;
+            foreach (var procedure in bundle.procedures)
+            {
+                if (procedure.openBody?.tissues == null) continue;
+                var supplied = new TissueInteractionProperties[OpenWallLayers.Count];
+                for (int i = 0; i < supplied.Length; i++)
+                {
+                    var geometry = OpenWallLayers.Get(i);
+                    var definition = Array.Find(procedure.openBody.tissues, tissue => tissue.id == geometry.id);
+                    Assert(definition != null, "packaged body provides material " + geometry.id);
+                    // The symbolic semantic incision reference is not itself a material-frame vector.
+                    Assert(string.IsNullOrEmpty(definition.fiberAxis) || definition.fiberAxis == "incision_line",
+                        "packaged symbolic fiber declaration is supported; actual frame resolution remains caller-owned");
+                    supplied[i] = new TissueInteractionProperties(definition.id, definition.layer, definition.order,
+                        definition.cuttable, definition.splittable, definition.tentable, definition.perfused,
+                        definition.hollow, definition.critical, geometry.fiberDirection, geometry.provenance);
+                }
+                using (var f = new WorldFixture(1))
+                {
+                    Assert(f.simulation.TryBindLayerProperties(supplied, out var reason), "actual packaged body agrees with mechanical capabilities: " + reason);
+                    foreach (var profile in supplied)
+                    {
+                        Assert(f.simulation.TryGetLayerProperties(profile.id, out var copied) && copied.HasConsequenceProperties &&
+                            copied.perfused == profile.perfused && copied.hollow == profile.hollow && copied.critical == profile.critical,
+                            "actual body flags retained without physiology defaults for " + profile.id);
+                    }
+                }
+                boundBodies++;
+            }
+            Assert(boundBodies > 0, "at least one actual packaged body crosses the property boundary");
         }
 
         static void ValidateGenericVerbs(float scale)
