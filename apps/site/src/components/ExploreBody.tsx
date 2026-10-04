@@ -16,7 +16,7 @@ import { session } from "@/lib/session";
 import { wordCount } from "@/lib/text";
 
 const TITLE = "The future of surgery.";
-const LEDE = "One rep, from the first cut to the robot replay.";
+const LEDE = "One workflow, from the first cut to the robot replay.";
 
 export function ExploreBody({ apkUrl, videoUrl }: { apkUrl: string; videoUrl: string }) {
   const { leaving, go } = useLeave("/");
