@@ -12,7 +12,7 @@ namespace Scalpal.Briefing
     /// time over a floating abdomen. Each step peels the covering layers, lifts/scales/spins/glows the focus structure
     /// and plays one bundled line. Trigger or Next advances, Skip ends; steps also advance on their own (clip length or a
     /// reading timer). No network: lines are bundled clips, and missing clips fall back to captions on a timer.
-    /// HandoffFlow owns the lifecycle and reads Finished.
+    /// While it runs the OR is hidden behind an ethereal void (BriefingStage). HandoffFlow owns the lifecycle and reads Finished.
     /// </summary>
     public sealed class BriefingDirector : MonoBehaviour
     {
@@ -20,6 +20,7 @@ namespace Scalpal.Briefing
         public const float MinimumStepSeconds = 3.5f, ClipTailSeconds = 1.1f;
         public BriefingAtlas Atlas { get; private set; }
         public BriefingPicker Picker { get; private set; }
+        public BriefingStage Stage { get; private set; }
         public BriefingStep[] Steps { get; private set; } = System.Array.Empty<BriefingStep>();
         public int StepIndex { get; private set; } = -1;
         public BriefingStep Step => StepIndex >= 0 && StepIndex < Steps.Length ? Steps[StepIndex] : null;
@@ -50,8 +51,10 @@ namespace Scalpal.Briefing
             director.Place();
             director.Picker = BriefingPicker.Create(director.Atlas, root.transform, viewer);
             director.BuildControls();
+            director.Stage = BriefingStage.Create(director, viewer);
             if (director.Steps.Length == 0) { director.Finish(false); return director; }
             director.Enter(0);
+            director.Stage.Sync(0);
             return director;
         }
 
@@ -189,6 +192,7 @@ namespace Scalpal.Briefing
             StopSpeech();
             foreach (var pointer in pointers) pointer.Clear();
             gameObject.SetActive(false);
+            if (Stage) Stage.Sync(0); // Restores the OR and starts the void's fade-out.
         }
 
         /// <summary>Advances the step clock; Update drives it with unscaled time, validation drives it directly.</summary>
@@ -235,10 +239,12 @@ namespace Scalpal.Briefing
         {
             // Returning from a pause or registration interruption replays the current step's line.
             if (Atlas && Step != null && !Finished) Speak(Step);
+            if (Stage) Stage.Sync(0);
         }
 
         void OnDisable()
         {
+            if (Stage) Stage.Sync(0); // Pause/realign: the OR shows again until the briefing resumes.
             StopSpeech();
             foreach (var pointer in pointers) pointer.Clear();
         }
