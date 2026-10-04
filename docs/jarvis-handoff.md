@@ -279,3 +279,23 @@ Jarvis has two parts. The state tracker (`CoachSession` in `services/preop/src/c
 - `{"type": "contact", "instrumentId": "scalpel", "structureId": "skin"}` when a tool tip first touches a tissue or structure (send once per contact, not every frame). In open surgery, the first contact with a critical structure (cecum, terminal ileum, iliac vessels, ureter) gives a one-time caution.
 
 Send them through `CoachRelay` / `POST /coach/sessions/:id/events` like the others. With them, the context shows "In hand: right scalpel" and a timed recent history ("0:03 Scalpel touched the skin. 0:05 Scalpel: cut the skin, 52 mm (cut across the fibers)."). Body actions (`surgery` events) and milestones appear in the same history in plain words.
+
+## Operating room condition: vitals, region injuries, outcome, checklist (docs/operation-flow.md)
+
+The coach now models the simulated patient's condition (`services/preop/src/patient-condition.ts`, physiology mirrored from `services/vitals/src/physiology.mjs` and parity-tested).
+
+- **Baseline:**
+  - VR: the patient's latest charted vitals and weight at session creation (`chart-vitals.ts`).
+  - AR: at Time-Out, `POST /coach/sessions/:id/vitals/baseline` with no body captures the Presage baseline from `VITALS_URL` (services/vitals `POST /baseline/capture`). Alternatively, send `{baseline: {hr, rr, sys, dia, source}}` yourself.
+- **Simulated vitals:** body reducer blood loss plus region bleeding, multiplied by `DEMO_HEMORRHAGE_SCALE` (8), go into the shared ATLS model. Snapshot `condition.vitals` holds `{hr, rr, sys, dia, spo2 (-1 if not charted), hemorrhageClass, bloodLossPct, label, simulated, scale}`; `condition.rawBloodLossMl` holds unscaled ml.
+- **Region injuries:** the headset sends `{type: "injury", region: "head" | "neck" | "chest" | "left_arm" | "right_arm" | "left_leg" | "right_leg", instrumentId}` when a cutting tool cuts outside the surgical field, and `{..., controlled: true}` once that region's bleeding is controlled. Each gives an instant pre-rendered alarm (`region.<id>`).
+  - neck: 300 ml/min raw;
+  - chest: 150 ml/min raw;
+  - limbs: 20 ml/min raw;
+  - head: fatal.
+- **Death:** at 50% simulated blood volume lost, or a catastrophic region, `condition.outcome = {result: "died", cause, at}`. The alert `patient_died` plays its clip (`outcome.died`), the monitor shows asystole, and every later event is refused with `patient_died`. Completing the goals sets `result: "completed"`.
+- **Vitals alerts:**
+  - class 2: caution;
+  - classes 3 and 4: warnings with clips `vitals.class3` and `vitals.class4`.
+- **Checklist:** snapshot `checklist: [{id, title, done, current}]` for the top-left HUD. It is guidance only and never gates actions.
+- **Dashboard logs:** every timeline line, alert, vitals sample (at most every 2 s and on class changes), checklist change and outcome goes to SpacetimeDB `sim_log` for the companion's Live logs panel.

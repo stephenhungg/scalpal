@@ -3,6 +3,8 @@ import { INSTRUMENTS_BY_ID } from "./catalog/instruments.js";
 import type { BodyGrade } from "./open-body-grade.js";
 import { StepEngine, perfectEvents, type EngineEvent } from "./engine.js";
 import type { BodyAction, BodyPredicate, BodyState } from "./open-body.js";
+import { CLASS_LINES, DEATH_LINE, PatientCondition, REGIONS, type ConditionView, type RegionId } from "./patient-condition.js";
+import type { Baseline } from "./physiology.js";
 import type { ProcedureStep, Severity, StepAction, SurgicalCase } from "./types.js";
 
 // Live coaching state for one surgery attempt. Wraps the reference StepEngine (same semantics as
@@ -16,6 +18,9 @@ export type CoachEvent =
   // State tracker facts that do not score: a tool picked up or put down, and a tool tip touching tissue.
   | { type: "instrument"; instrumentId: string; hand: "left" | "right"; held: boolean }
   | { type: "contact"; instrumentId: string; structureId: string }
+  // A cutting tool hit a body region outside the surgical field (coarse regions, docs/operation-flow.md);
+  // controlled: true when the learner gets control of that region's bleeding.
+  | { type: "injury"; region: RegionId; instrumentId: string; controlled?: boolean }
   | { type: "tracking"; valid: boolean } // registration validity; invalid pauses scoring
   // Simulated vessel injury from the headset's tissue model; totalMl is cumulative for the attempt.
   | { type: "bleeding"; structureId: string; active: boolean; rateMlPerMin: number; totalMl: number };
@@ -30,7 +35,10 @@ export type AlertKind =
   | "tracking_lost"
   | "tracking_restored"
   | "bleeding"
-  | "bleeding_controlled";
+  | "bleeding_controlled"
+  | "region_injury"
+  | "vitals"
+  | "patient_died";
 
 export type AlertPriority = "urgent" | "normal" | "low";
 
@@ -156,6 +164,10 @@ export interface CoachSnapshot {
   achievedMilestones: string[];
   orderDeviations: string[];
   decisionPrompts: { id: string; prompt: string; choices: string[] }[];
+  // The procedure's steps for the on-screen checklist: guidance only, never an action gate.
+  checklist: { id: string; title: string; done: boolean; current: boolean }[];
+  // Simulated vitals, injuries outside the field, and the case outcome (patient-condition.ts).
+  condition: ConditionView;
 }
 
 export interface StuckPolicy {
@@ -221,6 +233,9 @@ export class CoachSession {
   private bleedStartMs = new Map<string, number>(); // open body: headset time each active bleed began
   private bleedEscalated = new Set<string>();
   private bloodLossMl = 0;
+  // Simulated vitals and outcome; the baseline is set from the chart (VR) or Presage (AR) by the route.
+  readonly condition = new PatientCondition(() => this.ms());
+  simulated = false; // laptop demo driver in use: the coach advances bleeding time itself
   private scene = { summary: "", at: "", source: "" }; // latest vision summary of the learner's view
   private commands: CoachCommand[] = [];
   private alertSeq = 0;
@@ -262,6 +277,7 @@ export class CoachSession {
   }
 
   private changed(alerts: CoachAlert[]) {
+    alerts.push(...this.conditionAlerts());
     this.version += 1;
     for (const a of alerts) a.version = this.version;
     const snapshot = this.snapshot();
@@ -410,7 +426,9 @@ export class CoachSession {
   }
 
   handle(event: CoachEvent): EventOutcome {
+    if (this.condition.died) return { accepted: false, reason: "patient_died", alerts: [] };
     if (event.type === "tracking") return this.handleTracking(event.valid);
+    if (event.type === "injury") return this.handleInjury(event);
     if (event.type === "bleeding") return this.kase.procedure.openBody
       ? { accepted: false, reason: "body_state_authoritative", alerts: [] } : this.handleBleeding(event);
     if (event.type === "focus") return this.handleFocus(event.structureId);
@@ -617,9 +635,66 @@ export class CoachSession {
 
   // Called on a timer: escalates the hint tier once per level as time passes without progress.
   tick(): CoachAlert[] {
+    if (this.simulated) this.advanceSimulatedBleeding();
     const alerts = this.checkStuck();
-    if (alerts.length) this.changed(alerts);
+    const bleeding = this.bleeds.size > 0 || this.condition.view().regions.some((r) => r.bleeding);
+    // While anything bleeds the vitals move every tick, so the state is republished.
+    if (alerts.length || (bleeding && !this.condition.died)) this.changed(alerts);
     return alerts;
+  }
+
+  // quiet: at session creation, before anyone listens, so the state version does not move.
+  setBaseline(baseline: Baseline, opts: { weightKg?: number; spo2?: number | null; quiet?: boolean } = {}) {
+    this.condition.setBaseline(baseline, opts);
+    this.note(`Vitals baseline set from ${baseline.source ?? "authored"} values: HR ${baseline.hr}, BP ${baseline.sys}/${baseline.dia}, RR ${baseline.rr}.`);
+    if (!opts.quiet) this.changed([]);
+  }
+
+  // Laptop demo only: with no headset sending 1 Hz ticks, the coach sends the body reducer's tick itself
+  // while something bleeds, so blood loss grows in real time.
+  private advanceSimulatedBleeding() {
+    const body = this.engine.body;
+    if (!body || this.condition.died || !this.bleeds.size) return;
+    const lastT = body.log.at(-1)?.action.timeMs ?? 0;
+    const evidence = { actionId: `coach-tick-${lastT + 1000}`, instrumentId: "assistant", instrumentInstanceId: "", secondaryInstanceId: "", verb: "tick", tissueId: body.tissues[0]?.id ?? "skin", layer: body.tissues[0]?.layer ?? "skin", coordinateFrame: "registered_torso_m", timeMs: lastT + 1000, position: { x: 0, y: 0, z: 0 }, registered: true, speedMps: 0, forceProxy: 0, distanceMm: 0, lengthMm: 0, angleDegrees: 0, depthMm: 0, durationMs: 0, separationMm: 0, choice: "" } as BodyAction;
+    this.handle({ type: "surgery", evidence });
+  }
+
+  private handleInjury(e: { region: RegionId; instrumentId: string; controlled?: boolean }): EventOutcome {
+    const def = REGIONS[e.region];
+    if (e.controlled) {
+      const stopped = this.condition.control(e.region);
+      if (stopped) this.note(`Bleeding from the ${def.label} controlled.`);
+      const alerts = stopped ? [this.alert("bleeding_controlled", "low", `Bleeding from the ${def.label} controlled.`, [], "")] : [];
+      this.changed(alerts);
+      return { accepted: true, reason: "", alerts };
+    }
+    const { first } = this.condition.injure(e.region);
+    this.note(`${this.instrumentName(e.instrumentId)} cut the ${def.label}, outside the surgical field.`);
+    this.mistakes.push({ stepId: this.engine.current?.id ?? "", mistakeId: `region_${e.region}`, severity: def.critical ? "high" : "moderate", structure: e.region, feedback: def.alarm, at: this.clock().toISOString() });
+    const alerts = first ? [this.alert("region_injury", "urgent", def.alarm, [], "", `region.${e.region}`)] : [];
+    this.changed(alerts);
+    return { accepted: true, reason: "", alerts };
+  }
+
+  // Feeds the latest bleeding into the condition model and turns class changes and death into alerts.
+  private conditionAlerts(): CoachAlert[] {
+    let rate = 0;
+    for (const r of this.bleeds.values()) rate += r;
+    this.condition.setBodyBleeding(this.bloodLossMl, rate);
+    if (this.done) this.condition.markCompleted();
+    const out: CoachAlert[] = [];
+    for (const c of this.condition.update()) {
+      if (c.kind === "died") {
+        this.note(`The patient died: ${c.cause}.`);
+        out.push(this.alert("patient_died", "urgent", `${DEATH_LINE} Cause: ${c.cause}.`, [], "", "outcome.died", DEATH_LINE));
+      } else if (c.to >= 2) {
+        const v = this.condition.view().vitals;
+        this.note(`Vitals worsened to hemorrhage class ${c.to}: HR ${v.hr}, BP ${v.sys}/${v.dia} (simulated).`);
+        out.push(this.alert("vitals", c.to >= 3 ? "urgent" : "normal", CLASS_LINES[c.to as 2 | 3 | 4], [], "", c.to >= 3 ? `vitals.class${c.to}` : ""));
+      }
+    }
+    return out;
   }
 
   private stuckLevel(): number {
@@ -866,6 +941,13 @@ export class CoachSession {
       achievedMilestones: [...this.engine.completedMilestones],
       orderDeviations: [...this.engine.orderDeviations],
       decisionPrompts: (procedure.openBody?.decisions ?? []).map(({ id, prompt, choices }) => ({ id, prompt, choices })),
+      checklist: procedure.steps.map((st) => ({
+        id: st.id,
+        title: st.title,
+        done: this.engine.completedMilestones.has(st.id) || this.completed.some((c) => c.stepId === st.id),
+        current: st.id === step?.id,
+      })),
+      condition: this.condition.view(),
     };
   }
 
@@ -946,7 +1028,13 @@ export function reflexLines(kase: SurgicalCase, mode: PresentationMode = "mixed_
     bleeds.push({ key: `bleeding.${tissue.id}`, text: bleedingLine(kase.anatomy.find(a => a.id === tissue.id)?.displayName ?? tissue.id.replaceAll("_", " ")) });
   for (const tissue of kase.procedure.openBody?.tissues ?? []) if (tissue.perfused)
     bleeds.push({ key: `bleeding_uncontrolled.${tissue.id}`, text: uncontrolledBleedLine(kase.anatomy.find(a => a.id === tissue.id)?.displayName ?? tissue.id.replaceAll("_", " ")) });
-  return [...unique, { key: "tracking_lost", text: trackingLostLine(mode) }, ...bleeds, ...callouts, ...hints];
+  const condition = [
+    ...(Object.keys(REGIONS) as RegionId[]).map((r) => ({ key: `region.${r}`, text: REGIONS[r].alarm })),
+    { key: "vitals.class3", text: CLASS_LINES[3] },
+    { key: "vitals.class4", text: CLASS_LINES[4] },
+    { key: "outcome.died", text: DEATH_LINE },
+  ];
+  return [...unique, { key: "tracking_lost", text: trackingLostLine(mode) }, ...bleeds, ...callouts, ...hints, ...condition];
 }
 
 // True when the authored hint mostly repeats the coaching sentence, so the nudge says it once.
@@ -998,7 +1086,7 @@ function describeOffTarget(event: EngineEvent, name: (id: string) => string, too
 // context to the agent only when this key differs from the last one they sent.
 export function contextKey(s: CoachSnapshot): string {
   const parts = [
-    s.status, s.step.id, s.step.progressText, s.timeline.length && s.timeline[s.timeline.length - 1], s.held, s.completedCount, s.mistakeCount, s.focusStructure.id, s.stuckLevel,
+    s.status, s.step.id, s.step.progressText, s.condition.outcome.result, s.condition.vitals.hemorrhageClass, Math.round(s.condition.vitals.hr / 10), s.condition.regions.map((r) => `${r.region}:${r.bleeding}`).join(","), s.timeline.length && s.timeline[s.timeline.length - 1], s.held, s.completedCount, s.mistakeCount, s.focusStructure.id, s.stuckLevel,
     s.bodyGrade, s.bodyFacts, s.achievedMilestones, s.orderDeviations, s.trackingValid, s.hintTier, s.desynced, s.bloodLossMl, s.activeBleeds.map((b) => b.structure.id).join(","), s.scene.summary, s.commands.map((c) => `${c.commandId}:${c.status}`).join(","),
   ];
   let h = 2166136261;
@@ -1121,6 +1209,13 @@ export function renderContext(s: CoachSnapshot): string {
       s.completedSteps.map((c) => `${c.title} ${c.seconds}s${c.mistakes ? `, ${c.mistakes} mistake(s)` : ""}`).join("; "),
     ].join("\n");
   }
+  if (s.condition.outcome.result === "died") {
+    return [
+      `[LIVE SURGERY STATE v${s.version}] ${s.procedureTitle} for ${s.patientLabel}: THE PATIENT DIED (simulated). Cause: ${s.condition.outcome.cause}.`,
+      `The case is over; no further actions count. Tell the learner plainly what happened and what would have prevented it, then stop.`,
+      `Last events: ${s.timeline.slice(-5).map((t) => t.text).join(" ")}`,
+    ].join("\n");
+  }
   const st = s.step;
   const desync = s.desynced
     ? `HEADSET DISAGREES: the headset reports step "${s.headsetStepId}" while this state shows "${st.id}". Trust the headset; describe progress only in general terms until they agree.`
@@ -1148,6 +1243,10 @@ export function renderContext(s: CoachSnapshot): string {
   if (st.patientNotes.length) lines.push(`Patient-specific: ${st.patientNotes.join(" ")}`);
   if (s.scene.summary) lines.push(`In view (${s.scene.source || "camera"}): ${s.scene.summary}`);
   if (s.focusStructure.id) lines.push(`Learner is looking at: ${s.focusStructure.name}.`);
+  const v = s.condition.vitals;
+  lines.push(`Vitals (simulated from ${s.condition.baselineSource} baseline): HR ${v.hr}, BP ${v.sys}/${v.dia}, RR ${v.rr}${v.spo2 >= 0 ? `, SpO2 ${v.spo2}%` : ""}. Simulated blood loss ${v.bloodLossPct}% of volume (class ${v.hemorrhageClass}).${v.hemorrhageClass >= 3 ? " DETERIORATING: bleeding control comes before anything else." : ""}`);
+  const injuries = s.condition.regions;
+  if (injuries.length) lines.push(`Injuries outside the surgical field: ${injuries.map((r) => `${r.label}${r.bleeding ? " (bleeding)" : ""}`).join(", ")}.`);
   if (s.held.length) lines.push(`In hand: ${s.held.map((h) => `${h.hand} ${h.name}${h.touching.id ? ` (tip on the ${h.touching.name.toLowerCase()})` : ""}`).join("; ")}.`);
   const trail = s.timeline.slice(-TIMELINE_IN_CONTEXT);
   if (trail.length > 1) lines.push(`Recent, oldest first (session clock, now ${clockText(s.elapsedSeconds)}): ${trail.map((t) => `${clockText(t.atSeconds)} ${t.text}`).join(" ")}`);

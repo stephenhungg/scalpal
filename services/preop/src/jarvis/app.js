@@ -54,6 +54,9 @@ function render(snap) {
         ["Danger", s.dangers.length ? `<span class="danger">${esc(s.dangers.map((d) => d.name).join(", "))}</span>` : "none flagged"],
         ["Looking at", snap.focusStructure.name || "n/a"],
         ["This patient", s.patientNotes.join(" ") || "no step-specific notes"],
+        ["Vitals (sim)", snap.condition ? `HR ${snap.condition.vitals.hr} · BP ${snap.condition.vitals.sys}/${snap.condition.vitals.dia} · RR ${snap.condition.vitals.rr}${snap.condition.vitals.spo2 >= 0 ? ` · SpO2 ${snap.condition.vitals.spo2}` : ""} · loss ${snap.condition.vitals.bloodLossPct}% (class ${snap.condition.vitals.hemorrhageClass}, ${snap.condition.baselineSource} baseline)` : "n/a"],
+        ["Outcome", snap.condition ? (snap.condition.outcome.result === "died" ? `DIED: ${snap.condition.outcome.cause}` : snap.condition.outcome.result) : "n/a"],
+        ["Checklist", (snap.checklist ?? []).map((c) => `${c.done ? "✓" : c.current ? "▸" : "·"} ${c.title}`).join("  ")],
         ["Last event", snap.lastEvent],
         ["Mistakes", `${snap.mistakeCount} total`],
       ];

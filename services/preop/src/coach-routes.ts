@@ -11,6 +11,8 @@ import type { Frame, FrameMark, SceneVision } from "./scene-vision.js";
 import type { FrameDetector } from "./frame-detector.js";
 import { ReflexAudio } from "./reflex.js";
 import { openBodySimulation, restampForBody } from "./open-body-sim.js";
+import { REGION_IDS, type RegionId } from "./patient-condition.js";
+import type { Baseline } from "./physiology.js";
 import { NO_REALTIME, type RealtimeBridge, type RealtimeSink } from "./realtime-bridge.js";
 import { buildSystemPrompt, firstMessage } from "./coach-prompt.js";
 import { createContextFeed, type ContextFeed } from "./jarvis/context-feed.js";
@@ -37,6 +39,9 @@ export interface CoachRouteOptions {
   vision?: SceneVision | null; // Jarvis's eyes; null when no vision model is configured
   watchMs?: number; // minimum gap between background scene summaries (0 disables watching)
   detector?: FrameDetector | null; // real-camera instrument and hand boxes (services/vision); null when not running
+  // Baseline vitals for a case from the patient's chart (VR, and AR until the Presage baseline is captured).
+  baselineFor?: (kase: SurgicalCase) => Promise<{ baseline: Baseline; weightKg: number; spo2: number | null } | null>;
+  vitalsUrl?: string; // services/vitals (Presage); POST /baseline/capture at Time-Out in AR
 }
 
 const MAX_FRAME_CHARS = 4_000_000; // about 3 MB of JPEG
@@ -156,6 +161,9 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
     }
     const sid = `coach-${crypto.randomUUID().replaceAll("-", "").slice(0, 16)}`;
     const session = new CoachSession(sid, kase, options.now, options.stuckPolicy, mode);
+    const chart = await options.baselineFor?.(kase).catch(() => null);
+    if (chart) session.setBaseline(chart.baseline, { weightKg: chart.weightKg, spo2: chart.spo2, quiet: true });
+    forwardLogs(session);
     // Office to operating room: the scored encounter for this patient informs the surgery coaching.
     const office = typeof encounterId === "string" ? options.encounterFor?.(encounterId) : null;
     const preop = office && office.kase.patientId === kase.patientId ? office.carryover() : "";
@@ -457,6 +465,65 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
     return c.json({ command, actions: coachActions(s.id) });
   });
 
+  // Operating-room logs for the companion dashboard: new timeline lines, alerts, a vitals sample at most
+  // every 2 s (and on every class change), checklist progress and the outcome. Logs only, no video.
+  function forwardLogs(session: CoachSession) {
+    const sink = options.realtime;
+    if (!sink?.simLog) return;
+    const log = (kind: "event" | "alert" | "vitals" | "checklist" | "outcome", text: string, data?: unknown) => sink.simLog!({ coachSessionId: session.id, kind, text, data });
+    let lastLine = "";
+    let lastVitalsAt = 0;
+    let lastClass = 0;
+    let doneCount = 0;
+    let outcome = "in_progress";
+    session.subscribe(({ snapshot, alerts }) => {
+      const timeline = snapshot.timeline;
+      const from = timeline.findIndex((t) => `${t.atSeconds}|${t.text}` === lastLine);
+      for (const t of from === -1 ? timeline.slice(-3) : timeline.slice(from + 1)) log("event", t.text, { atSeconds: t.atSeconds });
+      if (timeline.length) lastLine = `${timeline.at(-1)!.atSeconds}|${timeline.at(-1)!.text}`;
+      for (const a of alerts) log("alert", a.say, { kind: a.kind, tier: a.tier });
+      const v = snapshot.condition.vitals;
+      const now = options.now().getTime();
+      if (now - lastVitalsAt >= 2000 || v.hemorrhageClass !== lastClass) {
+        lastVitalsAt = now;
+        lastClass = v.hemorrhageClass;
+        log("vitals", `HR ${v.hr} · BP ${v.sys}/${v.dia} · RR ${v.rr}${v.spo2 >= 0 ? ` · SpO2 ${v.spo2}` : ""} · loss ${v.bloodLossPct}% (class ${v.hemorrhageClass}, simulated from ${snapshot.condition.baselineSource})`, { ...v, rawBloodLossMl: snapshot.condition.rawBloodLossMl });
+      }
+      const done = snapshot.checklist.filter((c) => c.done).length;
+      if (done !== doneCount) {
+        doneCount = done;
+        log("checklist", `${done}/${snapshot.checklist.length} steps done${snapshot.checklist.find((c) => c.current) ? `; now: ${snapshot.checklist.find((c) => c.current)!.title}` : ""}`, snapshot.checklist);
+      }
+      if (snapshot.condition.outcome.result !== outcome) {
+        outcome = snapshot.condition.outcome.result;
+        log("outcome", outcome === "died" ? `Patient died: ${snapshot.condition.outcome.cause}` : outcome === "completed" ? "Case goals reached" : outcome, snapshot.condition.outcome);
+      }
+    });
+  }
+
+  // Time-Out in AR: freeze the volunteer's measured baseline (Presage, services/vitals) and use it for the
+  // simulated monitor. A body {baseline: {hr, rr, sys, dia}} sets it directly (tests, or a headset that
+  // reads the vitals service itself). Without either, the chart baseline stays.
+  app.post("/coach/sessions/:sid/vitals/baseline", async (c) => {
+    const s = getSession(c);
+    if (!s) return missing(c);
+    const b = (await body(c)).baseline as Record<string, unknown> | undefined;
+    const ok = (x: unknown) => typeof x === "number" && Number.isFinite(x) && x > 0 && x < 400;
+    let baseline: Baseline | null = null;
+    if (b && ok(b.hr) && ok(b.rr) && ok(b.sys) && ok(b.dia)) {
+      baseline = { hr: b.hr as number, rr: b.rr as number, sys: b.sys as number, dia: b.dia as number, source: typeof b.source === "string" ? b.source.slice(0, 20) : "measured" };
+    } else if (options.vitalsUrl) {
+      const res = await fetch(`${options.vitalsUrl.replace(/\/$/, "")}/baseline/capture`, { method: "POST", signal: AbortSignal.timeout(4000) }).catch(() => null);
+      const j = res?.ok ? ((await res.json().catch(() => null)) as Record<string, unknown> | null) : null;
+      if (j && ok(j.hr) && ok(j.rr) && ok(j.sys) && ok(j.dia)) baseline = { hr: j.hr as number, rr: j.rr as number, sys: j.sys as number, dia: j.dia as number, source: typeof j.source === "string" ? j.source : "measured" };
+      else return bad(c, 503, "vitals_unavailable", "The vitals service did not return a baseline; the chart baseline stays.", coachActions(s.id));
+    } else {
+      return bad(c, 400, "invalid_baseline", 'Send {"baseline": {"hr", "rr", "sys", "dia", "source"}} or set VITALS_URL for Presage capture.', coachActions(s.id));
+    }
+    s.setBaseline(baseline);
+    return c.json({ baseline, condition: s.snapshot().condition, actions: coachActions(s.id) });
+  });
+
   // Demo driver: lets the laptop exercise Jarvis before the headset is wired in.
   app.post("/coach/sessions/:sid/simulate", async (c) => {
     const s = getSession(c);
@@ -464,9 +531,16 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
     const { kind } = await body(c);
     let events: CoachEvent[] = [];
     const stepResults: ReturnType<CoachSession["handle"]>[] = [];
-    const open = typeof kind === "string" ? openBodySimulation(s, kind) : null;
+    s.simulated = true;
+    const region = typeof kind === "string" ? ({ cut_neck: "neck", cut_head: "head", cut_chest: "chest", cut_arm: "right_arm" } as Record<string, RegionId>)[kind] : undefined;
+    if (region) events = [{ type: "injury", region, instrumentId: "scalpel" }];
+    else if (kind === "control_injury") {
+      const bleedingRegion = s.condition.view().regions.find((r) => r.bleeding)?.region;
+      events = bleedingRegion ? [{ type: "injury", region: bleedingRegion, instrumentId: "hemostat", controlled: true }] : [];
+    }
+    const open = region || kind === "control_injury" ? null : typeof kind === "string" ? openBodySimulation(s, kind) : null;
     if (open) events = open;
-    else switch (kind) {
+    else if (!region && kind !== "control_injury") switch (kind) {
       case "correct_action": {
         const e = restampForBody(s, s.nextCorrectEvent());
         events = e ? [e] : [];
@@ -522,7 +596,7 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
         events = [{ type: "tracking", valid: true }];
         break;
       default:
-        return bad(c, 400, "invalid_simulation", "kind must be correct_action, complete_step, mistake, wrong_instrument, off_target, look_at_danger, tracking_lost, tracking_restored, bleed, or stop_bleed.", coachActions(s.id));
+        return bad(c, 400, "invalid_simulation", "kind must be correct_action, complete_step, mistake, wrong_instrument, off_target, look_at_danger, tracking_lost, tracking_restored, bleed, stop_bleed, cut_neck, cut_head, cut_chest, cut_arm, or control_injury.", coachActions(s.id));
     }
     const results = [...stepResults, ...events.map((e) => s.handle(e))];
     const snapshot = s.snapshot();
@@ -665,6 +739,12 @@ function parseEvent(e: unknown): CoachEvent | string {
       return id("instrumentId") || { type: "instrument", instrumentId: str("instrumentId"), hand: ev.hand, held: ev.held };
     case "contact":
       return id("instrumentId") || id("structureId") || { type: "contact", instrumentId: str("instrumentId"), structureId: str("structureId") };
+    case "injury": {
+      const region = str("region") as RegionId;
+      if (!REGION_IDS.includes(region)) return `injury needs region one of ${REGION_IDS.join(", ")}`;
+      if (ev.controlled !== undefined && typeof ev.controlled !== "boolean") return "injury controlled must be a boolean";
+      return id("instrumentId") || { type: "injury", region, instrumentId: str("instrumentId"), ...(ev.controlled === true ? { controlled: true } : {}) };
+    }
     case "tracking":
       return typeof ev.valid === "boolean" ? { type: "tracking", valid: ev.valid } : "tracking needs a boolean valid";
     case "bleeding": {
@@ -675,7 +755,7 @@ function parseEvent(e: unknown): CoachEvent | string {
       return id("structureId") || { type: "bleeding", structureId: str("structureId"), active: ev.active, rateMlPerMin: rate, totalMl: total };
     }
     default:
-      return "type must be place_port, touch, identify, confirm, surgery, instrument, contact, focus, tracking, or bleeding";
+      return "type must be place_port, touch, identify, confirm, surgery, instrument, contact, injury, focus, tracking, or bleeding";
   }
 }
 

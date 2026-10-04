@@ -20,6 +20,8 @@ export default createApp({
   // Office interview: spoken answers are transcribed (ElevenLabs) and matched to a choice (Claude Haiku).
   speechToText: process.env.ELEVENLABS_API_KEY ? new ElevenLabsSpeechToText(process.env.ELEVENLABS_API_KEY) : null,
   answerClassifier: process.env.ANTHROPIC_API_KEY ? new ClaudeAnswerClassifier() : null,
+  // Presage vitals service (services/vitals) for the AR Time-Out baseline, e.g. http://127.0.0.1:8791.
+  vitalsUrl: process.env.VITALS_URL || undefined,
   client: createFinchNodeClient({
     baseUrl: process.env.FINCHNODE_BASE_URL || undefined,
     // Optional ck_test_ sandbox key: enables real Connect admissions. Without it, demo records only.

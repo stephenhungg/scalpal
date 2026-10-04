@@ -10,6 +10,7 @@ import { registerCoachRoutes } from "./coach-routes.js";
 import { registerEncounterRoutes } from "./encounter-routes.js";
 import { registerInterviewRoutes } from "./interview-routes.js";
 import { patientStatusFor } from "./interview-content.js";
+import { chartBaseline } from "./chart-vitals.js";
 import type { AnswerClassifier, SpeechToText } from "./answer-classifier.js";
 import { ENCOUNTERS_BY_PLAN } from "./catalog/encounters.js";
 import type { RealtimeBridge } from "./realtime-bridge.js";
@@ -32,6 +33,7 @@ export interface AppOptions {
   answerClassifier?: AnswerClassifier | null;
   speechToText?: SpeechToText | null;
   interviewContentRoot?: string;
+  vitalsUrl?: string; // services/vitals (Presage) for the AR Time-Out baseline
   reflex?: ReflexAudio;
   toolAckWaitMs?: number;
   realtime?: RealtimeBridge | null;
@@ -533,6 +535,14 @@ export function createApp(options: AppOptions = {}) {
     encounters,
     encounterFor: (id) => encounters.get(id) ?? interviews.get(id),
     patientStatus: (id) => patientStatusFor(id, options.interviewContentRoot),
+    vitalsUrl: options.vitalsUrl,
+    // VR baseline (and AR until Presage is captured): the patient's latest charted vitals and weight.
+    baselineFor: async (kase) => {
+      const record = await client.getRecord(kase.patientId).catch(() => null);
+      if (!record) return null;
+      const chart = chartBaseline((record.data as { vitals?: never[] } | undefined)?.vitals ?? [], kase.patient.age);
+      return { baseline: chart.baseline, weightKg: chart.weightKg, spo2: chart.spo2 };
+    },
     vision: options.vision ?? null,
     watchMs: options.watchMs,
     detector: options.detector ?? null,
