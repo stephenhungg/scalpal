@@ -70,6 +70,38 @@ Verified on an M2 MacBook (branch `matthew/preop-finchnode`, carried to main):
 - **Training data:** two such episodes, converted to demos, generated training data at 55% physics yield.
 - **Not yet run:** a real headset session. The capture compiles in the .NET check but has not run on a Quest.
 
+### Surgery-step labels from the coach
+
+```sh
+uv run scalpal-motion teleop --consented --coach http://127.0.0.1:8787                 # follow the newest coach session
+uv run scalpal-motion teleop --consented --coach http://127.0.0.1:8787 --session coach-<id>
+uv run scalpal-motion teleop --consented --coach http://127.0.0.1:8787 --patient patient-demo-sparse
+```
+
+A background thread asks the coach (`GET /coach/current`, then `GET /coach/sessions/:sid`) about every 250 ms. Every 20 Hz control frame of an attempt is stamped with the newest answer: `sessionId`, `procedureId`, `stepId`, `stepTitle`, `stepNumber`, `held` instruments, case `outcome`, plus `age_s` and `stale` (older than 2 s). Frames are stamped `null` while the coach is down or has no session; teleop never waits on it. Attempts also log the measured wrist pose (`wrist`), the 22 finger joint angles (`joints`) and frame time (`t`). The window shows the current step.
+
+When an attempt is saved and `--coach` is set, a `scalpal.robot_attempt.v1` summary is POSTed to `/coach/sessions/:sid/robot-attempts` in the background (step, steps during the attempt, held tools, success, frames, duration, max lift). Failures are printed and ignored; `--no-report` turns it off. The route is proposed and not in `services/preop` yet, so today the coach answers 404 and only the local file is written.
+
+### Export to a LeRobot-style dataset
+
+```sh
+uv run scalpal-motion export-lerobot out/teleop --out out/lerobot/scalpal_robot_hand              # JSON Lines data files
+uv run --with pyarrow scalpal-motion export-lerobot out/teleop --out out/lerobot/scalpal_robot_hand # Parquet, as LeRobot reads it
+```
+
+No LeRobot install. It writes the LeRobotDataset v2.1 folder layout:
+
+```
+meta/info.json               fps 20, features, counts, data_path template
+meta/tasks.jsonl             one task per surgery step title ("instrument transfer" for unlabeled frames)
+meta/episodes.jsonl          episode_index, tasks, length, success
+meta/episodes_stats.jsonl    per-episode min/max/mean/std/count
+meta/scalpal_episodes.jsonl  source attempt, coach session, step ids, held tools, case outcome, labeled fraction
+data/chunk-000/episode_000000.parquet  (or .jsonl without pyarrow)
+```
+
+Per frame: `observation.state` float32[26] = measured wrist x, y, z, yaw + 22 finger joints; `action` float32[22] = commanded grip point x, y, z, yaw + 18 finger actuator targets; `timestamp` (sim time, frame/20), `teleop_time_s` (wall clock), `next.done`, `next.success`, `frame_index`, `episode_index`, `index`, `task_index` (the step title at that frame). `--success-only` keeps attempts that placed the handle. Attempts recorded before state logging (no `wrist`) are skipped, not filled in. Not checked against an installed `lerobot` loader; videos are absent (`total_videos` 0) because there is no camera.
+
 **What is human data here and what is not.** The committed learning result (`learning-results/`, 96.7% policy vs 20% replay) used finger shapes extracted from one public MediaPipe sample clip; `learning-results/human_profiles.json` is that frozen extraction and is the only camera-derived file on main. Teleop uses its open and closed shapes as the two ends of the finger blend. The MediaPipe hand-camera stream (`services/hands`, `live`, `import-episode`) stayed on the branch and is not part of the demo.
 
 ## Nathan's Gateway (integration path)

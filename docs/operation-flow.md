@@ -129,6 +129,7 @@ The companion on the demo laptop shows **logs only**, live through SpacetimeDB:
 - **Input:** **VR controllers only.** There is no hand camera or passthrough video.
 - **What is logged:** controller 6DoF poses and inputs (grip, trigger, buttons) with the tool actions, per surgery step. Hand motion (grasp, release, cut) is inferred from them.
 - **What it drives:** the logged motion is retargeted onto the simulated robot hand for the replay.
+- **How:** `ControllerMotionCapture` streams to `scalpal-motion teleop`; fingers follow the glove mapping (trigger: index, grip: middle/ring/pinky, held instrument: full grasp) and each attempt is stamped with the coach's step. Setup and verification: [robot-hand.md](robot-hand.md).
 - **Claims:**
   - Say "replays the learner's controller motion", or describe what was measured in sim.
   - Do not claim a learned autonomous policy unless the robotics results show one.
