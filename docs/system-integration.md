@@ -1,5 +1,11 @@
 # System Integration Map
 
+## Handoff Mode Contract Audit
+
+Audited main `8454199` against the latest clarification and the active handoff producer. The shared field is `HandoffTicket.presentationMode` in `scalpal.handoff.v1`: `mixed_reality` or `virtual`. Theatre preflight controls recommendation/availability; `BindOfficeSource` preserves the mode and original scored attempt, `HandoffFlow.ChooseMode` records the learner choice, `NativePresentation.Awake` overrides the inspector default with the ticket, and `NativeCaseSession.Start` passes the resulting mode into the exercise/coach. Neither scored-source binding nor `CanChoose` forces VR. Explore/office remain full VR. [Exact mode and preflight contract](office-to-or-handoff.md#implementation-checkpoint).
+
+Added ten startup/source/serialization regressions to the committed-scene mode validator, with the presentation initially set to the opposite mode. `verify_session.py --suite player` passed: mode230, registration111, Handoff215 plus the complete unified Editor gate. These are synthetic/reflected component checks, not new Play Mode or hardware evidence. Existing runtime already follows the clarified contract, so no runtime or scene default was changed; the installed Q2 APK below remains the runtime checkpoint. Physical fit and the controller-blocked launch still need operator testing.
+
 ## Latest Quest Integration Checkpoint — October 4, 2026, 12:42 AM EDT
 
 Quest integration owner checkpoint Q2, review follow-up to Q1. Source **`e0891da`**, including contact `95d691d` and pairing `66c032e`; development ARM64 IL2CPP APK **`0.6.1-review` / Android code 12**, Unity 6000.0.66f2. The single player retains **Launch → DiagnosisOffice → NativeSession (AR or VR) → RunEnding**. APK **80,409,192 bytes**, SHA256 `8f190aa509c1867716ea94380e834386c0dd28b8fa601fc0d6666ae628db9ffa`; local artifact `../work/builds/scalpal-unified-0.6.1-review-e0891da.apk` (outside Git).

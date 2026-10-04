@@ -54,6 +54,7 @@ namespace Scalpal.Quest.Editor
                 session.realtime.autoConnect = false;
                 SetProperty(session.workbench, "IsReady", true);
                 SeedSharedIdentity(session);
+                HandoffStartupMode(session);
 
                 // Only a clone of the real practice geometry is active. The native rig,
                 // sensors, voice and transport remain inactive throughout this fixture.
@@ -184,6 +185,38 @@ namespace Scalpal.Quest.Editor
             Set(session.bodyRegistration, "observationTime", Time.realtimeSinceStartup - NativeBodyRegistration.MaximumFitAge - .01f);
             Assert(!session.RegistrationReady, "a held AR fit still expires at the acquisition-time boundary");
             SetStaticProperty(typeof(HandoffRun), "Current", null);
+        }
+
+        static void HandoffStartupMode(NativeCaseSession session)
+        {
+            // Exercise the actual committed presentation Awake against a serialized
+            // scored-office ticket. Opposite inspector defaults must not win.
+            var view = session.presentation;
+            bool initialMode = view.passthrough;
+            foreach (var mode in new[] { "mixed_reality", "virtual" })
+            {
+                var ticket = Ticket(); ticket.presentationMode = mode;
+                var source = ticket.sourceOffice;
+                HandoffRun.BindOfficeSource(ticket, source);
+                Assert(ticket.presentationMode == mode && ticket.attemptId == source.attemptId,
+                    "binding the scored office source preserves learner mode and attempt: " + mode);
+                ticket = JsonUtility.FromJson<HandoffTicket>(JsonUtility.ToJson(ticket));
+                Assert(ticket.presentationMode == mode && ticket.schema == "scalpal.handoff.v1",
+                    "shared run context round-trips the agreed mode field: " + mode);
+                SetStaticProperty(typeof(HandoffRun), "Current", ticket);
+                view.passthrough = mode == "virtual";
+                Call(view, "Awake");
+                bool ar = mode == "mixed_reality";
+                Assert(view.passthrough == ar && view.CoachMode == ticket.presentationMode,
+                    "real presentation startup takes ticket mode over the opposite scene default: " + mode);
+                Assert(view.cameraManager.enabled == ar && view.virtualRoom.activeSelf == !ar && view.virtualMannequin.enabled == !ar
+                    && view.headCamera.backgroundColor.a == (ar ? 0f : 1f),
+                    "ticket startup configures actual passthrough/virtual scene bindings: " + mode);
+                Assert(ticket.attemptId == source.attemptId && ticket.sharedSessionId == source.sharedSessionId && !ticket.practiceStarted,
+                    "presentation startup does not create a second scored attempt or enter practice: " + mode);
+            }
+            SetStaticProperty(typeof(HandoffRun), "Current", null);
+            view.passthrough = initialMode; view.Apply();
         }
 
         static void HandoffPreflight(NativeCaseSession session)
