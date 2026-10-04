@@ -58,7 +58,7 @@ export default function Home() {
       <section className="home-hero">
         <h1>Session logs, live.</h1>
         <p>Join with an invite code, or start a new session.</p>
-        <p className="home-note">Robot replay is retargeted motion, not a learned robot policy.</p>
+        <p className="home-note">In simulation, a robot learns the incision-marking step from the learner's demonstrations and is graded by the same milestone checks.</p>
       </section>
 
       <Panel title="Join a session" className="home-card">
