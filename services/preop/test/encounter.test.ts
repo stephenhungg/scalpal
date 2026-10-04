@@ -216,6 +216,24 @@ describe("patient facts come only from tools", () => {
     expect(s.summary().toLowerCase()).not.toContain("unremarkable");
   });
 
+  it("keeps Jarvis a listening attending who intervenes only on errors, never a second patient voice", () => {
+    // Product rule: the patient is a separate agent the learner interviews. Jarvis hears the presentation
+    // and challenges only what is wrong or missing, so a good presentation is not turned into a quiz.
+    for (const e of ENCOUNTERS) {
+      const prompt = attendingPrompt(encounterFor(e.planSubject));
+      expect(prompt).toMatch(/You are Jarvis, the attending surgeon/);
+      expect(prompt).toMatch(/never speak for the patient/);
+      expect(prompt).toMatch(/let them present without interrupting/);
+      expect(prompt).toMatch(/Do not run a checklist/);
+      expect(prompt).toMatch(/Intervene only when something is wrong or missing/);
+      expect(prompt).toMatch(/Wrong procedure or wrong timing: challenge the plan/);
+      expect(prompt).toMatch(/at most two challenges/);
+      expect(prompt).not.toMatch(/Ask them to present the patient and tell you/);
+      // The patient's own persona never leaks into the attending prompt.
+      expect(prompt).not.toContain(e.persona.opener);
+    }
+  });
+
   it("puts the seated people in state: the patient, and an adult parent beside a child", () => {
     // The office seats an avatar for every playable patient; missing demographics left the chair empty.
     for (const e of ENCOUNTERS) {
