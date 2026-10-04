@@ -26,11 +26,13 @@ let demo = true;
 if (wantLive && !key) console.log("[vitals] PRESAGE_LIVE=1 but no PRESAGE_API_KEY: staying in DEMO mode");
 else if (wantLive && quota.remainingMinutes() <= 0.25) console.log(`[vitals] live budget used up (${quota.usedMinutes().toFixed(1)} min): staying in DEMO mode`);
 else if (wantLive) demo = false;
+// Test hook: run the live path (guard, auto-stop, ledger) with the demo source instead of Presage.
+const fakeLive = !demo && process.env.PRESAGE_FAKE_LIVE === "1";
 
 let snapshot = {
   schema: "scalpal.vitals/0",
   mode: demo ? "demo" : "live",
-  label: demo ? "DEMO · synthetic vitals" : "Volunteer · real vitals · Presage",
+  label: demo ? "DEMO · synthetic vitals" : fakeLive ? "TEST · fake live source" : "Volunteer · real vitals · Presage",
   status: { ok: false, reason: "Starting", code: null },
   pulse: null,
   breathing: null,
@@ -65,7 +67,7 @@ if (demo) {
   console.log("[vitals] labelled DEMO mode (no quota used). Set PRESAGE_LIVE=1 for real measurement.");
   startDemo({ onUpdate });
 } else {
-  const { startPresage } = await import("./presage.mjs");
+  const { startPresage } = fakeLive ? { startPresage: (o) => startDemo(o) } : await import("./presage.mjs");
   const minutes = Math.min(LIVE_MINUTES, quota.remainingMinutes());
   console.log(`[vitals] LIVE: ${quota.usedMinutes().toFixed(1)} of ${quota.totalMinutes} min used; this session stops after ${minutes.toFixed(1)} min`);
   const session = quota.begin();

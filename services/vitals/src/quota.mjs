@@ -3,7 +3,8 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-const FILE = fileURLToPath(new URL("../.presage-usage.json", import.meta.url));
+// PRESAGE_USAGE_FILE lets tests use a throwaway ledger instead of the real one.
+const FILE = process.env.PRESAGE_USAGE_FILE || fileURLToPath(new URL("../.presage-usage.json", import.meta.url));
 
 export function budget(totalMinutes) {
   const read = () => (existsSync(FILE) ? JSON.parse(readFileSync(FILE, "utf8")) : { usedSeconds: 0, sessions: [] });
