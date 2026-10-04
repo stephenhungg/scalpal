@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Collections;
 using System.Collections.Generic;
 using Scalpal.Anatomy;
@@ -83,7 +84,7 @@ namespace Scalpal.Surgery
                 return;
             }
             if (alert.tier == "advisory") { if (!warningPlaying) Show(alert); return; }
-            if (queued.Count < 8) queued.Enqueue(alert);
+            Enqueue(queued, alert);
         }
 
         void Update()
@@ -93,6 +94,8 @@ namespace Scalpal.Surgery
             if (playback != null || !relay || !relay.IsSynchronized) return;
             // A conversational turn finishes before a caution; urgent clips interrupt above.
             if (voice && voice.CoachSessionId == relay.SessionId && voice.Mode == "speaking") return;
+            // Leave a quiet gap after each caution so Jarvis is not talking constantly; safety warnings ignore it.
+            if (Time.unscaledTime < cautionReadyAt) return;
             while (queued.Count > 0)
             {
                 var alert = queued.Dequeue();
@@ -200,8 +203,18 @@ namespace Scalpal.Surgery
             return string.Join("\n", lines);
         }
 
+        // Cautions are pacing, not alarms: keep only the newest per kind, so a burst of the same callout plays once.
+        public static void Enqueue(Queue<CoachAlertDto> queue, CoachAlertDto alert)
+        {
+            var keep = queue.Where(waiting => waiting.kind != alert.kind).ToList();
+            queue.Clear(); foreach (var waiting in keep) queue.Enqueue(waiting);
+            if (queue.Count < 4) queue.Enqueue(alert);
+        }
+        public const float CautionGapSeconds = 12;
+        float cautionReadyAt;
         void FinishPlayback()
         {
+            if (playback != null && !safetyPlaying) cautionReadyAt = Time.unscaledTime + CautionGapSeconds;
             if (speaker) { speaker.Stop(); speaker.clip = null; }
             if (activeClip) Release(activeClip);
             activeClip = null; warningPlaying = safetyPlaying = false; playback = null;
@@ -210,7 +223,7 @@ namespace Scalpal.Surgery
         void Failed(string reason) => ResetDelivery();
         void ResetDelivery()
         {
-            generation++; StopPlayback(); StopPulse(); queued.Clear(); LastCaption = "";
+            generation++; StopPlayback(); StopPulse(); queued.Clear(); LastCaption = ""; cautionReadyAt = 0;
             if (caption) caption.text = "";
         }
         void Unsubscribe()
