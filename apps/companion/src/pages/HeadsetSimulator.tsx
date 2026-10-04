@@ -44,13 +44,13 @@ async function makeTestClip(): Promise<File> {
   await new Promise<void>(resolve => {
     const draw = () => {
       const t = (performance.now() - start) / 1000;
-      g.fillStyle = '#0b1016';
+      g.fillStyle = '#000000';
       g.fillRect(0, 0, 640, 480);
-      g.fillStyle = '#5eead4';
+      g.fillStyle = '#8ef08a';
       g.beginPath();
       g.arc(320 + Math.cos(t * 2) * 160, 240 + Math.sin(t * 3) * 120, 30, 0, Math.PI * 2);
       g.fill();
-      g.fillStyle = '#e6edf5';
+      g.fillStyle = '#ffffff';
       g.font = '20px monospace';
       g.fillText(`SYNTHETIC TEST CLIP  t=${t.toFixed(2)}s`, 20, 36);
       if (t < 5) requestAnimationFrame(draw);
