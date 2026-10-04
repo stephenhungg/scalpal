@@ -278,6 +278,43 @@ describe("coach routes", () => {
   });
 });
 
+// /jarvis/connection hands out a credential for an agent billed to the owner. It must only be minted for a
+// live session, and the prompt the voice runs with must be the one the server built for that session.
+describe("voice connection", () => {
+  const app = createApp({ client: fixtureClient(), now: () => NOW, coachTickMs: 0, elevenLabs: { apiKey: "", agentId: "agent-jarvis", patientAgentId: "agent-patient" } });
+  const call = async (method: string, route: string, body?: unknown) => {
+    const res = await app.request(route, { method, headers: body ? { "Content-Type": "application/json" } : {}, body: body ? JSON.stringify(body) : undefined });
+    return { status: res.status, json: (await res.json()) as Record<string, any> };
+  };
+
+  it("refuses to mint a connection when nothing is live", async () => {
+    expect((await call("GET", "/jarvis/connection")).status).toBe(409);
+    expect((await call("GET", "/jarvis/connection?agent=patient")).status).toBe(409);
+    expect((await call("GET", "/jarvis/connection?sessionId=coach-doesnotexist")).status).toBe(404);
+    expect((await call("GET", "/jarvis/connection?encounterId=enc-doesnotexist")).status).toBe(404);
+  });
+
+  it("returns the server-built prompt for a coach session", async () => {
+    const created = (await call("POST", "/coach/sessions", { patientId: "patient-demo-pediatric-asthma" })).json;
+    const conn = await call("GET", `/jarvis/connection?sessionId=${created.sessionId}`);
+    expect(conn.status).toBe(200);
+    expect(conn.json).toMatchObject({ agentId: "agent-jarvis", prompt: created.systemPrompt, firstMessage: created.firstMessage });
+    expect((await call("GET", "/jarvis/connection")).status).toBe(200); // the headset's legacy call while a session is live
+  });
+
+  it("picks the agent and prompt from the encounter phase, never from the client", async () => {
+    const enc = (await call("POST", "/encounters", { patientId: "patient-demo-sparse" })).json;
+    const patient = await call("GET", `/jarvis/connection?encounterId=${enc.encounterId}&agent=jarvis`);
+    expect(patient.json).toMatchObject({ agentId: "agent-patient", role: "patient", prompt: enc.patientPrompt, firstMessage: enc.patientFirstMessage, voiceId: enc.voiceId });
+    expect((await call("GET", "/jarvis/connection?agent=patient")).status).toBe(200);
+    const attending = (await call("POST", `/encounters/${enc.encounterId}/attending`)).json;
+    const jarvis = await call("GET", `/jarvis/connection?encounterId=${enc.encounterId}`);
+    expect(jarvis.json).toMatchObject({ agentId: "agent-jarvis", role: "attending", prompt: attending.attendingPrompt, firstMessage: attending.attendingFirstMessage, voiceId: "" });
+    await call("POST", `/encounters/${enc.encounterId}/tools/record_assessment`, { diagnosis: "appendicitis", differential: [], procedure: "appendectomy", urgency: "emergency" });
+    expect((await call("GET", `/jarvis/connection?encounterId=${enc.encounterId}`)).status).toBe(409);
+  });
+});
+
 describe("danger focus", () => {
   it("does not warn when the learner looks at the step's own target", () => {
     const s = new CoachSession("coach-f", buildCase(fixture("patient-demo-pediatric-asthma"), "", NOW), () => NOW);
@@ -349,12 +386,41 @@ describe("headset authority and retries", () => {
     expect(again.snapshot.eventCount).toBe(1);
   });
 
-  it("catches up to a headset that is ahead", async () => {
+  it("catches up to a headset that is one step ahead (its completing event was lost)", async () => {
     const sid = await start();
+    await post(`/coach/sessions/${sid}/simulate`, { kind: "complete_step" });
+    await post(`/coach/sessions/${sid}/simulate`, { kind: "complete_step" });
+    await post(`/coach/sessions/${sid}/simulate`, { kind: "complete_step" });
     const r = await post(`/coach/sessions/${sid}/events`, { event: { type: "touch", structureId: "mesoappendix", instrumentId: "maryland_dissector", stepId: "mesoappendix_window" } });
     expect(r.snapshot).toMatchObject({ desynced: false, resyncCount: 1, headsetStepId: "mesoappendix_window" });
     expect(r.snapshot.step.id).toBe("divide_mesoappendix"); // caught up, then the touch completed the window
     expect(r.alerts[0].kind).toBe("step_complete");
+  });
+
+  // One forged or buggy event must not award the whole procedure: skipped steps were never performed, so
+  // the coach flags the gap instead of synthesizing a perfect record for them.
+  it("refuses to skip steps on a single event's stepId", async () => {
+    const sid = await start();
+    const last = (await post(`/coach/sessions/${sid}/simulate`, { kind: "tracking_restored" })).snapshot.stepCount as number;
+    expect(last).toBeGreaterThan(2);
+    const kase = (await (await app.request("/patients/patient-demo-pediatric-asthma/case")).json()) as { procedure: { steps: { id: string }[] } };
+    const finalStep = kase.procedure.steps.at(-1)!.id;
+    const r = await post(`/coach/sessions/${sid}/events`, { event: { type: "confirm", stepId: finalStep, eventId: "evt-skip" } });
+    expect(r.results[0]).toMatchObject({ accepted: false, reason: "step_desynchronized" });
+    expect(r.snapshot.status).not.toBe("completed");
+    expect(r.snapshot.completedCount).toBe(0);
+    expect(r.snapshot.desynced).toBe(true);
+    const jump = await post(`/coach/sessions/${sid}/events`, { event: { type: "touch", structureId: "mesoappendix", instrumentId: "maryland_dissector", stepId: "mesoappendix_window" } });
+    expect(jump.snapshot.completedCount).toBe(0);
+    expect(jump.snapshot.step.id).toBe(kase.procedure.steps[0]!.id);
+  });
+
+  it("does not catch up while tracking is invalid", async () => {
+    const sid = await start();
+    await post(`/coach/sessions/${sid}/simulate`, { kind: "tracking_lost" });
+    const r = await post(`/coach/sessions/${sid}/events`, { event: { type: "place_port", portId: "left_lower", stepId: "working_ports" } });
+    expect(r.results[0]).toMatchObject({ applied: false, reason: "tracking_invalid" });
+    expect(r.snapshot.completedCount).toBe(0);
   });
 
   it("flags a headset that is behind and tells Jarvis to trust it", async () => {

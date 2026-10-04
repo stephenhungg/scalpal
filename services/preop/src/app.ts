@@ -25,6 +25,22 @@ export interface AppOptions {
   reflex?: ReflexAudio;
   toolAckWaitMs?: number;
   realtime?: RealtimeBridge | null;
+  // Extra browser origins allowed besides localhost/127.0.0.1 (any port) and same-origin pages
+  // (PREOP_CORS_ORIGINS in index.ts). Native clients send no Origin header and are unaffected.
+  corsOrigins?: readonly string[];
+}
+
+const LOCAL_ORIGIN = /^https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/;
+
+// Same-origin pages (/jarvis, /jarvis/camera served by this service, at whatever host the laptop uses)
+// compare by host so a TLS-terminating tunnel still counts as same-origin.
+export function originAllowed(origin: string, requestUrl: string, extra: readonly string[] = []): boolean {
+  if (LOCAL_ORIGIN.test(origin) || extra.includes(origin)) return true;
+  try {
+    return new URL(origin).host === new URL(requestUrl).host;
+  } catch {
+    return false;
+  }
 }
 
 export interface PatientListEntry {
@@ -49,7 +65,17 @@ export function createApp(options: AppOptions = {}) {
   const now = options.now ?? (() => new Date());
   const app = new Hono();
 
-  app.use("*", cors());
+  // Browsers may call this service only from allowed origins. A disallowed Origin is refused outright,
+  // not just denied CORS headers, because simple (no-preflight) requests would otherwise still execute.
+  const corsOrigins = options.corsOrigins ?? [];
+  app.use("*", async (c, next) => {
+    const origin = c.req.header("Origin");
+    if (origin !== undefined && !originAllowed(origin, c.req.url, corsOrigins)) {
+      return c.json({ error: { code: "origin_not_allowed", message: `Browser origin ${origin} is not allowed. Add it to PREOP_CORS_ORIGINS.` }, actions: [] }, 403);
+    }
+    await next();
+  });
+  app.use("*", cors({ origin: (origin, c) => (originAllowed(origin, c.req.url, corsOrigins) ? origin : null) }));
 
   // Sandbox admissions live in memory: sessionId -> scenario, and admitted subject -> scenario.
   const admissions = new Map<string, string>();
@@ -447,7 +473,7 @@ export function createApp(options: AppOptions = {}) {
     });
   });
 
-  registerEncounterRoutes(app, {
+  const encounters = registerEncounterRoutes(app, {
     now,
     realtime: options.realtime ?? undefined,
     loadCase: async (id) => {
@@ -467,6 +493,7 @@ export function createApp(options: AppOptions = {}) {
     toolAckWaitMs: options.toolAckWaitMs,
     realtime: options.realtime ?? undefined,
     bridge: options.realtime ?? null,
+    encounters,
     loadCase: async (id) => {
       const target = await resolve(id);
       return target ? caseOrUnavailable(target.subject, target.scenarioId) : null;

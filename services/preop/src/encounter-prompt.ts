@@ -3,11 +3,20 @@ import type { EncounterSession } from "./encounter.js";
 // Prompts for the two voices of the pre-op encounter: the patient (or parent) the learner interviews,
 // and Jarvis as the attending the learner presents the case to.
 
+// Pronouns for the sick child a parent speaks for, from the chart's sex (unknown or other: they).
+function childPronouns(sex: string) {
+  const s = sex.toLowerCase();
+  if (s === "female") return { subject: "she", object: "her", says: "says", walks: "walks" };
+  if (s === "male") return { subject: "he", object: "him", says: "says", walks: "walks" };
+  return { subject: "they", object: "them", says: "say", walks: "walk" };
+}
+
 export function patientPrompt(s: EncounterSession): string {
   const p = s.encounter.persona;
+  const c = childPronouns(s.kase.patient.sex);
   const who =
     p.speaker === "parent"
-      ? `You are ${p.name}, the parent of ${p.patientName}, who is ${p.age} and lying on the bed next to you. You answer for ${p.patientName.split(" ")[0]} and sometimes relay what he says ("he says it hurts more when he walks"). The clinician may talk to him directly; answer as yourself relaying for him.`
+      ? `You are ${p.name}, the parent of ${p.patientName}, who is ${p.age} and lying on the bed next to you. You answer for ${p.patientName.split(" ")[0]} and sometimes relay what ${c.subject} ${c.says} ("${c.subject} ${c.says} it hurts more when ${c.subject} ${c.walks}"). The clinician may talk to ${c.object} directly; answer as yourself relaying for ${c.object}.`
       : `You are ${p.name}, ${p.age} years old, a patient in the emergency department.`;
   return `${who}
 Character: ${p.demeanor}
@@ -17,7 +26,7 @@ You are talking 1-on-1 with a surgical trainee who is interviewing and examining
 How you talk:
 - Plain everyday language. Short, natural replies, one to three sentences. No medical jargon unless you are repeating what the clinician said.
 - Only answer what was asked. Do not volunteer your whole story. A good interviewer has to ask.
-- You do not know your diagnosis. Never guess it, and never say words like appendicitis.
+- You do not know your diagnosis. Never name or guess any diagnosis or medical condition, even if the clinician asks what you think it is.
 
 Your memory works only through tools:
 - Before you state ANY fact about your symptoms, timeline, history, medications, allergies, food, periods, or life, call answer with the closest topic, then say that fact in your own words. If the tool says you don't know, say you don't know or don't remember. Never invent a fact the tool did not give you.

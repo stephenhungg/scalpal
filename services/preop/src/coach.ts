@@ -280,7 +280,8 @@ export class CoachSession {
       this.seenEventIds.set(meta.eventId, "");
       if (this.seenEventIds.size > 10000) this.seenEventIds.delete(this.seenEventIds.keys().next().value!);
     }
-    if (meta.stepId && event.type !== "focus" && event.type !== "tracking") {
+    // No catch-up while tracking is lost: handle() rejects the event, and nothing may be synthesized either.
+    if (meta.stepId && event.type !== "focus" && event.type !== "tracking" && this.trackingValid) {
       this.reconcile(meta.stepId);
       if (this.desynced) {
         // Preserve rejection across a lost HTTP response; retrying this event must
@@ -293,8 +294,10 @@ export class CoachSession {
     return this.handle(event);
   }
 
-  // The headset's CaseRunner owns progression. If it is ahead, catch up silently; if it is behind or on a
-  // step we do not know, flag the desync so Jarvis trusts the headset instead of coaching the wrong step.
+  // The headset's CaseRunner owns progression. If it is exactly one step ahead (the event that completed our
+  // current step was lost), catch up that one step. A larger jump, a step behind, or a step we do not know is
+  // flagged as a desync so Jarvis trusts the headset; skipped steps are never synthesized as completed,
+  // otherwise one event with a late stepId would award the whole procedure with a perfect record.
   private reconcile(headsetStepId: string) {
     this.headsetStepId = headsetStepId;
     const steps = this.kase.procedure.steps;
@@ -304,9 +307,9 @@ export class CoachSession {
       this.desynced = false;
       return;
     }
-    if (target > current) {
-      for (let guard = 0; guard < 500 && this.engine.current && this.engine.current.id !== headsetStepId; guard++) {
-        const before = this.engine.current;
+    const before = this.engine.current;
+    if (before && target !== -1 && steps[target]?.id === before.next) {
+      for (let guard = 0; guard < 500 && this.engine.current === before; guard++) {
         const e = this.nextCorrectEvent();
         if (!e) break;
         const r = this.engine.handle(e);

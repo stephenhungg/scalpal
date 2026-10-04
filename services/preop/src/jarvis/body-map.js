@@ -10,6 +10,14 @@
 // Approximate surface projections of the catalog structures, smallest first so they win overlaps.
 export const REGIONS = [
   { id: "appendicular_artery", u: [0.29, 0.33], v: [0.9, 0.94] },
+  // Cholecystectomy: the cystic artery and duct run from the gallbladder neck toward the midline.
+  { id: "cystic_artery", u: [0.34, 0.38], v: [0.44, 0.47] },
+  { id: "cystic_duct", u: [0.34, 0.38], v: [0.47, 0.5] },
+  // Sigmoid colectomy: vessels and ureter lie deep to the sigmoid; this 2D map gives each a strip.
+  { id: "inferior_mesenteric_artery", u: [0.52, 0.56], v: [0.7, 0.78] },
+  { id: "left_ureter", u: [0.6, 0.64], v: [0.74, 0.92] },
+  { id: "sigmoid_mesocolon", u: [0.68, 0.78], v: [0.86, 0.91] },
+  { id: "rectum", u: [0.58, 0.66], v: [0.97, 1.06] },
   { id: "gallbladder", u: [0.25, 0.37], v: [0.42, 0.5] },
   { id: "mesoappendix", u: [0.27, 0.35], v: [0.87, 0.96] },
   { id: "appendix", u: [0.19, 0.29], v: [0.9, 0.99] },

@@ -83,6 +83,7 @@ export interface Encounter {
     name: string; // who is talking
     patientName: string; // who is sick
     age: number;
+    patientSex: "female" | "male"; // the sick patient's chart sex, checked against FinchNode demographics (the voice may be a parent's)
     voiceKey: "adult_female" | "adult_male" | "parent_female";
     demeanor: string; // how they talk, for the persona prompt
     opener: string; // first line, before any questions
@@ -125,6 +126,7 @@ export const ENCOUNTERS: Encounter[] = [
       name: "Priya Ramaswamy",
       patientName: "Priya Ramaswamy",
       age: 40,
+      patientSex: "female",
       voiceKey: "adult_female",
       demeanor: "An accountant, articulate and a little anxious. Lies still because moving hurts. Answers directly, sometimes asks what a medical term means.",
       opener: "Hi, sorry, I'm trying not to move much. My stomach has been killing me since yesterday.",
@@ -209,6 +211,7 @@ export const ENCOUNTERS: Encounter[] = [
       name: "Laura Abernathy",
       patientName: "Theo Abernathy",
       age: 9,
+      patientSex: "male",
       voiceKey: "parent_female",
       demeanor: "Theo's mom. Worried but organized, knows his medical history well. Speaks for Theo and sometimes relays what he says ('he says it hurts more when he walks').",
       opener: "Hi, I'm Laura, Theo's mom. He's been miserable since last night and he won't let anyone touch his belly.",
@@ -297,6 +300,7 @@ export const ENCOUNTERS: Encounter[] = [
       name: "Jonah Okoye",
       patientName: "Jonah Okoye",
       age: 30,
+      patientSex: "male",
       voiceKey: "adult_male",
       demeanor: "A construction worker, normally stoic, now clearly sick: short sentences, sweaty, shivering, in a lot of pain. Wants it fixed.",
       opener: "Doc, I'm in bad shape. My whole stomach is on fire.",

@@ -89,8 +89,28 @@ const URGENCY_WORDS: Record<Encounter["urgency"], string[]> = {
   elective: ["elective", "schedule", "outpatient"],
 };
 
-const norm = (s: string) => s.toLowerCase();
-const matchesAllGroups = (text: string, groups: string[][]) => groups.every((g) => g.some((k) => norm(text).includes(k)));
+const norm = (s: string) => s.toLowerCase().replaceAll("’", "'");
+
+// Negation-aware keyword check for what the learner commits to (diagnosis, procedure, timing): "not
+// appendicitis" or "not urgent" must not earn credit. A keyword counts when at least one mention is not
+// negated within a few words before it (or by a trailing "unlikely"/"ruled out") in the same clause.
+const NEGATED_BEFORE = /\b(?:not|no|never|nor|isn't|isnt|aren't|wasn't|don't|dont|doesn't|won't|wouldn't|unlikely|doubt|doubtful|without|less likely|rules? out|ruled out|ruling out|exclude[sd]?|excluding)\b/;
+const NEGATED_AFTER = /^\s+(?:is\s+|are\s+|was\s+|seems\s+|looks\s+)?(?:very\s+|quite\s+)?(?:unlikely|less likely|not likely|ruled out|excluded|doubtful)\b/;
+const NEGATION_WINDOW_WORDS = 4;
+const CLAUSE_BREAK = /[,;.!?:()]|\bbut\b|\bhowever\b|\bthough\b/;
+
+function mentions(text: string, keyword: string): boolean {
+  for (const clause of norm(text).split(CLAUSE_BREAK)) {
+    for (let at = clause.indexOf(keyword); at !== -1; at = clause.indexOf(keyword, at + 1)) {
+      const before = clause.slice(0, at).trim().split(/\s+/).slice(-NEGATION_WINDOW_WORDS).join(" ");
+      const wordEnd = clause.slice(at + keyword.length).search(/\s|$/);
+      const after = clause.slice(at + keyword.length + wordEnd);
+      if (!NEGATED_BEFORE.test(before) && !NEGATED_AFTER.test(after)) return true;
+    }
+  }
+  return false;
+}
+const matchesAllGroups = (text: string, groups: string[][]) => groups.every((g) => g.some((k) => mentions(text, k)));
 
 export class EncounterSession {
   phase: EncounterPhase = "interview";
@@ -262,14 +282,14 @@ export class EncounterSession {
     };
 
     const procedureOk = matchesAllGroups(a.procedure, e.procedureKeywords) || matchesAllGroups(a.diagnosis, e.procedureKeywords);
-    const urgencyOk = URGENCY_WORDS[e.urgency].some((w) => norm(`${a.urgency} ${a.procedure}`).includes(w));
+    const urgencyOk = URGENCY_WORDS[e.urgency].some((w) => mentions(`${a.urgency}. ${a.procedure}`, w));
     const plan: ScoreSection = {
       id: "plan",
       label: "Plan",
       max: 10,
       score: (procedureOk ? 6 : 0) + (urgencyOk ? 4 : 0),
       found: [...(procedureOk ? ["procedure"] : []), ...(urgencyOk ? [`${e.urgency} timing`] : [])],
-      missed: [...(procedureOk ? [] : ["laparoscopic appendectomy"]), ...(urgencyOk ? [] : [`${e.urgency} timing`])],
+      missed: [...(procedureOk ? [] : [this.kase.procedure.title.toLowerCase()]), ...(urgencyOk ? [] : [`${e.urgency} timing`])],
     };
 
     const ddxText = norm(a.differential.join(" "));

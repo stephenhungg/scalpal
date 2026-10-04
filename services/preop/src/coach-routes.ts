@@ -9,6 +9,7 @@ import { explainStructure, runTool } from "./coach-tools.js";
 import { ReflexAudio } from "./reflex.js";
 import { NO_REALTIME, type RealtimeBridge, type RealtimeSink } from "./realtime-bridge.js";
 import { buildSystemPrompt, firstMessage } from "./coach-prompt.js";
+import type { EncounterVoices } from "./encounter-routes.js";
 import type { Action, SurgicalCase } from "./types.js";
 
 // Live coach API. Unity (or the SpacetimeDB bridge) posts exercise events here; the Jarvis voice
@@ -25,6 +26,7 @@ export interface CoachRouteOptions {
   toolAckWaitMs?: number; // how long a highlight tool waits for the headset ack (tests shorten it)
   realtime?: RealtimeSink;
   bridge?: RealtimeBridge | null; // the live connection, for /realtime status and join
+  encounters?: EncounterVoices; // live encounters, so /jarvis/connection can bind a voice to one
 }
 
 const MAX_SESSIONS = 50;
@@ -384,26 +386,52 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
   app.get("/jarvis", (c) => c.html(readFileSync(new URL("./jarvis/index.html", import.meta.url), "utf8")));
   // Camera test rig: a webcam or iPhone (Continuity Camera) stands in for the Quest camera.
   app.get("/jarvis/camera", (c) => c.html(readFileSync(new URL("./jarvis/camera.html", import.meta.url), "utf8")));
-  for (const file of ["app.js", "arbiter.js", "encounter.js", "camera.js", "body-map.js"]) {
+  for (const file of ["app.js", "arbiter.js", "encounter.js", "camera.js", "camera-rig.js", "body-map.js"]) {
     app.get(`/jarvis/${file}`, (c) =>
       c.body(readFileSync(new URL(`./jarvis/${file}`, import.meta.url), "utf8"), 200, { "Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "no-cache" }),
     );
   }
 
-  // ?agent=patient returns the patient-interview agent instead of Jarvis.
+  // A connection is minted only for something live, and the prompt comes from the server:
+  //   ?sessionId=coach-...   Jarvis coaching that surgery session (prompt = the session's system prompt)
+  //   ?encounterId=enc-...   the patient agent during the interview, Jarvis as attending afterwards
+  // Legacy calls without an id (the Quest client: none, or ?agent=patient) still work, but only while a
+  // matching coach session or encounter phase is live; they carry no prompt.
   app.get("/jarvis/connection", async (c) => {
     const el = options.elevenLabs;
-    const agentId = c.req.query("agent") === "patient" ? el?.patientAgentId : el?.agentId;
-    if (!el || !agentId) {
-      return bad(c, 503, "jarvis_unconfigured", "Set ELEVENLABS_AGENT_ID and PATIENT_AGENT_ID (and ELEVENLABS_API_KEY for private agents), then run npm run jarvis:setup.", [{ id: "home", label: "Home", method: "GET", route: "/" }]);
+    const home: Action[] = [{ id: "home", label: "Home", method: "GET", route: "/" }];
+    const sessionId = c.req.query("sessionId");
+    const encounterId = c.req.query("encounterId");
+    let role: "jarvis" | "patient" = c.req.query("agent") === "patient" ? "patient" : "jarvis";
+    let bound: { prompt: string; firstMessage: string; voiceId: string; role: string } | null = null;
+    if (encounterId !== undefined) {
+      const voice = options.encounters?.voiceFor(encounterId) ?? null;
+      if (!voice) return bad(c, 404, "encounter_not_found", "No live encounter with that id. Start one from a patient.", home);
+      if (voice === "scored") return bad(c, 409, "invalid_phase", "This encounter is already scored; there is no conversation left to connect.", home);
+      role = voice.role === "patient" ? "patient" : "jarvis";
+      bound = voice;
+    } else if (sessionId !== undefined) {
+      const s = SESSION_ID.test(sessionId) ? sessions.get(sessionId) : undefined;
+      if (!s) return missing(c);
+      role = "jarvis";
+      bound = { role: "coach", prompt: buildSystemPrompt(s.kase, s.mode), firstMessage: firstMessage(s.kase), voiceId: "" };
     }
-    if (!el.apiKey) return c.json({ mode: "public", agentId, signedUrl: "", actions: [] });
+    const agentId = role === "patient" ? el?.patientAgentId : el?.agentId;
+    if (!el || !agentId) {
+      return bad(c, 503, "jarvis_unconfigured", "Set ELEVENLABS_AGENT_ID and PATIENT_AGENT_ID (and ELEVENLABS_API_KEY for private agents), then run npm run jarvis:setup.", home);
+    }
+    if (!bound) {
+      const live = role === "patient" ? Boolean(options.encounters?.anyLive("patient")) : sessions.size > 0 || Boolean(options.encounters?.anyLive("attending"));
+      if (!live) return bad(c, 409, "no_live_session", "Start a coach session or encounter before connecting voice, and pass its sessionId or encounterId.", home);
+    }
+    const binding = bound ? { role: bound.role, prompt: bound.prompt, firstMessage: bound.firstMessage, voiceId: bound.voiceId } : {};
+    if (!el.apiKey) return c.json({ mode: "public", agentId, signedUrl: "", ...binding, actions: [] });
     const res = await fetch(`https://api.elevenlabs.io/v1/convai/conversation/get-signed-url?agent_id=${encodeURIComponent(agentId)}`, {
       headers: { "xi-api-key": el.apiKey },
     }).catch(() => null);
-    if (!res?.ok) return bad(c, 503, "elevenlabs_unreachable", `ElevenLabs signed URL request failed${res ? ` (${res.status})` : ""}.`, [{ id: "home", label: "Home", method: "GET", route: "/" }]);
+    if (!res?.ok) return bad(c, 503, "elevenlabs_unreachable", `ElevenLabs signed URL request failed${res ? ` (${res.status})` : ""}.`, home);
     const { signed_url } = (await res.json()) as { signed_url: string };
-    return c.json({ mode: "signed", agentId, signedUrl: signed_url, actions: [] });
+    return c.json({ mode: "signed", agentId, signedUrl: signed_url, ...binding, actions: [] });
   });
 }
 
