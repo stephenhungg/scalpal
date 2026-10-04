@@ -4,7 +4,8 @@
 import { Conversation } from "https://esm.sh/@elevenlabs/client@1.26.0";
 import { createArbiter, percentile, semanticKey } from "/jarvis/arbiter.js";
 import { createContextFeed } from "/jarvis/context-feed.js";
-import { cleanTranscript, createEncounterFlow } from "/jarvis/encounter.js";
+import { cleanTranscript } from "/jarvis/encounter.js";
+import { createInterviewFlow } from "/jarvis/interview.js";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
@@ -263,21 +264,18 @@ async function startVoice() {
   });
 }
 
-// Pick a patient: interview first when the case has one, otherwise straight to surgery.
-const encounter = createEncounterFlow({
+// Pick a patient: the 1:1 patient interview first when the patient has one, otherwise straight to surgery.
+// Jarvis is not part of the interview; he connects in the operating room.
+const encounter = createInterviewFlow({
   api,
   log,
   Conversation,
   setActiveConvo: (c) => { encounterConvo = c; },
   onStatus: (text, cls) => { $("voice").textContent = text; $("voice").className = `pill ${cls}`; },
-  onScrubIn: (encounterId) => startSurgery(encounterId),
+  onScrubIn: (interviewId) => startSurgery(interviewId),
 });
-$("to-attending").onclick = () => encounter.presentToAttending();
 $("scrub-in").onclick = () => encounter.scrubIn();
-// Encounter failures stay on screen with Retry; a retried start may find no interview and go to surgery.
-$("flow-retry").onclick = async () => {
-  if ((await encounter.retry()) === "none") await startSurgery();
-};
+$("flow-retry").onclick = () => location.reload();
 
 $("start").onclick = async () => {
   $("start").disabled = true;

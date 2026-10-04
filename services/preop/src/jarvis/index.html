@@ -49,6 +49,8 @@
   details summary { cursor: pointer; color: var(--muted); font-size: 12px; margin-top: 10px; }
   form { display: flex; gap: 8px; margin-top: 10px; }
   form input { flex: 1; min-width: 0; }
+.choice { display: block; width: 100%; text-align: left; margin: 6px 0; padding: 10px 12px; }
+.choice b { margin-right: 8px; }
 </style>
 </head>
 <body>
@@ -66,26 +68,28 @@
 <main>
   <div id="flow-error" hidden style="grid-column: 1 / -1"><span id="flow-error-text" class="danger"></span> <button id="flow-retry">Retry</button></div>
   <section id="encounter" hidden>
-    <div class="row" id="stages">
-      <span class="pill" data-stage="interview">1 · Interview</span>
-      <span class="pill" data-stage="attending">2 · Present to attending</span>
-      <span class="pill" data-stage="scored">3 · Scorecard</span>
-      <span class="pill">4 · Surgery</span>
+    <div class="row" id="iv-stages">
+      <span class="pill" data-stage="interview">1 · Patient interview</span>
+      <span class="pill" data-stage="scored">2 · Scorecard</span>
+      <span class="pill">3 · Surgery</span>
     </div>
     <h2 style="margin-top:14px">Patient</h2>
-    <div id="enc-who" class="step-title"></div>
-    <div class="kv">
-      <div>Asked about</div><div id="enc-history"></div>
+    <div id="iv-who" class="step-title"></div>
+    <div id="iv-card" style="margin-top:12px">
+      <div id="iv-progress" class="muted"></div>
+      <div id="iv-prompt" class="step-title" style="margin:6px 0"></div>
+      <div id="iv-choices"></div>
+      <div class="row" style="margin-top:8px">
+        <button id="iv-talk">Hold to answer</button>
+        <span id="iv-heard" class="muted"></span>
+      </div>
     </div>
-    <h2 style="margin-top:14px">Exam findings</h2>
-    <div id="enc-exam"></div>
-    <h2 style="margin-top:14px">Results</h2>
-    <div id="enc-tests"></div>
+    <h2 style="margin-top:14px">Findings and results</h2>
+    <div id="iv-findings"></div>
     <div class="row" style="margin-top:14px">
-      <button id="to-attending" disabled>Done: present to attending</button>
       <button id="scrub-in" class="primary" disabled>Scrub in</button>
     </div>
-    <div id="scorecard" style="margin-top:14px"></div>
+    <div id="iv-score" style="margin-top:14px"></div>
   </section>
   <section id="surgery">
     <h2 id="caseline">No session</h2>

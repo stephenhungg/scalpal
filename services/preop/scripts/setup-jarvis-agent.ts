@@ -196,6 +196,24 @@ async function main() {
     },
     "patient agent",
   );
+
+  // The choice-based office interview: the patient voice only replies to the learner's picks, so it has
+  // no tools. Character and the opening line come per session from the committed patient.md.
+  await upsertAgent(
+    "INTERVIEW_PATIENT_AGENT_ID",
+    {
+      name: "Scalpal Patient (interview)",
+      tags: ["scalpal"],
+      conversation_config: {
+        agent: { first_message: "Hi.", language: "en", prompt: { prompt: PATIENT_BASE_PROMPT, llm: LLM, temperature: 0.6, tool_ids: [] } },
+        turn: { turn_timeout: 30 },
+      },
+      platform_settings: {
+        overrides: { conversation_config_override: { agent: { prompt: { prompt: true }, first_message: true }, tts: { voice_id: true } } },
+      },
+    },
+    "interview patient agent",
+  );
 }
 
 main().catch((err) => {
