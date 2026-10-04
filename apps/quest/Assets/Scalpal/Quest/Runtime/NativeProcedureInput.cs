@@ -55,6 +55,8 @@ namespace Scalpal.Quest
             foreach (var marker in portMarkers) if (marker) marker.input = this;
         }
 
+        public bool InteractionReady => CanScore();
+
         bool CanScore() => isActiveAndEnabled && exercise && workbench && workbench.IsReady &&
             practicing != null && practicing() && exercise.CanScore && !exercise.Completed;
 

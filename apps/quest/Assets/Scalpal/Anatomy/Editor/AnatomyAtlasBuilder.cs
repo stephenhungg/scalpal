@@ -19,7 +19,7 @@ namespace Scalpal.Anatomy.EditorTools
         public const string DefaultProcedureId = "lap_appendectomy";
         public const string AppendectomyPrefabPath = AnatomyPath + "/Prefabs/AnatomyExercise_lap_appendectomy.prefab";
         public const string OrganOverviewPrefabPath = AnatomyPath + "/Prefabs/AnatomyOrgans_Overview.prefab";
-        public const int OrganOverviewExpectedTriangles = 110511;
+        public const int OrganOverviewExpectedTriangles = 120125;
         public const int OrganOverviewTriangleBudget = 150000;
         public static int OrganOverviewPartCount => OrganOverviewIds.Count;
 
@@ -40,7 +40,47 @@ namespace Scalpal.Anatomy.EditorTools
             "visceral__superior_lobe_of_right_lung", "visceral__middle_lobe_of_right_lung",
             "visceral__inferior_lobe_of_right_lung",
             "cardiovascular__left_atrium", "cardiovascular__right_atrium",
-            "cardiovascular__left_ventricle", "cardiovascular__right_ventricle"
+            "cardiovascular__left_ventricle", "cardiovascular__right_ventricle",
+            // Abdominal reference layers. Surface regions have no modeled skin thickness.
+            "surface__epigastric_region_l",
+            "surface__epigastric_region_r",
+            "surface__hypochondriac_region_l",
+            "surface__hypochondriac_region_r",
+            "surface__umbilical_region_l",
+            "surface__umbilical_region_r",
+            "surface__lateral_region_of_abdomen_l",
+            "surface__lateral_region_of_abdomen_r",
+            "surface__hypogastric_region_l",
+            "surface__hypogastric_region_r",
+            "surface__inguinal_region_l",
+            "surface__inguinal_region_r",
+            "muscular__rectus_abdominis_muscle_l",
+            "muscular__rectus_abdominis_muscle_r",
+            "muscular__external_abdominal_oblique_muscle_l",
+            "muscular__external_abdominal_oblique_muscle_r",
+            "muscular__internal_abdominal_oblique_muscle_l",
+            "muscular__internal_abdominal_oblique_muscle_r",
+            "muscular__transversus_abdominis_muscle_l",
+            "muscular__transversus_abdominis_muscle_r",
+            "muscular__investing_abdominal_fascia_l",
+            "muscular__investing_abdominal_fascia_r",
+            "muscular__transversalis_fascia",
+            "muscular__linea_alba",
+            "skeletal__hip_bone_l",
+            "skeletal__hip_bone_r",
+            "skeletal__sacrum",
+            "skeletal__vertebra_l1",
+            "skeletal__vertebra_l2",
+            "skeletal__vertebra_l3",
+            "skeletal__vertebra_l4",
+            "skeletal__vertebra_l5",
+            "cardiovascular__abdominal_aorta",
+            "cardiovascular__inferior_vena_cava_abdominal_part",
+            "cardiovascular__ileocolic_artery",
+            "cardiovascular__colic_branch_of_ileocolic_artery",
+            "cardiovascular__ileal_branch_of_ileocolic_artery",
+            "cardiovascular__superior_mesenteric_artery",
+            "cardiovascular__superior_mesenteric_vein"
         });
 
         [Serializable]
@@ -178,7 +218,7 @@ namespace Scalpal.Anatomy.EditorTools
 
         // Reusable selection/inspection anatomy, never another scored case. All selected
         // geometry retains its source frame; the caller centers/scales the pedestal only.
-        // Independent HRA detail assets and the full skin/skeleton atlas remain separate.
+        // Independent HRA detail assets remain separate. Bounded abdominal reference layers share the body frame.
         public static GameObject BuildOrganOverview()
         {
             var text = AssetDatabase.LoadAssetAtPath<TextAsset>(ManifestPath);
@@ -327,8 +367,9 @@ namespace Scalpal.Anatomy.EditorTools
                 }
 
                 var controller = root.AddComponent<AnatomyController>();
-                controller.initiallyHiddenSystems = atlas.systems.Where(s => s.group == "body" && (s.id == "surface" || s.id == "skin"))
+                controller.initiallyHiddenSystems = atlas.systems.Where(s => s.group == "body" && (s.id == "surface" || s.id == "skin" || (prefabPath == OrganOverviewPrefabPath && (s.id == "muscular" || s.id == "skeletal"))))
                     .Select(s => s.id).ToArray();
+                if (prefabPath == OrganOverviewPrefabPath) root.AddComponent<Scalpal.Anatomy.Tissue.AnatomyLayerView>();
                 controller.RebuildIndex();
                 controller.SetPreviewMode(true);
                 // Store authored visibility, not this editor instance's transient filters.
@@ -410,6 +451,7 @@ namespace Scalpal.Anatomy.EditorTools
 
         static Material BuildMaterial(string system, Shader shader, bool ghost = false)
         {
+            if (!ghost) shader = Shader.Find("Scalpal/Tissue") ?? throw new InvalidOperationException("Missing tissue shader");
             string name = system + (ghost ? "_ghost" : "");
             string path = AnatomyPath + "/Materials/" + name + ".mat";
             var material = AssetDatabase.LoadAssetAtPath<Material>(path);
@@ -423,6 +465,13 @@ namespace Scalpal.Anatomy.EditorTools
             material.SetColor(standard ? "_Color" : "_BaseColor", color);
             material.SetFloat(standard ? "_Glossiness" : "_Smoothness", 0.3f);
             material.SetFloat("_Metallic", 0f);
+            if (!ghost)
+            {
+                // Appearance presets, not measured hydration/roughness or mechanical coefficients.
+                material.SetFloat("_Smoothness", system == "skeletal" ? .18f : system == "surface" ? .28f : .58f);
+                material.SetFloat("_FiberAmount", system == "muscular" ? .8f : 0f);
+                material.SetFloat("_TextureScale", system == "surface" ? 650f : 350f);
+            }
             material.SetFloat(standard ? "_Mode" : "_Surface", ghost ? (standard ? 2f : 1f) : 0f);
             material.SetFloat("_ZWrite", ghost ? 0f : 1f);
             material.SetFloat("_SrcBlend", ghost ? (float)UnityEngine.Rendering.BlendMode.SrcAlpha : (float)UnityEngine.Rendering.BlendMode.One);

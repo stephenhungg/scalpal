@@ -173,8 +173,8 @@ namespace Scalpal.Quest.Editor
         static void ApplySessionSettings()
         {
             PlayerSettings.productName = "Scalpal Surgical Session";
-            PlayerSettings.bundleVersion = "0.3.2-auto-body";
-            PlayerSettings.Android.bundleVersionCode = 7;
+            PlayerSettings.bundleVersion = "0.4.0-tissue";
+            PlayerSettings.Android.bundleVersionCode = 8;
             // Meta's OpenXR camera-pose plugin requires linear lighting; retain built-in rendering.
             PlayerSettings.colorSpace = ColorSpace.Linear;
             var settings = OpenXRSettings.GetSettingsForBuildTargetGroup(BuildTargetGroup.Android);
@@ -313,9 +313,9 @@ namespace Scalpal.Quest.Editor
             var atlasDependencies = AssetDatabase.GetDependencies(ScenePath, true)
                 .Where(path => path.StartsWith("Assets/Scalpal/Anatomy/Models/", StringComparison.Ordinal) && path.EndsWith(".fbx", StringComparison.OrdinalIgnoreCase))
                 .Select(Path.GetFileNameWithoutExtension).OrderBy(name => name).ToArray();
-            if (!atlasDependencies.SequenceEqual(new[] { "cardiovascular", "exercise-targets", "lymphatic", "visceral" }))
+            if (!atlasDependencies.SequenceEqual(new[] { "cardiovascular", "exercise-targets", "lymphatic", "muscular", "skeletal", "surface", "visceral" }))
                 throw new InvalidOperationException("Unexpected whole-body/detail atlas dependency in the native session.");
-            Debug.Log("SCALPAL_NATIVE_SESSION_SCENE_VALIDATED tools=15 controllers=2 practiceParts=9 practiceTriangles=93399 overviewParts=42 overviewTriangles=110511 ports=3 initialValidity=false "
+            Debug.Log("SCALPAL_NATIVE_SESSION_SCENE_VALIDATED tools=15 controllers=2 practiceParts=9 practiceTriangles=93399 overviewParts=81 overviewTriangles=120125 ports=3 initialValidity=false "
                 + "sourceBounds=" + MeshBounds(session.anatomy.gameObject));
         }
 
@@ -397,6 +397,7 @@ namespace Scalpal.Quest.Editor
             NativeBodyRegistrationValidation.Run();
             Scalpal.Instruments.Editor.InstrumentRuntimeValidation.Run();
             NativeProcedureInputValidation.Run();
+            NativeTissueValidation.Run();
             NativeAppendectomyValidation.Run();
             NativeSessionBoundaryValidation.Run();
             NativeCoachRelayValidation.Run();

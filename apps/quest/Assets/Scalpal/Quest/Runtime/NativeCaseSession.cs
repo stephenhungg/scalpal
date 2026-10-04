@@ -40,6 +40,7 @@ namespace Scalpal.Quest
         public bool Practicing => Phase == "Practicing" && !practicePaused;
         public string Message { get; private set; } = "Loading synthetic case";
         NativeProcedureInput input;
+        NativeTissueSimulation tissueSimulation;
         SurgicalCase candidate;
         string coachSessionId = "", voicePrompt = "", voiceGreeting = "", voiceContext = "";
         string selected = "", highlighted = "";
@@ -78,6 +79,8 @@ namespace Scalpal.Quest
             input.portMarkers = patientFrame.GetComponentsInChildren<NativePortMarker>(true);
             patientFrame.gameObject.SetActive(false);
             input.Initialize(exercise, workbench, () => Practicing && SharedMatches && RegistrationReady);
+            tissueSimulation = GetComponent<NativeTissueSimulation>() ?? gameObject.AddComponent<NativeTissueSimulation>();
+            tissueSimulation.Initialize(anatomy, workbench, () => isActiveAndEnabled && input.InteractionReady);
             exercise.anatomy = anatomy; exercise.coach = coach;
             exercise.presentationMode = PresentationMode; exercise.requireCoachSynchronization = true;
             exercise.EventHandled += EventHandled;
@@ -131,7 +134,7 @@ namespace Scalpal.Quest
                 candidate.procedure == null || candidate.brief == null || !candidate.brief.synthetic ||
                 (candidate.status != "ready" && candidate.status != "needs_review"))
             { candidate = null; Message = "Case service unavailable or case/assets mismatch. A: retry connection"; yield break; }
-            Phase = "Selecting"; Message = "Appendectomy preview ready. B: review synthetic case";
+            Phase = "Selecting"; Message = "Appendectomy preview ready. X: anatomy layers; B: review synthetic case";
         }
 
         void Update()
@@ -157,6 +160,11 @@ namespace Scalpal.Quest
                 left.TryGetFeatureValue(CommonUsages.primaryButton, out bool x);
                 left.TryGetFeatureValue(CommonUsages.secondaryButton, out bool y);
                 if (b && !previousB) ConfirmAction();
+                if (x && !previousX && Phase == "Selecting")
+                {
+                    var layers = preview.GetComponent<Scalpal.Anatomy.Tissue.AnatomyLayerView>();
+                    if (layers) layers.Cycle();
+                }
                 if (x && !previousX && Practicing)
                 {
                     if (!input.IdentifyFocused(out var reason)) Message = reason;
@@ -245,6 +253,7 @@ namespace Scalpal.Quest
         public void Retry()
         {
             if (busy) return;
+            if (tissueSimulation) tissueSimulation.ResetTissues();
             generation++; voice.Disconnect(); coachSessionId = "";
             sharedAttemptReady = false; attemptFailed = false; attemptRequested = false;
             exercise.StopAttempt(); workbench.ResetWorkbench();
@@ -255,6 +264,8 @@ namespace Scalpal.Quest
             preview.SetPreviewRotation(true); rotating = true;
             preview.transform.parent.localScale = previewScale;
             anatomy.ClearHighlight();
+            var previewLayers = preview.GetComponent<Scalpal.Anatomy.Tissue.AnatomyLayerView>();
+            if (previewLayers) previewLayers.Show(Scalpal.Anatomy.Tissue.AnatomyLayerView.Layer.Organs);
             Phase = candidate == null ? "Startup" : "Selecting";
             Message = "New attempt. B: review the synthetic case";
             RequestAttempt();
@@ -392,7 +403,12 @@ namespace Scalpal.Quest
                 var step = exercise.Current;
                 body = step == null ? "Finishing case" : $"{completedSteps + 1}/{candidate.procedure.steps.Length}: {step.title}\n{step.instruction}\nTool: {step.instrumentId}\nX: identify looked-at anatomy | B: confirm\nFocus: {selected}";
             }
-            else body = "B: review appendectomy | Y: enable voice | A: retry";
+            else
+            {
+                var layers = preview.GetComponent<Scalpal.Anatomy.Tissue.AnatomyLayerView>();
+                body = "B: review appendectomy | Y: enable voice | A: retry";
+                if (Phase == "Selecting" && layers) body += "\nX: anatomy layers | Showing: " + layers.Current;
+            }
             string registration = presentation && presentation.passthrough ? "\n" + (bodyRegistration ? bodyRegistration.Status : "Body registration missing") : "\nVirtual mannequin fit";
             status.text = $"SCALPAL | {Phase} | {PresentationMode}\n{body}\n{Message}{registration}\nXR: {(workbench.IsReady ? "ready" : "paused")} | Shared: {realtime.Status}\nCoach: {(exercise.CoachMatches ? "synchronized" : coach.SyncFailureReason)} | Voice: {voice.Status}\nRight stick: AR/VR in selection";
         }
