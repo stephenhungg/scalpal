@@ -238,7 +238,8 @@ namespace Scalpal.Surgery.Editor
                 // depthMm is the grasped tissue point, not the tool tip.
                 Vector3 registered = new Vector3(delivery.action.position.x, delivery.action.position.y, delivery.action.position.z);
                 Vector3 measured = s.session.patientFrame.TransformPoint(registered);
-                Require(Mathf.Abs(-s.wound.InverseTransformPoint(measured).z * 1000 - delivery.action.depthMm) < .01f
+                // Event-boundary rounding: whole-mm depth from a 0.1 mm position (BodyAction.Quantize).
+                Require(Math.Abs(-s.wound.InverseTransformPoint(measured).z * 1000 - delivery.action.depthMm) < .6
                     && s.Target("appendix").TryContact(measured, .003f, out _), label + ": delivery depth is measured on the moved appendix surface");
 
                 tool.SetActivation(0); s.Step(); var held = s.WorldPositions(); s.Step(30);
@@ -288,7 +289,7 @@ namespace Scalpal.Surgery.Editor
             int count = s.records.Count;
             s.Hold(tool); s.Place(tool, site); s.Step();
             var record = s.records.Skip(count).LastOrDefault(r => r.action.verb == verb);
-            Require(record != null && record.action.tissueId == tissueId && Mathf.Abs(record.action.distanceMm - alongMm) < .05f && record.action.choice != "longitudinal_unmeasured",
+            Require(record != null && record.action.tissueId == tissueId && Math.Abs(record.action.distanceMm - alongMm) < .55 /* whole-mm event rounding */ && record.action.choice != "longitudinal_unmeasured",
                 $"{tool.instrumentId} {verb} measured on moved {tissueId} at {alongMm} mm (got {record?.action.tissueId} {record?.action.distanceMm:F2})");
             s.Park(tool);
         }
@@ -297,9 +298,12 @@ namespace Scalpal.Surgery.Editor
             Require(FindSite(s, tool, tissueId, alongMm, out var site, out var direction), $"stroke site on moved {tissueId} at {alongMm} mm");
             int count = s.records.Count;
             s.Hold(tool); s.Place(tool, site); s.Step();
-            for (int i = 1; i <= 3 && !s.records.Skip(count).Any(r => r.action.verb == "cut"); i++) { s.Place(tool, site + direction * (.0005f * i)); s.Step(); }
+            for (int i = 1; i <= 3; i++) { s.Place(tool, site + direction * (.0005f * i)); s.Step(); }
+            // A stroke is committed once, when the blade leaves the tissue.
+            tool.SetActivation(0); s.Step(); tool.SetActivation(1);
+            Require(s.records.Skip(count).Count(r => r.action.verb == "cut") == 1, $"one {tissueId} stroke is one cut");
             var record = s.records.Skip(count).FirstOrDefault(r => r.action.verb == "cut");
-            Require(record != null && record.action.tissueId == tissueId && Mathf.Abs(record.action.distanceMm - alongMm) < .05f && record.action.lengthMm >= 1,
+            Require(record != null && record.action.tissueId == tissueId && Math.Abs(record.action.distanceMm - alongMm) < .55 /* whole-mm event rounding */ && record.action.lengthMm >= 1,
                 $"{tool.instrumentId} stroke measured on moved {tissueId} at {alongMm} mm (got {record?.action.tissueId} {record?.action.distanceMm:F2})");
             s.Park(tool);
         }
