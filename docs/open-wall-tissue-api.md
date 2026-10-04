@@ -51,3 +51,5 @@ Current Surgery still uses static wall contact planes, controller-derived wall l
 
 
 Checkpoint source `5473aa9`, synchronized at `e5abdee`. The full native gate passed10,627 new wall assertions plus all existing mechanics/session fixtures. The open-surgery boundary gate passed318 adapter/fluid/delivery checks and current scene bindings. The scaled automatic-blade near-miss regression failed before its tolerance fix and passed afterward. Synthetic accepted lift/spread ranges and remaining consumer work are recorded in the integration map; these values do not establish surgical thresholds.
+
+Final publication synchronization at `1871c93` also passed the full native gate with10,627 wall assertions. The Play Mode and open-surgery boundary evidence above was run at `e5abdee`; neither result establishes the pending Surgery material-grip hookup or a physical operation.
