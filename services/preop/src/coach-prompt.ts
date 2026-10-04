@@ -1,7 +1,7 @@
 import { STEP_COACHING, STRUCTURE_FACTS } from "./catalog/coach-knowledge.js";
 import { INSTRUMENTS_BY_ID } from "./catalog/instruments.js";
 import type { PresentationMode } from "./coach.js";
-import type { SurgicalCase } from "./types.js";
+import type { Procedure, SurgicalCase } from "./types.js";
 
 // Per-case system prompt for Jarvis. It carries only this case's patient, procedure, steps, and
 // anatomy, so the agent has nothing from another surgery to confuse it with. Live progress arrives
@@ -105,8 +105,7 @@ ${gaps}
 
 ${preop ? `FROM THE PRE-OP OFFICE\n${preop}\nYou opened with the surgical time-out. Once the learner confirms the patient, procedure, and site, name the chart risks above as anticipated risks in one sentence, say "Good. Let's begin.", and give step 1.\n\n` : ""}PROCEDURE: ${p.title} (${p.approach})
 ${p.summary}
-Ports: ${p.ports.map((x) => `${x.label} (${x.sizeMm} mm)`).join("; ")}.
-Ordered steps. The learner must complete them in this order:
+${p.openBody ? openBodyRules(p.openBody) : `Ports: ${p.ports.map((x) => `${x.label} (${x.sizeMm} mm)`).join("; ")}.\nOrdered steps. The learner must complete them in this order:`}
 ${steps}
 
 ANATOMY IN THIS CASE (nothing else exists in this scene)
@@ -115,6 +114,18 @@ ${anatomy}`;
 
 // After the office, the coach opens with the WHO surgical Time-Out (docs/office-to-or-handoff.md, beat T1).
 export const TIME_OUT_OPENING = "Scrubbed in with you. Time-out: confirm patient, procedure and site.";
+
+// Open surgery is free-form: the expected path coaches, the body state decides what happened.
+function openBodyRules(body: NonNullable<Procedure["openBody"]>): string {
+  const guardrails = body.guardrails.map((g) => `- ${g.feedback}`).join("\n");
+  const decisions = body.decisions.map((d) => `- ${d.prompt}`).join("\n");
+  return `Open surgery, no ports. The learner may do anything with any tool; nothing is blocked except tissue that is not yet exposed. The steps below are the expected path, not a gate. Judge only from the live state's achieved milestones, body facts, and last event; never say something was cut, clamped, tied, or removed unless the state shows it. If the learner goes off the expected path, coach the consequence and the next expected milestone instead of telling them they are on the wrong step.
+Guardrails (the simulator reports these as mistakes; warn immediately when one fires):
+${guardrails}
+Decision points (ask, do not answer for them):
+${decisions || "- None."}
+Expected path:`;
+}
 
 export function firstMessage(kase: SurgicalCase, fromOffice = false): string {
   if (fromOffice) return TIME_OUT_OPENING;
