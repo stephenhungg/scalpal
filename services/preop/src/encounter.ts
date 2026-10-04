@@ -289,7 +289,7 @@ export class EncounterSession {
       max: 10,
       score: (procedureOk ? 6 : 0) + (urgencyOk ? 4 : 0),
       found: [...(procedureOk ? ["procedure"] : []), ...(urgencyOk ? [`${e.urgency} timing`] : [])],
-      missed: [...(procedureOk ? [] : ["laparoscopic appendectomy"]), ...(urgencyOk ? [] : [`${e.urgency} timing`])],
+      missed: [...(procedureOk ? [] : [this.kase.procedure.title.toLowerCase()]), ...(urgencyOk ? [] : [`${e.urgency} timing`])],
     };
 
     const ddxText = norm(a.differential.join(" "));

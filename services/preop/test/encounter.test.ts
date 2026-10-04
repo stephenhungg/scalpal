@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createApp } from "../src/app.js";
 import { buildCase } from "../src/case-builder.js";
-import { ENCOUNTERS_BY_PLAN } from "../src/catalog/encounters.js";
+import { ENCOUNTERS, ENCOUNTERS_BY_PLAN } from "../src/catalog/encounters.js";
 import { EncounterSession } from "../src/encounter.js";
 import { attendingPrompt, patientPrompt } from "../src/encounter-prompt.js";
 import { validateCatalog } from "../src/validate.js";
@@ -16,10 +16,28 @@ describe("encounter catalog", () => {
 describe("patient facts come only from tools", () => {
   it("keeps facts out of the persona prompt", () => {
     const prompt = patientPrompt(encounterFor("patient-demo-multi-source"));
-    for (const fact of ["latex", "two weeks", "soup", "nine", "accountant is", "appendicitis"]) {
-      if (fact === "appendicitis") expect(prompt).toMatch(/never say words like appendicitis/);
-      else expect(prompt.toLowerCase()).not.toContain(fact);
+    for (const fact of ["latex", "two weeks", "soup", "nine", "accountant is"]) expect(prompt.toLowerCase()).not.toContain(fact);
+  });
+
+  // The patient model must not be told its diagnosis, even as a word to avoid, and the rule must work for
+  // any future case, not just appendicitis.
+  it("never tells the patient model its diagnosis", () => {
+    for (const e of ENCOUNTERS) {
+      const prompt = patientPrompt(encounterFor(e.planSubject)).toLowerCase();
+      expect(prompt).toContain("never name or guess any diagnosis or medical condition");
+      for (const word of [e.diagnosis.label, ...e.diagnosis.keywords.flat(), ...(e.diagnosis.partial?.keywords.flat() ?? [])]) {
+        expect(prompt, `${e.planSubject}: ${word}`).not.toContain(word.toLowerCase());
+      }
     }
+  });
+
+  it("uses the child's own pronouns when a parent relays", () => {
+    const daughter = fixture("patient-demo-pediatric-asthma");
+    daughter.data.demographics = { ...daughter.data.demographics, gender: "female" };
+    const prompt = patientPrompt(new EncounterSession("enc-test", buildCase(daughter, "", NOW), ENCOUNTERS_BY_PLAN.get("patient-demo-pediatric-asthma")!, () => NOW));
+    expect(prompt).toMatch(/she says it hurts more when she walks/);
+    expect(prompt.split("\n")[0]).not.toMatch(/\b(he|him|his)\b/); // the generated persona line; the demeanor is authored text
+    expect(patientPrompt(encounterFor("patient-demo-pediatric-asthma"))).toMatch(/he says it hurts more when he walks/);
   });
 
   it("answers allergies and medications from the real chart when nothing is authored", () => {
@@ -85,6 +103,16 @@ describe("scoring", () => {
     expect(card.total).toBe(100);
     expect(card.criticalMissed).toEqual([]);
     expect(card.diagnosisResult).toBe("correct");
+  });
+
+  // Feedback must name this case's operation; a future cholecystitis patient must not be told to do an appendectomy.
+  it("names the case's own procedure when the plan misses it", () => {
+    const s = encounterFor("patient-demo-multi-source");
+    s.recordAssessment({ diagnosis: "appendicitis", differential: [], procedure: "", urgency: "urgent" });
+    expect(s.score().sections.find((x) => x.id === "plan")!.missed).toEqual([s.kase.procedure.title.toLowerCase()]);
+    const other = new EncounterSession("enc-test", { ...s.kase, procedure: { ...s.kase.procedure, title: "Laparoscopic cholecystectomy" } }, s.encounter, () => NOW);
+    other.recordAssessment({ diagnosis: "appendicitis", differential: [], procedure: "", urgency: "urgent" });
+    expect(other.score().sections.find((x) => x.id === "plan")!.missed).toEqual(["laparoscopic cholecystectomy"]);
   });
 
   it("puts critical misses first and explains why", () => {
@@ -238,6 +266,27 @@ describe("encounter routes", () => {
     expect((await req("POST", `/encounters/${id}/tools/get_encounter_summary`, {})).json.result).toMatch(/Rebound tenderness/);
     await req("POST", `/encounters/${id}/tools/record_assessment`, { diagnosis: "appendicitis", differential: [], procedure: "appendectomy", urgency: "urgent" });
     expect((await req("POST", `/encounters/${id}/tools/get_encounter_summary`, {})).status).toBe(200);
+  });
+
+  // Patient sex is authored on the encounter, not guessed from the voice: a mother can speak for a daughter.
+  it("checks demographics against the authored patient sex, not the voice", async () => {
+    const theo = ENCOUNTERS_BY_PLAN.get("patient-demo-pediatric-asthma")!;
+    const original = { ...theo.persona };
+    const client = fixtureClient();
+    const getRecord = client.getRecord;
+    client.getRecord = async (subject) => {
+      const record = await getRecord(subject);
+      return { ...record, data: { ...record.data, demographics: { ...record.data.demographics, gender: "female" } } };
+    };
+    const girls = createApp({ client, now: () => NOW, coachTickMs: 0 });
+    const start = async () => (await girls.request("/encounters", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ patientId: "patient-demo-pediatric-asthma" }) })).status;
+    try {
+      expect(await start()).toBe(409); // authored as a boy
+      Object.assign(theo.persona, { patientSex: "female" });
+      expect(await start()).toBe(201); // same parent_female voice, authored girl
+    } finally {
+      Object.assign(theo.persona, original);
+    }
   });
 
   it("does not attach authored fictional symptoms to real or mismatched records", async () => {
