@@ -502,6 +502,81 @@ export const robotResult = table(
   }
 );
 
+// ---------------------------------------------------------------------------
+// Simulated patient condition (server-side physiology)
+// ---------------------------------------------------------------------------
+
+/**
+ * The authoritative simulated patient for a session. The coach starts it with
+ * the chart (or measured) baseline and feeds facts (body blood loss, active
+ * bleeds, injuries outside the field); the scheduled `patientTick` advances
+ * blood loss and vitals once a second with src/physiology.ts. Teaching model,
+ * every value is simulated. Milliliters: raw = as reported/accrued, simulated
+ * = raw x scale (demo acceleration).
+ */
+export const patientCondition = table(
+  { name: 'patient_condition' },
+  {
+    sessionId: t.string().primaryKey(),
+    /** The coach's own session id (services/preop) that owns this condition. */
+    coachSessionId: t.string(),
+    baselineHr: t.f64(),
+    baselineRr: t.f64(),
+    baselineSys: t.f64(),
+    baselineDia: t.f64(),
+    /** -1 when not charted. */
+    baselineSpo2: t.f64(),
+    /** 'chart' | 'measured' | 'demo' | 'authored' */
+    baselineSource: t.string(),
+    weightKg: t.f64(),
+    mlPerKg: t.f64(),
+    /** Estimated blood volume, weightKg x mlPerKg. */
+    ebvMl: t.f64(),
+    scale: t.f64(),
+    hr: t.i32(),
+    rr: t.i32(),
+    sys: t.i32(),
+    dia: t.i32(),
+    /** -1 when not charted. */
+    spo2: t.i32(),
+    /** Simulated loss incl. the active-bleed look-ahead, percent of EBV. */
+    bloodLossPct: t.f64(),
+    hemorrhageClass: t.u32(),
+    label: t.string(),
+    /** Raw blood lost from the surgical field (body reducer facts + server accrual). */
+    bodyLostMl: t.f64(),
+    /** Raw blood lost from injured regions outside the field (server accrual). */
+    regionLostMl: t.f64(),
+    /** Simulated blood lost: (body + region) x scale. */
+    bloodLostMl: t.f64(),
+    /** Sum of active bleed rates in the field, raw ml/min. */
+    bodyBleedMlPerMin: t.f64(),
+    /** JSON [{name, rateMlPerMin}] of active bleeds in the field (raw). */
+    activeBleedsJson: t.string(),
+    /** JSON [{region, label, bleeding, rawBleedMlPerMin, at}] (at: ms since epoch). */
+    regionInjuriesJson: t.string(),
+    /** 'in_progress' | 'completed' | 'ended' | 'died' */
+    outcomeResult: t.string(),
+    outcomeCause: t.string(),
+    outcomeAt: t.option(t.timestamp()),
+    /** Bumps on every change. */
+    version: t.u64(),
+    startedAt: t.timestamp(),
+    /** Accrual clock: blood loss is integrated up to this time. */
+    advancedAt: t.timestamp(),
+    updatedAt: t.timestamp(),
+  }
+);
+
+/** 1 Hz schedule for `patientTick`; present only while a condition is in progress. */
+export const patientTickTimer = table(
+  { name: 'patient_tick_timer' },
+  {
+    scheduledId: t.u64().primaryKey().autoInc(),
+    scheduledAt: t.scheduleAt(),
+  }
+);
+
 const spacetimedb = schema({
   serviceIdentity,
   connection,
@@ -526,6 +601,8 @@ const spacetimedb = schema({
   encounterEvent,
   simLog,
   robotResult,
+  patientCondition,
+  patientTickTimer,
 });
 
 export default spacetimedb;

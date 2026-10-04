@@ -46,6 +46,7 @@ namespace SpacetimeDB.Types
             AddTable(SessionMediaSource = new(conn));
             AddTable(SessionMembers = new(conn));
             AddTable(SessionMotionJobs = new(conn));
+            AddTable(SessionPatientCondition = new(conn));
             AddTable(SessionReplayState = new(conn));
             AddTable(SessionRobotResults = new(conn));
             AddTable(SessionSimLogs = new(conn));
@@ -550,6 +551,7 @@ namespace SpacetimeDB.Types
             new QueryBuilder().From.SessionMediaSource().ToSql(),
             new QueryBuilder().From.SessionMembers().ToSql(),
             new QueryBuilder().From.SessionMotionJobs().ToSql(),
+            new QueryBuilder().From.SessionPatientCondition().ToSql(),
             new QueryBuilder().From.SessionReplayState().ToSql(),
             new QueryBuilder().From.SessionRobotResults().ToSql(),
             new QueryBuilder().From.SessionSimLogs().ToSql(),
@@ -578,6 +580,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Table<MediaSource, SessionMediaSourceCols, SessionMediaSourceIxCols> SessionMediaSource() => new("session_media_source", new SessionMediaSourceCols("session_media_source"), new SessionMediaSourceIxCols("session_media_source"));
         public global::SpacetimeDB.Table<SessionMember, SessionMembersCols, SessionMembersIxCols> SessionMembers() => new("session_members", new SessionMembersCols("session_members"), new SessionMembersIxCols("session_members"));
         public global::SpacetimeDB.Table<MotionJob, SessionMotionJobsCols, SessionMotionJobsIxCols> SessionMotionJobs() => new("session_motion_jobs", new SessionMotionJobsCols("session_motion_jobs"), new SessionMotionJobsIxCols("session_motion_jobs"));
+        public global::SpacetimeDB.Table<PatientCondition, SessionPatientConditionCols, SessionPatientConditionIxCols> SessionPatientCondition() => new("session_patient_condition", new SessionPatientConditionCols("session_patient_condition"), new SessionPatientConditionIxCols("session_patient_condition"));
         public global::SpacetimeDB.Table<ReplayState, SessionReplayStateCols, SessionReplayStateIxCols> SessionReplayState() => new("session_replay_state", new SessionReplayStateCols("session_replay_state"), new SessionReplayStateIxCols("session_replay_state"));
         public global::SpacetimeDB.Table<RobotResult, SessionRobotResultsCols, SessionRobotResultsIxCols> SessionRobotResults() => new("session_robot_results", new SessionRobotResultsCols("session_robot_results"), new SessionRobotResultsIxCols("session_robot_results"));
         public global::SpacetimeDB.Table<SimLog, SessionSimLogsCols, SessionSimLogsIxCols> SessionSimLogs() => new("session_sim_logs", new SessionSimLogsCols("session_sim_logs"), new SessionSimLogsIxCols("session_sim_logs"));
@@ -674,6 +677,7 @@ namespace SpacetimeDB.Types
                 Reducer.DeleteArtifact args => Reducers.InvokeDeleteArtifact(eventContext, args),
                 Reducer.DenyGrant args => Reducers.InvokeDenyGrant(eventContext, args),
                 Reducer.DenyServiceGrant args => Reducers.InvokeDenyServiceGrant(eventContext, args),
+                Reducer.EndPatientCondition args => Reducers.InvokeEndPatientCondition(eventContext, args),
                 Reducer.EndSession args => Reducers.InvokeEndSession(eventContext, args),
                 Reducer.FailMotionJob args => Reducers.InvokeFailMotionJob(eventContext, args),
                 Reducer.HeartbeatMotionJob args => Reducers.InvokeHeartbeatMotionJob(eventContext, args),
@@ -688,6 +692,8 @@ namespace SpacetimeDB.Types
                 Reducer.RegisterJobOutput args => Reducers.InvokeRegisterJobOutput(eventContext, args),
                 Reducer.RemoveMember args => Reducers.InvokeRemoveMember(eventContext, args),
                 Reducer.RemoveServiceIdentity args => Reducers.InvokeRemoveServiceIdentity(eventContext, args),
+                Reducer.ReportBodyState args => Reducers.InvokeReportBodyState(eventContext, args),
+                Reducer.ReportInjury args => Reducers.InvokeReportInjury(eventContext, args),
                 Reducer.RequestCommand args => Reducers.InvokeRequestCommand(eventContext, args),
                 Reducer.RequestDownload args => Reducers.InvokeRequestDownload(eventContext, args),
                 Reducer.RequestMotionJob args => Reducers.InvokeRequestMotionJob(eventContext, args),
@@ -703,9 +709,11 @@ namespace SpacetimeDB.Types
                 Reducer.SetEncounterPhase args => Reducers.InvokeSetEncounterPhase(eventContext, args),
                 Reducer.SetEncounterResult args => Reducers.InvokeSetEncounterResult(eventContext, args),
                 Reducer.SetMediaSource args => Reducers.InvokeSetMediaSource(eventContext, args),
+                Reducer.SetPatientBaseline args => Reducers.InvokeSetPatientBaseline(eventContext, args),
                 Reducer.SetReplayState args => Reducers.InvokeSetReplayState(eventContext, args),
                 Reducer.StartAttempt args => Reducers.InvokeStartAttempt(eventContext, args),
                 Reducer.StartEncounter args => Reducers.InvokeStartEncounter(eventContext, args),
+                Reducer.StartPatientCondition args => Reducers.InvokeStartPatientCondition(eventContext, args),
                 _ => throw new ArgumentOutOfRangeException("Reducer", $"Unknown reducer {reducer}")
             };
         }
