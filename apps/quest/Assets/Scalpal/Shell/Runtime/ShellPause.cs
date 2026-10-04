@@ -146,6 +146,7 @@ namespace Scalpal.Shell
         public void Recenter()
         {
             if (hubInput) hubInput.Recenter();
+            if (DialogueBox.Active) DialogueBox.Active.Recenter();
             // Office tracking origin is owned by its rig. Move presentation roots, never its tracked camera.
             if (officeAligned && officeRig && officeRig.head && officeRig.origin)
             {

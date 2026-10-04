@@ -108,7 +108,7 @@ namespace Scalpal.EncounterOffice.Editor
             Debug.Log("SCALPAL_ENCOUNTER_OFFICE_PREPARED scene="+ScenePath+" globalBuildSettingsUnchanged=true");
         }
         [MenuItem("Scalpal/Encounter Office/Verify Diagnosis Office")]
-        public static void Verify() { EncounterOfficeValidation.Run(); EncounterRouteValidation.Run(); }
+        public static void Verify() { EncounterOfficeValidation.Run(); EncounterRouteValidation.Run(); Scalpal.Shell.Editor.DialogueBoxValidation.Run(); }
         public static void PrepareAndVerify() { Prepare(); Verify(); }
 
         static void ForegroundPanel(Transform panel,Vector3 position,float scale)
@@ -127,9 +127,30 @@ namespace Scalpal.EncounterOffice.Editor
             string output = Environment.GetEnvironmentVariable("SCALPAL_ENCOUNTER_PREVIEW");
             if (string.IsNullOrWhiteSpace(output) || !Path.IsPathRooted(output)) throw new InvalidOperationException("SCALPAL_ENCOUNTER_PREVIEW must be an absolute output path.");
             EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
-            if(Environment.GetEnvironmentVariable("SCALPAL_ENCOUNTER_PREVIEW_LAYOUT")=="assessment")
+            string layout=Environment.GetEnvironmentVariable("SCALPAL_ENCOUNTER_PREVIEW_LAYOUT");
+            if(layout=="assessment")
             {
                 var ui=UnityEngine.Object.FindFirstObjectByType<EncounterOfficePanel>();ui.Act("page","assessment");ui.Act("keyboard","");
+            }
+            Scalpal.Shell.DialogueFeed dialogue=null;
+            if(layout=="dialogue"||layout=="dialogue-attending")
+            {
+                // Editor-only illustration: a fixed patient and authored-looking lines, not a live encounter.
+                var session=UnityEngine.Object.FindFirstObjectByType<NativeEncounterSession>();
+                session.patient.Select(new EncounterState{patientId=EncounterContract.FemalePatientId,patientName="Priya Ramaswamy",speaker="patient",patientSex="female",patientAge=40,speakerName="Priya Ramaswamy",speakerSex="female",speakerAge=40,phase="interview"});
+                var ui=UnityEngine.Object.FindFirstObjectByType<EncounterOfficePanel>();ui.Act("page",layout=="dialogue"?"history":"assessment");
+                dialogue=Scalpal.Shell.DialogueFeed.Attach();var box=dialogue.box;
+                if(layout=="dialogue")
+                {
+                    box.Say(Scalpal.Shell.DialogueSpeaker.You,"","When did the pain start, and where was it at first?");
+                    box.Say(Scalpal.Shell.DialogueSpeaker.Patient,"Priya Ramaswamy","Last night, around my belly button. This morning it moved down to the right side and it hurts when I walk.");
+                }
+                else
+                {
+                    box.Say(Scalpal.Shell.DialogueSpeaker.You,"","I think this is acute appendicitis.");
+                    box.Say(Scalpal.Shell.DialogueSpeaker.Attending,"","Good. What else is on your differential, and how urgently should she go to theatre?");
+                }
+                box.CompleteLine();box.Tick(0);for(int i=0;i<60;i++)box.Tick(1f/72);
             }
             foreach(var fit in UnityEngine.Object.FindObjectsByType<EncounterOfficeText>(FindObjectsInactive.Include,FindObjectsSortMode.None))fit.Fit();
             var camera = UnityEngine.Object.FindFirstObjectByType<EncounterOfficeRig>().head;
@@ -143,7 +164,7 @@ namespace Scalpal.EncounterOffice.Editor
                 Directory.CreateDirectory(Path.GetDirectoryName(output));File.WriteAllBytes(output,texture.EncodeToPNG());
                 Debug.Log("SCALPAL_ENCOUNTER_PREVIEW_OK monoEditorOnly=true");
             }
-            finally { camera.targetTexture=null; RenderTexture.active=previous;UnityEngine.Object.DestroyImmediate(texture);UnityEngine.Object.DestroyImmediate(render); }
+            finally { camera.targetTexture=null; RenderTexture.active=previous;UnityEngine.Object.DestroyImmediate(texture);UnityEngine.Object.DestroyImmediate(render); if(dialogue)UnityEngine.Object.DestroyImmediate(dialogue.gameObject); }
         }
 
         [MenuItem("Scalpal/Encounter Office/Build Android Office")]
