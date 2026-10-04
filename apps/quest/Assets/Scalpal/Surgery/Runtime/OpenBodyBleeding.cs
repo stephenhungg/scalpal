@@ -107,7 +107,7 @@ namespace Scalpal.Surgery
             double target = Math.Max(0, exercise.Body.Get("", "poolMl"));
             ShownPoolMl += (target - ShownPoolMl) * (1 - Math.Exp(-seconds / .35));
             if (Math.Abs(target - ShownPoolMl) < .001) ShownPoolMl = target;
-            pool.SetActive(ShownPoolMl > .001);
+            pool.SetActive(ShownPoolMl > .001 && (PresentationVisible == null || PresentationVisible()));
             // Flattened ellipsoid of the shown volume: V = 2/3 pi r^2 h, at least 3 mm deep, at most the 25 mm cavity.
             float radius = Mathf.Min(.04f,Mathf.Sqrt((float)(3 * ShownPoolMl * 1e-6/(2*Math.PI*.003))));
             float level = radius > 0 ? Mathf.Clamp((float)(3 * ShownPoolMl * 1e-6/(2*Math.PI*radius*radius)), .003f, .025f) : 0;

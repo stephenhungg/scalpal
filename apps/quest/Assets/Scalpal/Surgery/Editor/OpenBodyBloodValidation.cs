@@ -262,7 +262,16 @@ namespace Scalpal.Surgery.Editor
             Require(!poolView.gameObject.activeSelf&&s.bleeding.ShownPoolMl==shown,"invalid display hides blood without deleting it");
             s.bleeding.PresentationVisible=()=>true;s.bleeding.Simulate(0);
             Require(poolView.gameObject.activeSelf&&s.bleeding.ShownPoolMl==shown,"display recovery restores the same accumulated blood");
-            s.bleeding.PresentationVisible=priorDisplay;s.gate=true;
+            // A hidden operative field must stay hidden even while valid fluid simulation continues.
+            // Control has stopped flow, so neither display gating nor recovery may alter the stored totals.
+            double loss = s.Fact("", "bloodLostMl");
+            s.gate=true;s.bleeding.PresentationVisible=()=>false;s.bleeding.Simulate(Dt);
+            Require(!poolView.gameObject.activeSelf && s.Fact("", "poolMl") == pool && s.Fact("", "bloodLostMl") == loss,
+                "active simulation honors the hidden-field gate without deleting pooled blood or cumulative loss");
+            s.bleeding.PresentationVisible=()=>true;s.bleeding.Simulate(Dt);
+            Require(poolView.gameObject.activeSelf && s.Fact("", "poolMl") == pool && s.Fact("", "bloodLostMl") == loss,
+                "active display recovery restores the pool without inventing or erasing fluid");
+            s.bleeding.PresentationVisible=priorDisplay;
             var suction = s.Input.CreateMeasurement("suction_irrigator", "suction", "appendicular_artery", s.Wound.TransformPoint(new Vector3(0, 0, .025f)), "validation-suction");
             suction.durationMs = Math.Min(1000, pool * 50); suction.choice = "pool_suction";
             Require(s.Input.SubmitMeasured(suction), "pool suction is accepted at the visible pool");
