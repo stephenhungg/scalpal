@@ -132,14 +132,14 @@ namespace Scalpal.Quest.Editor
         sealed class State
         {
             public readonly int nodes, cutFaces;
-            public readonly float mass, referenceVolume;
+            public readonly NativeVolumeValidation.TopologySnapshot topology;
             public readonly bool[] cuts;
             public readonly int[] binding;
             public readonly Vector3[] positions;
             public State(TissueVolume volume)
             {
                 nodes = volume.NodeCount; cutFaces = volume.CutFaceCount;
-                mass = volume.TotalMass; referenceVolume = volume.ReferenceVolume;
+                topology = new NativeVolumeValidation.TopologySnapshot(volume);
                 cuts = volume.Faces.Select(face => face.cut).ToArray();
                 binding = Enumerable.Range(0, volume.Cells.Length * 4).Select(i => volume.NodeFor(i / 4, i % 4)).ToArray();
                 positions = (Vector3[])volume.Positions.Clone();
@@ -147,7 +147,7 @@ namespace Scalpal.Quest.Editor
             public void AssertTopology(TissueVolume volume, string reason)
             {
                 Assert(volume.NodeCount == nodes && volume.CutFaceCount == cutFaces, reason + ": topology counts");
-                Assert(Near(volume.TotalMass, mass) && Near(volume.ReferenceVolume, referenceVolume), reason + ": reference mass/volume");
+                topology.Validate(volume);
                 Assert(cuts.SequenceEqual(volume.Faces.Select(face => face.cut)), reason + ": fracture flags");
                 Assert(binding.SequenceEqual(Enumerable.Range(0, binding.Length).Select(i => volume.NodeFor(i / 4, i % 4))), reason + ": cell bindings");
             }
@@ -259,7 +259,7 @@ namespace Scalpal.Quest.Editor
                 Assert(f.Volume.CutFaceCount > 0, "owned finite CutStart/CutEnd sweep fractures the wall");
                 Assert(f.Wall.Surface.triangles.Length == triangles.Length + 6 * f.Volume.CutFaceCount, "each fracture exposes two generated interior triangles");
                 Assert(f.Volume.NodeCount > initial.nodes, "incision creates independently bound cut-side nodes");
-                Assert(Near(f.Volume.TotalMass, initial.mass) && Near(f.Volume.ReferenceVolume, initial.referenceVolume), "blade sweep conserves reference volume and mass");
+                initial.topology.Validate(f.Volume,true);
                 var firstCut = new State(f.Volume);
                 f.Cut(); firstCut.AssertTopology(f.Volume, "repeated blade traversal cannot duplicate an existing incision");
                 foreach (var face in f.Volume.Faces.Where(face => face.cut))

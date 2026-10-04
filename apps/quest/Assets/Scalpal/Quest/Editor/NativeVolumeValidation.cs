@@ -26,13 +26,15 @@ namespace Scalpal.Quest.Editor
             var box = TissueVolumeFactory.Box(new Bounds(Vector3.zero, new Vector3(.12f, .12f, .06f)), 4, 4, 2, Material, false);
             ValidateVolume(box); Assert(Near(box.ReferenceVolume, .12f * .12f * .06f), "box partition preserves known metric volume");
             ValidateSurface(box, true);
+            new TopologySnapshot(box).Validate(box);
             int baselineNodes = box.NodeCount;
             Assert(box.CutSweep(Vector3.one, Vector3.one + Vector3.right, Vector3.one + Vector3.up, .0005f) == 0, "remote finite blade cannot cut body");
             Assert(box.CutSweep(Vector3.zero, Vector3.zero, Vector3.up, .0005f) == 0, "degenerate sweep cannot fracture");
             var a = new Vector3(0, -.03f, -.04f); var b = new Vector3(0, .03f, -.04f); var c = new Vector3(0, .03f, .04f);
-            float mass = box.TotalMass;
+            var beforeCut = new TopologySnapshot(box);
             Assert(box.CutSweep(a, b, c, .0005f) > 0 && box.CutFaceCount > 0, "finite swept knife creates interior fracture faces");
-            Assert(Near(box.TotalMass, mass) && box.NodeCount >= baselineNodes, "fracture duplicates connectivity without losing mass");
+            Assert(box.NodeCount >= baselineNodes, "fracture duplicates connectivity");
+            beforeCut.Validate(box, true);
             foreach (var face in box.Faces)
             {
                 if (!face.cut) continue;
@@ -49,8 +51,9 @@ namespace Scalpal.Quest.Editor
             for (int cell = 0; cell < box.Cells.Length; cell++) for (int corner = 0; corner < 4; corner++)
                 Assert(box.Positions[box.NodeFor(cell, corner)] == box.Original[box.Cells[cell].Vertex(corner)], "reset restores cell material coordinates");
             ValidateSurface(box, true);
-            ValidateFanSplit(); ValidateBudgets();
-            var wall = TissueVolumeFactory.AbdominalWall(); ValidateVolume(wall); ValidateSurface(wall, true);
+            beforeCut.Validate(box);
+            ValidateInvariantMutations(); ValidateFanSplit(); ValidateBudgets();
+            var wall = TissueVolumeFactory.AbdominalWall(); ValidateVolume(wall); ValidateSurface(wall, true); new TopologySnapshot(wall).Validate(wall);
             Assert(wall.Materials.Length == 3, "generated abdominal wall has three explicit educational layers");
             foreach (var material in wall.Materials)
                 Assert(material.HasValidUnits && !string.IsNullOrWhiteSpace(material.id) && !material.id.StartsWith("surface__", StringComparison.Ordinal), "layer has SI parameters and does not impersonate source segmentation");
@@ -73,6 +76,104 @@ namespace Scalpal.Quest.Editor
             Assert(Mathf.Abs(minimumDepth[0] - BodyRegistrationMath.SourceFront) < 1e-5f && maximumDepth[0] <= minimumDepth[1] + 1e-6f && maximumDepth[1] <= minimumDepth[2] + 1e-6f,
                 "skin, fat and peritoneum progress inward along source +Z from registered anterior surface");
             Debug.Log("SCALPAL_NATIVE_VOLUME_VALIDATION_OK checks=" + checks + " synthetic SI mechanics/topology/reset; no headset or clinical evidence");
+        }
+
+
+        // Reconstruct invariants from live topology and geometry; do not compare the
+        // constructor's cached ReferenceVolume/TotalMass against themselves after cuts.
+        public sealed class TopologySnapshot
+        {
+            readonly TissueVolume.Cell[] cells;
+            readonly Vector3[] original;
+            readonly float[] referenceVolumes, currentVolumes, densities;
+            public TopologySnapshot(TissueVolume volume)
+            {
+                cells = (TissueVolume.Cell[])volume.Cells.Clone();
+                original = (Vector3[])volume.Original.Clone();
+                referenceVolumes = new float[cells.Length]; currentVolumes = new float[cells.Length]; densities = new float[cells.Length];
+                for (int cell = 0; cell < cells.Length; cell++)
+                {
+                    var c = cells[cell];
+                    referenceVolumes[cell] = Signed(original[c.a], original[c.b], original[c.c], original[c.d]);
+                    currentVolumes[cell] = BoundVolume(volume, cell, volume.Positions);
+                    densities[cell] = volume.Materials[c.material].densityKgPerCubicMeter;
+                }
+            }
+            public void Validate(TissueVolume volume, bool preserveCurrentGeometry = false)
+            {
+                Assert(volume.Cells.Length == cells.Length, "every baseline cell is retained exactly once");
+                var incidentMass = new float[volume.NodeCount]; var references = new int[volume.NodeCount];
+                var inverseMass = (float[])typeof(TissueVolume).GetField("inverseMass", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(volume);
+                var pinned = (bool[])typeof(TissueVolume).GetField("pinned", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(volume);
+                double cellMass = 0, nodeMass = 0;
+                for (int cell = 0; cell < cells.Length; cell++)
+                {
+                    var c = volume.Cells[cell]; var expected = cells[cell];
+                    Assert(c.a == expected.a && c.b == expected.b && c.c == expected.c && c.d == expected.d && c.material == expected.material,
+                        "cell identity/material coverage survives topology rebuild");
+                    var ids = new int[4];
+                    for (int corner = 0; corner < 4; corner++)
+                    {
+                        int node = volume.NodeFor(cell, corner); ids[corner] = node;
+                        Assert(node >= 0 && node < volume.NodeCount, "bound node belongs to live topology");
+                        for (int previous = 0; previous < corner; previous++) Assert(ids[previous] != node, "cell binds four distinct corners");
+                        Assert((volume.Rest[node] - original[expected.Vertex(corner)]).sqrMagnitude < 1e-16f,
+                            "each active corner retains its own material reference coordinate");
+                        references[node]++; incidentMass[node] += referenceVolumes[cell] * densities[cell] / 4;
+                    }
+                    float restVolume = BoundVolume(volume, cell, volume.Rest);
+                    Assert(restVolume > 0 && VolumeNear(restVolume, referenceVolumes[cell]), "live bound rest tetrahedron retains independently computed cell volume");
+                    cellMass += restVolume * densities[cell];
+                    float deformed = BoundVolume(volume, cell, volume.Positions);
+                    Assert(TissueCage.Finite(volume.Positions[ids[0]]) && !float.IsNaN(deformed) && !float.IsInfinity(deformed) && deformed > 0,
+                        "live deformed tetrahedron is finite and not inverted");
+                    if (preserveCurrentGeometry) Assert(VolumeNear(deformed, currentVolumes[cell]), "pure cut or rejected operation preserves each current cell's geometric volume");
+                }
+                for (int node = 0; node < volume.NodeCount; node++)
+                {
+                    Assert(references[node] > 0, "active node is owned by at least one retained cell");
+                    float actual = volume.NodeMass(node);
+                    Assert(actual > 0 && Near(actual, incidentMass[node]), "stored node mass equals its actual bound-cell incidence, including pinned and split nodes");
+                    Assert(pinned[node] ? inverseMass[node] == 0 : Near(inverseMass[node], 1 / incidentMass[node]),
+                        "dynamic inverse mass agrees with physical incident mass, while pinned mass remains represented");
+                    nodeMass += actual;
+                }
+                Assert(Math.Abs(nodeMass - cellMass) <= Math.Max(1e-9, Math.Abs(cellMass) * .0001), "sum of stored node masses matches reconstructed retained-cell mass");
+            }
+            public void ValidateTotalDeformedVolume(TissueVolume volume, float relativeTolerance)
+            {
+                double current = 0, reference = 0;
+                for (int cell = 0; cell < cells.Length; cell++) { current += BoundVolume(volume, cell, volume.Positions); reference += referenceVolumes[cell]; }
+                Assert(Math.Abs(current - reference) <= Math.Abs(reference) * relativeTolerance,
+                    "specific loaded fixture geometric volume remains inside declared finite-strain tolerance; not incompressibility proof");
+            }
+            static bool VolumeNear(float actual, float expected) => Mathf.Abs(actual - expected) <= Mathf.Max(1e-14f, Mathf.Abs(expected) * .0002f);
+            static float BoundVolume(TissueVolume volume, int cell, Vector3[] nodes) => Signed(nodes[volume.NodeFor(cell, 0)], nodes[volume.NodeFor(cell, 1)], nodes[volume.NodeFor(cell, 2)], nodes[volume.NodeFor(cell, 3)]);
+        }
+
+        static void ValidateInvariantMutations()
+        {
+            var volume = TissueVolumeFactory.Box(new Bounds(Vector3.zero, Vector3.one * .06f), 2, 2, 2, Material, false);
+            var snapshot = new TopologySnapshot(volume); snapshot.Validate(volume);
+            // Deliberate faults hit the actual solver arrays, not an alternate test-only implementation.
+            var bindings = (int[,])typeof(TissueVolume).GetField("binding", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(volume);
+            int corner = bindings[0, 1]; bindings[0, 1] = bindings[0, 0];
+            ExpectInvariantFailure(() => snapshot.Validate(volume), "duplicate bound corner corruption is detected"); bindings[0, 1] = corner;
+            var masses = (float[])typeof(TissueVolume).GetField("nodeMass", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(volume);
+            float mass = masses[corner]; masses[corner] *= .8f;
+            ExpectInvariantFailure(() => snapshot.Validate(volume), "wrong split-node/incident mass is detected even with unchanged TotalMass"); masses[corner] = mass;
+            Vector3 rest = volume.Rest[corner]; volume.Rest[corner] += Vector3.right * .001f;
+            ExpectInvariantFailure(() => snapshot.Validate(volume), "corrupted bound rest geometry is detected even with unchanged ReferenceVolume"); volume.Rest[corner] = rest;
+            var cell = volume.Cells[0]; volume.Cells[0] = volume.Cells[1];
+            ExpectInvariantFailure(() => snapshot.Validate(volume), "missing/replaced cell coverage is detected"); volume.Cells[0] = cell;
+            var positions = (Vector3[])volume.Positions.Clone(); for (int node = 0; node < volume.NodeCount; node++) volume.Positions[node] *= 1.02f;
+            ExpectInvariantFailure(() => snapshot.Validate(volume, true), "positive, finite cut geometry-volume mutation is detected"); Array.Copy(positions, volume.Positions, positions.Length);
+            snapshot.Validate(volume, true);
+        }
+        static void ExpectInvariantFailure(Action action, string reason)
+        {
+            bool caught = false; try { action(); } catch (InvalidOperationException) { caught = true; }
+            Assert(caught, reason);
         }
 
         static void ValidateUnits()
@@ -160,16 +261,19 @@ namespace Scalpal.Quest.Editor
             Assert(!left.Overlaps(right), "cut sides have independent material nodes rather than shared hidden welds");
             Assert(volume.BeginHandle(new Vector3(-.06f, 0, 0), .002f), "left cut side can acquire handle");
             Assert(left.Contains(volume.Handle), "left handle belongs to left component");
+            var loadedSnapshot = new TopologySnapshot(volume);
             var restRight = new Dictionary<int, Vector3>(); foreach (int node in right) restRight[node] = volume.Positions[node];
             Vector3 goal = volume.HandlePosition + Vector3.left * .008f;
             for (int step = 0; step < 20; step++) volume.Step(1f / 90, goal, Vector3.zero);
-            Assert((volume.HandlePosition - goal).sqrMagnitude < 1e-8f, "held cut side follows bounded handle");
+            Assert(volume.Handle >= 0 && (volume.HandlePosition - volume.Rest[volume.Handle]).sqrMagnitude > 1e-6f, "held cut side accepts real bounded deformation");
             foreach (int node in right) Assert((volume.Positions[node] - restRight[node]).sqrMagnitude < 1e-10f, "pulling one disconnected cut side does not drag opposite side");
             for (int cell = 0; cell < volume.Cells.Length; cell++)
             {
                 float current = Signed(volume.Positions[volume.NodeFor(cell, 0)], volume.Positions[volume.NodeFor(cell, 1)], volume.Positions[volume.NodeFor(cell, 2)], volume.Positions[volume.NodeFor(cell, 3)]);
                 Assert(current > 0 && !float.IsNaN(current), "fixed-step deformation remains finite without inverted cells");
             }
+            loadedSnapshot.Validate(volume);
+            loadedSnapshot.ValidateTotalDeformedVolume(volume, .10f);
             volume.Freeze(); Assert(volume.BeginHandle(new Vector3(.06f, 0, 0), .002f) && right.Contains(volume.Handle), "opposite side independently acquires a handle");
         }
 
@@ -186,9 +290,10 @@ namespace Scalpal.Quest.Editor
             }
             var faceBudget = new TissueVolume(nodes.ToArray(), cells.ToArray(), new[] { Material }, new bool[nodes.Count]);
             var largeA = new Vector3(-1, -1, 0); var largeB = new Vector3(2, -1, 0); var largeC = new Vector3(-1, 2, 0);
-            int before = faceBudget.NodeCount; float mass = faceBudget.TotalMass;
-            Assert(faceBudget.CutSweep(largeA, largeB, largeC, .0005f) == 0 && faceBudget.CutFaceCount == 0 && faceBudget.NodeCount == before && Near(faceBudget.TotalMass, mass), "over-cut-face-budget sweep atomically refuses fracture");
+            int before = faceBudget.NodeCount; var faceSnapshot = new TopologySnapshot(faceBudget);
+            Assert(faceBudget.CutSweep(largeA, largeB, largeC, .0005f) == 0 && faceBudget.CutFaceCount == 0 && faceBudget.NodeCount == before, "over-cut-face-budget sweep atomically refuses fracture");
             foreach (var face in faceBudget.Faces) Assert(!face.cut, "face budget rollback retains every intact face");
+            faceSnapshot.Validate(faceBudget, true);
 
             nodes.Clear(); cells.Clear();
             for (int i = 0; i < 1022; i++)
@@ -203,12 +308,13 @@ namespace Scalpal.Quest.Editor
             cells.Add(new TissueVolume.Cell { a = root, b = root + 2, c = root + 1, d = root + 4 });
             cells.Add(new TissueVolume.Cell { a = root, b = root + 1, c = root + 5, d = root + 4 });
             var nodeBudget = new TissueVolume(nodes.ToArray(), cells.ToArray(), new[] { Material }, new bool[nodes.Count]);
-            before = nodeBudget.NodeCount; mass = nodeBudget.TotalMass;
+            before = nodeBudget.NodeCount; var nodeSnapshot = new TopologySnapshot(nodeBudget);
             Assert(before == 4094, "node-capacity fixture begins below actual solver budget");
             Assert(nodeBudget.CutSweep(new Vector3(-.01f, -.01f, 0), new Vector3(.08f, -.01f, 0), new Vector3(-.01f, .08f, 0), .0001f) == 0,
                 "fracture requiring excess connected-fan nodes is refused");
-            Assert(nodeBudget.NodeCount == before && nodeBudget.CutFaceCount == 0 && Near(nodeBudget.TotalMass, mass), "node budget failure rolls back topology and mass atomically");
+            Assert(nodeBudget.NodeCount == before && nodeBudget.CutFaceCount == 0, "node budget failure rolls back topology atomically");
             foreach (var face in nodeBudget.Faces) Assert(!face.cut, "node budget rollback retains every intact face");
+            nodeSnapshot.Validate(nodeBudget, true);
         }
     }
 }
