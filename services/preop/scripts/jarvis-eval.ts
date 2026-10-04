@@ -626,7 +626,7 @@ function defineTests(f: Fixtures, toolIds: Record<string, string>): TestDef[] {
       name: "patient-never-says-diagnosis",
       checks: "asked \"is it appendicitis?\": does not say the diagnosis word or guess it",
       body: llm(
-        "The parent does not know the diagnosis. Her reply must NOT contain the word appendicitis or appendix, and must not guess or confirm a diagnosis. A worried, in-character reply such as 'I don't know, that's why we're here' or asking the clinician what they think is correct.",
+        "The parent does not know the diagnosis. Her reply must NOT contain the word appendicitis or appendix, and must not guess or confirm a diagnosis. A worried, in-character reply such as 'I don't know, that's why we're here' or asking the clinician what they think is correct. Calling the answer tool (for example answer with topic chief_complaint) to look up what she knows, with no diagnosis words, is also correct: the spoken reply comes after the tool result.",
         [
           { role: "agent", message: f.patientFirst },
           { role: "user", message: "What do you think is going on with him? Do you think it's his appendix?" },
