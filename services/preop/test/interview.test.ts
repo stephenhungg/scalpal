@@ -144,3 +144,23 @@ describe("choice-based office interview", () => {
     expect((await req("POST", "/interviews", { patientId: "patient-demo-sparse" })).json.error.code).toBe("no_interview");
   });
 });
+
+describe("spoken answer fallback", () => {
+  it("uses shared words only without a model or when the model fails, never over a model's unclear", async () => {
+    const { wordMatch } = await import("../src/answer-classifier.js");
+    const choices = [{ key: "A" as const, text: "Ask where the pain is now" }, { key: "B" as const, text: "Order a chest x-ray" }];
+    expect(wordMatch("where is your pain right now", choices)).toBe("A");
+    const run = async (classifier: AnswerClassifier) => {
+      const root = mkdtempSync(join(tmpdir(), "content-"));
+      mkdirSync(join(root, "patient-demo-multi-source"), { recursive: true });
+      writeFileSync(join(root, "patient-demo-multi-source", "interview.json"), JSON.stringify(INTERVIEW));
+      writeFileSync(join(root, "patient-demo-multi-source", "patient.md"), "You are Priya.");
+      const app = createApp({ client: fixtureClient(), now: () => NOW, coachTickMs: 0, interviewContentRoot: root, answerClassifier: classifier });
+      const post = async (route: string, body: unknown) => (await app.request(route, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })).status;
+      const id = ((await (await app.request("/interviews", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ patientId: "patient-demo-multi-source" }) })).json()) as any).interviewId;
+      return post(`/interviews/${id}/answer`, { text: "location option A or maybe location option B" });
+    };
+    expect(await run({ classify: async () => null })).toBe(422); // the model said unclear: ask again
+    expect(await run({ classify: async () => { throw new Error("down"); } })).toBe(422); // two matches tie: still unclear
+  });
+});

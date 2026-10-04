@@ -130,8 +130,12 @@ export function registerInterviewRoutes(app: Hono, options: InterviewRouteOption
     }
     // A bare letter ("B", "option c") needs no model; anything else goes to the classifier.
     if (!key && heard) key = letterFrom(heard);
-    // The model when configured; shared content words otherwise (or when the model is unreachable or unsure).
-    if (!key && heard) key = (options.classifier ? await options.classifier.classify(heard, round.choices) : null) ?? wordMatch(heard, round.choices);
+    // The model when configured; shared content words when there is no model or it is unreachable. A model
+    // that judges the answer unclear (a hedge, a negation) is respected, so the learner is asked again.
+    if (!key && heard) {
+      if (!options.classifier) key = wordMatch(heard, round.choices);
+      else key = await options.classifier.classify(heard, round.choices).catch(() => wordMatch(heard, round.choices));
+    }
     if (!key) return bad(c, 422, "unclear_answer", heard ? `Heard "${heard}", which did not match one choice. Say A, B, C or D, or tap one.` : "Send key, text or audio.", actionsFor(s.id), { heard });
     if (heard) s.transcript("learner", heard);
     const out = s.pick(key, via, heard)!;

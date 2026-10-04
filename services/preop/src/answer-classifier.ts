@@ -64,9 +64,10 @@ export class ClaudeAnswerClassifier implements AnswerClassifier {
       });
       const out = res.content.map((b) => (b.type === "text" ? b.text : "")).join("").trim().toUpperCase();
       const key = out.match(/^[ABCD]\b/)?.[0] as ChoiceKey | undefined;
-      return key && KEYS.includes(key) ? key : null;
-    } catch {
-      return null;
+      return key && KEYS.includes(key) ? key : null; // null: the model judged the answer unclear
+    } catch (e) {
+      // Unreachable or failing model: let the caller fall back instead of treating it as unclear.
+      throw new Error(`answer classifier unavailable: ${(e as Error).message}`);
     }
   }
 }
