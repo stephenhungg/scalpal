@@ -36,6 +36,7 @@ import {
 // Import all reducer arg schemas
 import AckSignalsReducer from "./ack_signals_reducer";
 import AddServiceIdentityReducer from "./add_service_identity_reducer";
+import AppendEncounterEventReducer from "./append_encounter_event_reducer";
 import AppendExerciseEventReducer from "./append_exercise_event_reducer";
 import CancelMotionJobReducer from "./cancel_motion_job_reducer";
 import ClaimMotionJobReducer from "./claim_motion_job_reducer";
@@ -70,9 +71,12 @@ import SendSignalReducer from "./send_signal_reducer";
 import SetAttemptResultReducer from "./set_attempt_result_reducer";
 import SetCoachStatusReducer from "./set_coach_status_reducer";
 import SetDisplayNameReducer from "./set_display_name_reducer";
+import SetEncounterPhaseReducer from "./set_encounter_phase_reducer";
+import SetEncounterResultReducer from "./set_encounter_result_reducer";
 import SetMediaSourceReducer from "./set_media_source_reducer";
 import SetReplayStateReducer from "./set_replay_state_reducer";
 import StartAttemptReducer from "./start_attempt_reducer";
+import StartEncounterReducer from "./start_encounter_reducer";
 
 // Import all procedure arg schemas
 
@@ -88,6 +92,8 @@ import SessionAttemptsRow from "./session_attempts_table";
 import SessionCoachMessagesRow from "./session_coach_messages_table";
 import SessionCoachStatusRow from "./session_coach_status_table";
 import SessionCommandsRow from "./session_commands_table";
+import SessionEncounterEventsRow from "./session_encounter_events_table";
+import SessionEncountersRow from "./session_encounters_table";
 import SessionEventsRow from "./session_events_table";
 import SessionExerciseStateRow from "./session_exercise_state_table";
 import SessionInvitesRow from "./session_invites_table";
@@ -177,6 +183,20 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, SessionCommandsRow),
+  sessionEncounterEvents: __table({
+    name: 'session_encounter_events',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, SessionEncounterEventsRow),
+  sessionEncounters: __table({
+    name: 'session_encounters',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, SessionEncountersRow),
   sessionEvents: __table({
     name: 'session_events',
     indexes: [
@@ -232,6 +252,7 @@ const tablesSchema = __schema({
 const reducersSchema = __reducers(
   __reducerSchema("ack_signals", AckSignalsReducer),
   __reducerSchema("add_service_identity", AddServiceIdentityReducer),
+  __reducerSchema("append_encounter_event", AppendEncounterEventReducer),
   __reducerSchema("append_exercise_event", AppendExerciseEventReducer),
   __reducerSchema("cancel_motion_job", CancelMotionJobReducer),
   __reducerSchema("claim_motion_job", ClaimMotionJobReducer),
@@ -266,9 +287,12 @@ const reducersSchema = __reducers(
   __reducerSchema("set_attempt_result", SetAttemptResultReducer),
   __reducerSchema("set_coach_status", SetCoachStatusReducer),
   __reducerSchema("set_display_name", SetDisplayNameReducer),
+  __reducerSchema("set_encounter_phase", SetEncounterPhaseReducer),
+  __reducerSchema("set_encounter_result", SetEncounterResultReducer),
   __reducerSchema("set_media_source", SetMediaSourceReducer),
   __reducerSchema("set_replay_state", SetReplayStateReducer),
   __reducerSchema("start_attempt", StartAttemptReducer),
+  __reducerSchema("start_encounter", StartEncounterReducer),
 );
 
 /** The schema information for all procedures in this module. This is defined the same way as the procedures would have been defined in the server. */
@@ -327,3 +351,4 @@ export class DbConnection extends __DbConnectionImpl<typeof REMOTE_MODULE> {
     return new SubscriptionBuilder(this);
   };
 }
+

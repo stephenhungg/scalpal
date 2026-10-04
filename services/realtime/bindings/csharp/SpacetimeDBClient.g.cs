@@ -38,6 +38,8 @@ namespace SpacetimeDB.Types
             AddTable(SessionCoachMessages = new(conn));
             AddTable(SessionCoachStatus = new(conn));
             AddTable(SessionCommands = new(conn));
+            AddTable(SessionEncounterEvents = new(conn));
+            AddTable(SessionEncounters = new(conn));
             AddTable(SessionEvents = new(conn));
             AddTable(SessionExerciseState = new(conn));
             AddTable(SessionInvites = new(conn));
@@ -458,7 +460,7 @@ namespace SpacetimeDB.Types
                 Error += callback;
                 return this;
             }
-
+        
             /// <summary>
             /// Add a typed query to this subscription.
             ///
@@ -538,6 +540,8 @@ namespace SpacetimeDB.Types
             new QueryBuilder().From.SessionCoachMessages().ToSql(),
             new QueryBuilder().From.SessionCoachStatus().ToSql(),
             new QueryBuilder().From.SessionCommands().ToSql(),
+            new QueryBuilder().From.SessionEncounterEvents().ToSql(),
+            new QueryBuilder().From.SessionEncounters().ToSql(),
             new QueryBuilder().From.SessionEvents().ToSql(),
             new QueryBuilder().From.SessionExerciseState().ToSql(),
             new QueryBuilder().From.SessionInvites().ToSql(),
@@ -562,6 +566,8 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Table<CoachMessage, SessionCoachMessagesCols, SessionCoachMessagesIxCols> SessionCoachMessages() => new("session_coach_messages", new SessionCoachMessagesCols("session_coach_messages"), new SessionCoachMessagesIxCols("session_coach_messages"));
         public global::SpacetimeDB.Table<CoachStatus, SessionCoachStatusCols, SessionCoachStatusIxCols> SessionCoachStatus() => new("session_coach_status", new SessionCoachStatusCols("session_coach_status"), new SessionCoachStatusIxCols("session_coach_status"));
         public global::SpacetimeDB.Table<Command, SessionCommandsCols, SessionCommandsIxCols> SessionCommands() => new("session_commands", new SessionCommandsCols("session_commands"), new SessionCommandsIxCols("session_commands"));
+        public global::SpacetimeDB.Table<EncounterEvent, SessionEncounterEventsCols, SessionEncounterEventsIxCols> SessionEncounterEvents() => new("session_encounter_events", new SessionEncounterEventsCols("session_encounter_events"), new SessionEncounterEventsIxCols("session_encounter_events"));
+        public global::SpacetimeDB.Table<Encounter, SessionEncountersCols, SessionEncountersIxCols> SessionEncounters() => new("session_encounters", new SessionEncountersCols("session_encounters"), new SessionEncountersIxCols("session_encounters"));
         public global::SpacetimeDB.Table<ExerciseEvent, SessionEventsCols, SessionEventsIxCols> SessionEvents() => new("session_events", new SessionEventsCols("session_events"), new SessionEventsIxCols("session_events"));
         public global::SpacetimeDB.Table<ExerciseState, SessionExerciseStateCols, SessionExerciseStateIxCols> SessionExerciseState() => new("session_exercise_state", new SessionExerciseStateCols("session_exercise_state"), new SessionExerciseStateIxCols("session_exercise_state"));
         public global::SpacetimeDB.Table<SessionInvite, SessionInvitesCols, SessionInvitesIxCols> SessionInvites() => new("session_invites", new SessionInvitesCols("session_invites"), new SessionInvitesIxCols("session_invites"));
@@ -651,6 +657,7 @@ namespace SpacetimeDB.Types
             return reducer switch {
                 Reducer.AckSignals args => Reducers.InvokeAckSignals(eventContext, args),
                 Reducer.AddServiceIdentity args => Reducers.InvokeAddServiceIdentity(eventContext, args),
+                Reducer.AppendEncounterEvent args => Reducers.InvokeAppendEncounterEvent(eventContext, args),
                 Reducer.AppendExerciseEvent args => Reducers.InvokeAppendExerciseEvent(eventContext, args),
                 Reducer.CancelMotionJob args => Reducers.InvokeCancelMotionJob(eventContext, args),
                 Reducer.ClaimMotionJob args => Reducers.InvokeClaimMotionJob(eventContext, args),
@@ -685,9 +692,12 @@ namespace SpacetimeDB.Types
                 Reducer.SetAttemptResult args => Reducers.InvokeSetAttemptResult(eventContext, args),
                 Reducer.SetCoachStatus args => Reducers.InvokeSetCoachStatus(eventContext, args),
                 Reducer.SetDisplayName args => Reducers.InvokeSetDisplayName(eventContext, args),
+                Reducer.SetEncounterPhase args => Reducers.InvokeSetEncounterPhase(eventContext, args),
+                Reducer.SetEncounterResult args => Reducers.InvokeSetEncounterResult(eventContext, args),
                 Reducer.SetMediaSource args => Reducers.InvokeSetMediaSource(eventContext, args),
                 Reducer.SetReplayState args => Reducers.InvokeSetReplayState(eventContext, args),
                 Reducer.StartAttempt args => Reducers.InvokeStartAttempt(eventContext, args),
+                Reducer.StartEncounter args => Reducers.InvokeStartEncounter(eventContext, args),
                 _ => throw new ArgumentOutOfRangeException("Reducer", $"Unknown reducer {reducer}")
             };
         }

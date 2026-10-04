@@ -8,6 +8,7 @@ import { type Infer as __Infer } from "spacetimedb";
 // Import all reducer arg schemas
 import AckSignalsReducer from "../ack_signals_reducer";
 import AddServiceIdentityReducer from "../add_service_identity_reducer";
+import AppendEncounterEventReducer from "../append_encounter_event_reducer";
 import AppendExerciseEventReducer from "../append_exercise_event_reducer";
 import CancelMotionJobReducer from "../cancel_motion_job_reducer";
 import ClaimMotionJobReducer from "../claim_motion_job_reducer";
@@ -42,12 +43,16 @@ import SendSignalReducer from "../send_signal_reducer";
 import SetAttemptResultReducer from "../set_attempt_result_reducer";
 import SetCoachStatusReducer from "../set_coach_status_reducer";
 import SetDisplayNameReducer from "../set_display_name_reducer";
+import SetEncounterPhaseReducer from "../set_encounter_phase_reducer";
+import SetEncounterResultReducer from "../set_encounter_result_reducer";
 import SetMediaSourceReducer from "../set_media_source_reducer";
 import SetReplayStateReducer from "../set_replay_state_reducer";
 import StartAttemptReducer from "../start_attempt_reducer";
+import StartEncounterReducer from "../start_encounter_reducer";
 
 export type AckSignalsParams = __Infer<typeof AckSignalsReducer>;
 export type AddServiceIdentityParams = __Infer<typeof AddServiceIdentityReducer>;
+export type AppendEncounterEventParams = __Infer<typeof AppendEncounterEventReducer>;
 export type AppendExerciseEventParams = __Infer<typeof AppendExerciseEventReducer>;
 export type CancelMotionJobParams = __Infer<typeof CancelMotionJobReducer>;
 export type ClaimMotionJobParams = __Infer<typeof ClaimMotionJobReducer>;
@@ -82,6 +87,10 @@ export type SendSignalParams = __Infer<typeof SendSignalReducer>;
 export type SetAttemptResultParams = __Infer<typeof SetAttemptResultReducer>;
 export type SetCoachStatusParams = __Infer<typeof SetCoachStatusReducer>;
 export type SetDisplayNameParams = __Infer<typeof SetDisplayNameReducer>;
+export type SetEncounterPhaseParams = __Infer<typeof SetEncounterPhaseReducer>;
+export type SetEncounterResultParams = __Infer<typeof SetEncounterResultReducer>;
 export type SetMediaSourceParams = __Infer<typeof SetMediaSourceReducer>;
 export type SetReplayStateParams = __Infer<typeof SetReplayStateReducer>;
 export type StartAttemptParams = __Infer<typeof StartAttemptReducer>;
+export type StartEncounterParams = __Infer<typeof StartEncounterReducer>;
+
