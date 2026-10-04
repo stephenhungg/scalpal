@@ -77,6 +77,7 @@ namespace Scalpal.EncounterOffice.Editor
             }
             ValidatePresentationDemographics(session.patient);
             ValidatePatientAnimation(session);
+            ValidateArmAnimation(session.patient);
             ValidateSpeechAndTalk(session.patient);
             Check(!UnityEngine.Object.FindFirstObjectByType<Scalpal.Quest.NativeCaseSession>()&&!UnityEngine.Object.FindFirstObjectByType<Scalpal.Instruments.TrainingTarget>(),"encounter scene does not instantiate surgery progression or scored tissue targets");
             var buttons=UnityEngine.Object.FindObjectsByType<EncounterOfficeButton>(FindObjectsInactive.Include,FindObjectsSortMode.None);
@@ -262,7 +263,9 @@ namespace Scalpal.EncounterOffice.Editor
                 var skin=skins.First(renderer=>renderer.sharedMaterials.Any(material=>material.name.Contains("Skin")));
                 presentation.SetState("speaking");Step(0,true);var baseline=BakedVertices(skin);
                 Step(1,true);var voiced=BakedVertices(skin);
-                float jawMotion=MaximumMotion(baseline,voiced);
+                // Arms gesture independently while voiced (ValidateArmAnimation); jaw and breathing are measured off the arm chain.
+                var body=BodyVertices(skin);
+                float jawMotion=MaximumMotion(baseline,voiced,body);
                 UnityEngine.Debug.Log("SCALPAL_PATIENT_JAW_DEFORMATION patient="+id+" jawDegrees="+Quaternion.Angle(jaw.localRotation,jawRest)+" maxVertexMetres="+jawMotion+" rendererScale="+skin.transform.lossyScale);
                 Check(Quaternion.Angle(jaw.localRotation,jawRest)>8&&jawMotion>.002f&&jawMotion<.04f,"controlled nonzero playback envelope rotates and deforms the imported human jaw by 2–40mm: "+id+" maxVertexMetres="+jawMotion);
                 Step(0,true);Check(Quaternion.Angle(jaw.localRotation,jawRest)<.001f,"actual playback silence closes the jaw even while agent mode says speaking: "+id);
@@ -274,7 +277,7 @@ namespace Scalpal.EncounterOffice.Editor
                 presentation.SetState("resting");Step(1,true);Check(Quaternion.Angle(jaw.localRotation,jawRest)<.001f,"attending/resting patient does not mouth the attending's playback: "+id);
                 // Sample near a breath peak; t=2.1 gave only .031 degrees, below Quaternion.Angle's near-equal resolution.
                 presentation.SetState("listening");Step(0,false,1f);
-                float headDegrees=Quaternion.Angle(head.localRotation,headRest),chestDegrees=Quaternion.Angle(chest.localRotation,chestRest),idleMotion=MaximumMotion(baseline,BakedVertices(skin));
+                float headDegrees=Quaternion.Angle(head.localRotation,headRest),chestDegrees=Quaternion.Angle(chest.localRotation,chestRest),idleMotion=MaximumMotion(baseline,BakedVertices(skin),body);
                 UnityEngine.Debug.Log("SCALPAL_PATIENT_IDLE_DEFORMATION patient="+id+" headDegrees="+headDegrees+" torsoDegrees="+chestDegrees+" maxVertexMetres="+idleMotion);
                 Check(headDegrees>.05f&&chestDegrees>.01f&&idleMotion>.0001f&&idleMotion<.03f,"idle/listening head and breathing animate real weighted skin within 0.1–30mm without voice: "+id+" headDegrees="+headDegrees+" torsoDegrees="+chestDegrees+" maxVertexMetres="+idleMotion);
                 presentation.SetState("speaking");Step(1,true);
@@ -289,6 +292,114 @@ namespace Scalpal.EncounterOffice.Editor
             }
             presentation.Select(AdultFixtures()[0]);
         }
+        // Arms are the people's body language: the appendicitis patient guards the right lower belly, whoever is voicing
+        // gestures and then settles back, and no pose may reach through the torso, the lap or a chair. Each figure must
+        // animate its own sex's rig, so a male encounter can never be driven (or seen) through the female skeleton.
+        static void ValidateArmAnimation(EncounterPatientPresentation presentation)
+        {
+            var animation=typeof(EncounterPatientPresentation).GetMethod("ApplyAnimation",Private);
+            float clock=0;
+            void Run(float seconds,bool voiced,string state)
+            {
+                presentation.SetState(state);
+                for(float elapsed=0;elapsed<seconds;elapsed+=.05f){clock+=.05f;animation.Invoke(presentation,new object[]{.05f,clock,voiced?.45f+.35f*Mathf.Sin(clock*11):0f,voiced});}
+            }
+            Transform[] Arms(GameObject model){var nodes=model.GetComponentsInChildren<Transform>(true);return EncounterPatientPresentation.ArmBones.Select(name=>nodes.Single(node=>node.name==name)).ToArray();}
+            Quaternion[] Pose(Transform[] bones)=>bones.Select(bone=>bone.localRotation).ToArray();
+            float Moved(Transform[] bones,Quaternion[] from,int first=0,int count=6){float most=0;for(int i=first;i<first+count;i++)most=Mathf.Max(most,Quaternion.Angle(bones[i].localRotation,from[i]));return most;}
+            // Seated body frame from the donor's own face direction: forward toward the clinician, x to the person's right.
+            Vector3 Body(GameObject model,Vector3 point)
+            {
+                var nodes=model.GetComponentsInChildren<Transform>(true);var spine=nodes.Single(node=>node.name=="spine03");
+                var forward=Vector3.ProjectOnPlane(nodes.Single(node=>node.name=="NoseTip").position-nodes.Single(node=>node.name=="HeadPivot").position,Vector3.up).normalized;
+                var offset=(point-spine.position)/model.transform.lossyScale.x;
+                return new Vector3(Vector3.Dot(offset,Vector3.Cross(Vector3.up,forward)),offset.y,Vector3.Dot(offset,forward));
+            }
+            // A hand's fingertip region, 9cm along the hand bone of an adult-size figure.
+            Vector3 Tip(GameObject model,Transform wrist)=>wrist.position+wrist.up*.09f*model.transform.lossyScale.x;
+            // Office geometry as temporary colliders: forearm and hand samples must stay clear of chair, armrests and desk.
+            var office=GameObject.Find("BotanicalDoctorOffice");var colliders=new List<MeshCollider>();
+            foreach(var filter in office.GetComponentsInChildren<MeshFilter>(true)){var collider=filter.gameObject.AddComponent<MeshCollider>();collider.sharedMesh=filter.sharedMesh;colliders.Add(collider);}
+            Physics.SyncTransforms();
+            string Clash(GameObject model,Transform[] bones)
+            {
+                float scale=model.transform.lossyScale.x;
+                for(int side=0;side<2;side++)
+                {
+                    var forearm=bones[side*3+1];var wrist=bones[side*3+2];var tip=Tip(model,wrist);
+                    for(int k=0;k<=6;k++)
+                    {
+                        var point=k<=4?Vector3.Lerp(forearm.position,wrist.position,k/4f):Vector3.Lerp(wrist.position,tip,(k-4)/2f);
+                        var hit=Physics.OverlapSphere(point,.03f*scale).FirstOrDefault(collider=>colliders.Contains(collider));
+                        if(hit)return model.name+" "+bones[side*3].name+" sample "+k+" touches "+hit.name;
+                    }
+                    // In front of the abdomen (not through it) and above the seat cushion.
+                    var local=Body(model,tip);
+                    if(local.z<.06f)return model.name+" "+wrist.name+" hand is inside the torso: forward="+local.z;
+                    if(tip.y<EncounterPatientPresentation.SeatHeight+.05f*scale)return model.name+" "+wrist.name+" hand sinks into the seat: y="+tip.y;
+                }
+                return "";
+            }
+            string Limits(Transform[] bones,Quaternion[] imported){for(int i=0;i<6;i++){float degrees=Quaternion.Angle(bones[i].localRotation,imported[i]);if(degrees>EncounterPatientPresentation.ArmLimit[i%3]+.25f)return bones[i].name+"="+degrees;}return "";}
+            try
+            {
+                foreach(var state in AdultFixtures())
+                {
+                    bool female=state.patientSex=="female";var model=female?presentation.female:presentation.male;var other=female?presentation.male:presentation.female;
+                    presentation.Select(null);
+                    var arms=Arms(model);var otherArms=Arms(other);var imported=Pose(arms);var otherImported=Pose(otherArms);var importedHand=Body(model,Vector3.Lerp(arms[2].position,Tip(model,arms[2]),.5f));
+                    var skins=model.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+                    presentation.Select(state);
+                    var jaw=Get<Transform>(presentation,"jaw");var head=Get<Transform>(presentation,"head");
+                    Check(presentation.Patient==model&&model.activeSelf&&!other.activeSelf&&jaw&&jaw.IsChildOf(model.transform)&&head&&head.IsChildOf(model.transform),"a "+state.patientSex+" encounter selects the "+state.patientSex+" model and animates its own head/jaw bones");
+                    Check(arms.All(bone=>WeightedBone(skins,bone)),"arm animation drives weighted upper-arm, forearm and hand bones of the "+state.patientSex+" donor rig");
+                    Run(3,false,"listening");var rest=Pose(arms);
+                    Check(Moved(arms,imported)>3&&Moved(otherArms,otherImported)<.001f,"the "+state.patientSex+" model's arms take the resting pose; the hidden "+(female?"male":"female")+" rig is untouched");
+                    var guard=Body(model,Vector3.Lerp(arms[2].position,Tip(model,arms[2]),.5f)); // palm centre
+                    Check(guard.x>.03f&&guard.y<importedHand.y-.02f&&guard.z<importedHand.z-.03f,"resting appendicitis patient lowers the right hand onto the right lower abdomen: "+state.patientSex+" hand="+guard.ToString("F3")+" imported="+importedHand.ToString("F3"));
+                    Check(Clash(model,arms)=="","resting arms clear torso, lap and chair: "+Clash(model,arms));
+                    float most=0,spread=0;var first=Pose(arms);string clash="",limits="";
+                    for(int i=0;i<80;i++)
+                    {
+                        Run(.1f,true,"speaking");
+                        most=Mathf.Max(most,Moved(arms,rest,3,3));spread=Mathf.Max(spread,Moved(arms,first,3,3));
+                        if(clash=="")clash=Clash(model,arms);if(limits=="")limits=Limits(arms,imported);
+                    }
+                    Check(most>8&&spread>4,"while voicing, the free arm gestures away from rest and keeps varying: "+state.patientSex+" most="+most+" spread="+spread);
+                    Check(clash=="","gesturing arms never clip torso, lap or chair: "+clash);
+                    Check(limits=="","arm offsets stay within the conservative per-bone limits: "+limits);
+                    // Drive to a wince: the guarding hand presses closer into the belly and the head dips.
+                    float wince=Enumerable.Range(0,4000).Select(i=>i*.05f).First(time=>time>clock+2&&EncounterPatientPresentation.Wince(time)>.97f);
+                    Run(wince-clock-3,true,"speaking");var beforeWince=Body(model,Tip(model,arms[2])).z;Run(3,true,"speaking");
+                    Check(Body(model,Tip(model,arms[2])).z<beforeWince-.005f&&Clash(model,arms)=="","an occasional wince presses the guarding hand toward the belly without clipping: "+state.patientSex);
+                    Run(6,false,"listening");
+                    Check(Moved(arms,rest)<1.5f,"after speaking the arms settle back to the resting pose: "+state.patientSex+" residual="+Moved(arms,rest));
+                    Call(presentation,"OnDisable");
+                    Check(Moved(arms,imported)<.001f,"disable restores the imported arm pose: "+state.patientSex);
+                }
+                // Pediatric: the speaking parent beside the child gestures; the child only guards and breathes.
+                var parent=new EncounterState{patientId="child-subject-fixture",patientName="Child fixture",patientSex="male",patientAge=9,speaker="parent",speakerName="Parent fixture",speakerSex="female",speakerAge=35};
+                foreach(var sex in new[]{"female","male"})
+                {
+                    parent.speakerSex=sex;presentation.Select(null);presentation.Select(parent);
+                    var parentArms=Arms(presentation.Companion);var childArms=Arms(presentation.Patient);
+                    Check(presentation.Companion.name.StartsWith(sex=="female"?"GenericAdultFemale":"GenericAdultMale",StringComparison.Ordinal)&&!presentation.Patient.name.Contains("Female"),"a "+sex+" parent is seated with the "+sex+" rig beside the male child");
+                    Run(3,false,"listening");var parentRest=Pose(parentArms);var childRest=Pose(childArms);
+                    Check(Clash(presentation.Companion,parentArms)==""&&Clash(presentation.Patient,childArms)=="","seated parent and child arms clear their chairs at rest: "+Clash(presentation.Companion,parentArms)+Clash(presentation.Patient,childArms));
+                    float parentMost=0,childMost=0;string clash="";
+                    for(int i=0;i<80;i++)
+                    {
+                        Run(.1f,true,"speaking");parentMost=Mathf.Max(parentMost,Moved(parentArms,parentRest));childMost=Mathf.Max(childMost,Moved(childArms,childRest));
+                        if(clash=="")clash=Clash(presentation.Companion,parentArms)+Clash(presentation.Patient,childArms);
+                    }
+                    Check(parentMost>8&&childMost<2,"the speaking "+sex+" parent companion gestures while the listening child stays still: parent="+parentMost+" child="+childMost);
+                    Check(clash=="","parent and child arms never clip their chairs while the parent talks: "+clash);
+                    Run(6,false,"listening");
+                    Check(Moved(parentArms,parentRest)<1.5f,"the parent's arms settle back after speaking");
+                }
+            }
+            finally { foreach(var collider in colliders)UnityEngine.Object.DestroyImmediate(collider);presentation.Select(null); }
+        }
         static bool AtRest(Transform head,Quaternion headRest,Transform jaw,Quaternion jawRest,Transform chest,Quaternion chestRest) =>
             Quaternion.Angle(head.localRotation,headRest)<.001f&&Quaternion.Angle(jaw.localRotation,jawRest)<.001f&&Quaternion.Angle(chest.localRotation,chestRest)<.001f;
         static Vector3[] BakedVertices(SkinnedMeshRenderer skin)
@@ -297,9 +408,15 @@ namespace Scalpal.EncounterOffice.Editor
             var mesh=new Mesh();try { skin.BakeMesh(mesh,true);return mesh.vertices.Select(vertex=>skin.transform.TransformPoint(vertex)).ToArray(); }
             finally { UnityEngine.Object.DestroyImmediate(mesh); }
         }
-        static float MaximumMotion(Vector3[] before,Vector3[] after)
+        static float MaximumMotion(Vector3[] before,Vector3[] after,bool[] include=null)
         {
-            float maximum=0;for(int i=0;i<before.Length;i++)maximum=Mathf.Max(maximum,Vector3.Distance(before[i],after[i]));return maximum;
+            float maximum=0;for(int i=0;i<before.Length;i++)if(include==null||include[i])maximum=Mathf.Max(maximum,Vector3.Distance(before[i],after[i]));return maximum;
+        }
+        // Skin vertices with no weight on either arm chain (upper arm down to the fingers).
+        static bool[] BodyVertices(SkinnedMeshRenderer skin)
+        {
+            var arm=skin.bones.Select(bone=>bone&&skin.bones.Any(other=>other&&other.name.StartsWith("upperarm01.",StringComparison.Ordinal)&&bone.IsChildOf(other))).ToArray();
+            return skin.sharedMesh.boneWeights.Select(weight=>!(weight.weight0>0&&arm[weight.boneIndex0]||weight.weight1>0&&arm[weight.boneIndex1]||weight.weight2>0&&arm[weight.boneIndex2]||weight.weight3>0&&arm[weight.boneIndex3])).ToArray();
         }
         static void ValidateSpeechAndTalk(EncounterPatientPresentation presentation)
         {
