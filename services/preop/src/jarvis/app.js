@@ -263,7 +263,7 @@ const encounter = createEncounterFlow({
   log,
   setActiveConvo: (c) => { encounterConvo = c; },
   onStatus: (text, cls) => { $("voice").textContent = text; $("voice").className = `pill ${cls}`; },
-  onScrubIn: () => startSurgery(),
+  onScrubIn: (encounterId) => startSurgery(encounterId),
 });
 $("to-attending").onclick = () => encounter.presentToAttending();
 $("scrub-in").onclick = () => encounter.scrubIn();
@@ -277,8 +277,9 @@ $("start").onclick = async () => {
   await startSurgery();
 };
 
-async function startSurgery() {
-  const created = await api("POST", "/coach/sessions", { patientId, mode: $("presentation").value });
+async function startSurgery(encounterId = "") {
+  // The scored office encounter carries into the operating room prompt.
+  const created = await api("POST", "/coach/sessions", { patientId, mode: $("presentation").value, ...(encounterId ? { encounterId } : {}) });
   if (!created.ok) { log("event", created.json.error?.message ?? "Could not start.", "urgent"); $("start").disabled = false; return; }
   log("event", "Surgery: Jarvis is coaching. Use the simulator or the headset.");
   sid = created.json.sessionId;

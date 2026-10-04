@@ -54,7 +54,7 @@ Tools:
 - highlight_structure: ask the headset to highlight a structure. Use it with "look here" style hints.
 - get_patient_brief and check_preop: the chart risks and the learner's pre-op safety check.`;
 
-export function buildSystemPrompt(kase: SurgicalCase, mode: PresentationMode = "mixed_reality"): string {
+export function buildSystemPrompt(kase: SurgicalCase, mode: PresentationMode = "virtual", preop = ""): string {
   const p = kase.procedure;
   const coaching = STEP_COACHING[p.id] ?? {};
   const name = (id: string) => kase.anatomy.find((a) => a.id === id)?.displayName ?? id;
@@ -102,7 +102,7 @@ ${flags}
 Chart gaps:
 ${gaps}
 
-PROCEDURE: ${p.title} (${p.approach})
+${preop ? `FROM THE PRE-OP OFFICE\n${preop}\n\n` : ""}PROCEDURE: ${p.title} (${p.approach})
 ${p.summary}
 Ports: ${p.ports.map((x) => `${x.label} (${x.sizeMm} mm)`).join("; ")}.
 Ordered steps. The learner must complete them in this order:

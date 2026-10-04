@@ -25,6 +25,7 @@ export interface CoachRouteOptions {
   toolAckWaitMs?: number; // how long a highlight tool waits for the headset ack (tests shorten it)
   realtime?: RealtimeSink;
   bridge?: RealtimeBridge | null; // the live connection, for /realtime status and join
+  encounterFor?: (id: string) => { kase: SurgicalCase; carryover(): string } | null;
 }
 
 const MAX_SESSIONS = 50;
@@ -80,8 +81,9 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
   const body = async (c: Context) => (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
 
   app.post("/coach/sessions", async (c) => {
-    const { patientId, mode: rawMode } = await body(c);
-    const mode = rawMode === undefined ? "mixed_reality" : PRESENTATION_MODES.find((m) => m === rawMode);
+    const { patientId, mode: rawMode, encounterId } = await body(c);
+    // Full VR is the main path (explore, office, operating room); mixed reality is still supported.
+    const mode = rawMode === undefined ? "virtual" : PRESENTATION_MODES.find((m) => m === rawMode);
     if (!mode) return bad(c, 400, "invalid_mode", 'mode must be "mixed_reality" or "virtual".', [{ id: "choose_patient", label: "Choose a patient", method: "GET", route: "/patients" }]);
     const kase = typeof patientId === "string" ? await options.loadCase(patientId) : null;
     if (!kase) return bad(c, 404, "patient_not_found", 'Send {"patientId": "<FinchNode subject>"} for a known patient.', [{ id: "choose_patient", label: "Choose a patient", method: "GET", route: "/patients" }]);
@@ -90,6 +92,9 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
     if (sessions.size >= MAX_SESSIONS) sessions.delete(sessions.keys().next().value!);
     const sid = `coach-${crypto.randomUUID().replaceAll("-", "").slice(0, 16)}`;
     const session = new CoachSession(sid, kase, options.now, options.stuckPolicy, mode);
+    // Office to operating room: the scored encounter for this patient informs the surgery coaching.
+    const office = typeof encounterId === "string" ? options.encounterFor?.(encounterId) : null;
+    const preop = office && office.kase.patientId === kase.patientId ? office.carryover() : "";
     sessions.set(sid, session);
     const snapshot = session.snapshot();
     return c.json(
@@ -97,7 +102,7 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
         sessionId: sid,
         snapshot,
         context: renderContext(snapshot), contextKey: contextKey(snapshot),
-        systemPrompt: buildSystemPrompt(kase, mode),
+        systemPrompt: buildSystemPrompt(kase, mode, preop),
         firstMessage: firstMessage(kase),
         actions: coachActions(sid),
       },

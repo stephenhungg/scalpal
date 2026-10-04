@@ -50,6 +50,9 @@ export interface Scorecard {
   total: number;
   max: number;
   grade: string;
+  procedureId: string; // always the surgery this patient needs, whatever the learner proposed
+  procedureTitle: string;
+  procedureChosenCorrectly: boolean;
   sections: ScoreSection[];
   criticalMissed: FoundItem[];
   criticalFound: FoundItem[];
@@ -269,7 +272,7 @@ export class EncounterSession {
       max: 10,
       score: (procedureOk ? 6 : 0) + (urgencyOk ? 4 : 0),
       found: [...(procedureOk ? ["procedure"] : []), ...(urgencyOk ? [`${e.urgency} timing`] : [])],
-      missed: [...(procedureOk ? [] : ["laparoscopic appendectomy"]), ...(urgencyOk ? [] : [`${e.urgency} timing`])],
+      missed: [...(procedureOk ? [] : [this.kase.procedure.title.toLowerCase()]), ...(urgencyOk ? [] : [`${e.urgency} timing`])],
     };
 
     const ddxText = norm(a.differential.join(" "));
@@ -293,6 +296,8 @@ export class EncounterSession {
     for (const m of criticalMissed) feedback.push(`Must fix: you did not cover ${m.label}. ${m.why}`);
     if (diagnosisResult === "partial") feedback.push(`Close: you named ${e.diagnosis.partial?.label.toLowerCase()}, but the full picture is ${e.diagnosis.label.toLowerCase()}.`);
     if (diagnosisResult === "incorrect" || diagnosisResult === "missing") feedback.push(`The diagnosis was ${e.diagnosis.label.toLowerCase()}.`);
+    // A wrong plan never dead-ends the demo: the operating room loads the surgery this patient needs.
+    if (!procedureOk) feedback.push(`The surgery this patient needs is a ${this.kase.procedure.title.toLowerCase()}, and that is what we will do in the operating room.`);
     if (!urgencyOk) feedback.push(`Timing: this case is ${e.urgency}.`);
     if (named.length < 3) feedback.push(`Broaden the differential: consider ${differential.missed.join(", ").toLowerCase()}.`);
     for (const x of items.filter((i) => !this.has(i) && !e.critical.includes(i)).slice(0, 3)) feedback.push(`Also missed ${labelOf(x.id)}: ${x.why}`);
@@ -315,6 +320,9 @@ export class EncounterSession {
       total,
       max: 100,
       grade,
+      procedureId: this.kase.procedureId,
+      procedureTitle: this.kase.procedure.title,
+      procedureChosenCorrectly: procedureOk,
       sections,
       criticalMissed,
       criticalFound,
@@ -326,6 +334,18 @@ export class EncounterSession {
       feedback,
       spoken: spokenParts.join(" "),
     };
+  }
+
+  // What the attending learned in the office, carried into the operating room prompt.
+  carryover(): string {
+    if (this.phase !== "scored" || !this.assessment) return "";
+    const card = this.score();
+    const lines = [
+      `Pre-op interview score ${card.total}/100 (${card.grade}). The learner diagnosed "${this.assessment.diagnosis || "nothing"}" (${card.diagnosisResult}).`,
+      card.procedureChosenCorrectly ? "" : `They proposed "${this.assessment.procedure || "no procedure"}"; the case needs a ${this.kase.procedure.title.toLowerCase()}.`,
+      card.criticalMissed.length ? `In the interview they missed: ${card.criticalMissed.map((m) => m.label).join(", ")}. Bring these up when they matter during the operation.` : "They covered every critical item in the interview.",
+    ];
+    return lines.filter(Boolean).join(" ");
   }
 
   state() {

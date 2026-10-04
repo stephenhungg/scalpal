@@ -204,3 +204,32 @@ describe("encounter routes", () => {
     }
   });
 });
+
+describe("office to operating room", () => {
+  const app = createApp({ client: fixtureClient(), now: () => NOW, coachTickMs: 0 });
+  const req = async (method: string, route: string, body?: unknown) => {
+    const res = await app.request(route, { method, headers: body ? { "Content-Type": "application/json" } : {}, body: body ? JSON.stringify(body) : undefined });
+    return { status: res.status, json: (await res.json()) as Record<string, any> };
+  };
+
+  it("loads the right surgery after a wrong plan and tells Jarvis what was missed", async () => {
+    const id = (await req("POST", "/encounters", { patientId: "patient-demo-multi-source" })).json.encounterId;
+    await req("POST", `/encounters/${id}/tools/answer`, { topic: "onset" });
+    await req("POST", `/encounters/${id}/attending`);
+    await req("POST", `/encounters/${id}/tools/record_assessment`, { diagnosis: "kidney stone", differential: ["appendicitis"], procedure: "ureteroscopy", urgency: "elective" });
+    const card = (await req("GET", `/encounters/${id}/score`)).json.scorecard;
+    expect(card).toMatchObject({ procedureId: "lap_appendectomy", procedureChosenCorrectly: false, diagnosisResult: "incorrect" });
+    expect(card.feedback.join(" ")).toMatch(/needs is a laparoscopic appendectomy/);
+    const surgery = await req("POST", "/coach/sessions", { patientId: "patient-demo-multi-source", encounterId: id });
+    expect(surgery.json.snapshot.procedureId).toBe("lap_appendectomy");
+    expect(surgery.json.systemPrompt).toMatch(/FROM THE PRE-OP OFFICE/);
+    expect(surgery.json.systemPrompt).toMatch(/proposed "ureteroscopy"/);
+    expect(surgery.json.systemPrompt).toMatch(/missed: .*allergies/);
+  });
+
+  it("ignores an encounter that belongs to a different patient or is not scored", async () => {
+    const id = (await req("POST", "/encounters", { patientId: "patient-demo-multi-source" })).json.encounterId;
+    expect((await req("POST", "/coach/sessions", { patientId: "patient-demo-multi-source", encounterId: id })).json.systemPrompt).not.toMatch(/PRE-OP OFFICE/);
+    expect((await req("POST", "/coach/sessions", { patientId: "patient-demo-pediatric-asthma", encounterId: id })).json.systemPrompt).not.toMatch(/PRE-OP OFFICE/);
+  });
+});

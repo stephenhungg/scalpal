@@ -293,7 +293,8 @@ describe("presentation modes", () => {
     const app = createApp({ client: fixtureClient(), now: () => NOW, coachTickMs: 0 });
     const start = async (mode?: string) =>
       app.request("/coach/sessions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ patientId: "patient-demo-pediatric-asthma", ...(mode ? { mode } : {}) }) });
-    const mr = (await (await start()).json()) as { systemPrompt: string; snapshot: { mode: string } };
+    expect(((await (await start()).json()) as { snapshot: { mode: string } }).snapshot.mode).toBe("virtual"); // full VR is the main path
+    const mr = (await (await start("mixed_reality")).json()) as { systemPrompt: string; snapshot: { mode: string } };
     expect(mr.snapshot.mode).toBe("mixed_reality");
     expect(mr.systemPrompt).toMatch(/real person reclining/);
     const vr = (await (await start("virtual")).json()) as { sessionId: string; systemPrompt: string };

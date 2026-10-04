@@ -24,7 +24,7 @@ const encounterActions = (id: string): Action[] => [
   { id: "choose_patient", label: "Choose another patient", method: "GET", route: "/patients" },
 ];
 
-export function registerEncounterRoutes(app: Hono, options: EncounterRouteOptions) {
+export function registerEncounterRoutes(app: Hono, options: EncounterRouteOptions): { get(id: string): EncounterSession | null } {
   const sessions = new Map<string, EncounterSession>();
   const voices = { ...DEFAULT_PATIENT_VOICES, ...(options.patientVoices ?? {}) };
   const realtime = options.realtime ?? NO_REALTIME;
@@ -175,4 +175,6 @@ export function registerEncounterRoutes(app: Hono, options: EncounterRouteOption
     }
     return c.json({ result, display, state: s.state(), actions: encounterActions(s.id) });
   });
+
+  return { get: (id: string) => (ENCOUNTER_ID.test(id) ? (sessions.get(id) ?? null) : null) };
 }

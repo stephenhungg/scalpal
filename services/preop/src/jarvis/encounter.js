@@ -115,7 +115,7 @@ export function createEncounterFlow({ api, log, setActiveConvo, onStatus, onScru
       await end();
       $("encounter").hidden = true;
       $("surgery").hidden = false;
-      onScrubIn();
+      onScrubIn(enc?.encounterId ?? "");
     },
 
     async stop() {
