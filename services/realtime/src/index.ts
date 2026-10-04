@@ -1363,10 +1363,20 @@ export const claimMotionJob = spacetimedb.reducer(
   }
 );
 
+/**
+ * The run must be current and its lease unexpired at call time; the sweep
+ * only requeues expired leases every SWEEP_INTERVAL_MICROS, so without this
+ * check a lapsed worker could still heartbeat (re-extending) or complete.
+ * Worker ownership is checked by the gateway, which knows the caller's
+ * workerId; these reducers have no worker argument.
+ */
 function requireActiveRun(ctx: Ctx, jobId: string, run: number) {
   const job = ctx.db.motionJob.jobId.find(jobId) ?? fail('unknown job');
   if (job.status !== 'running' || job.run !== run) {
     fail(`stale run ${run}: job is ${job.status} on run ${job.run}`);
+  }
+  if (job.leaseExpiresAt && job.leaseExpiresAt.microsSinceUnixEpoch <= ctx.timestamp.microsSinceUnixEpoch) {
+    fail(`stale run ${run}: lease expired`);
   }
   return job;
 }

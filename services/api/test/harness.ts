@@ -8,6 +8,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { after, afterEach } from 'node:test';
 import { serve, type ServerType } from '@hono/node-server';
 import type { Identity } from 'spacetimedb';
 import { DbConnection, tables } from '../src/module_bindings/index';
@@ -26,8 +27,75 @@ function spacetime(...args: string[]) {
   return execFileSync('spacetime', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
 }
 
+const TEST_DB_NAME = /^scalpal-test-[a-z0-9-]+$/;
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]', '::1']);
+
+function isLoopback(url: string): boolean {
+  try {
+    return LOOPBACK_HOSTS.has(new URL(url).hostname);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * publishFresh wipes the target with --delete-data=always, so refuse anything
+ * that is not clearly a throwaway test database: the name must start with
+ * `scalpal-test-`, and the server must be local (the `local` CLI nickname or a
+ * loopback URL, with a loopback client URI) unless TEST_SPACETIME_ALLOW_REMOTE=1.
+ */
+export function assertDisposableTarget(
+  target: { server: string; uri: string; db: string },
+  env: NodeJS.ProcessEnv = process.env
+): void {
+  if (!TEST_DB_NAME.test(target.db)) {
+    throw new Error(
+      `refusing to wipe database "${target.db}": test databases must match ${TEST_DB_NAME} ` +
+        '(set TEST_SPACETIMEDB_DB=scalpal-test-<name> or leave it unset)'
+    );
+  }
+  const localServer = target.server === 'local' || isLoopback(target.server);
+  if ((!localServer || !isLoopback(target.uri)) && env.TEST_SPACETIME_ALLOW_REMOTE !== '1') {
+    throw new Error(
+      `refusing to wipe "${target.db}" on non-local server "${target.server}" (${target.uri}); ` +
+        'set TEST_SPACETIME_ALLOW_REMOTE=1 to opt in explicitly'
+    );
+  }
+}
+
 export function publishFresh() {
+  assertDisposableTarget({ server: SERVER, uri: URI, db: DB });
   spacetime('publish', '--server', SERVER, '--yes', '--delete-data=always', DB, '--module-path', MODULE_PATH);
+}
+
+/**
+ * Run `teardown` after the file's tests, then force-exit (open SpacetimeDB
+ * sockets keep node alive) with a non-zero code if anything failed. node:test
+ * only sets process.exitCode on 'beforeExit', which never fires while those
+ * sockets are open, so failures are tracked here. Call once, at top level.
+ */
+function failedContext(t: object): boolean {
+  // `passed` exists on test contexts from Node 21/22; @types/node 20 lacks it.
+  return (t as { passed?: boolean }).passed === false;
+}
+
+export function exitAfterTeardown(teardown: () => unknown = () => {}, delayMs = 200): void {
+  let failed = false;
+  afterEach(t => {
+    if (failedContext(t)) failed = true;
+  });
+  after(async t => {
+    // The root context fails when a top-level before() hook threw.
+    if (failedContext(t)) failed = true;
+    try {
+      await teardown();
+    } catch (err) {
+      failed = true;
+      throw err;
+    } finally {
+      setTimeout(() => process.exit(process.exitCode ?? (failed ? 1 : 0)), delayMs).unref();
+    }
+  });
 }
 
 export function registerService(identityHex: string) {
