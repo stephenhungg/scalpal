@@ -36,6 +36,7 @@ import spacetimedb, {
   session,
   serviceGrant,
   sessionInvite,
+  simLog,
   sweepTimer,
   transferGrant,
 } from './schema';
@@ -893,6 +894,44 @@ export const appendEncounterEvent = spacetimedb.reducer(
       itemId: a.itemId,
       speaker: a.speaker,
       text: a.text,
+      at: ctx.timestamp,
+    });
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Operating-room logs (companion dashboard)
+// ---------------------------------------------------------------------------
+
+const SIM_LOG_KINDS = ['event', 'alert', 'vitals', 'checklist', 'outcome'] as const;
+const MAX_SIM_LOG_TEXT = 2_000;
+const MAX_SIM_LOG_DATA = 8_000;
+/** Rows kept per session; the oldest are dropped past this. */
+const MAX_SIM_LOG_ROWS = 2_000;
+
+export const appendSimLog = spacetimedb.reducer(
+  { sessionId: t.string(), coachSessionId: t.string(), kind: t.string(), text: t.string(), dataJson: t.string() },
+  (ctx, a) => {
+    requireRole(ctx, a.sessionId, ['coach', 'operator']);
+    activeSession(ctx, a.sessionId);
+    oneOf(a.kind, SIM_LOG_KINDS, 'kind');
+    checkText(a.coachSessionId, 'coachSessionId', 120);
+    checkText(a.text, 'text', MAX_SIM_LOG_TEXT);
+    checkText(a.dataJson, 'dataJson', MAX_SIM_LOG_DATA);
+    if (!a.text.trim()) return;
+    const ids: bigint[] = [];
+    for (const row of ctx.db.simLog.sessionId.filter(a.sessionId)) ids.push(row.id);
+    if (ids.length >= MAX_SIM_LOG_ROWS) {
+      ids.sort((x, y) => (x < y ? -1 : x > y ? 1 : 0));
+      for (const id of ids.slice(0, ids.length - MAX_SIM_LOG_ROWS + 1)) ctx.db.simLog.id.delete(id);
+    }
+    ctx.db.simLog.insert({
+      id: 0n,
+      sessionId: a.sessionId,
+      coachSessionId: a.coachSessionId,
+      kind: a.kind,
+      text: a.text,
+      dataJson: a.dataJson,
       at: ctx.timestamp,
     });
   }
@@ -1779,6 +1818,14 @@ export const sessionEncounterEvents = spacetimedb.view(
   t.array(encounterEvent.rowType),
   ctx => [...viewerSessions(ctx.db as ViewDb, ctx.sender)].flatMap(id => [
     ...ctx.db.encounterEvent.sessionId.filter(id),
+  ])
+);
+
+export const sessionSimLogs = spacetimedb.view(
+  { name: 'session_sim_logs', public: true },
+  t.array(simLog.rowType),
+  ctx => [...viewerSessions(ctx.db as ViewDb, ctx.sender)].flatMap(id => [
+    ...ctx.db.simLog.sessionId.filter(id),
   ])
 );
 

@@ -935,3 +935,58 @@ textarea {
   height: 38px;
   margin-top: 6px;
 }
+
+/* ---------- Live logs (operating room) ---------- */
+
+.simlog-vitals {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--info-bg);
+  color: var(--info);
+  font-size: 14px;
+}
+.simlog-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.simlog-chip {
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--text-3);
+  background: transparent;
+}
+.simlog-chip.on {
+  color: var(--text);
+  background: var(--panel-2);
+  border-color: var(--line-strong);
+}
+.timeline.simlog {
+  max-height: 420px;
+}
+.simlog-kind {
+  color: var(--text-3);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.simlog li.bad .simlog-text {
+  color: var(--bad);
+}
+.simlog li.warn .simlog-text {
+  color: var(--warn);
+}
+.simlog li.simlog-alert {
+  background: var(--bad-bg);
+}
+.simlog li.simlog-alert.warn {
+  background: var(--warn-bg);
+}
+.simlog li.simlog-vitals .mono {
+  color: var(--info);
+}

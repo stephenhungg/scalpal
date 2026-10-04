@@ -173,6 +173,24 @@ export class RealtimeBridge implements RealtimeSink {
     this.call("postCoachMessage", (c) => c.reducers.postCoachMessage({ sessionId: this.sessionId, speaker, text: text.slice(0, 4000) }));
   }
 
+  simLog(entry: SimLogEntry) {
+    const text = entry.text.trim().slice(0, 2000);
+    if (!text) return;
+    let dataJson = "";
+    if (entry.data !== undefined) {
+      try {
+        dataJson = JSON.stringify(entry.data) ?? "";
+      } catch {
+        dataJson = "";
+      }
+      // Cutting JSON mid-token would leave it unparseable, so an oversized payload is replaced by a marker.
+      if (dataJson.length > 8000) dataJson = JSON.stringify({ truncated: true, length: dataJson.length });
+    }
+    this.call("appendSimLog", (c) =>
+      c.reducers.appendSimLog({ sessionId: this.sessionId, coachSessionId: entry.coachSessionId.slice(0, 120), kind: entry.kind, text, dataJson }),
+    );
+  }
+
   coachStatus(status: "offline" | "connecting" | "listening" | "thinking" | "speaking" | "error", detail?: string) {
     this.call("setCoachStatus", (c) => c.reducers.setCoachStatus({ sessionId: this.sessionId, status, detail: detail?.slice(0, 500) }));
   }
