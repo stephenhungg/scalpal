@@ -50,6 +50,8 @@ The service gate requires the pinned SpacetimeDB **2.10.2** CLI on `PATH` and it
 
 For a mono Editor preview, optionally set `SCALPAL_ENCOUNTER_PREVIEW_LAYOUT=assessment` to inspect assessment and keyboard placement without fabricated case data. Set `SCALPAL_ENCOUNTER_PREVIEW` to an absolute PNG path and execute `Scalpal.EncounterOffice.Editor.EncounterOfficeBuild.CapturePreview` with Unity batch mode and graphics enabled. A rendered preview checks composition/text; it does not establish stereo headset appearance.
 
+Accepted mono renders: [interview](../assets/environments/doctor-office/previews/unity-interview.png) and [assessment/keyboard](../assets/environments/doctor-office/previews/unity-assessment.png).
+
 For an Android development APK, set `SCALPAL_ENCOUNTER_APK` to an absolute APK path and execute `Scalpal.EncounterOffice.Editor.EncounterOfficeBuild.Build`. The build verifies the scene, temporarily selects `com.scalpal.encounteroffice`, and restores the project’s product/package/version/HTTP settings and XR preload assets afterward. It builds only the diagnosis scene. To configure its private development endpoint after installing:
 
 ```sh
