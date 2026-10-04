@@ -7,6 +7,7 @@ import LiveView from '../components/LiveView';
 import Members from '../components/Members';
 import Motion from '../components/Motion';
 import Replay from '../components/Replay';
+import Vitals from '../components/Vitals';
 import { copy, Panel, StatusPill } from '../components/ui';
 import { useLive, useSession } from '../data/live';
 import { Link } from '../lib/router';
@@ -75,6 +76,7 @@ export default function SessionPage({ sessionId }: { sessionId: string }) {
         </div>
         <div className="col">
           <ExerciseState data={data} />
+          <Vitals />
           <Coach data={data} />
           <Learning data={data} />
           <Commands data={data} />
