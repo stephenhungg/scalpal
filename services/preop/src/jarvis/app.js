@@ -262,20 +262,24 @@ async function startVoice() {
 const encounter = createEncounterFlow({
   api,
   log,
+  Conversation,
   setActiveConvo: (c) => { encounterConvo = c; },
   onStatus: (text, cls) => { $("voice").textContent = text; $("voice").className = `pill ${cls}`; },
   onScrubIn: () => startSurgery(),
 });
 $("to-attending").onclick = () => encounter.presentToAttending();
 $("scrub-in").onclick = () => encounter.scrubIn();
+// Encounter failures stay on screen with Retry; a retried start may find no interview and go to surgery.
+$("flow-retry").onclick = async () => {
+  if ((await encounter.retry()) === "none") await startSurgery();
+};
 
 $("start").onclick = async () => {
   $("start").disabled = true;
   $("stop").disabled = false;
   patientId = $("patient").value;
   $("log").innerHTML = "";
-  if (await encounter.start(patientId)) return;
-  await startSurgery();
+  if ((await encounter.start(patientId)) === "none") await startSurgery();
 };
 
 async function startSurgery() {
