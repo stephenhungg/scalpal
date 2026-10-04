@@ -11,10 +11,11 @@ namespace Scalpal.EncounterOffice
         public GameObject female, male;
         public TMPro.TextMeshPro stateLabel;
         public QuestJarvisVoice voice;
-        // Companion chair seat in the office art (measured from the DoctorOffice upholstery mesh), and the yaw that
-        // turns a seated template toward the patient chair.
+        // Companion chair seat in the office art (measured from the DoctorOffice upholstery mesh), and the seated
+        // template's yaw. The chair itself faces about 8 degrees away from the patient; turning the parent -20 degrees
+        // inside it put the left hand into the armrest, so the parent sits square to the chair.
         public Vector3 companionSeat = new Vector3(1.15f, 0, -.30f);
-        public float companionYaw = -20;
+        public float companionYaw = 0;
         public const float SeatHeight = .52f; // inventory.json patientSeatHeightMetres
         public string State { get; private set; } = "waiting";
         public GameObject Patient { get; private set; }
