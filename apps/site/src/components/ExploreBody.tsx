@@ -9,6 +9,7 @@ import { RollButton } from "./RollButton";
 import { Shell } from "./Shell";
 import { useLeave } from "./useLeave";
 import { EXIT } from "@/lib/scene";
+import { session } from "@/lib/session";
 import { wordCount } from "@/lib/text";
 
 const TITLE = "The future of surgery.";
@@ -16,6 +17,8 @@ const LEDE = "One rep, from the first cut to the robot replay.";
 
 export function ExploreBody({ apkUrl, videoUrl }: { apkUrl: string; videoUrl: string }) {
   const { leaving, go } = useLeave("/");
+  // Reaching this page counts as having seen the site: Back returns to the finished landing.
+  session.introPlayed = true;
   return (
     <main className="relative">
       <HandsBackdrop />

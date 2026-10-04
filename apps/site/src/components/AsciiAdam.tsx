@@ -260,6 +260,9 @@ const TOUCH = 6.6
 const CLOSED = 6.8 // arms fully at their touching pose
 // once held, the arms breathe: a slow bob (out of phase) and a slight ease apart and back
 const BREATH = { period: 3.4, bob: 0.006, part: 0.007, easeIn: 1.2 }
+// One breathing clock for the whole session (module state survives client-side navigation),
+// so the hands keep the same phase when the page changes instead of snapping back to rest.
+let breathStart: number | null = null
 
 type Props = { playing?: boolean; time?: number; onTouch?: () => void; introSpeed?: number; holdAfterTouch?: boolean; shiftY?: number; startTouched?: boolean }
 
@@ -393,7 +396,6 @@ export function AsciiAdam({ playing = true, time, onTouch, introSpeed = 1, holdA
       // startTouched: open already at the touching pose (no reach, no onTouch)
       let clock = startTouched ? CLOSED : 0
       let touched = startTouched
-      let held = 0 // seconds since the hands settled together
       let last = performance.now()
       let drawn = false
       const frame = (now: number) => {
@@ -432,7 +434,8 @@ export function AsciiAdam({ playing = true, time, onTouch, introSpeed = 1, holdA
         const lx = aim(leftArm, baseL, null, dt)
         const rx = aim(rightArm, baseR, null, dt)
         if (touched && holdRef.current && clock >= CLOSED) {
-          if (live) held += dt
+          if (breathStart === null) breathStart = now
+          const held = (now - breathStart) / 1000
           const w = Math.min(1, held / BREATH.easeIn) // fade the breathing in
           const ph = (held / BREATH.period) * Math.PI * 2
           const apart = BREATH.part * (0.5 - 0.5 * Math.cos(ph)) * w

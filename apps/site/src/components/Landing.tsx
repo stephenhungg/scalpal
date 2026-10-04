@@ -3,6 +3,7 @@
 import { motion } from "motion/react";
 import { BrandMark } from "./BrandMark";
 import { useState } from "react";
+import { session } from "@/lib/session";
 import { useLeave } from "./useLeave";
 import { useSparkHole } from "./useSparkHole";
 import { DIM_EXPLORE, DIM_LANDING, EXIT, SHIFT_Y } from "@/lib/scene";
@@ -19,13 +20,10 @@ const LEDE = "Practice surgery in mixed reality with a voice coach, and turn eve
 // Loader: only the hands are on screen until the fingertips touch. Then the Scalpal mark dithers
 // in where the title goes, holds, and dithers into "Scalpal."; after that the nav, subtitle
 // and button come in.
-// Set once the intro has played. Module state survives client-side navigation (Back from
-// /explore) but resets on a full reload, so coming back shows the finished page while a
-// refresh plays the intro again.
-let introPlayed = false;
 
 export function Landing() {
-  const [skip] = useState(() => introPlayed);
+  // Coming back from /explore shows the finished page; a full reload plays the intro again.
+  const [skip] = useState(() => session.introPlayed);
   const [launched, setLaunched] = useState(skip);
   const [titled, setTitled] = useState(skip);
 
@@ -69,7 +67,7 @@ export function Landing() {
               text={TITLE}
               instant={skip}
               onDone={() => {
-                introPlayed = true;
+                session.introPlayed = true;
                 setTitled(true);
               }}
             />
