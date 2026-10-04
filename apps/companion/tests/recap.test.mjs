@@ -111,3 +111,37 @@ test('highlight falls back to incision and clamps the final window to video leng
   assert.deepEqual(highlightWindow(r), { start: 40, end: 60 });
   r.replay.clockAligned = false; assert.deepEqual(highlightWindow(r), { start: 0, end: 20 });
 });
+
+test('ready gateway replay requires an explicitly kinematic worker result', async () => {
+  const { acceptReplayView } = await import('../src/recap/replay.ts');
+  const r = fresh(); r.replay.jobId = 'job'; r.replay.jobRun = 1;
+  // Exact response fields emitted by services/api/src/recap.ts, including quality-derived replayKind.
+  const view = { schemaVersion: 'scalpal.replay.v1', sessionId: r.sessionId, attemptId: r.attemptId,
+    jobId: 'job', jobRun: 1, sourceArtifactId: 'raw', replayArtifactId: 'robot', source: 'rehearsal',
+    status: 'ready', reason: '', progress: 1, stage: 'complete', sourceVideoUrl: 'https://example.test/source',
+    replayVideoUrl: 'https://example.test/replay', expiresAtUnixMs: Date.now() + 300000, replayKind: 'kinematic', label: 'Rehearsal hand motion' };
+  assert.equal(acceptReplayView(r, view), view);
+  for (const replayKind of ['physics', 'unknown', undefined]) assert.throws(() => acceptReplayView(r, { ...view, replayKind }), /kinematic/);
+});
+
+test('decoded duration opens an imported zero-duration replay at its logged highlight', async () => {
+  const { loadedReplayMetadata } = await import('../src/recap/replay.ts');
+  const { highlightWindow } = await import('../src/recap/runResult.ts');
+  const r = fresh(); r.replay.source = 'learner'; r.replay.clockAligned = true; r.replay.captureStartRunSeconds = 10; r.replay.durationSeconds = 0;
+  const loaded = loadedReplayMetadata(r, 180, 0);
+  assert.equal(loaded.result.replay.durationSeconds, 180);
+  assert.deepEqual(highlightWindow(loaded.result), { start: 54, end: 74 });
+  assert.equal(loaded.position, 54);
+  assert.equal(loadedReplayMetadata(loaded.result, 180, 62).position, 62);
+  assert.equal(loadedReplayMetadata(loaded.result, 60, 170).position, 60);
+  assert.throws(() => loadedReplayMetadata(r, Infinity, 0), /duration/);
+});
+
+test('bearer credentials cannot be sent to a cleartext remote gateway', async () => {
+  const { secureGatewayBase } = await import('../src/recap/replay.ts');
+  assert.equal(secureGatewayBase('http://127.0.0.1:8788/'), 'http://127.0.0.1:8788');
+  assert.equal(secureGatewayBase('https://gateway.example.test/'), 'https://gateway.example.test');
+  assert.equal(secureGatewayBase('http://[::1]:8788'), 'http://[::1]:8788');
+  for (const url of ['http://192.168.1.25:8788', 'http://localhost.example.test', 'ftp://localhost', 'https://user:pass@example.test'])
+    assert.throws(() => secureGatewayBase(url), /HTTPS|credentials/);
+});

@@ -58,6 +58,7 @@ function parseMarks(raw: unknown): FrameMark[] {
 
 const MAX_SESSIONS = 50;
 const SESSION_ID = /^coach-[a-z0-9]{6,40}$/;
+const RUN_ID = /^(?:[a-f0-9]{32}|[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12})$/i;
 
 const ALIASES: Record<string, string> = {
   cbd: "common_bile_duct",
@@ -80,6 +81,9 @@ const coachActions = (sid: string): Action[] => [
 
 export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
   const sessions = new Map<string, CoachSession>();
+  // Canonical HandoffTicket run ids survive coach recovery/retry. Bindings share
+  // the bounded live-session lifetime; a service restart intentionally loses them.
+  const runSessions = new Map<string, string>();
   // Office context for sessions started from a scored encounter, so a later voice connect keeps it.
   const officeCarryover = new Map<string, string>();
   const frames = new Map<string, Frame>();
@@ -123,18 +127,25 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
   const body = async (c: Context) => (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
 
   app.post("/coach/sessions", async (c) => {
-    const { patientId, mode: rawMode, encounterId } = await body(c);
+    const { patientId, mode: rawMode, encounterId, runId: rawRunId } = await body(c);
+    const runId = rawRunId === undefined || rawRunId === null || rawRunId === "" ? undefined : rawRunId;
+    if (runId !== undefined && (typeof runId !== "string" || !RUN_ID.test(runId)))
+      return bad(c, 400, "invalid_run_id", "runId must be the canonical HandoffTicket UUID.", []);
     // The operating room is mixed reality on a real reclining person (latest flow); full VR is still supported.
     const mode = rawMode === undefined ? "mixed_reality" : PRESENTATION_MODES.find((m) => m === rawMode);
     if (!mode) return bad(c, 400, "invalid_mode", 'mode must be "mixed_reality" or "virtual".', [{ id: "choose_patient", label: "Choose a patient", method: "GET", route: "/patients" }]);
     const kase = typeof patientId === "string" ? await options.loadCase(patientId) : null;
     if (!kase) return bad(c, 404, "patient_not_found", 'Send {"patientId": "<FinchNode subject>"} for a known patient.', [{ id: "choose_patient", label: "Choose a patient", method: "GET", route: "/patients" }]);
     if (!kase.procedureId) return bad(c, 409, "case_unavailable", kase.statusReason, kase.actions);
+    const priorRun = typeof runId === "string" ? sessions.get(runSessions.get(runId) ?? "") : undefined;
+    if (priorRun && priorRun.kase.patientId !== kase.patientId)
+      return bad(c, 409, "run_patient_mismatch", "This run is already bound to a different patient.", []);
 
     if (sessions.size >= MAX_SESSIONS) {
       const oldest = sessions.keys().next().value!;
       sessions.delete(oldest);
       officeCarryover.delete(oldest);
+      for (const [run, session] of runSessions) if (session === oldest) runSessions.delete(run);
     }
     const sid = `coach-${crypto.randomUUID().replaceAll("-", "").slice(0, 16)}`;
     const session = new CoachSession(sid, kase, options.now, options.stuckPolicy, mode);
@@ -142,11 +153,13 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
     const office = typeof encounterId === "string" ? options.encounterFor?.(encounterId) : null;
     const preop = office && office.kase.patientId === kase.patientId ? office.carryover() : "";
     sessions.set(sid, session);
+    if (typeof runId === "string") runSessions.set(runId, sid);
     if (preop) officeCarryover.set(sid, preop);
     const snapshot = session.snapshot();
     return c.json(
       {
         sessionId: sid,
+        runId,
         snapshot,
         context: renderContext(snapshot), contextKey: contextKey(snapshot),
         systemPrompt: buildSystemPrompt(kase, mode, preop),
@@ -174,19 +187,26 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
   });
 
   // Recap has no conversational agent, client prompt override, or surgery tools.
-  // The path is the actual server-issued coach run id; client body fields are not trusted.
+  // Canonical routes resolve only ids bound at session creation; recap request
+  // bodies cannot select another coach or override what Jarvis says.
   const reactionQuestion = "How did that feel?";
   const selfAssessmentQuestion = "What is one thing you would do differently?";
-  app.post("/coach/sessions/:sid/recap", (c) => {
-    const s = getSession(c);
+  const recapSession = (c: Context) => {
+    const runId = c.req.param("runId");
+    return runId === undefined ? getSession(c) : sessions.get(runSessions.get(runId) ?? "") ?? null;
+  };
+  const recapMetadata = (c: Context) => {
+    const s = recapSession(c);
     if (!s) return missing(c);
     c.header("Cache-Control", "no-store");
-    return c.json({ runId: s.id, reactionQuestion, selfAssessmentQuestion,
-      reactionAudioRoute: `/coach/sessions/${s.id}/recap/reaction.mp3`,
+    const runId = c.req.param("runId");
+    const route = runId ? `/coach/runs/${runId}` : `/coach/sessions/${s.id}`;
+    return c.json({ runId: runId ?? s.id, reactionQuestion, selfAssessmentQuestion,
+      reactionAudioRoute: `${route}/recap/reaction.mp3`,
       voiceConfigured: Boolean(reflex?.configured) });
-  });
-  app.get("/coach/sessions/:sid/recap/reaction.mp3", async (c) => {
-    const s = getSession(c);
+  };
+  const recapAudio = async (c: Context) => {
+    const s = recapSession(c);
     if (!s) return missing(c);
     if (!reflex?.configured) return bad(c, 503, "recap_voice_unconfigured", "Jarvis speech is unavailable. Use the reflection panel.", []);
     try {
@@ -195,7 +215,12 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
     } catch {
       return bad(c, 503, "recap_voice_failed", "Jarvis speech is unavailable. Use the reflection panel.", []);
     }
-  });
+  };
+  app.post("/coach/runs/:runId/recap", recapMetadata);
+  app.get("/coach/runs/:runId/recap/reaction.mp3", recapAudio);
+  // Compatibility for callers which still use a server-issued coach id.
+  app.post("/coach/sessions/:sid/recap", recapMetadata);
+  app.get("/coach/sessions/:sid/recap/reaction.mp3", recapAudio);
 
   app.post("/coach/sessions/:sid/events", async (c) => {
     const s = getSession(c);

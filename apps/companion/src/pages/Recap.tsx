@@ -3,7 +3,7 @@ import { Link } from '../lib/router';
 import { errorMarkers, feedbackFromFacts, highlightWindow, parseRunResult, type RunResult } from '../recap/runResult';
 import { initialResult } from '../recap/sample';
 import '../recap/recap.css';
-import { acceptReplayView, playbackRefresh, type ReplayView } from '../recap/replay';
+import { acceptReplayView, loadedReplayMetadata, playbackRefresh, secureGatewayBase, type ReplayView } from '../recap/replay';
 import { TOKEN_KEY } from '../config';
 import { load } from '../lib/storage';
 
@@ -40,7 +40,7 @@ export default function Recap({ sessionId }: { sessionId?: string }) {
       try {
         const token = load(TOKEN_KEY);
         if (!token) throw new Error('Connect to the session to resolve protected replay artifacts.');
-        const base = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8788';
+        const base = secureGatewayBase(import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8788');
         const response = await fetch(`${base}/v1/sessions/${encodeURIComponent(result!.sessionId)}/replay/${encodeURIComponent(result!.replay.jobId)}`, { headers: { Authorization: `Bearer ${token}` } });
         if (!response.ok) throw new Error(`Replay resolution failed (${response.status}).`);
         const next = acceptReplayView(result!, await response.json());
@@ -74,14 +74,31 @@ export default function Recap({ sessionId }: { sessionId?: string }) {
     if (robot.current) robot.current.currentTime = clipped;
     setSeconds(clipped);
   }
-  async function play() {
-    if (playing) { stop(); return; }
-    if (!sampleVideo && view && view.expiresAtUnixMs <= Date.now()) { resume.current = true; restore.current = seconds; setRefresh(n => n + 1); return; }
-    if (seconds >= limit || seconds < window.start) seek(window.start);
+  async function startPlayers() {
     try {
       await Promise.all([robot.current?.play(), source.current?.play()]);
       setPlaying(true);
     } catch { stop(); setMediaError('Video could not start. Check that the artifact URL is accessible and has not expired.'); }
+  }
+  function robotMetadata(video: HTMLVideoElement) {
+    try {
+      if (!result) return;
+      const loaded = sampleVideo ? null : loadedReplayMetadata(result, video.duration, restore.current);
+      if (loaded) setResult(loaded.result);
+      const position = loaded?.position ?? 0;
+      restore.current = position; video.currentTime = position;
+      if (source.current?.readyState) source.current.currentTime = position;
+      setSeconds(position);
+      // Metadata changes the highlight bounds. Resume directly at the computed
+      // position instead of calling play() with the previous zero-length window.
+      if (resume.current) { resume.current = false; void startPlayers(); }
+    } catch (e) { stop(); setMediaError(e instanceof Error ? e.message : 'Replay metadata is unavailable.'); }
+  }
+  async function play() {
+    if (playing) { stop(); return; }
+    if (!sampleVideo && view && view.expiresAtUnixMs <= Date.now()) { resume.current = true; restore.current = seconds; setRefresh(n => n + 1); return; }
+    if (seconds >= limit || seconds < window.start) seek(window.start);
+    await startPlayers();
   }
   async function read(file?: File) {
     if (!file) return;
@@ -91,7 +108,7 @@ export default function Recap({ sessionId }: { sessionId?: string }) {
       stop(); viewRef.current = null; setView(null); setRefresh(0); restore.current = highlightWindow(next).start; setResult(next); setStage(0); setFallback(false); setSeconds(0); setError(''); setMediaError('');
     } catch (e) { setError(e instanceof Error ? e.message : 'Unable to read result.'); }
   }
-  function useSample() { stop(); setFallback(true); setSeconds(0); setMediaError(''); }
+  function useSample() { stop(); restore.current = 0; resume.current = false; setFallback(true); setSeconds(0); setMediaError(''); }
 
   return <main className="recap-page">
     <div className="recap-flower" aria-hidden="true">✳</div>
@@ -140,7 +157,7 @@ export default function Recap({ sessionId }: { sessionId?: string }) {
         {hasVideo && <><div className="recap-videos">
           <figure><figcaption>{shownSource === 'learner' ? 'Learner’s recorded segment' : shownSource === 'rehearsal' ? 'Rehearsal recording' : 'Source recording'}</figcaption>
             {!sampleVideo && view?.sourceVideoUrl ? <video ref={source} src={view!.sourceVideoUrl} onLoadedMetadata={e => { e.currentTarget.currentTime = restore.current; }} muted playsInline preload="metadata" onError={refreshMedia} /> : <div className="recap-video-placeholder">{shownSource === 'sample' ? 'No participant footage in this sample.' : 'No source recording URL supplied.'}</div>}</figure>
-          <figure><figcaption>{fallback ? 'SAMPLE FALLBACK' : shownSource!.toUpperCase()} · robot-hand replay</figcaption><video key={sampleVideo ? 'sample' : replay!.replayArtifactId} ref={robot} src={sampleVideo ? '/recap-sample.mp4' : view?.replayVideoUrl} onLoadedMetadata={e => { e.currentTarget.currentTime = sampleVideo ? 0 : restore.current; setSeconds(e.currentTarget.currentTime); if (resume.current) { resume.current = false; void play(); } }} muted playsInline preload="auto"
+          <figure><figcaption>{fallback ? 'SAMPLE FALLBACK' : shownSource!.toUpperCase()} · robot-hand replay</figcaption><video key={sampleVideo ? 'sample' : replay!.replayArtifactId} ref={robot} src={sampleVideo ? '/recap-sample.mp4' : view?.replayVideoUrl} onLoadedMetadata={e => robotMetadata(e.currentTarget)} muted playsInline preload="auto"
             onTimeUpdate={e => { const t = e.currentTarget.currentTime; setSeconds(Math.min(t, limit)); if (t >= limit && limit > 0) { stop(); seek(limit); } else if (source.current && Math.abs(source.current.currentTime - t) > .3) source.current.currentTime = t; }}
             onEnded={stop} onError={refreshMedia} /></figure>
         </div><div className="recap-controls"><button className="recap-button" disabled={!!mediaError} onClick={() => void play()}>{playing ? 'Pause' : 'Play both'}</button>
