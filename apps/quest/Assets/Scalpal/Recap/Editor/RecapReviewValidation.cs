@@ -18,6 +18,7 @@ namespace Scalpal.Recap.Editor
         public static void All()
         {
             Run(); MediaRed(); RecapVideoReviewValidation.Run(); RecapValidation.Run(); RecapIntegrationValidation.Run();
+            BodyGradeAdapterValidation.Run();
             Scalpal.Handoff.Editor.HandoffValidation.Verify();
             Debug.Log("SCALPAL_RECAP_ALL_REVIEW_OK");
         }
