@@ -18,7 +18,7 @@ git lfs fsck
 
 For an existing clone, run `git fetch origin`, `git switch main`, `git pull --ff-only`, and `git lfs pull`. Preserve unrelated local work before switching branches. Repository access is required; this does not change collaborator permissions.
 
-Open **[blender/atlas.blend](blender/atlas.blend)** directly in Blender. It contains all 4,031 prepared meshes, organized into system collections, plus separate heart, liver, and vasculature scenes. Covering layers start hidden; enable their collections in the Outliner. Source labels and stable IDs are embedded as mesh-object custom properties. There are no linked external Blender libraries.
+Open **[blender/atlas.blend](blender/atlas.blend)** directly in Blender. It contains all 4,035 prepared meshes, organized into system collections, plus separate heart, liver, and vasculature scenes. Covering layers start hidden; enable their collections in the Outliner. Source labels and stable IDs are embedded as mesh-object custom properties. There are no linked external Blender libraries.
 
 | Deliverable | Location | Storage |
 | --- | --- | --- |
@@ -47,7 +47,7 @@ Different atlas sources are not spatially interchangeable. Full-body layers shar
 
 Asset preparation and local geometry inspection are not physical Quest validation. Unity scene composition, registration fitting, actual stereo rendering, and headset frame time must be verified by the Quest integrator. Rendering anatomy does not implement cutting, deformation, bleeding, or physiological flow.
 
-Verified export inventory: 3,874 full-body source parts across eight systems (669,730 triangles), 11 supplemental exercise targets (9,833 triangles), plus 146 parts in three independent detail models (360,261 triangles). All passed the Blender round-trip checks. The manifest records 1,400 excluded source guides. Local code checks passed for desktop, Android player defines, and Editor with an Android target; these use Unity test doubles, not the Unity editor.
+Verified export inventory: 3,874 full-body source parts across eight systems (669,730 triangles), 15 supplemental exercise targets (16,974 triangles), plus 146 parts in three independent detail models (360,261 triangles). All passed the Blender round-trip checks. The manifest records 1,400 excluded source guides. Local code checks passed for desktop, Android player defines, and Editor with an Android target; these use Unity test doubles, not the Unity editor.
 
 ## Build and verify runtime geometry
 
@@ -66,7 +66,7 @@ The builder exports eight full-body FBXs, one supplemental exercise-target FBX, 
 
 Z-Anatomy's `.i`/`.j` helper meshes include visible cuboid label pointers and region guides. They are excluded from the tissue display and listed under `excludedGuides`; the complete source originals retain them. Edge-only markers are also excluded. Simplification output is validated before export to remove duplicate faces that FBX import would otherwise drop.
 
-The atlas maps 18 original targets plus 11 supplemental targets. Every interactive and mistake target for appendectomy, gallbladder, and sigmoid colectomy is covered. Four catalog IDs remain unmapped: `abdominal_wall`, `umbilicus`, `heart`, and `lungs`; some have source substructures but no canonical combined node. Port placement and confirmation do not need fake anatomy colliders. `exerciseCoverage` and `unmappedCatalogIds` record the distinction. The supplemental targets are schematic teaching geometry, not anatomically validated source segmentation. See [case wiring and first demo](../../docs/anatomy-integration.md).
+The atlas maps 18 original targets plus 15 supplemental targets. Every interactive and mistake target for appendectomy, gallbladder, and sigmoid colectomy is covered. All 33 catalog IDs are now mapped exactly once. Batch 4 adds source-derived heart (four chambers) and lungs (five lobes) aggregates, plus schematic abdominal wall and umbilicus targets. Existing source IDs remain intact. Port placement and confirmation do not need fake anatomy colliders. `exerciseCoverage` and `unmappedCatalogIds` record the distinction. The supplemental targets are schematic teaching geometry, not anatomically validated source segmentation. See [case wiring and first demo](../../docs/anatomy-integration.md).
 
 Verification reimports all exported FBXs in Blender and checks exact mesh-name coverage, triangle counts, SHA256, and world bounds within 1 mm of the prepared geometry. It validates an FBX round trip, not Unity's importer or headset rendering. Generated GUIDs are stable, and existing `.meta` files are preserved.
 
@@ -110,3 +110,9 @@ Run **Scalpal > Anatomy > Build Appendectomy Demo Scene** to generate the wired 
 The authored targets below include the requested cecum/terminal ileum, five enlarged duct/artery targets, and the colectomy additions. The image is a Blender inspection of schematic teaching geometry.
 
 ![Supplemental teaching targets](targets-preview.png)
+
+## Batch 4 validation and current baseline
+
+This addition was reconciled with main `a7ada33` before shipping. All 4,031 existing part records remain unchanged; only `abdominal_wall`, `umbilicus`, `heart`, and `lungs` were added. The builder attaches AnatomyParts and mesh colliders using their exact catalog IDs. Rebuild the full atlas prefab in Unity to materialize the new objects; checked-in native scene/subset prefabs are not silently regenerated. Optional abdominal wall/umbilicus context stays out of the existing operative subset so the native scene keeps its own wall and port presentation. Required interaction targets still take precedence.
+
+The requested Unity menu **Scalpal > Validate Selected Anatomy Rig** could not run on this machine: the Unity 6000.0.66f2 executable and assemblies are absent. The repository does contain the Unity project. The full source-frame atlas also differs from that validator's torso-origin/+Z-head and 150k whole-rig assumptions; catalog completion alone does not prove those checks pass. Run and review this menu on the teammate's Unity machine after rebuilding the atlas. Local verification passed: 91 .NET harness checks, six anatomy catalog/service tests, service TypeScript checking, and Blender round-trip checks for all 12 exports and the 4,035-part workspace. These are separate evidence from Unity execution.

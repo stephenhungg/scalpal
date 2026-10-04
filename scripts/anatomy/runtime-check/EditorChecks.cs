@@ -71,6 +71,20 @@ public static class EditorChecks
         if (opaque.floats["_Surface"] != 0 || opaque.floats["_ZWrite"] != 1 || opaque.IsKeywordEnabled("_SURFACE_TYPE_TRANSPARENT")
             || !opaque.IsKeywordEnabled("_EMISSION") || !ghost.IsKeywordEnabled("_EMISSION"))
             throw new Exception("Opaque material must remain opaque and both variants support highlighting.");
-        Console.WriteLine("4 opaque/ghost material configuration checks passed (shader rendering not exercised).");
+        if (opaque.shader.name != "Scalpal/Tissue")
+            throw new Exception("Opaque anatomy must use the shared tissue shader in the current builder.");
+        var standard = (UnityEngine.Material)method.Invoke(null,
+            new object[] { "vessel_vein", UnityEngine.Shader.Find("Standard"), true });
+        if (standard.shader.name != "Standard" || standard.colors["_Color"].a != 0.15f || standard.floats["_Mode"] != 2)
+            throw new Exception("Built-in ghost must use Standard fade mode and its color property.");
+        if (standard.floats["_ZWrite"] != 0 || standard.floats["_SrcBlend"] != 5 || standard.floats["_DstBlend"] != 10)
+            throw new Exception("Built-in ghost must alpha blend without depth writes.");
+        if (standard.renderQueue != 3000 || !standard.IsKeywordEnabled("_ALPHABLEND_ON")
+            || standard.IsKeywordEnabled("_SURFACE_TYPE_TRANSPARENT") || standard.passes["ShadowCaster"])
+            throw new Exception("Built-in ghost must use its own transparent variant without shadows.");
+        if (!standard.IsKeywordEnabled("_EMISSION") || standard.IsKeywordEnabled("_ALPHATEST_ON")
+            || standard.IsKeywordEnabled("_ALPHAPREMULTIPLY_ON"))
+            throw new Exception("Built-in ghost must support highlighting without conflicting alpha keywords.");
+        Console.WriteLine("9 tissue/URP/built-in material configuration checks passed (shader rendering not exercised).");
     }
 }

@@ -110,7 +110,9 @@ namespace Scalpal.Anatomy
             if (missing.Count > 0) { missing.Sort(StringComparer.Ordinal); return Reject("missing anatomy or collider: " + string.Join(", ", missing), out reason); }
             var displayed = new HashSet<string>(required, StringComparer.Ordinal);
             foreach (var id in procedure.structures ?? Array.Empty<string>())
-                if (anatomy.TryGetPart(id, out _)) displayed.Add(id);
+                // Surface context stays in the atlas; the native operating scene owns
+                // its wall/port presentation. Explicit interaction requirements still win.
+                if (id != "abdominal_wall" && id != "umbilicus" && anatomy.TryGetPart(id, out _)) displayed.Add(id);
             anatomy.ShowAllSystems();
             anatomy.SetExerciseParts(displayed);
             anatomy.SetPreviewRotation(false);

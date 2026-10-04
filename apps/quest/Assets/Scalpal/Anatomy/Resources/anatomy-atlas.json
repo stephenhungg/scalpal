@@ -258,24 +258,24 @@
       "id": "exercise-targets",
       "group": "body",
       "assetPath": "Assets/Scalpal/Anatomy/Models/exercise-targets.fbx",
-      "sourceTriangles": 9833,
-      "triangles": 9833,
-      "meshCount": 11,
+      "sourceTriangles": 16974,
+      "triangles": 16974,
+      "meshCount": 15,
       "sourceBoundsBlenderXYZ": [
         [
-          -0.11380050331354141,
-          0.0997864380478859
+          -0.13103657960891724,
+          0.1298472285270691
         ],
         [
-          -0.08118411153554916,
-          0.07706049829721451
+          -0.13343237340450287,
+          0.08324117213487625
         ],
         [
           0.7280486822128296,
-          1.1820178031921387
+          1.4309736490249634
         ]
       ],
-      "sha256": "ff50883cfbab8f1444a7e1198ef557bc11fff98f17c08f3ce5d9d0c1f5d8c3fb",
+      "sha256": "f67fb83b37a2bad80ec12b03194d1450d535a979424cd9f965ee2e711f96266a",
       "inputHashes": {
         "visceral": "ccc78359e6c5de7cdb18d6ffd4b72d111a14527a6cea5ac711df3c6892e4824e",
         "cardiovascular": "d2c86b393002c868979eb6f7f241d60a204b7555fdf8221a9fdff8720e28b6fd"
@@ -40952,6 +40952,135 @@
       ],
       "colliderRadiusMeters": 0,
       "anatomicalValidation": "unreviewed generic teaching approximation; not patient anatomy"
+    },
+    {
+      "stableId": "heart",
+      "catalogId": "heart",
+      "displayName": "Heart",
+      "objectName": "anat_heart",
+      "system": "exercise-targets",
+      "sourceTriangles": 1126,
+      "triangles": 1126,
+      "reflectionCorrected": false,
+      "provenance": "source-derived aggregate of four cardiac chamber meshes; source substructures retained",
+      "sourceLandmarks": [
+        "atlas_cardiovascular__left_atrium",
+        "atlas_cardiovascular__right_atrium",
+        "atlas_cardiovascular__left_ventricle",
+        "atlas_cardiovascular__right_ventricle"
+      ],
+      "sourceBoundsBlenderXYZ": [
+        [
+          -0.037403229624032974,
+          0.08245975524187088
+        ],
+        [
+          -0.08164004981517792,
+          0.031806886196136475
+        ],
+        [
+          1.2371636629104614,
+          1.3449286222457886
+        ]
+      ],
+      "colliderRadiusMeters": 0,
+      "anatomicalValidation": "unreviewed generic teaching approximation; not patient anatomy"
+    },
+    {
+      "stableId": "lungs",
+      "catalogId": "lungs",
+      "displayName": "Lungs",
+      "objectName": "anat_lungs",
+      "system": "exercise-targets",
+      "sourceTriangles": 3583,
+      "triangles": 3583,
+      "reflectionCorrected": false,
+      "provenance": "source-derived aggregate of five lung lobes; source substructures retained",
+      "sourceLandmarks": [
+        "atlas_visceral__superior_lobe_of_left_lung",
+        "atlas_visceral__inferior_lobe_of_left_lung",
+        "atlas_visceral__superior_lobe_of_right_lung",
+        "atlas_visceral__middle_lobe_of_right_lung",
+        "atlas_visceral__inferior_lobe_of_right_lung"
+      ],
+      "sourceBoundsBlenderXYZ": [
+        [
+          -0.13103657960891724,
+          0.1298472285270691
+        ],
+        [
+          -0.10245679318904877,
+          0.08324117213487625
+        ],
+        [
+          1.166913390159607,
+          1.4309736490249634
+        ]
+      ],
+      "colliderRadiusMeters": 0,
+      "anatomicalValidation": "unreviewed generic teaching approximation; not patient anatomy"
+    },
+    {
+      "stableId": "abdominal_wall",
+      "catalogId": "abdominal_wall",
+      "displayName": "Abdominal Wall",
+      "objectName": "anat_abdominal_wall",
+      "system": "exercise-targets",
+      "sourceTriangles": 1216,
+      "triangles": 1216,
+      "reflectionCorrected": false,
+      "provenance": "authored schematic anterior abdominal wall panel; not layered muscle segmentation",
+      "sourceLandmarks": [
+        "anat_liver",
+        "anat_sigmoid_colon",
+        "anat_transverse_colon"
+      ],
+      "sourceBoundsBlenderXYZ": [
+        [
+          -0.12755846977233887,
+          0.11197517812252045
+        ],
+        [
+          -0.1264323741197586,
+          -0.10843238979578018
+        ],
+        [
+          0.785592794418335,
+          1.275818109512329
+        ]
+      ],
+      "colliderRadiusMeters": 0,
+      "anatomicalValidation": "unreviewed generic teaching approximation; not patient anatomy"
+    },
+    {
+      "stableId": "umbilicus",
+      "catalogId": "umbilicus",
+      "displayName": "Umbilicus",
+      "objectName": "anat_umbilicus",
+      "system": "exercise-targets",
+      "sourceTriangles": 1216,
+      "triangles": 1216,
+      "reflectionCorrected": false,
+      "provenance": "authored schematic touchable umbilicus landmark; not measured torso registration",
+      "sourceLandmarks": [
+        "anat_abdominal_wall"
+      ],
+      "sourceBoundsBlenderXYZ": [
+        [
+          -0.016791678965091705,
+          0.0012083100154995918
+        ],
+        [
+          -0.13343237340450287,
+          -0.12543238699436188
+        ],
+        [
+          1.0067055225372314,
+          1.024705410003662
+        ]
+      ],
+      "colliderRadiusMeters": 0,
+      "anatomicalValidation": "unreviewed generic teaching approximation; not patient anatomy"
     }
   ],
   "excludedGuides": [
@@ -47963,12 +48092,7 @@
     "registration": "unverified; preview only until fitted and validated",
     "detailModels": "independent HRA source frames; never composite over Z-Anatomy automatically"
   },
-  "unmappedCatalogIds": [
-    "abdominal_wall",
-    "heart",
-    "lungs",
-    "umbilicus"
-  ],
+  "unmappedCatalogIds": [],
   "exerciseCoverage": [
     {
       "procedureId": "lap_cholecystectomy",

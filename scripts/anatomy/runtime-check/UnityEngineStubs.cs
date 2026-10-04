@@ -66,6 +66,15 @@ namespace UnityEngine
     }
     public class Transform : Component
     {
+        public Vector3 localPosition, localScale;
+        public Quaternion localRotation;
+        public Transform parent => gameObject.parent?.transform;
+        public void SetParent(Transform value, bool worldPositionStays)
+        {
+            gameObject.parent?.children.Remove(gameObject);
+            gameObject.parent = value?.gameObject;
+            gameObject.parent?.children.Add(gameObject);
+        }
         public Vector3 position;
         public Quaternion rotation;
         public void LookAt(Vector3 target) { }
@@ -76,6 +85,7 @@ namespace UnityEngine
     public struct Vector3 {
         public float x, y, z;
         public Vector3(float x, float y, float z) { this.x = x; this.y = y; this.z = z; }
+        public string ToString(string format) => $"({x.ToString(format)}, {y.ToString(format)}, {z.ToString(format)})";
         public float magnitude => (float)Math.Sqrt(x*x+y*y+z*z);
         public static Vector3 operator +(Vector3 a, Vector3 b) => new Vector3(a.x+b.x,a.y+b.y,a.z+b.z);
         public static Vector3 up => new Vector3();
@@ -98,7 +108,7 @@ namespace UnityEngine
     public static class Debug { public static void LogWarning(string message, Object context = null) { Console.WriteLine(message); } public static void Log(string message) { Console.WriteLine(message); } public static void LogError(string message) { Console.WriteLine(message); } }
     public class Shader : Object
     {
-        public static Shader Find(string name) => new Shader();
+        public static Shader Find(string name) => new Shader { name = name };
         static readonly Dictionary<string, int> ids = new Dictionary<string, int>();
         public static int PropertyToID(string name)
         {
@@ -142,6 +152,8 @@ namespace UnityEngine
     }
     public class Renderer : Component
     {
+        public Rendering.ShadowCastingMode shadowCastingMode;
+        public bool receiveShadows;
         public Bounds bounds;
         public bool enabled = true;
         public Material[] sharedMaterials = Array.Empty<Material>();
@@ -159,8 +171,9 @@ namespace UnityEngine
             blocks[index] = copy;
         }
     }
+    public class MeshRenderer : Renderer { }
     public class Collider : Component { public bool enabled = true; }
-    public class Mesh : Object { }
+    public class Mesh : Object { public int[] triangles = Array.Empty<int>(); }
     public class MeshFilter : Component { public Mesh sharedMesh; }
     public class MeshCollider : Collider { public Mesh sharedMesh; public bool convex; public bool isTrigger; }
     public class TextAsset : Object { public string text; }
@@ -168,7 +181,7 @@ namespace UnityEngine
     public static class JsonUtility { public static T FromJson<T>(string json) => System.Text.Json.JsonSerializer.Deserialize<T>(json, new System.Text.Json.JsonSerializerOptions { IncludeFields = true }); }
 }
 
-namespace UnityEngine.Rendering { public enum BlendMode { Zero = 0, One = 1, SrcAlpha = 5, OneMinusSrcAlpha = 10 } }
+namespace UnityEngine.Rendering { public static class GraphicsSettings { public static UnityEngine.Object currentRenderPipeline; } public enum ShadowCastingMode { Off, On, TwoSided, ShadowsOnly } public enum BlendMode { Zero = 0, One = 1, SrcAlpha = 5, OneMinusSrcAlpha = 10 } }
 namespace UnityEngine.SceneManagement
 {
     public struct Scene { public bool isLoaded => false; public bool IsValid() => false; }
@@ -178,3 +191,6 @@ namespace UnityEngine.SceneManagement
         public static void MoveGameObjectToScene(UnityEngine.GameObject obj, Scene scene) { }
     }
 }
+
+// Builder-only signature: tissue behavior is exercised by the separate Unity tissue gates.
+namespace Scalpal.Anatomy.Tissue { public class AnatomyLayerView : UnityEngine.MonoBehaviour { } }

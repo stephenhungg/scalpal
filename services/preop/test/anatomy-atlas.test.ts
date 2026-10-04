@@ -46,7 +46,16 @@ describe("anatomy and authored exercise integration", () => {
     const bytes = readFileSync(resolve(quest, system.assetPath));
     expect(createHash("sha256").update(bytes).digest("hex")).toBe(system.sha256);
     const authored = parts.filter(part => part.system === system.id);
-    expect(authored).toHaveLength(11);
+    expect(authored).toHaveLength(15);
     expect(authored.every(part => part.provenance)).toBe(true);
+  });
+  it("provides every canonical catalog ID exactly once without replacing source IDs", () => {
+    for (const structure of ANATOMY) {
+      const matches = parts.filter(part => part.stableId === structure.id);
+      expect(matches, structure.id).toHaveLength(1);
+      expect(matches[0]!.catalogId).toBe(structure.id);
+      expect(matches[0]!.objectName).toBe(structure.unityName);
+    }
+    expect(atlas.unmappedCatalogIds).toEqual([]);
   });
 });

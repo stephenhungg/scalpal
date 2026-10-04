@@ -24,7 +24,8 @@ namespace Scalpal.Anatomy.EditorTools
         public static int OrganOverviewPartCount => OrganOverviewIds.Count;
 
         // Explicit shared-body-frame parts, including the five lung lobes and four heart
-        // chambers as their source IDs. Do not invent combined "heart"/"lungs" surgery IDs.
+        // chambers as their source IDs. Canonical heart/lungs aggregates live in the
+        // full atlas; keep this bounded overview's source IDs and triangle count stable.
         // Greater omentum is deliberately omitted: its 77,968 triangles cover anterior
         // organs. BuildExercise still preserves that authored appendectomy context.
         public static readonly IReadOnlyList<string> OrganOverviewIds = Array.AsReadOnly(new[] {
@@ -197,7 +198,7 @@ namespace Scalpal.Anatomy.EditorTools
                     throw new InvalidOperationException("Required interaction target is absent or not collider-addressable: " + (id ?? "<empty>"));
             var displayed = new HashSet<string>(required, StringComparer.Ordinal);
             foreach (var id in procedure.structures ?? Array.Empty<string>())
-                if (id != null && available.ContainsKey(id)) displayed.Add(id);
+                if (id != null && id != "abdominal_wall" && id != "umbilicus" && available.ContainsKey(id)) displayed.Add(id);
             if (displayed.Count == 0) throw new InvalidOperationException("Exercise contains no available anatomy.");
             var selected = atlas.parts.Where(p => displayed.Contains(p.stableId)).ToArray();
             var systems = new HashSet<string>(selected.Select(p => p.system), StringComparer.Ordinal);

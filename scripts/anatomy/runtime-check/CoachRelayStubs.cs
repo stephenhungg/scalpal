@@ -20,11 +20,18 @@ namespace Scalpal.Exercises.Coach
         public bool Connected { get; set; }
         public bool IsSynchronized { get; set; }
         public string SessionPatientId { get; set; } = "";
+        public string SessionCaseId { get; set; } = "";
+        public string SessionMode { get; set; } = "";
         public string SessionProcedureId { get; set; } = "";
         public string SessionInitialStepId { get; set; } = "";
         public string SyncFailureReason { get; set; } = "";
-        public void AdoptCurrentSession(string patientId, string procedureId = "") { }
-        public void Forward(Scalpal.Exercises.Engine.CaseEvent value) { }
+        // Signature-only network boundary. No adoption or transport succeeds in this double.
+        public void AdoptCurrentSession(string patientId, string expectedProcedureId = "", string expectedCaseId = "",
+            string expectedMode = "", string expectedInitialStepId = "") { }
+        public void AdoptSession(string sessionId, string patientId, string procedureId, string caseId, string mode, string initialStepId) { }
+        public void UseSession(string sessionId, string patientId = "", string procedureId = "", string initialStepId = "",
+            string caseId = "", string mode = "") { }
+        public void Forward(Scalpal.Exercises.Engine.CaseEvent value, string stepId = "") { }
 
         public readonly List<bool> tracking = new List<bool>();
         public readonly List<(string id, bool applied, string reason)> acks = new List<(string, bool, string)>();

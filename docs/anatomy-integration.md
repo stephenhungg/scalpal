@@ -22,7 +22,7 @@ The live catalog is TypeScript. C# DTOs and generated IDs consume its JSON; the 
 
 ## Target coverage
 
-The supplemental `exercise-targets.fbx` adds 11 separate objects, each named `anat_<stableId>`. The atlas builder creates an `AnatomyPart` with that exact ID and a non-trigger static `MeshCollider` referencing its mesh.
+The supplemental `exercise-targets.fbx` adds 15 separate objects, each named `anat_<stableId>`. The atlas builder creates an `AnatomyPart` with that exact ID and a non-trigger static `MeshCollider` referencing its mesh.
 
 | Priority | Added stable IDs |
 | --- | --- |
@@ -32,7 +32,7 @@ The supplemental `exercise-targets.fbx` adds 11 separate objects, each named `an
 
 The five gallbladder tubes are deliberately enlarged to 12 mm diameter. The additions are schematic teaching geometry anchored to source atlas landmarks, not newly segmented or anatomically validated originals. Gonadal vessels group the male atlas's left testicular artery and vein. `small_bowel` groups the source duodenum/jejunum with the authored terminal ileum as a representative target. Per-part provenance is recorded in the manifest and Blender object properties.
 
-No interaction target is missing for any of the three procedures. `abdominal_wall`, `umbilicus`, `heart`, and `lungs` remain unmapped canonical IDs. Noninteractive port/confirmation context does not require placeholder colliders. Source heart/lung substructures still exist. Port placement uses a distinct authored port ID, not an anatomy ID.
+No interaction target is missing for any of the three procedures. All 33 canonical catalog IDs now have mappings, including the batch 4 abdominal wall/umbilicus proxies and source-derived heart/lungs aggregates. Noninteractive port/confirmation context does not require placeholder colliders. Source heart/lung substructures still exist. Port placement uses a distinct authored port ID, not an anatomy ID.
 
 Case selection displays only required targets and available procedure context. Their mesh totals are 93,399 triangles for appendectomy, 120,474 for gallbladder, and 119,209 for colectomy. These are geometry counts, not measured Quest frame time. A full atlas remains substantially larger.
 
@@ -74,4 +74,4 @@ npm test
 npm run test:unity
 ```
 
-The geometry checks reimport all 12 FBXs and reopen the saved 4,031-part Blender workspace. The integration harness plays all three actual procedures through the binding using IDs from the real atlas manifest. Relay tests use controlled transport/coroutine doubles, not a live headset network. No cutting, deformation, bleeding, robot policy, clinical accuracy, or headset performance is established by these checks.
+The geometry checks reimport all 12 FBXs and reopen the saved 4,035-part Blender workspace. The integration harness plays all three actual procedures through the binding using IDs from the real atlas manifest. Relay tests use controlled transport/coroutine doubles, not a live headset network. No cutting, deformation, bleeding, robot policy, clinical accuracy, or headset performance is established by these checks.

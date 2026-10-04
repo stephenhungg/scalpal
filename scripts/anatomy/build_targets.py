@@ -148,6 +148,28 @@ def main():
     bowel_sources = [source['anat_duodenum'],*jejunum,ileum]
     add('small_bowel',duplicate_group('small_bowel',bowel_sources),[o.name for o in bowel_sources],
         'source-derived representative aggregate: duodenum and jejunum plus authored terminal ileum; not a complete traced small bowel')
+    # Batch 4 adds canonical whole-organ/context targets without renaming any
+    # existing atlas substructure. These are separate addressable aggregates.
+    chambers = ['atlas_cardiovascular__left_atrium', 'atlas_cardiovascular__right_atrium',
+                'atlas_cardiovascular__left_ventricle', 'atlas_cardiovascular__right_ventricle']
+    add('heart', duplicate_group('heart', [source[n] for n in chambers]), chambers,
+        'source-derived aggregate of four cardiac chamber meshes; source substructures retained')
+    lobes = ['atlas_visceral__superior_lobe_of_left_lung', 'atlas_visceral__inferior_lobe_of_left_lung',
+             'atlas_visceral__superior_lobe_of_right_lung', 'atlas_visceral__middle_lobe_of_right_lung',
+             'atlas_visceral__inferior_lobe_of_right_lung']
+    add('lungs', duplicate_group('lungs', [source[n] for n in lobes]), lobes,
+        'source-derived aggregate of five lung lobes; source substructures retained')
+    abdomen = bounds([source['anat_liver'], source['anat_sigmoid_colon'], source['anat_transverse_colon']])
+    wall_center = Vector([(abdomen[0][0]+abdomen[0][1])/2, abdomen[1][0]-.018,
+                          (abdomen[2][0]+abdomen[2][1])/2])
+    wall_scale = ((abdomen[0][1]-abdomen[0][0])*.56, .009,
+                  (abdomen[2][1]-abdomen[2][0])*.54)
+    add('abdominal_wall', ellipsoid('abdominal_wall', wall_center, wall_scale),
+        ['anat_liver', 'anat_sigmoid_colon', 'anat_transverse_colon'],
+        'authored schematic anterior abdominal wall panel; not layered muscle segmentation')
+    navel = wall_center + Vector((0, -.012, -.015))
+    add('umbilicus', ellipsoid('umbilicus', navel, (.009,.004,.009)),
+        ['anat_abdominal_wall'], 'authored schematic touchable umbilicus landmark; not measured torso registration')
     bpy.ops.object.select_all(action='DESELECT')
     for o in authored: o.select_set(True)
     out = BASE/'Models/exercise-targets.fbx'
