@@ -29,12 +29,16 @@ namespace Scalpal.Recap
     }
     [Serializable] public sealed class ScoreSection { public string id, label; public int score, max; public string[] found, missed; }
     [Serializable] public sealed class ClinicalFact { public string kind, id, label, why; }
-    [Serializable] public class TimedFact { public string id, label; public double atSeconds; }
-    [Serializable] public sealed class DecisionFact : TimedFact { public bool correct; }
+    [Serializable] public class TimedFact { public string id, label; public double atSeconds; public bool timeKnown = true; }
+    [Serializable] public sealed class DecisionFact : TimedFact { public bool correct; public bool correctnessAvailable = true; }
     [Serializable] public sealed class SurgeryEconomy { public bool available; public double leftPathMeters, rightPathMeters, durationSeconds; }
     [Serializable] public sealed class SurgeryGrade
     {
         public bool available, demoAssisted;
+        public bool hintsAvailable = true, complete, decisionSummaryAvailable;
+        public int correctDecisions, decisionCount;
+        public string rubric = "", completionReason = "", eventClock = "run";
+        public string[] missingMilestones = Array.Empty<string>(), missingMetrics = Array.Empty<string>();
         public double total, max, bloodLossMl;
         public string grade = "";
         public TimedFact[] milestones = Array.Empty<TimedFact>(), guardrailViolations = Array.Empty<TimedFact>(), orderDeviations = Array.Empty<TimedFact>(), hints = Array.Empty<TimedFact>();
@@ -51,6 +55,7 @@ namespace Scalpal.Recap
         [NonSerialized] public long expiresAtUnixMs;
         public double durationSeconds, captureStartRunSeconds;
         public bool clockAligned;
+        public string eventClock = "run";
     }
     [Serializable] public sealed class DemoFlags
     {
@@ -107,7 +112,7 @@ namespace Scalpal.Recap
             if (r.surgery?.available == true)
             {
                 foreach (var item in r.surgery.milestones ?? Array.Empty<TimedFact>()) if (f.strengths.Count < 2) f.strengths.Add("Reached: " + item.label);
-                foreach (var item in r.surgery.guardrailViolations ?? Array.Empty<TimedFact>()) if (f.improvements.Count < 2) f.improvements.Add("Review: " + item.label + " at " + item.atSeconds.ToString("0.0") + " s");
+                foreach (var item in r.surgery.guardrailViolations ?? Array.Empty<TimedFact>()) if (f.improvements.Count < 2) f.improvements.Add("Review: " + item.label + (item.timeKnown ? " at " + item.atSeconds.ToString("0.0") + " s" : " (time unavailable)"));
             }
             f.takeAway = f.improvements.Count > 0 ? "Next attempt — " + f.improvements[0] : f.strengths.Count > 0 ? "Carry forward — " + f.strengths[0] : "No logged facts yet. Reflect on one deliberate action for your next attempt.";
             return f;
@@ -115,17 +120,17 @@ namespace Scalpal.Recap
         public static bool TryClipTime(RunResult r, TimedFact fact, out double seconds)
         {
             seconds = fact.atSeconds - r.replay.captureStartRunSeconds;
-            return r.replay.source == "learner" && r.replay.clockAligned && seconds >= 0 && seconds <= r.replay.durationSeconds;
+            return fact.timeKnown && r.replay.eventClock == (r.surgery?.eventClock ?? "run") && r.replay.source == "learner" && r.replay.clockAligned && seconds >= 0 && seconds <= r.replay.durationSeconds;
         }
         public static TimedFact[] Errors(RunResult r) => (r.surgery?.guardrailViolations ?? Array.Empty<TimedFact>()).Concat(r.surgery?.orderDeviations ?? Array.Empty<TimedFact>()).ToArray();
         public static double HighlightStart(RunResult r, double duration)
         {
-            if (r.replay.source != "learner" || !r.replay.clockAligned) return 0;
+            if (r.replay.source != "learner" || !r.replay.clockAligned || r.replay.eventClock != (r.surgery?.eventClock ?? "run")) return 0;
             var guards = r.surgery?.guardrailViolations ?? Array.Empty<TimedFact>();
             var milestones = (r.surgery?.milestones ?? Array.Empty<TimedFact>()).Where(f => f.id.IndexOf("incis", StringComparison.OrdinalIgnoreCase) >= 0 || f.id.IndexOf("ligat", StringComparison.OrdinalIgnoreCase) >= 0);
             foreach (var group in new[] { guards.AsEnumerable(), milestones })
             {
-                var found = group.Where(f => TryClipTime(r, f, out _)).OrderBy(f => f.atSeconds).FirstOrDefault();
+                var found = group.Where(f => f.timeKnown && TryClipTime(r, f, out _)).OrderBy(f => f.atSeconds).FirstOrDefault();
                 if (found != null) return Math.Max(0, Math.Min(Math.Max(0, duration - 20), found.atSeconds - r.replay.captureStartRunSeconds - 3));
             }
             return 0;

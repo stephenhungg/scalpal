@@ -41,7 +41,7 @@ namespace Scalpal.Handoff
         public static HandoffTicket Current { get; private set; }
         public static TheatrePreflight Preflight { get; private set; } = new TheatrePreflight();
         public static bool NeedsEscalation(EncounterScore score) => score != null && (!score.procedureChosenCorrectly || score.diagnosisResult != "correct");
-        public static bool Supported(string procedure) => procedure == "lap_appendectomy";
+        public static bool Supported(string procedure) => procedure == "lap_appendectomy" || procedure == "open_appendectomy";
         public static bool SwitchNeedsNewAttempt(HandoffTicket ticket) => ticket != null && ticket.practiceStarted;
         public static bool CanChoose(string mode, TheatrePreflight preflight) => mode == "virtual" || mode == "mixed_reality" && preflight != null && preflight.ArAvailable;
         public static HandoffTicket Begin(EncounterState state, EncounterScore score, string endpoint)

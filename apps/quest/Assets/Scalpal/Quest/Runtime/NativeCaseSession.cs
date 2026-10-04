@@ -489,6 +489,9 @@ namespace Scalpal.Quest
                         coachSessionId, coachBaseUrl, realtime.GetClientAccessToken());
                 else RecapSessionIntegration.Ensure().Begin(OfficeHandoff, candidate, boundSharedSession, boundSharedAttempt,
                     coachSessionId, coachBaseUrl, realtime.GetClientAccessToken(), officeEncounterAttempt);
+                RecapSessionIntegration.Ensure().Observe(exercise);
+                var openSession = GetComponent<Scalpal.Surgery.OpenSurgerySession>();
+                if (openSession) openSession.judgeFastPath = RecapRunContext.Current.result.demo.skipMarking;
                 return true;
             }
             catch (ArgumentException) { Message = "Run context does not match this attempt. Start a fresh attempt."; return false; }
@@ -528,9 +531,14 @@ namespace Scalpal.Quest
             if (result.completed)
             {
                 Phase = "Recap"; voice.Disconnect(); anatomy.SetRegistrationValid(false); coach.Tracking(false);
-                Message = $"Complete: {completedSteps}/{candidate.procedure.steps.Length} steps, {mistakes} authored warnings. Left menu: new attempt";
-                realtime.ReportAttemptResult((uint)completedSteps, (uint)candidate.procedure.steps.Length,
-                    (uint)mistakes, 0, candidate.procedure.title + " rehearsal completed; " + PresentationMode);
+                var finalGrade = exercise.Grade;
+                int reached = finalGrade?.metMilestones?.Length ?? completedSteps;
+                int total = candidate.procedure.openBody?.milestones?.Length ?? candidate.procedure.steps.Length;
+                int warnings = finalGrade?.guardrailIds?.Length ?? mistakes;
+                bool goalsReached = finalGrade?.complete ?? true;
+                Message = $"Run ended: {reached}/{total} milestones, {warnings} authored warnings. " + (goalsReached ? "Goals reached." : "Some goals remain unmet.");
+                realtime.ReportAttemptResult((uint)reached, (uint)total,
+                    (uint)warnings, 0, candidate.procedure.title + (goalsReached ? " goals reached; " : " ended with unmet goals; ") + PresentationMode + "; hints not measured");
                 CompleteRecapRun();
             }
             Publish();

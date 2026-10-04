@@ -145,3 +145,75 @@ test('bearer credentials cannot be sent to a cleartext remote gateway', async ()
   for (const url of ['http://192.168.1.25:8788', 'http://localhost.example.test', 'ftp://localhost', 'https://user:pass@example.test'])
     assert.throws(() => secureGatewayBase(url), /HTTPS|credentials/);
 });
+
+test('shared Unity scorecard fixture stays identical to the current real preop producer', () => {
+  const saved = JSON.parse(readFileSync(new URL('./fixtures/preop-scorecard.json', import.meta.url), 'utf8'));
+  const actual = producedScorecard();
+  assert.equal(actual.procedureId, 'open_appendectomy');
+  assert.deepEqual(saved, actual);
+});
+
+test('real open-body grade preserves illustrative denominator, incomplete goals and unmeasured metrics', async () => {
+  const { producedBodyGrade } = await import('./preop-producer.ts');
+  const { decisionSummaryText, hintsSummaryText, timedFactText } = await import('../src/recap/runResult.ts');
+  const grade = producedBodyGrade();
+  const r = fresh();
+  // Consumer DTO projection only: all scores, counts and completeness come from the real grader.
+  r.surgery = { ...r.surgery, total: grade.earnedPoints, max: grade.availablePoints, grade: 'Illustrative · uncalibrated',
+    rubric: grade.rubric, complete: grade.complete, completionReason: grade.reason,
+    missingMilestones: [...grade.missingMilestones], missingMetrics: [...grade.missingMetrics],
+    hintsAvailable: false, decisionSummaryAvailable: true, correctDecisions: grade.correctDecisions, decisionCount: grade.decisionCount,
+    milestones: grade.metMilestones.map(id => ({ id, label: id, atSeconds: 0, timeKnown: false })),
+    guardrailViolations: grade.guardrailIds.map(id => ({ id, label: id, atSeconds: 0, timeKnown: false })),
+    decisions: [{ id: 'raw-choice', label: 'Unassessed raw choice', atSeconds: 0, timeKnown: false, correct: false, correctnessAvailable: false }],
+    hints: [], bloodLossMl: grade.bloodLostMl };
+  const parsed = parseRunResult(JSON.stringify(r));
+  assert.equal(parsed.surgery.max, 80); assert.equal(parsed.surgery.total, grade.earnedPoints);
+  assert.equal(parsed.surgery.rubric, 'illustrative_v1_uncalibrated'); assert.equal(parsed.surgery.complete, false);
+  assert.deepEqual(parsed.surgery.missingMilestones, grade.missingMilestones);
+  assert.equal(hintsSummaryText(parsed.surgery), 'Not measured');
+  assert.equal(decisionSummaryText(parsed.surgery), `${grade.correctDecisions} / ${grade.decisionCount}`);
+  assert.match(timedFactText(parsed.surgery.guardrailViolations[0]), /time not recorded/);
+});
+
+test('unknown event timestamps never produce a video marker, highlight or precise feedback time', async () => {
+  const { highlightWindow } = await import('../src/recap/runResult.ts');
+  const r = fresh(); r.diagnosis = null; r.diagnosisAvailable = false;
+  r.replay.source = 'learner'; r.replay.clockAligned = true; r.replay.captureStartRunSeconds = 0; r.replay.durationSeconds = 180;
+  r.surgery.guardrailViolations = [{ id: 'unmapped-guard', label: 'Guardrail hit', atSeconds: 67, timeKnown: false }];
+  r.surgery.orderDeviations = []; r.surgery.milestones = [{ id: 'first_incision', label: 'First incision', atSeconds: 100, timeKnown: false }];
+  assert.deepEqual(errorMarkers(r), []);
+  assert.deepEqual(highlightWindow(r), { start: 0, end: 20 });
+  assert.doesNotMatch(feedbackFromFacts(r).improvements[0], /67\.0 s/);
+});
+
+test('new availability flags validate types and legacy timed/decision records stay measured', async () => {
+  const { decisionSummaryText, hintsSummaryText, timedFactText } = await import('../src/recap/runResult.ts');
+  const r = fresh();
+  r.surgery.guardrailViolations[0].timeKnown = 'yes';
+  assert.throws(() => parseRunResult(JSON.stringify(r)), /guardrail/);
+  delete r.surgery.guardrailViolations[0].timeKnown;
+  r.surgery.decisionSummaryAvailable = true; r.surgery.correctDecisions = 2; r.surgery.decisionCount = 1;
+  assert.throws(() => parseRunResult(JSON.stringify(r)), /decision/i);
+  delete r.surgery.decisionSummaryAvailable; delete r.surgery.correctDecisions; delete r.surgery.decisionCount;
+  const parsed = parseRunResult(JSON.stringify(r));
+  assert.equal(hintsSummaryText(parsed.surgery), String(parsed.surgery.hints.length));
+  assert.equal(decisionSummaryText(parsed.surgery), `${parsed.surgery.decisions.filter(d => d.correct).length} / ${parsed.surgery.decisions.length}`);
+  assert.match(timedFactText(parsed.surgery.guardrailViolations[0]), /67\.0 s/);
+  parsed.surgery.decisions.forEach(d => { d.correctnessAvailable = false; });
+  assert.equal(decisionSummaryText(parsed.surgery), 'Not measured');
+});
+
+test('active-interaction grader clocks cannot masquerade as run-time video alignment', async () => {
+  const { highlightWindow } = await import('../src/recap/runResult.ts');
+  const r = fresh(); r.isSample = false; r.replay.jobId = 'clock-job'; r.replay.replayArtifactId = 'clock-artifact'; r.replay.source = 'learner'; r.replay.clockAligned = true; r.replay.captureStartRunSeconds = 10; r.replay.durationSeconds = 180;
+  r.surgery.eventClock = 'active_interaction'; r.replay.eventClock = 'run';
+  assert.deepEqual(errorMarkers(r), []);
+  assert.deepEqual(highlightWindow(r), { start: 0, end: 20 });
+  r.replay.eventClock = 'active_interaction';
+  const parsed = parseRunResult(JSON.stringify(r));
+  assert.equal(parsed.surgery.eventClock, 'active_interaction');
+  assert.equal(parsed.replay.eventClock, 'active_interaction');
+  assert.deepEqual(highlightWindow(parsed), { start: 54, end: 74 });
+  assert.equal(errorMarkers(parsed)[0].clipSeconds, 57);
+});
