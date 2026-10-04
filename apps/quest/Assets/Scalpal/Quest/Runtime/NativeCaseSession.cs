@@ -770,7 +770,7 @@ namespace Scalpal.Quest
                     + "\nOffice: " + OfficeHandoff.scorecard.total + "/100 · " + OfficeHandoff.scorecard.grade
                     + "\nLearner proposed: " + OfficeHandoff.assessment.procedure + "\n" + body;
             string registration = presentation && presentation.passthrough ? "\n" + (bodyRegistration ? bodyRegistration.Status : "Body registration missing") : "\nVirtual mannequin fit";
-            status.text = $"SCALPAL | {Phase} | {PresentationMode}\n{body}\n{Message}{registration}\nXR: {(workbench.IsReady ? "ready" : "paused")} | Shared: {realtime.Status}\nCoach: {(exercise.CoachMatches ? "synchronized" : coach.SyncFailureReason)} | Voice: {voice.Status}" + (HasHandoff ? "\nMode: chosen at the theatre handoff" : OfficeHandoff == null ? "\nRight stick: AR/VR in selection" : "\nRight stick: AR/VR in selection; AR needs green operator preflight");
+            status.text = $"Scalpal | {Phase} | {PresentationMode}\n{body}\n{Message}{registration}\nXR: {(workbench.IsReady ? "ready" : "paused")} | Shared: {realtime.Status}\nCoach: {(exercise.CoachMatches ? "synchronized" : coach.SyncFailureReason)} | Voice: {voice.Status}" + (HasHandoff ? "\nMode: chosen at the theatre handoff" : OfficeHandoff == null ? "\nRight stick: AR/VR in selection" : "\nRight stick: AR/VR in selection; AR needs green operator preflight");
         }
         IEnumerator Request(string method, string path, string body, Action<string> receive, Action<long> statusCode = null)
         {

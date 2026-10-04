@@ -13,25 +13,31 @@ using UnityEngine;
 
 namespace Scalpal.Shell.Editor
 {
-    // Creates the one style asset the dialogue box reads. Existing assets are never overwritten,
-    // so a brand pass can repoint fonts/materials without this builder reverting it.
+    // Creates the one style asset the dialogue box reads and points it at the Scalpal brand
+    // (Resources/ScalpalBrand): fonts, materials and palette are synced; tuned geometry and pacing are kept.
     public static class DialogueBoxBuild
     {
         public const string StylePath = "Assets/Scalpal/Shell/Resources/" + DialogueBoxStyle.ResourcePath + ".asset";
-        const string Office = "Assets/Scalpal/EncounterOffice";
         [MenuItem("Scalpal/Shell/Prepare Dialogue Box Style")]
         public static DialogueBoxStyle PrepareStyle()
         {
+            var brand = Scalpal.Brand.Editor.ScalpalBrandBuild.Prepare();
             var style = AssetDatabase.LoadAssetAtPath<DialogueBoxStyle>(StylePath);
-            if (style) return style;
-            Directory.CreateDirectory(Path.GetDirectoryName(StylePath)); AssetDatabase.Refresh();
-            style = ScriptableObject.CreateInstance<DialogueBoxStyle>();
-            style.bodyFont = Load<Font>(Office + "/Fonts/Inter-Regular.ttf");
-            style.nameFont = Load<Font>(Office + "/Fonts/Inter-SemiBold.ttf");
-            style.glass = Load<Material>(Office + "/Materials/office_glass_card.mat");
-            style.bodyText = Load<Material>(Office + "/Materials/office_world_text_Inter-Regular.mat");
-            style.nameText = Load<Material>(Office + "/Materials/office_world_text_Inter-SemiBold.mat");
-            AssetDatabase.CreateAsset(style, StylePath); AssetDatabase.SaveAssets();
+            if (!style)
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(StylePath)); AssetDatabase.Refresh();
+                style = ScriptableObject.CreateInstance<DialogueBoxStyle>();
+                AssetDatabase.CreateAsset(style, StylePath);
+            }
+            style.bodyFont = brand.body; style.nameFont = brand.label;
+            style.glass = brand.glass; style.bodyText = brand.bodyText; style.nameText = brand.labelText;
+            style.chip = brand.accent; style.button = brand.button;
+            // Brand palette: dark glass, white ink, spark-accent roles (geometry and pacing stay as tuned).
+            var palette = ScriptableObject.CreateInstance<DialogueBoxStyle>();
+            style.cardTint = palette.cardTint; style.ink = palette.ink; style.mutedInk = palette.mutedInk; style.chipInk = palette.chipInk;
+            style.you = palette.you; style.patient = palette.patient; style.parent = palette.parent; style.attending = palette.attending; style.coach = palette.coach; style.warning = palette.warning;
+            UnityEngine.Object.DestroyImmediate(palette);
+            EditorUtility.SetDirty(style); AssetDatabase.SaveAssets();
             return style;
         }
         static T Load<T>(string path) where T : UnityEngine.Object
@@ -55,8 +61,9 @@ namespace Scalpal.Shell.Editor
             checks = 0;
             EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             var style = DialogueBoxStyle.Load();
-            Check(style && style.bodyFont && style.nameFont && style.glass && style.bodyText && style.nameText, "Resources/DialogueBoxStyle binds fonts and materials from one place");
-            Check(style.glass.shader.name == "Scalpal/Encounter Office/Glass" && style.bodyText.shader.name == "Scalpal/Encounter Office/World Text", "box reuses the office glass and world-text shaders");
+            Check(style && style.bodyFont && style.nameFont && style.glass && style.bodyText && style.nameText && style.chip && style.button, "Resources/DialogueBoxStyle binds fonts and materials from one place");
+            var brand = Scalpal.Brand.ScalpalBrand.Active;
+            Check(style.bodyFont == brand.body && style.nameFont == brand.label && style.glass == brand.glass && style.bodyText == brand.bodyText && style.nameText == brand.labelText && style.button == brand.button, "box takes Geist Mono SDF type, dark glass and buttons from the Scalpal brand");
             var head = new GameObject("ValidationHead").AddComponent<Camera>();
             head.transform.SetPositionAndRotation(new Vector3(0, 1.6f, 0), Quaternion.identity); head.tag = "MainCamera";
             var box = DialogueBox.Create(style, head.transform);
@@ -97,11 +104,11 @@ namespace Scalpal.Shell.Editor
             foreach (var (speaker, name, label) in expected)
             {
                 box.Say(speaker, name, "Line from " + label);
-                var nameText = box.transform.Find("Card/Name").GetComponent<TextMesh>();
+                var nameText = box.transform.Find("Card/Name").GetComponent<TMPro.TextMeshPro>();
                 var color = box.RoleColor(speaker);
                 Check(box.Speaker == speaker && box.SpeakerLabel == label && nameText.text == label, "speaker name tag reads " + label);
                 Check(Mathf.Abs(nameText.color.r - color.r) < .01f && Mathf.Abs(nameText.color.g - color.g) < .01f, "name tag uses its role colour: " + label);
-                Check(box.transform.Find("Card/Initial").GetComponent<TextMesh>().text.Length == 1, "role chip carries a single initial: " + label);
+                Check(box.transform.Find("Card/Initial").GetComponent<TMPro.TextMeshPro>().text.Length == 1, "role chip carries a single initial: " + label);
             }
             Check(expected.Select(e => box.RoleColor(e.Item1)).Distinct().Count() == expected.Length, "each role has a distinct colour");
             Check(DialogueBox.Label(DialogueSpeaker.Patient, null) == "Patient" && DialogueBox.Label(DialogueSpeaker.Parent, " ") == "Parent", "missing patient or parent name falls back to the role label");
@@ -114,7 +121,7 @@ namespace Scalpal.Shell.Editor
             string sentence = "The pain moved down to the right side this morning and it hurts more when I walk, cough or go over bumps in the car on the way here, and I have not wanted to eat anything since.";
             box.Say(DialogueSpeaker.Patient, "Priya Ramaswamy", sentence);
             Check(box.PreviousText.StartsWith("Priya Ramaswamy · Patient:", StringComparison.Ordinal) && box.PreviousText.Contains("belly button"), "previous line moves above the new line with its speaker");
-            var previousMesh = box.transform.Find("Card/Previous").GetComponent<TextMesh>();
+            var previousMesh = box.transform.Find("Card/Previous").GetComponent<TMPro.TextMeshPro>();
             Tick(box, .1f);
             Check(box.Typing && box.VisibleText.Length > 0 && box.VisibleText.Length < 12, "text types out rather than appearing at once: '" + box.VisibleText + "'");
             Tick(box, 1.5f);
@@ -132,7 +139,7 @@ namespace Scalpal.Shell.Editor
             Tick(box, .5f);
             Check(!box.Visible, "a passive listening hint never summons a dismissed box");
             box.BeginTurn(DialogueSpeaker.You, ""); box.SetIndicator(DialogueIndicator.Listening, "", true); Tick(box, .4f);
-            var indicator = box.transform.Find("Card/Indicator").GetComponent<TextMesh>();
+            var indicator = box.transform.Find("Card/Indicator").GetComponent<TMPro.TextMeshPro>();
             Check(box.Visible && box.SpeakerLabel == "You" && indicator.text.StartsWith("listening", StringComparison.Ordinal), "held talk shows a You turn with a listening indicator");
             box.Say(DialogueSpeaker.You, "", "Where does it hurt?");
             box.SetIndicator(DialogueIndicator.Thinking, "Priya", true); Tick(box, .4f);

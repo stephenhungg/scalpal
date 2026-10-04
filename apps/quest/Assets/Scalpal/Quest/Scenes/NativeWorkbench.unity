@@ -1216,7 +1216,7 @@ TextMesh:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 829245956}
-  m_Text: 'SCALPAL | NATIVE TOOL TEST
+  m_Text: 'Scalpal | Native tool test
 
     Grip: pick up / release   Trigger: use
     tool

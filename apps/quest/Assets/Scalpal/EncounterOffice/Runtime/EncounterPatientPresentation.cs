@@ -9,7 +9,7 @@ namespace Scalpal.EncounterOffice
     public sealed class EncounterPatientPresentation : MonoBehaviour
     {
         public GameObject female, male;
-        public TextMesh stateLabel;
+        public TMPro.TextMeshPro stateLabel;
         public QuestJarvisVoice voice;
         // Companion chair seat in the office art (measured from the DoctorOffice upholstery mesh), and the yaw that
         // turns a seated template toward the patient chair.

@@ -112,7 +112,7 @@ namespace Scalpal.Quest
                 float seconds = Mathf.Max(0.001f, Time.unscaledTime - sampleStart);
                 string state = $"xr={running} head={headTracked} floor={floor} focus={focused && !paused} aligned={aligned} left={Hand(0)} right={Hand(1)} effects={effects} updateHz={frames / seconds:F1}";
                 Debug.Log("SCALPAL_NATIVE_STATUS " + state);
-                if (status && !externalSessionControls) status.text = "SCALPAL | NATIVE TOOL TEST\nGrip: pick up / release   Trigger: use tool\nA: reset tools and practice patch\n" + (valid ? "Tracking ready" : "Paused: waiting for valid XR tracking") + "   Effects: " + effects;
+                if (status && !externalSessionControls) status.text = "Scalpal | Native tool test\nGrip: pick up / release   Trigger: use tool\nA: reset tools and practice patch\n" + (valid ? "Tracking ready" : "Paused: waiting for valid XR tracking") + "   Effects: " + effects;
                 frames = 0; sampleStart = Time.unscaledTime; nextStatus = Time.unscaledTime + 2;
             }
         }

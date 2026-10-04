@@ -1,29 +1,32 @@
 using System.Collections.Generic;
+using Scalpal.Brand;
 using UnityEngine;
 using UnityEngine.XR;
 
 namespace Scalpal.EncounterOffice
 {
-    // Uses the native workbench's proven floor/head/controller pose contract and existing Android OpenXR settings.
+    // Uses the native workbench's floor/head pose contract and existing Android OpenXR settings.
+    // UI rays come from each controller's OpenXR aim pose (ScalpalAim), not the grip pose.
     [DefaultExecutionOrder(-200)]
     public sealed class EncounterOfficeRig : MonoBehaviour
     {
         public Transform origin;
         public Camera head;
         public Transform left, right;
-        public LineRenderer leftRay, rightRay;
         public NativeEncounterSession session;
-        public TextMesh talkHint;
+        public TMPro.TextMeshPro talkHint;
         public Vector3 initialHeadFloorPosition = new Vector3(0, 0, 1.75f);
         public bool Ready { get; private set; }
         readonly List<XRDisplaySubsystem> displays = new List<XRDisplaySubsystem>();
         readonly List<XRInputSubsystem> inputs = new List<XRInputSubsystem>();
         bool aligned, tracked, focused = true, paused;
-        bool leftDown, rightDown, leftArmed, rightArmed;
+        readonly ScalpalPointerHand[] pointers = { new ScalpalPointerHand(0, "OfficePointerLeft"), new ScalpalPointerHand(1, "OfficePointerRight") };
+        public ScalpalPointerHand Pointer(int hand) => pointers[hand];
         bool leftGripArmed, rightGripArmed, previousGripHold, talkHintDismissed;
         XRNode talkHand;
         void OnEnable() => Application.onBeforeRender += RefreshPose;
         void OnDisable() { Application.onBeforeRender -= RefreshPose; Ready = false; ClearRays(); ClearTalk(); }
+        void OnDestroy() { foreach (var pointer in pointers) pointer.Destroy(); }
         void Update()
         {
             SubsystemManager.GetSubsystems(displays); SubsystemManager.GetSubsystems(inputs);
@@ -44,8 +47,7 @@ namespace Scalpal.EncounterOffice
                 aligned = true;
             }
             Ready = aligned && tracked && floor && displays.Exists(display => display.running) && focused && !paused;
-            Point(XRNode.LeftHand, left, leftRay, ref leftDown, ref leftArmed);
-            Point(XRNode.RightHand, right, rightRay, ref rightDown, ref rightArmed);
+            StepPointers();
             bool leftGrip = Grip(XRNode.LeftHand, ref leftGripArmed);
             bool rightGrip = Grip(XRNode.RightHand, ref rightGripArmed);
             ApplyTalkInput(leftGrip || rightGrip, leftGrip ? XRNode.LeftHand : XRNode.RightHand);
@@ -88,23 +90,13 @@ namespace Scalpal.EncounterOffice
             device.TryGetFeatureValue(CommonUsages.devicePosition, out position); device.TryGetFeatureValue(CommonUsages.deviceRotation, out rotation);
             target.SetLocalPositionAndRotation(position, rotation); return true;
         }
-        void Point(XRNode node, Transform hand, LineRenderer line, ref bool previous, ref bool armed)
+        /// <summary>Aim-pose rays from both hands; trigger (or pinch) presses office buttons. Simulated aim stands in for readiness in validation.</summary>
+        public void StepPointers()
         {
-            var device = InputDevices.GetDeviceAtXRNode(node);
-            bool handTracked = device.isValid && device.TryGetFeatureValue(CommonUsages.isTracked, out bool isTracked) && isTracked;
-            device.TryGetFeatureValue(CommonUsages.triggerButton, out bool pressed);
-            if (!Ready || !handTracked) { armed = false; previous = pressed; if (line) line.enabled = false; return; }
-            if (!pressed) armed = true;
-            var direction = hand.forward;
-            // Touch grip poses point their local forward axis along the controller ray.
-            bool hit = Physics.Raycast(hand.position, direction, out var target, 6);
-            if (line) { line.enabled = true; line.SetPosition(0, hand.position); line.SetPosition(1, hit ? target.point : hand.position + direction * 3); }
-            var button = hit ? target.collider.GetComponent<EncounterOfficeButton>() : null;
-            if (button) button.Highlight();
-            if (armed && pressed && !previous) button?.Press();
-            previous = pressed;
+            bool ready = (Ready || ScalpalAim.Simulated) && origin;
+            foreach (var pointer in pointers) pointer.Step(origin, ready, origin, collider => collider.GetComponent<EncounterOfficeButton>());
         }
-        void ClearRays() { if (leftRay) leftRay.enabled = false; if (rightRay) rightRay.enabled = false; leftArmed = rightArmed = false; }
+        void ClearRays() { foreach (var pointer in pointers) pointer.Clear(); }
         bool Grip(XRNode node, ref bool armed)
         {
             var device = InputDevices.GetDeviceAtXRNode(node);

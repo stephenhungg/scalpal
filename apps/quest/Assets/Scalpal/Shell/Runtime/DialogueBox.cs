@@ -1,5 +1,7 @@
 using System.Collections.Generic;
 using System.Text;
+using Scalpal.Brand;
+using TMPro;
 using UnityEngine;
 using UnityEngine.XR;
 
@@ -41,7 +43,7 @@ namespace Scalpal.Shell
         public float TargetPitch { get; private set; }
 
         GameObject content;
-        TextMesh body, previous, nameText, initial, indicatorText;
+        TextMeshPro body, previous, nameText, initial, indicatorText;
         Renderer card, border, chip;
         MaterialPropertyBlock block;
         readonly List<string> lines = new List<string>();
@@ -54,14 +56,15 @@ namespace Scalpal.Shell
         Vector3 anchor, anchorVelocity;
         bool following, moving, snap = true, summoned, warning, built;
         int shownCharacters = -1, indicatorPhase = -1;
-        float metersPerPixel, bodyLinePitch, textWidth;
+        float metersPerPixel = 1, bodyLinePitch, textWidth, bodyEm;
         string indicatorName = "";
         Color roleColor;
-        const int FontSize = 64, MaxCharacters = 600;
+        const int MaxCharacters = 600;
         static readonly string[] ListeningFrames = { "listening", "listening.", "listening..", "listening..." };
         static readonly string[] ThinkingFrames = { "thinking", "thinking.", "thinking..", "thinking..." };
         static Mesh blossom;
         static readonly int ColorId = Shader.PropertyToID("_Color");
+        static readonly int RimId = Shader.PropertyToID("_RimColor"), RimBId = Shader.PropertyToID("_RimColorB");
 
         public static DialogueBox Create(DialogueBoxStyle style, Transform viewer)
         {
@@ -96,11 +99,10 @@ namespace Scalpal.Shell
             }
         }
 
-        void OnEnable() { Active = this; Font.textureRebuilt += RefreshAtlas; }
+        void OnEnable() { Active = this; }
         void OnDisable()
         {
             if (Active == this) Active = null;
-            Font.textureRebuilt -= RefreshAtlas;
             foreach (var system in subscribed) system.trackingOriginUpdated -= OriginUpdated;
             subscribed.Clear();
         }
@@ -116,10 +118,10 @@ namespace Scalpal.Shell
             textWidth = width - 2 * pad;
             body = Text("Body", style.bodyFont, style.bodyText, TextAnchor.UpperLeft);
             BodyGlyphHeight = Calibrate(body, style.bodyLineHeight);
+            bodyEm = body.fontSize * .1f;
             body.text = "Hg\nHg"; bodyLinePitch = Measure(body).y - BodyGlyphHeight;
-            body.text = "MMMMMMMMMM";
-            float advance = Advance(style.bodyFont, body.text);
-            metersPerPixel = advance > 0 ? Measure(body).x / advance : .0005f;
+            // Widths are measured in metres straight from the static SDF font's advances.
+            metersPerPixel = 1;
             body.text = "";
             previous = Text("Previous", style.bodyFont, style.bodyText, TextAnchor.UpperLeft);
             float previousHeight = Calibrate(previous, style.bodyLineHeight * .82f);
@@ -143,7 +145,7 @@ namespace Scalpal.Shell
             chipObject.transform.localPosition = new Vector3(left + chipSize / 2, nameY, -.004f);
             chipObject.transform.localScale = Vector3.one * chipSize;
             chipObject.GetComponent<MeshFilter>().sharedMesh = Blossom();
-            chip = chipObject.GetComponent<MeshRenderer>(); chip.sharedMaterial = style.glass; chip.sortingOrder = 2;
+            chip = chipObject.GetComponent<MeshRenderer>(); chip.sharedMaterial = style.chip ? style.chip : style.glass; chip.sortingOrder = 2;
             Plain(chip);
             initial.transform.localPosition = new Vector3(left + chipSize / 2, nameY, -.008f);
             nameText.transform.localPosition = new Vector3(left + chipSize + .014f, nameY, -.008f);
@@ -153,42 +155,40 @@ namespace Scalpal.Shell
             content.SetActive(false); alpha = 0;
         }
 
-        TextMesh Text(string name, Font font, Material material, TextAnchor anchor)
+        TextMeshPro Text(string name, TMP_FontAsset font, Material material, TextAnchor anchor)
         {
-            var text = new GameObject(name).AddComponent<TextMesh>();
+            var text = new GameObject(name).AddComponent<TextMeshPro>();
             text.transform.SetParent(content.transform, false);
-            text.font = font; text.fontSize = FontSize; text.anchor = anchor; text.richText = false;
-            text.alignment = anchor == TextAnchor.MiddleRight ? TextAlignment.Right : anchor == TextAnchor.MiddleCenter ? TextAlignment.Center : TextAlignment.Left;
+            text.font = font; text.fontSharedMaterial = material; text.richText = false;
+            text.textWrappingMode = TextWrappingModes.NoWrap; text.overflowMode = TextOverflowModes.Overflow;
+            ScalpalBrand.Anchor(text, anchor);
+            text.rectTransform.sizeDelta = new Vector2(textWidth, .1f);
             text.color = style.ink;
-            var renderer = text.GetComponent<MeshRenderer>(); renderer.sharedMaterial = material; renderer.sortingOrder = 3;
-            if (material && font) material.mainTexture = font.material.mainTexture;
+            var renderer = text.GetComponent<MeshRenderer>(); renderer.sortingOrder = 3; Plain(renderer);
             return text;
         }
 
-        // Fix the physical glyph height (ascender to descender) instead of a font-size guess.
-        static float Calibrate(TextMesh text, float height)
+        // Fix the line extent (ascender to descender) from the font's metrics instead of a font-size guess.
+        static float Calibrate(TextMeshPro text, float height)
         {
-            text.text = "Hg"; text.characterSize = .01f;
-            float measured = Measure(text).y;
-            if (measured > .00001f) text.characterSize *= height / measured;
-            float result = Measure(text).y; text.text = "";
-            return result;
+            float em = height / ScalpalBrandLayout.ExtentPerEm(text.font) / Mathf.Max(1e-6f, Mathf.Abs(text.transform.lossyScale.y));
+            text.fontSize = em * 10;
+            return height;
         }
 
-        static Vector2 Measure(TextMesh text)
+        static Vector2 Measure(TextMeshPro text)
         {
-            text.font.RequestCharactersInTexture(text.text, text.fontSize, text.fontStyle);
-            var size = text.GetComponent<MeshRenderer>().localBounds.size;
+            var size = text.GetPreferredValues(Mathf.Infinity, Mathf.Infinity);
             var scale = text.transform.lossyScale;
             return new Vector2(Mathf.Abs(size.x * scale.x), Mathf.Abs(size.y * scale.y));
         }
 
-        static float Advance(Font font, string value)
+        // Advance of one character in metres at an em size, from the static SDF font asset (with fallback).
+        static float Advance(TMP_FontAsset font, char c, float em)
         {
-            font.RequestCharactersInTexture(value, FontSize);
-            float sum = 0;
-            foreach (char c in value) sum += font.GetCharacterInfo(c, out var info, FontSize) ? info.advance : FontSize * .5f;
-            return sum;
+            if (font.characterLookupTable.TryGetValue(c, out var character)) return character.glyph.metrics.horizontalAdvance / font.faceInfo.pointSize * font.faceInfo.scale * character.scale * em;
+            if (font.fallbackFontAssetTable != null) foreach (var fallback in font.fallbackFontAssetTable) if (fallback && fallback.characterLookupTable.ContainsKey(c)) return Advance(fallback, c, em);
+            return em * .6f;
         }
 
         Renderer Surface(string name, Vector2 size, Material material, Vector3 position, int order)
@@ -304,7 +304,6 @@ namespace Scalpal.Shell
         void Wrap(string text)
         {
             lines.Clear(); lineEnds.Clear();
-            var font = style.bodyFont; font.RequestCharactersInTexture(text, FontSize);
             float space = Width(' '), maxPixels = textWidth / Mathf.Max(metersPerPixel, 1e-7f);
             int consumed = 0;
             foreach (var paragraph in text.Split('\n'))
@@ -332,12 +331,11 @@ namespace Scalpal.Shell
         }
         int revealTotal;
 
-        float Width(char c) => style.bodyFont.GetCharacterInfo(c, out var info, FontSize) ? info.advance : FontSize * .5f;
+        float Width(char c) => Advance(style.bodyFont, c, bodyEm);
 
-        string Ellipsize(string value, float meters, TextMesh target)
+        string Ellipsize(string value, float meters, TextMeshPro target)
         {
-            style.bodyFont.RequestCharactersInTexture(value, FontSize);
-            float scale = target.characterSize / Mathf.Max(body.characterSize, 1e-6f);
+            float scale = target.fontSize / Mathf.Max(body.fontSize, 1e-6f);
             float limit = meters / Mathf.Max(metersPerPixel * scale, 1e-7f), sum = 0, ellipsis = Width('…');
             for (int i = 0; i < value.Length; i++)
             {
@@ -411,9 +409,13 @@ namespace Scalpal.Shell
         {
             if (!content) return;
             float a = alpha;
-            block.SetColor(ColorId, new Color(style.cardTint.r, style.cardTint.g, style.cardTint.b, style.cardTint.a * a)); card.SetPropertyBlock(block);
-            block.SetColor(ColorId, new Color(roleColor.r, roleColor.g, roleColor.b, .38f * a)); border.SetPropertyBlock(block);
-            block.SetColor(ColorId, new Color(roleColor.r, roleColor.g, roleColor.b, .96f * a)); chip.SetPropertyBlock(block);
+            // Brand glass: dark card whose hairline takes the speaker's role colour; the outer rim plate stays clear.
+            var rim = new Color(roleColor.r, roleColor.g, roleColor.b, .85f * a);
+            block.Clear();
+            block.SetColor(ColorId, new Color(style.cardTint.r, style.cardTint.g, style.cardTint.b, style.cardTint.a * a));
+            block.SetColor(RimId, rim); block.SetColor(RimBId, rim); card.SetPropertyBlock(block);
+            block.Clear(); block.SetColor(ColorId, Color.clear); block.SetColor(RimId, Color.clear); block.SetColor(RimBId, Color.clear); border.SetPropertyBlock(block);
+            block.Clear(); block.SetColor(ColorId, new Color(roleColor.r, roleColor.g, roleColor.b, .96f * a)); chip.SetPropertyBlock(block);
             var ink = warning ? style.warning : style.ink;
             body.color = new Color(ink.r, ink.g, ink.b, a);
             nameText.color = new Color(roleColor.r, roleColor.g, roleColor.b, a);
@@ -502,12 +504,5 @@ namespace Scalpal.Shell
         }
 
         void OriginUpdated(XRInputSubsystem system) => Recenter();
-
-        void RefreshAtlas(Font font)
-        {
-            if (!style) return;
-            if (font == style.bodyFont && style.bodyText) style.bodyText.mainTexture = font.material.mainTexture;
-            if (font == style.nameFont && style.nameText) style.nameText.mainTexture = font.material.mainTexture;
-        }
     }
 }

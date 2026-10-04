@@ -188,7 +188,7 @@ namespace Scalpal.Handoff
             loading = true; SetPhase("transition");
             if (office) office.StopVoice();
             card.Hide();
-            if (!ShellView.Font) ShellView.Configure(card.font, card.glass, card.buttonMaterial, card.textMaterial, card.buttonMaterial);
+            if (!ShellView.Configured) ShellView.Configure(Scalpal.Brand.ScalpalBrand.Active);
             // Use the shell's single transition owner so its pause/back controls cannot race OR loading.
             yield return ShellTransition.Ensure().Load("NativeSession", "Pre-op · " + ticket.scorecard.patientName + "\n" + ticket.procedureTitle, revealSeconds: ticket.presentationMode == "mixed_reality" ? 1f : .5f);
             if (!ReferenceEquals(ticket, Ticket)) { loading = false; yield break; }

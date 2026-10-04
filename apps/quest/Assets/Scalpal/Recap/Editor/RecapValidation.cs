@@ -66,7 +66,30 @@ namespace Scalpal.Recap.Editor
             Check(c.panel.errors.Length==3&&c.panel.exploreButton&&c.panel.retryButton,"error markers and next actions bound");
             var rig=UnityEngine.Object.FindFirstObjectByType<RecapInput>();Check(rig&&rig.origin&&rig.head&&rig.left&&rig.right,"headset rig bound");
             Check(!c.replay.robotPlayer.playOnAwake && !c.replay.sourcePlayer.playOnAwake,"videos require explicit playback");
+            ValidateBrandAndPointer(c,rig);
             Debug.Log("SCALPAL_RECAP_VERIFY_OK checks="+checks+" headset=false provider=false");
+        }
+        // Brand SDF type at readable sizes for the authored scene, and the aim-pose ray pressing Continue.
+        static void ValidateBrandAndPointer(RecapController c,RecapInput rig)
+        {
+            var brand=Scalpal.Brand.ScalpalBrand.Active;
+            Check(!UnityEngine.Object.FindObjectsByType<TextMesh>(FindObjectsInactive.Include,FindObjectsSortMode.None).Any(),"recap renders no legacy TextMesh");
+            Check(c.panel.title.font==brand.display&&c.panel.continueButton.label.font==brand.label&&c.panel.status.font==brand.body,"recap titles are Instrument Serif; copy and buttons are Geist Mono");
+            var measured=Scalpal.Brand.ScalpalBrandLayout.Measure(c.panel.transform,RecapBuild.Viewer);
+            Debug.Log("SCALPAL_RECAP_TEXT_MM min="+measured.Min(item=>item.mmAt1m).ToString("F1")+" failing="+string.Join(" | ",measured.Where(item=>!item.Passes).Select(item=>item.fit.name+"="+item.mmAt1m.ToString("F1"))));
+            foreach(var item in measured)Check(item.Passes,"recap text meets its floor: "+item.fit.name+" '"+item.fit.Text.text.Split('\n')[0]+"' "+item.mmAt1m.ToString("F1"));
+            // The press itself would advance the recap flow; swap in an inert action so the probe proves collider + ray + focus only.
+            var button=c.panel.continueButton;string action=button.action;
+            try
+            {
+                button.action="validation-inert";
+                for(int hand=0;hand<2;hand++)
+                {
+                    var result=Scalpal.Brand.Editor.ScalpalPointerProbe.Press(hand,rig.origin,button.GetComponent<Collider>(),()=>rig.Pointer(hand),rig.StepPointers);
+                    Check(result.RayMatchesAim&&result.rayVisible&&result.hovered&&result.accentOnHover,"recap ray from the "+(hand==0?"left":"right")+" controller aim pose focuses Continue with the brand accent");
+                }
+            }
+            finally { button.action=action; }
         }
     }
 }

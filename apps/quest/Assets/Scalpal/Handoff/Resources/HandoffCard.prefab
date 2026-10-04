@@ -44,9 +44,5 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1f8583381c2848b88fb1e4885908a33f, type: 3}
   m_Name:
   m_EditorClassIdentifier:
-  font: {fileID: 12800000, guid: f4405e77f1de54a74bb7559a9d708e82, type: 3}
-  glass: {fileID: 2100000, guid: e26b5fdffb15649668879bab4181d291, type: 2}
-  buttonMaterial: {fileID: 2100000, guid: 0a587f17761b8483caa718f1e7df0131, type: 2}
-  textMaterial: {fileID: 2100000, guid: 6f88671ac7d0c4324900bf8d9e05b8a3, type: 2}
   viewer: {fileID: 0}
   distance: 1.2

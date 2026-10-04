@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using Scalpal.Brand;
+using TMPro;
 using UnityEngine;
 
 namespace Scalpal.EncounterOffice
@@ -8,7 +10,7 @@ namespace Scalpal.EncounterOffice
     {
         public NativeEncounterSession session;
         // The conversation itself is shown by the shared Shell DialogueBox; these panels hold controls and findings.
-        public TextMesh heading, status, chart, draft;
+        public TextMeshPro heading, status, chart, draft;
         public EncounterOfficeButton[] options;
         public EncounterOfficeButton microphoneMode, surgery, suggestions;
         // History questions are suggestions for a voice-first interview: collapsed until asked for.
@@ -120,7 +122,7 @@ namespace Scalpal.EncounterOffice
                 if (session.Score != null) draft.text = "Attending assessment · " + session.Score.total + "/" + session.Score.max + " " + session.Score.grade + "\nFull feedback is paged in Your findings.";
             }
             if(assessment)assessment.gameObject.SetActive(Page=="assessment"||session.State?.phase=="attending"||session.State?.phase=="scored");
-            foreach(var fit in GetComponentsInChildren<EncounterOfficeText>(true))fit.Fit();
+            foreach(var fit in GetComponentsInChildren<ScalpalTextFit>(true))fit.Fit();
             string[] items = Page == "patients" ? Array.ConvertAll(session.Patients, item => item?.patientId ?? "") : Page == "history" ? EncounterContract.History : Page == "exam" ? EncounterContract.Exams : Page == "tests" ? EncounterContract.Tests : Field == "procedure" ? plans : Field == "urgency" ? timing : diagnoses;
             if (Offset >= items.Length) Offset = 0;
             bool collapsed = Page == "history" && !SuggestionsOpen && suggestions;
@@ -132,7 +134,7 @@ namespace Scalpal.EncounterOffice
                 button.argument = items[index];
                 var entry = Page == "patients" ? session.Patients[index] : null;
                 button.enabledAction = Page != "patients" || EncounterOfficeRoute.CanEnter(entry);
-                if (button.label) { button.label.text = Page == "patients" ? (entry?.displayLabel ?? entry?.title ?? "Connect patient") + (button.enabledAction ? "" : " · unavailable") : EncounterContract.Label(items[index]);button.label.GetComponent<EncounterOfficeText>()?.Fit(); }
+                if (button.label) { button.label.text = Page == "patients" ? (entry?.displayLabel ?? entry?.title ?? "Connect patient") + (button.enabledAction ? "" : " · unavailable") : EncounterContract.Label(items[index]);button.label.GetComponent<ScalpalTextFit>()?.Fit(); }
             }
         }
         // Each line is labelled with whoever actually said it; the patient and Jarvis are never one blended voice.

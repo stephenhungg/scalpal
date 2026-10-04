@@ -154,7 +154,7 @@ namespace Scalpal.Shell.Editor
                         Check(!pause.IsPaused && Mathf.Approximately(Time.timeScale, 1) && !AudioListener.pause, "actual Resume control restores simulation time and audio output");
                         pause.Pause();
                         MenuButton(pause, "Back to explore").Press();
-                        Check(pause.IsPaused && !ShellTransition.Busy && SceneManager.GetActiveScene().name == "DiagnosisOffice" && Menu(pause).GetComponentsInChildren<TextMesh>().Any(text => text.text == "Leave this encounter?"), "first Back press opens confirmation and cannot leave encounter");
+                        Check(pause.IsPaused && !ShellTransition.Busy && SceneManager.GetActiveScene().name == "DiagnosisOffice" && Menu(pause).GetComponentsInChildren<TMPro.TextMeshPro>().Any(text => text.text == "Leave this encounter?"), "first Back press opens confirmation and cannot leave encounter");
                         MenuButton(pause, "Back to explore").Press();
                         Check(!pause.IsPaused && ShellTransition.Busy, "second confirmed Back press starts actual return transition");
                         Stage("return"); break;

@@ -12,21 +12,23 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 81c1055880c8f49e080be666df5d5bf4, type: 3}
   m_Name: DialogueBoxStyle
   m_EditorClassIdentifier: 
-  bodyFont: {fileID: 12800000, guid: f4405e77f1de54a74bb7559a9d708e82, type: 3}
-  nameFont: {fileID: 12800000, guid: bd50e62bf50034306946d14ba7aea5f7, type: 3}
-  glass: {fileID: 2100000, guid: e26b5fdffb15649668879bab4181d291, type: 2}
-  bodyText: {fileID: 2100000, guid: 6f88671ac7d0c4324900bf8d9e05b8a3, type: 2}
-  nameText: {fileID: 2100000, guid: 99b257a1f62794f09b687592295a2260, type: 2}
-  cardTint: {r: 0.04, g: 0.058, b: 0.064, a: 0.91}
-  ink: {r: 0.96, g: 0.97, b: 0.95, a: 1}
-  mutedInk: {r: 0.74, g: 0.79, b: 0.77, a: 1}
-  chipInk: {r: 0.07, g: 0.07, b: 0.09, a: 1}
-  you: {r: 0.62, g: 0.8, b: 0.97, a: 1}
-  patient: {r: 0.95, g: 0.66, b: 0.74, a: 1}
-  parent: {r: 0.97, g: 0.82, b: 0.52, a: 1}
-  attending: {r: 0.78, g: 0.69, b: 0.97, a: 1}
-  coach: {r: 0.52, g: 0.88, b: 0.78, a: 1}
-  warning: {r: 1, g: 0.64, b: 0.48, a: 1}
+  bodyFont: {fileID: 11400000, guid: 0c0b065925c1d4ce8bdbb883c7bdb9df, type: 2}
+  nameFont: {fileID: 11400000, guid: 4c894c53b4d184d458785ecf768def8f, type: 2}
+  glass: {fileID: 2100000, guid: ef92ea7e7c05d492faa507c9fee623e1, type: 2}
+  bodyText: {fileID: 2100000, guid: 84e7bd8ed30814652bd761da130cd801, type: 2}
+  nameText: {fileID: 2100000, guid: ee513a93b12204f2499c26bed76d387a, type: 2}
+  chip: {fileID: 2100000, guid: 154e15aba7ac340dca39b0f1089918e1, type: 2}
+  button: {fileID: 2100000, guid: f541a1f803e254913bab3e2a1ec94dc9, type: 2}
+  cardTint: {r: 0.016, g: 0.016, b: 0.019, a: 0.95}
+  ink: {r: 1, g: 1, b: 1, a: 1}
+  mutedInk: {r: 1, g: 1, b: 1, a: 0.7}
+  chipInk: {r: 0.04, g: 0.04, b: 0.045, a: 1}
+  you: {r: 1, g: 1, b: 1, a: 0.85}
+  patient: {r: 1, g: 0.85882354, b: 0.21960784, a: 1}
+  parent: {r: 1, g: 0.78, b: 0.45, a: 1}
+  attending: {r: 0.9490196, g: 0.3019608, b: 0.078431375, a: 1}
+  coach: {r: 1, g: 0.55, b: 0.26, a: 1}
+  warning: {r: 1, g: 0.42, b: 0.28, a: 1}
   bodyLineHeight: 0.026
   width: 0.8
   distance: 1

@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using Scalpal.Brand;
 using Scalpal.EncounterOffice;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -23,7 +24,6 @@ namespace Scalpal.Shell
         public event Action<bool,string> Finished;
         Material fadeMaterial;
         Transform fade, titleRoot;
-        readonly List<Material> titleMaterials = new List<Material>();
         ShellInput transitionInput;
         EncounterOfficeRig gatedRig;
         bool rigWasEnabled;
@@ -180,8 +180,6 @@ namespace Scalpal.Shell
         void ClearTitle()
         {
             if (titleRoot) { Destroy(titleRoot.gameObject); titleRoot=null; }
-            foreach(var material in titleMaterials) if(material) Destroy(material);
-            titleMaterials.Clear();
         }
         void CreateFade()
         {
@@ -198,8 +196,6 @@ namespace Scalpal.Shell
         void LateUpdate()
         {
             if (Busy) PositionFade();
-            // Dynamic Inter atlas recreation must update the overlay copies as well.
-            if (ShellView.Font) foreach(var material in titleMaterials) if(material) material.mainTexture=ShellView.Font.material.mainTexture;
         }
         void PositionFade()
         {
@@ -215,19 +211,15 @@ namespace Scalpal.Shell
             { if (!Paused) elapsed+=Time.unscaledDeltaTime; fadeMaterial.color=new Color(0,0,0,Mathf.Lerp(start,end,elapsed/seconds)); PositionFade(); yield return null; }
             fadeMaterial.color=new Color(0,0,0,end);
         }
-        void CreateTitle(string title)
+        public void CreateTitle(string title)
         {
-            var head=Camera.main; if (!head) return;
+            var head=Camera.main; if (!head || !ShellView.Configured) return;
             titleRoot=new GameObject("WorldLockedPhaseTitle").transform; titleRoot.SetParent(transform,false);
-            var forward=Vector3.ProjectOnPlane(head.transform.forward,Vector3.up).normalized;
-            titleRoot.SetPositionAndRotation(head.transform.position+forward*1.3f,Quaternion.LookRotation(forward));
-            var heading=ShellView.Text(titleRoot,title,new Vector3(0,.08f,0),.038f,1.2f,TextAnchor.MiddleCenter);
-            var stepper=ShellView.Text(titleRoot,"Explore  ›  Office  ›  OR  ›  Replay  ›  Recap",new Vector3(0,-.11f,0),.024f,1.2f,TextAnchor.MiddleCenter);
-            foreach (var text in new[]{heading,stepper})
-            {
-                var material=text.GetComponent<Renderer>().material; material.shader=Shader.Find("Scalpal/Shell/Overlay Text"); material.renderQueue=4200; titleMaterials.Add(material);
-                // A separate overlay text pass keeps the world-locked title readable above the black stereo fade.
-            }
+            if (!ScalpalPlacement.Place(titleRoot,head.transform,1.3f,0)) return;
+            // Brand overlay materials (ZTest Always) keep the world-locked title readable above the black stereo fade.
+            var heading=ShellView.Text(titleRoot,title,new Vector3(0,0,0),.038f,1.2f,TextAnchor.MiddleCenter,ScalpalTextRole.Title,true);
+            heading.name="PhaseTitle";
+
         }
     }
 }

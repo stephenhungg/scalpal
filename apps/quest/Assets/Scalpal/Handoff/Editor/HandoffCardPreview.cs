@@ -7,7 +7,7 @@ using UnityEngine;
 
 namespace Scalpal.Handoff.Editor
 {
-    /// <summary>Uses the actual runtime card and licensed office assets; screenshots are mono editor evidence only.</summary>
+    /// <summary>Uses the actual runtime card and brand assets; screenshots are mono editor evidence only.</summary>
     public static class HandoffCardPreview
     {
         const string Office = "Assets/Scalpal/EncounterOffice";
@@ -28,15 +28,8 @@ namespace Scalpal.Handoff.Editor
             finally { UnityEngine.Object.DestroyImmediate(go); }
         }
 
-        public static void Bind(HandoffCard card)
-        {
-            card.font = AssetDatabase.LoadAssetAtPath<Font>(Office + "/Fonts/Inter-Regular.ttf");
-            card.glass = AssetDatabase.LoadAssetAtPath<Material>(Office + "/Materials/office_glass_card.mat");
-            card.buttonMaterial = AssetDatabase.LoadAssetAtPath<Material>(Office + "/Materials/office_glass_button.mat");
-            card.textMaterial = AssetDatabase.LoadAssetAtPath<Material>(Office + "/Materials/office_world_text_Inter-Regular.mat");
-            if (!card.font || !card.glass || !card.buttonMaterial || !card.textMaterial)
-                throw new InvalidOperationException("Handoff preview requires the existing EncounterOffice Inter and glass assets.");
-        }
+        // Fonts and materials come from the shared brand resource (Resources/ScalpalBrand); nothing to bind.
+        public static void Bind(HandoffCard card) { if (!Scalpal.Brand.ScalpalBrand.Active) throw new InvalidOperationException("Brand resource missing."); }
 
         [MenuItem("Scalpal/Handoff/Capture Theatre and Time-Out")]
         public static void CapturePreviews()
@@ -85,8 +78,7 @@ namespace Scalpal.Handoff.Editor
             try
             {
                 camera.targetTexture = render;
-                // Two draws let the dynamic Inter atlas settle after all strings are requested.
-                camera.Render(); camera.Render();
+                camera.Render();
                 RenderTexture.active = render;
                 texture.ReadPixels(new Rect(0, 0, 1920, 1440), 0, 0); texture.Apply();
                 File.WriteAllBytes(path, texture.EncodeToPNG());

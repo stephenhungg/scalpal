@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Scalpal.Brand;
 using Scalpal.EncounterOffice;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -94,7 +95,7 @@ namespace Scalpal.Shell
             if (!IsPaused || !focused || suspended || !wasPresent || (!string.IsNullOrEmpty(transitionFailure) && !failureCanResume)) return;
             transitionFailure=null;
             IsPaused = false; confirming = false; Time.timeScale = savedScale; AudioListener.pause=savedAudioPause;
-            if (panel) { Destroy(panel.gameObject); panel = null; }
+            if (panel) { Discard(panel.gameObject); panel = null; }
             if (pauseInput) { pauseInput.Release(); pauseInput.enabled = false; }
             if (officeRig) officeRig.enabled = officeWasEnabled;
             if (hubInput) hubInput.Release();
@@ -106,13 +107,11 @@ namespace Scalpal.Shell
         }
         void BuildMenu()
         {
-            if (panel) Destroy(panel.gameObject);
-            var head = Camera.main; if (!head || !ShellView.Font || !ShellView.Glass) return;
+            if (panel) Discard(panel.gameObject);
+            var head = Camera.main; if (!head || !ShellView.Configured) return;
             menuTransition=ShellTransition.Busy;
             panel = ShellView.Panel(transform, "Paused", Vector3.zero, new Vector2(.82f,.67f));
-            ShellView.Text(panel, confirming ? "Leave this encounter?" : string.IsNullOrEmpty(transitionFailure) ? "Paused · press to continue" : "Unable to begin", new Vector3(-.36f,.27f,-.012f), .035f,.72f);
-            string phase = SceneManager.GetActiveScene().name == "DiagnosisOffice" ? "Explore  ›  OFFICE  ›  OR  ›  Replay  ›  Recap" : "EXPLORE  ›  Office  ›  OR  ›  Replay  ›  Recap";
-            ShellView.Text(panel, phase, new Vector3(-.36f,.19f,-.012f), .022f,.72f);
+            ShellView.Text(panel, confirming ? "Leave this encounter?" : string.IsNullOrEmpty(transitionFailure) ? "Paused" : "Unable to begin", new Vector3(-.36f,.285f,-.012f), .040f,.72f,TextAnchor.UpperLeft,ScalpalTextRole.Title);
             if (!string.IsNullOrEmpty(transitionFailure) && !confirming)
             {
                 ShellView.Text(panel,EncounterOfficePanel.Wrap(transitionFailure,42),new Vector3(-.36f,.10f,-.012f),.025f,.72f);
@@ -128,20 +127,21 @@ namespace Scalpal.Shell
             }
             else
             {
-                ShellView.Button(panel,"Resume",new Vector3(0,.05f,-.014f),new Vector2(.66f,.075f),Resume);
+                ShellView.Button(panel,"Resume",new Vector3(0,.05f,-.014f),new Vector2(.66f,.075f),Resume,true,true);
                 ShellView.Button(panel,ShellTransition.Busy?"Back after loading":"Back to explore",new Vector3(0,-.06f,-.014f),new Vector2(.66f,.075f),()=>{confirming=true;BuildMenu();},!ShellTransition.Busy);
                 ShellView.Button(panel,"Recenter",new Vector3(0,-.17f,-.014f),new Vector2(.66f,.075f),Recenter);
-                ShellView.Text(panel,"Voice stays stopped until you start it again.",new Vector3(-.36f,-.26f,-.012f),.022f,.72f);
             }
             pauseInput.head = head; pauseInput.origin = officeRig ? officeRig.origin : hubInput ? hubInput.origin : head.transform.parent;
             pauseInput.allowedRoot = panel; pauseInput.content = null; pauseInput.enabled = true; pauseInput.Release(); PlaceMenu(head);
         }
+        static void Discard(GameObject value) { if (Application.isPlaying) Destroy(value); else DestroyImmediate(value); }
         void PlaceMenu(Camera head)
         {
             if (!panel || !head) return;
             var forward = Vector3.ProjectOnPlane(head.transform.forward, Vector3.up).normalized;
             if (forward.sqrMagnitude < .5f) forward = Vector3.forward;
-            panel.SetPositionAndRotation(head.transform.position + forward * 1.0f + Vector3.down*.07f,Quaternion.LookRotation(forward));
+            // Level with the horizon: yaw-only facing, never the head's pitch or roll.
+            panel.SetPositionAndRotation(head.transform.position + forward * 1.0f + Vector3.down*.07f,ScalpalPlacement.Level(forward));
         }
         public void Recenter()
         {

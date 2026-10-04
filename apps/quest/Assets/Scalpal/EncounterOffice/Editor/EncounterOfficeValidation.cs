@@ -8,6 +8,8 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Threading;
+using Scalpal.Brand;
+using Scalpal.Brand.Editor;
 using Scalpal.Voice;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -82,6 +84,7 @@ namespace Scalpal.EncounterOffice.Editor
                 Check(buttons.Any(button=>button.command==command&&button.GetComponent<Collider>()&&button.panel==panel),"ray-accessible control exists: "+command);
             Check(buttons.Any(button=>button.command=="page"&&button.argument=="patients")&&!buttons.Any(button=>button.command=="patient"&&(button.argument==EncounterContract.FemalePatientId||button.argument==EncounterContract.MalePatientId)),"patient picker uses the service list instead of fixed demo identity buttons");
             Check(panel.surgery&&panel.surgery.command=="surgery"&&!panel.surgery.gameObject.activeSelf&&File.Exists(EncounterOfficeBuild.SurgeryScenePath),"OR action is bound, starts hidden before scoring, and the existing native surgery scene is present");
+            ValidatePointerTabs(rig,panel,buttons);
             var voiceButton=buttons.Single(button=>button.command=="voice");panel.Refresh();
             Check(session.VoiceEnabled&&voiceButton.label.text=="Voice on","voice auto-connect is enabled by default; with no live connection the button offers Voice on");
             Property(session.voice,"Status","connected");panel.Refresh();Check(voiceButton.label.text=="Voice off","a live voice offers an explicit Voice off");
@@ -96,7 +99,7 @@ namespace Scalpal.EncounterOffice.Editor
             panel.Act("draft_previous","");Check(panel.draft.text!=finalDraftPage&&panel.draft.text.Split('\n').Length<=4,"draft back exposes earlier long assessment text without truncating stored plan");
             for(int i=0;i<6;i++)panel.Act("draft_previous","");Check(panel.draft.text.Contains("stepa")&&session.Draft.procedure.Length==400,"learner can review beginning of full stored 400-character plan");
             // The conversation lives in the shared DialogueBox; the findings panel no longer pages a duplicate transcript.
-            Check(panel.suggestions.command=="suggestions"&&!buttons.Any(button=>button.command=="response_next"||button.command=="response_previous")&&!UnityEngine.Object.FindObjectsByType<TextMesh>(FindObjectsInactive.Include,FindObjectsSortMode.None).Any(text=>text.name=="Response"),"office panels carry no duplicate transcript region");
+            Check(panel.suggestions.command=="suggestions"&&!buttons.Any(button=>button.command=="response_next"||button.command=="response_previous")&&!UnityEngine.Object.FindObjectsByType<TMPro.TextMeshPro>(FindObjectsInactive.Include,FindObjectsSortMode.None).Any(text=>text.name=="Response"),"office panels carry no duplicate transcript region");
             panel.Act("page","history");
             Check(panel.suggestions.gameObject.activeSelf&&panel.options.All(option=>!option.gameObject.activeSelf),"history topics start collapsed behind Suggestions for a voice-first interview");
             panel.Act("suggestions","");
@@ -106,18 +109,45 @@ namespace Scalpal.EncounterOffice.Editor
             panel.Act("page","assessment");panel.Act("field","procedure");
             Property(session,"Score",new EncounterScore{total=23,max=100,grade="Needs practice",feedback=Enumerable.Range(0,26).Select(n=>"Feedback item "+n).ToArray()});panel.Refresh();
             Check(panel.chart.text.Split('\n').Length<=11&&panel.draft.text.Split('\n').Length<=3,"full score feedback is paged and assessment panel does not overflow controls");
-            var fittedTexts=UnityEngine.Object.FindObjectsByType<EncounterOfficeText>(FindObjectsInactive.Include,FindObjectsSortMode.None);
-            Check(fittedTexts.Length==UnityEngine.Object.FindObjectsByType<TextMesh>(FindObjectsInactive.Include,FindObjectsSortMode.None).Length,"every scene text has a measured bounds fitter");
+            var fittedTexts=UnityEngine.Object.FindObjectsByType<ScalpalTextFit>(FindObjectsInactive.Include,FindObjectsSortMode.None).Where(fit=>fit.GetComponentInParent<EncounterOfficePanel>(true)||fit.GetComponentInParent<EncounterOfficeRig>(true)||fit.GetComponentInParent<EncounterPatientPresentation>(true)).ToArray();
+            Check(!UnityEngine.Object.FindObjectsByType<TextMesh>(FindObjectsInactive.Include,FindObjectsSortMode.None).Any(),"office renders no legacy TextMesh (static SDF TextMeshPro only)");
+            var brand=ScalpalBrand.Active;
+            Check(fittedTexts.Length>40,"office panels, talk hint and patient label carry brand fitted text");
             foreach(var fit in fittedTexts)
             {
                 fit.Fit();var measured=fit.MeasuredSize();
-                Check(measured.x<=fit.maximumWidth+.002f&&measured.y<=fit.maximumHeight+.002f,"actual generated TextMesh bounds fit their world-space region: "+fit.name);
-                Check(fit.GetComponent<Renderer>().sharedMaterial.shader.name=="Scalpal/Encounter Office/World Text"&&fit.GetComponent<Renderer>().sharedMaterial.renderQueue==3020,"depth-tested text renders above glass and buttons");
+                Check(measured.x<=fit.maximumWidth+.002f&&measured.y<=fit.maximumHeight+.002f,"laid-out SDF text fits its world-space region: "+fit.name+" '"+fit.Text.text+"' measured="+measured.x.ToString("F4")+"x"+measured.y.ToString("F4")+" max="+fit.maximumWidth.ToString("F4")+"x"+fit.maximumHeight.ToString("F4")+" size="+fit.Text.fontSize);
+                var material=fit.Text.fontSharedMaterial;
+                Check(material==brand.TextMaterial(fit.role)&&fit.Text.font==brand.Font(fit.role)&&material.renderQueue==3020,"brand SDF text renders above glass and buttons: "+fit.name);
             }
+            Check(fittedTexts.Where(fit=>fit.role==ScalpalTextRole.Title).All(fit=>fit.Text.font==brand.display)&&fittedTexts.Where(fit=>fit.role!=ScalpalTextRole.Title).All(fit=>fit.Text.font!=brand.display),"panel titles are Instrument Serif; body and buttons are Geist Mono");
+            ValidateReadability(panel);
             ValidateDialoguePlacement(session,rig,panel);
             Check(before.SequenceEqual(EditorBuildSettings.scenes.Select(s=>s.path+s.enabled)),"validation preserves surgery build scene settings");
         }
         // The shared dialogue box in the real office layout: lower middle, below the patient's face, clear of the consoles.
+        // Authored panel strings in the built layout, measured from the seated clinician's eye.
+        static void ValidateReadability(EncounterOfficePanel panel)
+        {
+            var root=panel.transform;
+            var measured=ScalpalBrandLayout.Measure(root,EncounterOfficeBuild.Viewer,true).Where(item=>item.fit.gameObject.activeInHierarchy||item.fit.transform.IsChildOf(panel.keyboard)).ToList();
+            UnityEngine.Debug.Log("SCALPAL_ENCOUNTER_TEXT_MM min="+measured.Min(item=>item.mmAt1m).ToString("F1")+" failing="+string.Join(" | ",measured.Where(item=>!item.Passes).Select(item=>item.fit.name+"="+item.mmAt1m.ToString("F1"))));
+            foreach(var item in measured)Check(item.Passes,"office text meets its floor (labels 32, body 24 mm/m): "+item.fit.name+" '"+item.fit.Text.text.Split('\n')[0]+"' "+item.mmAt1m.ToString("F1"));
+            foreach(Transform console in root)Check(ScalpalPlacement.IsLevel(console),"office console is level with the horizon: "+console.name);
+        }
+        // Every office tab is a collider the corrected aim ray can press, from either controller.
+        static void ValidatePointerTabs(EncounterOfficeRig rig,EncounterOfficePanel panel,EncounterOfficeButton[] buttons)
+        {
+            int hand=0;
+            foreach(var page in new[]{"history","exam","tests","patients"})
+            {
+                var tab=buttons.Single(button=>button.command=="page"&&button.argument==page&&button.panel==panel);
+                var result=ScalpalPointerProbe.Press(hand,rig.origin,tab.GetComponent<Collider>(),()=>rig.Pointer(hand),rig.StepPointers);
+                Check(result.RayMatchesAim&&result.rayVisible&&(result.lineStart-result.expectedOrigin).magnitude<1e-4f,"office ray starts at the "+(hand==0?"left":"right")+" controller aim pose: "+page);
+                Check(result.hovered&&result.accentOnHover&&panel.Page==page,"aim ray + trigger presses the "+page+" tab from the "+(hand==0?"left":"right")+" controller");
+                hand=1-hand;
+            }
+        }
         static void ValidateDialoguePlacement(NativeEncounterSession session,EncounterOfficeRig rig,EncounterOfficePanel panel)
         {
             session.patient.Select(AdultFixtures()[0]);panel.Act("page","history");
