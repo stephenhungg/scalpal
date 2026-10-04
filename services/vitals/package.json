@@ -9,9 +9,9 @@
   },
   "scripts": {
     "start": "node --env-file-if-exists=.env src/server.mjs",
-    "demo": "PRESAGE_DEMO=1 node --env-file-if-exists=.env src/server.mjs",
+    "live": "PRESAGE_LIVE=1 node --env-file-if-exists=.env src/server.mjs",
     "cameras": "node src/cameras.mjs",
-    "test": "node --test test/"
+    "test": "node --test test/*.test.mjs"
   },
   "dependencies": {
     "@smartspectra/node-sdk": "^3.4.0"
