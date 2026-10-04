@@ -84,3 +84,8 @@ The `0.3.2-auto-body` permission-lifecycle build (code 7) built/installed over U
 ## Abdominal Tissue Build Checkpoint
 
 Focused source `1a01fab`, stacked on AR `9215799`, adds 81-part layered reference overview, procedural material appearance and three local grasp-deformation targets. See [tissue simulation](tissue-simulation.md). The repeatable Unity gate passed including actual source mesh preservation, renderer/contact agreement, reset/gates and layer visibility. ARM64 IL2CPP Android build `0.4.0-tissue` / code8 succeeded; APK63.47MiB installed. USB coach/realtime/pose routes were restored, local health checks returned200, and the app launch smoke stopped at Quest's controllers-required dialog. New layer visuals, native grasp/performance, complete case and actual body registration remain physical checkpoints. This install/test did not enable participant capture.
+
+
+## Office handoff integration
+
+The unified player now accepts an explicit `HandoffRun` ticket rather than selecting the demo constants when entered from the office. `NativeCaseSession` revalidates patient/encounter/procedure against the service, opens the shared Time-Out, includes `encounterId` in coach creation and preserves the office score across OR attempts. Presentation mode is selected before `NativePresentation.Apply`; pre-practice switches keep the attempt, while practice switches create another. The existing standalone scene retains its component defaults. See [office-to-OR implementation and evidence](office-to-or-handoff.md#implementation-checkpoint) for controls, failure handling, verification and pending physical/capture/companion boundaries. No tissue or physics implementation was changed by the handoff.

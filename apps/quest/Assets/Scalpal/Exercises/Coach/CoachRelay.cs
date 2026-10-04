@@ -152,6 +152,7 @@ namespace Scalpal.Exercises.Coach
         public bool Connected => !string.IsNullOrEmpty(SessionId);
         // True after initial tracking state was acknowledged, false after any scoring delivery failure.
         public bool IsSynchronized { get; private set; }
+        public bool DeliveryIdle => pending.Count == 0 && !sending;
         public string SyncFailureReason { get; private set; } = "";
         public event Action<CoachCommand> CommandRequested;
         public event Action<string> SessionAdopted;

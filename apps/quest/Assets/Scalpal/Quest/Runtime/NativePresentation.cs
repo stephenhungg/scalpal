@@ -33,6 +33,7 @@ namespace Scalpal.Quest
                 authoredFrame = new Pose(patientFrame.position, patientFrame.rotation); authoredFrameScale = patientFrame.localScale;
                 initialized = true;
             }
+            if (Scalpal.Handoff.HandoffRun.Current != null) passthrough = Scalpal.Handoff.HandoffRun.Current.presentationMode == "mixed_reality";
             Apply();
         }
 

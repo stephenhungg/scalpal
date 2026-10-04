@@ -3,8 +3,9 @@ using System.Collections;
 using System.IO;
 using System.Text;
 using Scalpal.Anatomy;
-using Scalpal.EncounterOffice;
 using Scalpal.Instruments;
+using Scalpal.Handoff;
+using Scalpal.EncounterOffice;
 using Scalpal.Exercises.Coach;
 using Scalpal.Exercises.Data;
 using Scalpal.Exercises.Engine;
@@ -20,7 +21,7 @@ namespace Scalpal.Quest
 {
     // One exercise across AR/VR. The case engine owns progression; adapters report real inputs.
     [DefaultExecutionOrder(75)]
-    public sealed class NativeCaseSession : MonoBehaviour
+    public sealed partial class NativeCaseSession : MonoBehaviour
     {
         public NativeWorkbench workbench;
         public AnatomyExerciseBinding exercise;
@@ -38,9 +39,17 @@ namespace Scalpal.Quest
         public string coachBaseUrl = "http://localhost:8787";
         public const string PatientId = "patient-demo-multi-source";
         public const string ProcedureId = "lap_appendectomy";
+        public bool HasHandoff => HandoffRun.Current != null;
+        public bool HandoffVerified { get; private set; }
+        public bool CaptionFallbackAllowed { get; private set; }
+        public bool CoachPrepared => !string.IsNullOrEmpty(coachSessionId);
+        public bool Busy => busy;
+        public bool AttemptNeedsRetry => attemptFailed;
+        public SurgicalCase ReviewedCase => candidate;
         public const string ContentVersion = "0.1.0";
-        public string SelectedPatientId { get; private set; } = PatientId;
-        public string SelectedProcedureId { get; private set; } = "";
+        string standalonePatientId = PatientId, standaloneProcedureId = "";
+        public string SelectedPatientId { get => HandoffRun.Current?.patientId ?? standalonePatientId; private set => standalonePatientId = value; }
+        public string SelectedProcedureId { get => HandoffRun.Current?.procedureId ?? standaloneProcedureId; private set => standaloneProcedureId = value; }
         public EncounterSurgeryHandoff OfficeHandoff { get; private set; }
         public string Phase { get; private set; } = "Startup";
         public bool Practicing => Phase == "Practicing" && !practicePaused;
@@ -62,12 +71,13 @@ namespace Scalpal.Quest
         int generation, completedSteps, mistakes;
         float nextUi, nextContext;
         string lastVoiceContextKey = "";
+        bool handoffVoiceAllowed;
 
         [Serializable] public class DevelopmentConfig
         {
             public string uri, database, joinCode, preferredSessionId, coachBaseUrl;
         }
-        [Serializable] class CreateRequest { public string patientId; public string mode = "virtual"; }
+        [Serializable] public class CreateRequest { public string patientId, mode, encounterId; }
         [Serializable] class Created
         {
             public string sessionId, context, systemPrompt, firstMessage;
@@ -77,7 +87,7 @@ namespace Scalpal.Quest
 
         void Awake()
         {
-            if (!EncounterOfficeRoute.TakeSurgery(out var handoff)) return;
+            if (HasHandoff || !EncounterOfficeRoute.TakeSurgery(out var handoff)) return;
             OfficeHandoff = handoff;
             SelectedPatientId = handoff.patientId;
             SelectedProcedureId = handoff.procedureId;
@@ -90,8 +100,9 @@ namespace Scalpal.Quest
             if (!workbench || !exercise || !anatomy || !preview || !coach || !realtime || !voice || !status)
             { Message = "Session bindings missing"; enabled = false; return; }
             workbench.externalSessionControls = true;
-            workbench.RetryRequested += Retry;
+            workbench.RetryRequested += WorkbenchRetry;
             ReadDevelopmentConfig();
+            if (HasHandoff) coachBaseUrl = HandoffRun.Current.serviceUrl;
             coach.ConfigureEndpoint(coachBaseUrl);
             voice.ConfigureEndpoint(coachBaseUrl);
             input = GetComponent<NativeProcedureInput>();
@@ -157,17 +168,33 @@ namespace Scalpal.Quest
         {
             busy = true; Phase = "Startup";
             string json = null;
-            yield return Request("GET", "/patients/" + Uri.EscapeDataString(SelectedPatientId ?? "") + "/case", null, value => json = value);
+            yield return Request("GET", "/patients/" + Uri.EscapeDataString(SelectedPatientId) + "/case", null, value => json = value);
             if (epoch != generation) yield break;
             busy = false;
             try { candidate = json == null ? null : JsonUtility.FromJson<SurgicalCase>(json); }
             catch (ArgumentException) { candidate = null; }
             if (candidate == null || candidate.patientId != SelectedPatientId || string.IsNullOrEmpty(candidate.procedureId) ||
-                (OfficeHandoff != null && candidate.procedureId != SelectedProcedureId) ||
-                candidate.procedure == null || candidate.procedure.id != candidate.procedureId || candidate.brief == null ||
-                candidate.brief.patientId != SelectedPatientId || !candidate.brief.synthetic ||
+                ((HasHandoff || OfficeHandoff != null) && candidate.procedureId != SelectedProcedureId) ||
+                candidate.procedure == null || candidate.brief == null || !candidate.brief.synthetic ||
                 (candidate.status != "ready" && candidate.status != "needs_review"))
             { candidate = null; Message = "Case service unavailable or case/assets mismatch. Left menu: retry connection"; yield break; }
+            if (HasHandoff)
+            {
+                busy = true;
+                string stateJson = null, scoreJson = null;
+                var path = "/encounters/" + Uri.EscapeDataString(HandoffRun.Current.encounterId);
+                yield return Request("GET", path, null, value => stateJson = value);
+                yield return Request("GET", path + "/score", null, value => scoreJson = value);
+                if (epoch != generation) yield break;
+                EncounterReply stateReply = null, scoreReply = null;
+                try { if (stateJson != null) stateReply = JsonUtility.FromJson<EncounterReply>(stateJson); if (scoreJson != null) scoreReply = JsonUtility.FromJson<EncounterReply>(scoreJson); } catch (ArgumentException) { }
+                busy = false;
+                if (!HandoffRun.Verify(HandoffRun.Current, stateReply?.state, scoreReply?.scorecard, candidate, out var refusal))
+                { candidate = null; Message = refusal; yield break; }
+                HandoffVerified = true; HandoffRun.Current.scorecard = scoreReply.scorecard; HandoffRun.Current.verifiedCase = candidate;
+                reviewed = true; Phase = "Confirmed"; preview.gameObject.SetActive(false);
+                Message = "Complete the theatre Time-Out before practice"; yield break;
+            }
             if (OfficeHandoff == null) SelectedProcedureId = candidate.procedureId;
             Phase = "Selecting"; Message = candidate.procedure.title + " preview ready. X: anatomy layers; B: review synthetic case";
         }
@@ -177,17 +204,19 @@ namespace Scalpal.Quest
             if (!workbench) return;
             if (sharedAttemptReady && realtime.Paired && !SharedMatches)
             {
+                generation++; ResetHandoffRecovery();
                 sharedAttemptReady = false; attemptFailed = true;
                 exercise.StopAttempt(); voice.Disconnect(); coachSessionId = ""; Phase = "Selecting";
                 preview.gameObject.SetActive(true);
-                Message = OfficeHandoff == null ? "Shared session/attempt changed; Left menu: start a new matching attempt"
-                    : "The office encounter belongs to a different shared attempt. Return to the office for a new case.";
+                if (HasHandoff) { HandoffRun.Current.practiceStarted = false; HandoffRun.Current.ResetTimeOut(); }
+                Message = "Shared session/attempt changed; Left menu: start a new matching attempt";
             }
-            bool fitValid = RegistrationReady && Practicing && SharedMatches;
+            UpdateHandoffCoachRecovery();
+            bool fitValid = RegistrationReady && Practicing && SharedMatches && !recoveringLocalCoach && (!localCoachReady || coach.IsSynchronized);
             patientFrame.gameObject.SetActive(fitValid);
             anatomy.SetRegistrationValid(fitValid);
-            coach.Tracking(fitValid);
-            if (realtime.Paired && !sharedAttemptReady && !attemptRequested && !attemptFailed) RequestAttempt();
+            coach.Tracking(RegistrationReady && Practicing && SharedMatches);
+            if ((!HasHandoff || HandoffVerified) && realtime.Paired && !sharedAttemptReady && !attemptRequested && !attemptFailed) RequestAttempt();
             if (workbench.IsReady)
             {
                 bool b = XRInput.Button(XRNode.RightHand, XRInputButton.Secondary);
@@ -247,13 +276,15 @@ namespace Scalpal.Quest
         {
             if (OfficeHandoff != null && (id != OfficeHandoff.attemptId || !OfficeSharedMatches(out _))) return;
             attemptRequested = false; sharedAttemptReady = true; attemptFailed = false;
-            boundSharedSession = realtime.SessionId; boundSharedAttempt = id; Publish();
+            boundSharedSession = realtime.SessionId; boundSharedAttempt = id;
+            if (HasHandoff) { HandoffRun.Current.sharedSessionId = boundSharedSession; HandoffRun.Current.attemptId = id; }
+            Publish();
         }
         void AttemptFailed(string reason) { attemptRequested = false; sharedAttemptReady = false; attemptFailed = true; Message = reason; }
 
         public bool ConfirmAction()
         {
-            if (busy || candidate == null) return false;
+            if (busy || candidate == null || HasHandoff && !HandoffRun.Current.timeOutConfirmed) return false;
             if (presentation && presentation.passthrough && bodyRegistration && !bodyRegistration.Accepted
                 && (Phase == "Confirmed" || Phase == "Practicing"))
             {
@@ -282,7 +313,7 @@ namespace Scalpal.Quest
 
         IEnumerator StartPractice(int epoch)
         {
-            busy = true; Message = "Creating a fresh matched coach session";
+            busy = true; CaptionFallbackAllowed = false; Message = "Creating a fresh matched coach session";
             string json = null;
             if (OfficeHandoff != null)
             {
@@ -310,30 +341,57 @@ namespace Scalpal.Quest
             }
             if (!SharedMatches || !RegistrationReady)
             { busy = false; Message = "Shared attempt or body fit changed while verifying; confirm and retry"; yield break; }
-            string createJson = OfficeHandoff == null
-                ? JsonUtility.ToJson(new CreateRequest { patientId = SelectedPatientId, mode = PresentationMode })
-                : EncounterSurgeryBinding.CoachCreateJson(OfficeHandoff, PresentationMode);
-            yield return Request("POST", "/coach/sessions", createJson, value => json = value);
+            long responseCode = 0;
+            yield return Request("POST", "/coach/sessions", JsonUtility.ToJson(CoachRequest()), value => json = value, code => responseCode = code);
             if (epoch != generation) yield break;
             if (!SharedMatches || !RegistrationReady) { busy = false; Message = "Shared attempt or body fit changed while loading; confirm and retry"; yield break; }
             Created created = null;
             try { if (json != null) created = JsonUtility.FromJson<Created>(json); } catch (ArgumentException) { }
-            if (created?.snapshot == null || created.snapshot.caseId != candidate.caseId ||
+            if (HasHandoff && json == null && (responseCode == 0 || responseCode >= 500))
+            { busy = false; CaptionFallbackAllowed = true; Message = "Coach offline. Captions and authored local scoring are available."; yield break; }
+            if (created?.snapshot == null || string.IsNullOrEmpty(created.sessionId) || created.snapshot.caseId != candidate.caseId ||
                 created.snapshot.patientId != SelectedPatientId || created.snapshot.procedureId != SelectedProcedureId || created.snapshot.mode != PresentationMode)
             { busy = false; Message = "Coach case differs from the reviewed case; restart selection"; yield break; }
             coachSessionId = created.sessionId;
-            voicePrompt = created.systemPrompt; voiceGreeting = created.firstMessage; voiceContext = created.context;
+            voicePrompt = created.systemPrompt; voiceGreeting = HasHandoff ? "Scrubbed in with you. Time-out: confirm patient, procedure and site." : created.firstMessage; voiceContext = created.context;
+            if (HasHandoff)
+            {
+                busy = false; Message = "Jarvis ready. Confirm the Time-Out rows.";
+                ConnectVoice(); yield break;
+            }
+            BeginReviewedPractice();
+        }
+
+        public CreateRequest CoachRequest() => new CreateRequest { patientId = SelectedPatientId, mode = PresentationMode, encounterId = HandoffRun.Current?.encounterId ?? OfficeHandoff?.encounterId };
+        public bool PrepareTimeOut()
+        {
+            if (!HasHandoff || !HandoffVerified || busy || !SharedMatches || !RegistrationReady || CoachPrepared) return false;
+            StartCoroutine(StartPractice(generation)); return true;
+        }
+        public bool FinishTimeOut(bool captionsOnly = false)
+        {
+            if (!HasHandoff || !HandoffVerified || busy || !SharedMatches || !RegistrationReady || !HandoffRun.Current.AllConfirmed || (!CoachPrepared && !(captionsOnly && CaptionFallbackAllowed))) return false;
+            HandoffRun.Current.timeOutConfirmed = true;
+            exercise.requireCoachSynchronization = CoachPrepared;
+            return BeginReviewedPractice();
+        }
+        bool BeginReviewedPractice()
+        {
             exercise.explicitCoachSessionId = coachSessionId;
             if (!exercise.SelectCase(new ScalpalBundle { cases = new[] { candidate } }, candidate.caseId, reviewed, out var reason))
-            { busy = false; Message = reason; yield break; }
+            { busy = false; Message = reason; return false; }
             preview.gameObject.SetActive(false);
+            localCaptionAttempt = HasHandoff && !exercise.requireCoachSynchronization;
             Phase = "Practicing"; practicePaused = false;
+            if (HasHandoff) HandoffRun.Current.practiceStarted = true;
             anatomy.SetRegistrationValid(RegistrationReady); coach.Tracking(RegistrationReady);
             busy = false; Message = "Practice starts after coach synchronization";
             realtime.AppendEvent("practice_started", exercise.Current?.id, null, "Generic teaching anatomy; " + PresentationMode, Time.realtimeSinceStartupAsDouble * 1000);
-            if (voiceRequested) ConnectVoice();
-            Publish();
+            if (voiceRequested && !voice.Connected) ConnectVoice();
+            Publish(); return true;
         }
+
+        void WorkbenchRetry() { if (!HasHandoff || Phase == "Recap") Retry(); }
 
         public void Retry()
         {
@@ -343,6 +401,8 @@ namespace Scalpal.Quest
                 ReturnToOffice();
                 return;
             }
+            ResetHandoffRecovery();
+            if (HasHandoff) { HandoffRun.Current.ResetTimeOut(); HandoffRun.Current.practiceStarted = false; }
             if (tissueSimulation) tissueSimulation.ResetTissues();
             if (volumeSimulation) volumeSimulation.ResetTissues();
             if (vesselSimulation) vesselSimulation.ResetTissues();
@@ -351,14 +411,15 @@ namespace Scalpal.Quest
             exercise.StopAttempt(); workbench.ResetWorkbench();
             if (bodyRegistration) bodyRegistration.ResetFit();
             patientFrame.gameObject.SetActive(false);
-            completedSteps = mistakes = 0; practicePaused = reviewed = false; highlighted = selected = "";
+            completedSteps = mistakes = 0; practicePaused = false; reviewed = HasHandoff; highlighted = selected = "";
             preview.gameObject.SetActive(true); preview.SetPreviewMode(true); preview.RestoreVisibility();
             preview.SetPreviewRotation(true); rotating = true;
+            if (HasHandoff) preview.gameObject.SetActive(false);
             preview.transform.parent.localScale = previewScale;
             anatomy.ClearHighlight(); preview.ClearHighlight();
             var previewLayers = preview.GetComponent<Scalpal.Anatomy.Tissue.AnatomyLayerView>();
             if (previewLayers) previewLayers.Show(Scalpal.Anatomy.Tissue.AnatomyLayerView.Layer.Organs);
-            Phase = candidate == null ? "Startup" : "Selecting";
+            Phase = candidate == null ? "Startup" : HasHandoff ? "Confirmed" : "Selecting";
             Message = "New attempt. B: review the synthetic case";
             RequestAttempt();
             if (candidate == null) StartCoroutine(LoadCase(generation));
@@ -367,6 +428,7 @@ namespace Scalpal.Quest
 
         void EventHandled(CaseEvent action, CaseResult result)
         {
+            RecordLocalCoachEvent(action, result.stepId);
             if (result.mistake != null)
             {
                 mistakes++; Message = result.mistake.feedback;
@@ -379,7 +441,7 @@ namespace Scalpal.Quest
                 result.stepId, string.IsNullOrEmpty(action.id) ? null : action.id, Message, Time.realtimeSinceStartupAsDouble * 1000);
             if (result.completed)
             {
-                Phase = "Recap"; anatomy.SetRegistrationValid(false); coach.Tracking(false);
+                Phase = "Recap"; voice.Disconnect(); anatomy.SetRegistrationValid(false); coach.Tracking(false);
                 Message = $"Complete: {completedSteps}/{candidate.procedure.steps.Length} steps, {mistakes} authored warnings. Left menu: new attempt";
                 realtime.ReportAttemptResult((uint)completedSteps, (uint)candidate.procedure.steps.Length,
                     (uint)mistakes, 0, candidate.procedure.title + " rehearsal completed; " + PresentationMode);
@@ -435,7 +497,16 @@ namespace Scalpal.Quest
             if (voice.Connected || voice.Status == "connecting") { voiceRequested = false; voice.Disconnect(); }
             else { voiceRequested = true; if (!string.IsNullOrEmpty(coachSessionId)) ConnectVoice(); else Message = "Voice enabled for the next confirmed practice session"; }
         }
-        void ConnectVoice() { lastVoiceContextKey = ""; voice.ConfigureConversation(voicePrompt, voiceGreeting, voiceContext); voice.Connect(coachSessionId); }
+        public void SetHandoffVoiceAllowed(bool value)
+        {
+            handoffVoiceAllowed = value;
+            if (!value && voice) voice.Disconnect();
+        }
+        public void ReconnectTimeOutVoice()
+        {
+            if (handoffVoiceAllowed && CoachPrepared && !voice.Connected && voice.Status != "connecting") ConnectVoice();
+        }
+        void ConnectVoice() { if (HasHandoff && !handoffVoiceAllowed) return; lastVoiceContextKey = ""; voice.ConfigureConversation(voicePrompt, voiceGreeting, voiceContext); voice.Connect(coachSessionId); }
         void VoiceTool(QuestJarvisVoice.ToolRequest request)
         {
             voice.ResolveClientTool(request, "This action is unavailable in the native exercise", true);
@@ -493,15 +564,27 @@ namespace Scalpal.Quest
         {
             if (OfficeHandoff != null && passthrough)
             { Message = "Practice from the diagnosis office uses full VR."; return false; }
-            if (!presentation || busy || (Phase != "Selecting" && Phase != "Recap")) return false;
+            if (!presentation || busy || (!HasHandoff && Phase != "Selecting" && Phase != "Recap")) return false;
             if (presentation.passthrough == passthrough) return true;
-            // A presentation change starts a new attempt; old commands/voice cannot cross modes.
+            if (HasHandoff && !HandoffRun.CanChoose(passthrough ? "mixed_reality" : "virtual", HandoffRun.Preflight)) return false;
+            bool newAttempt = !HasHandoff || HandoffRun.SwitchNeedsNewAttempt(HandoffRun.Current);
+            generation++; voice.Disconnect(); coachSessionId = "";
             presentation.passthrough = passthrough;
             if (bodyRegistration) bodyRegistration.StopTracking();
-            presentation.Apply();
-            exercise.presentationMode = PresentationMode;
-            Retry();
+            presentation.Apply(); exercise.presentationMode = PresentationMode;
+            if (HasHandoff) { HandoffRun.Current.presentationMode = PresentationMode; HandoffRun.Current.ResetTimeOut(); }
+            if (newAttempt) Retry();
+            else { Phase = "Confirmed"; Message = "Mode changed. Office score and attempt kept."; }
             return true;
+        }
+        public void PauseHandoffPractice()
+        {
+            practicePaused = true; anatomy.SetRegistrationValid(false); coach.Tracking(false); voice.Disconnect();
+        }
+        public bool ResumeHandoffPractice()
+        {
+            if (!RegistrationReady || !SharedMatches) return false;
+            practicePaused = false; if (CoachPrepared) ConnectVoice(); return true;
         }
 
         void UpdateUi()
@@ -537,20 +620,21 @@ namespace Scalpal.Quest
             string registration = presentation && presentation.passthrough ? "\n" + (bodyRegistration ? bodyRegistration.Status : "Body registration missing") : "\nVirtual mannequin fit";
             status.text = $"SCALPAL | {Phase} | {PresentationMode}\n{body}\n{Message}{registration}\nXR: {(workbench.IsReady ? "ready" : "paused")} | Shared: {realtime.Status}\nCoach: {(exercise.CoachMatches ? "synchronized" : coach.SyncFailureReason)} | Voice: {voice.Status}" + (OfficeHandoff == null ? "\nRight stick: AR/VR in selection" : "\nFull VR office practice");
         }
-        IEnumerator Request(string method, string path, string body, Action<string> receive)
+        IEnumerator Request(string method, string path, string body, Action<string> receive, Action<long> statusCode = null)
         {
             using (var request = new UnityWebRequest(coachBaseUrl.TrimEnd('/') + path, method))
             {
                 request.downloadHandler = new DownloadHandlerBuffer(); request.timeout = 8;
                 if (body != null) { request.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body)); request.SetRequestHeader("Content-Type", "application/json"); }
                 yield return request.SendWebRequest();
+                statusCode?.Invoke(request.responseCode);
                 if (request.result == UnityWebRequest.Result.Success) receive(request.downloadHandler.text);
             }
         }
         void OnDestroy()
         {
             generation++;
-            if (workbench) workbench.RetryRequested -= Retry;
+            if (workbench) workbench.RetryRequested -= WorkbenchRetry;
             if (exercise) exercise.EventHandled -= EventHandled;
             if (coach) coach.CommandRequested -= CoachCommand;
             if (realtime) { realtime.AttemptStarted -= AttemptStarted; realtime.AttemptFailed -= AttemptFailed; realtime.CommandRequested -= SharedCommand; }

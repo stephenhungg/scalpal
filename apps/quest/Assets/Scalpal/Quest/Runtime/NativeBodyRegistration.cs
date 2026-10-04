@@ -26,6 +26,16 @@ namespace Scalpal.Quest
         public bool CandidateValid => candidateValid && Time.realtimeSinceStartup - observationTime < 0.75f;
         public string Status { get; private set; } = "Participant agreed? Left stick: enable local body detection";
         public bool EnabledByOperator { get; private set; }
+        public int PersonCount { get; private set; }
+        public bool[] VisibleLandmarks { get; } = new bool[4];
+        public int StableObservations => CandidateValid ? Mathf.Min(stableFrames, 3) : 0;
+        public bool SurfaceMeasured { get; private set; }
+        public bool BeginPreflightedDetection()
+        {
+            if (!Scalpal.Handoff.HandoffRun.Preflight.ArAvailable || !PermissionsGranted()) return false;
+            if (!EnabledByOperator) EnableDetection();
+            return EnabledByOperator;
+        }
         bool previousClick, candidateValid, inFlight, awaitingPermissions;
         int epoch, stableFrames;
         Plane plane;
@@ -100,6 +110,8 @@ namespace Scalpal.Quest
 
         void EnableDetection()
         {
+            if (Scalpal.Handoff.HandoffRun.Current != null && (!Scalpal.Handoff.HandoffRun.Preflight.ArAvailable || !PermissionsGranted()))
+            { Status = "Camera/spatial permission denied; use the virtual OR"; return; }
             ResetFit();
             if (!cameraAccess || !surfaceAccess || !EnvironmentRaycastManager.IsSupported)
             { Status = "Automatic body depth unavailable on this runtime; alignment paused"; return; }
@@ -299,6 +311,14 @@ namespace Scalpal.Quest
 
         public void Process(Reply reply, string id, Vector2Int resolution, float captured, BodySurfaceSnapshot surface)
         {
+            PersonCount = reply?.personCount ?? 0;
+            SurfaceMeasured = false;
+            int[] displayIds = { 11, 12, 23, 24 };
+            for (int i = 0; i < 4; i++)
+            {
+                var point = reply?.landmarks == null ? null : Array.Find(reply.landmarks, p => p != null && p.index == displayIds[i]);
+                VisibleLandmarks[i] = reply != null && reply.valid && reply.personCount == 1 && point != null && point.visibility >= .65f && point.presence >= .65f;
+            }
             if (reply == null || reply.schema != "scalpal.body_pose.v1" || reply.frameId != id || !reply.valid || reply.personCount != 1
                 || reply.coordinateConvention != "normalized_image_top_left" || reply.imageWidth != resolution.x || reply.imageHeight != resolution.y
                 || reply.landmarks == null || reply.landmarks.Length != 33 || Time.realtimeSinceStartup - captured > 0.75f || captured > Time.realtimeSinceStartup
@@ -330,6 +350,7 @@ namespace Scalpal.Quest
                 if (!BodyRegistrationMath.ImageRay(surface.bottomLeft, surface.bottomRight, surface.topLeft, surface.lensForward, imagePoints[i], out var ray)
                     || !BodyRegistrationMath.Intersect(ray, plane, center, out points[i]))
                 { Invalidate("Body rays do not meet the measured torso surface"); return; }
+            SurfaceMeasured = true;
             if (!BodyRegistrationMath.TryFit(points, plane.normal, out var proposed)) { Invalidate("Body fit proportions/orientation uncertain"); return; }
             if (Accepted && !BodyRegistrationMath.Near(proposed, accepted)) Invalidate("Participant moved; automatically reacquiring fit");
             stableFrames = candidateValid && BodyRegistrationMath.Near(candidate, proposed) ? stableFrames + 1 : 1;
