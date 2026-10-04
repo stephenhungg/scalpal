@@ -29,7 +29,7 @@ globalThis.fetch = async () => { providerFetchAttempts++; throw new Error('Provi
 const app = createApp({ client: fixtureClient(), now: () => NOW, coachTickMs: 0, realtime: bridge });
 const routes: string[] = [];
 const coachCreates: { body: Record<string, unknown>; reply: Record<string, any> }[] = [];
-let encounterCreates = 0;
+let encounterCreates = 0, providerUnavailableCount = 0;
 app.get('/fixture/state', c => {
   const session = [...operator.conn.db.mySessions.iter()].find(s => s.sessionId === sessionId);
   const encounters = [...operator.conn.db.sessionEncounters.iter()].filter(e => e.sessionId === sessionId);
@@ -37,7 +37,7 @@ app.get('/fixture/state', c => {
   const coach = coachCreates[0];
   return c.json({ sessionId, initialAttemptId, initialAttemptCount, currentAttemptId: session?.currentAttemptId,
     attemptCount: session?.attemptCount, attemptRows: [...operator.conn.db.sessionAttempts.iter()].filter(a => a.sessionId === sessionId).length,
-    encounterRows: encounters.length, encounterCreates, providerFetchAttempts, encounterId: encounter?.encounterId ?? '',
+    encounterRows: encounters.length, encounterCreates, providerUnavailableCount, providerFetchAttempts, encounterId: encounter?.encounterId ?? '',
     encounterAttemptId: encounter?.attemptId ?? '', encounterPatientId: encounter?.patientId ?? '', encounterPhase: encounter?.phase ?? '',
     coachCreateCount: coachCreates.length, coachPatientId: coach?.body.patientId ?? '', coachEncounterId: coach?.body.encounterId ?? '',
     coachMode: coach?.body.mode ?? '', coachSessionId: coach?.reply.sessionId ?? '',
@@ -51,6 +51,10 @@ const { serve } = require('@hono/node-server');
 const server = serve({ hostname: '127.0.0.1', port: 0, fetch: async (request: Request) => {
   const path = new URL(request.url).pathname;
   if (!path.startsWith('/fixture/')) routes.push(`${request.method} ${path}`);
+  if (path === '/jarvis/connection') {
+    providerUnavailableCount++;
+    return Response.json({ error: 'provider_unavailable', message: 'Synthetic fixture: provider voice is unavailable' }, { status: 503 });
+  }
   const body = request.method === 'POST' && path === '/coach/sessions' ? await request.clone().json() : undefined;
   const reply = await app.fetch(request);
   if (request.method === 'POST' && path === '/encounters' && reply.status === 201) encounterCreates++;
