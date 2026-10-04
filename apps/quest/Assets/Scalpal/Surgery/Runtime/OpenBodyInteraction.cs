@@ -68,6 +68,8 @@ namespace Scalpal.Surgery
         Vector3 referenceStart = new Vector3(-.03f, 0, 0), referenceEnd = new Vector3(.03f, 0, 0), markedStart, markedEnd;
         public event Action<BodyRecord, InstrumentBehaviour> Submitted;
         public event Action<IReadOnlyList<Vector3>> MarkerChanged;
+        // The skin marker's stroke in progress (wound-local tip samples; empty when the stroke ends). Presentation only.
+        public event Action<InstrumentBehaviour, IReadOnlyList<Vector3>> MarkerDrawing;
         // State tracker (never scored): a tool tip first touching a tissue, and region injury/control outside the field.
         public event Action<InstrumentBehaviour, string> Contacted;
         public event Action<string, InstrumentBehaviour, bool> RegionInjured;
@@ -85,6 +87,9 @@ namespace Scalpal.Surgery
         public bool Ready => isActiveAndEnabled && exercise && exercise.CanScore && exercise.Body != null && torso && wound && gate != null && gate();
         public IReadOnlyList<SurgeryTissueTarget> Targets => targets;
         public IReadOnlyList<OrganMobilization> Mobility => mobility;
+        // The registered incision reference line the mark is measured against, in wound-local metres.
+        public Vector3 ReferenceStart => referenceStart;
+        public Vector3 ReferenceEnd => referenceEnd;
 
         // The open-wall volume supplies layer contact, grips, lift/split measurements and cut evidence.
         // Without one, wall layers keep authored contact planes but can never be tented or split.
@@ -302,7 +307,8 @@ namespace Scalpal.Surgery
                 {
                     // One committed action per stroke (per layer): FlushStroke runs when contact ends,
                     // so guardrails see the finished stroke once instead of every millimetre.
-                    if (verb == "mark" && (state.marker.Count == 0 || Vector3.Distance(state.marker[state.marker.Count - 1], local) > .001f)) state.marker.Add(local);
+                    if (verb == "mark" && (state.marker.Count == 0 || Vector3.Distance(state.marker[state.marker.Count - 1], local) > .001f))
+                    { state.marker.Add(local); MarkerDrawing?.Invoke(state.tool, state.marker); }
                 }
                 return;
             }
@@ -650,7 +656,9 @@ namespace Scalpal.Surgery
             if (state.mobile != null) { state.mobile.EndHold(); state.mobile = null; }
             ReleaseGrip(state);
             state.tissueId = ""; state.target = null; state.grasping = state.ownsHandle = state.committed = false;
-            state.stroke.Reset(); state.marker.Clear(); state.strokeSent = state.dwell = state.sinceSent = 0;
+            state.stroke.Reset();
+            if (state.marker.Count > 0) { state.marker.Clear(); MarkerDrawing?.Invoke(state.tool, state.marker); }
+            state.strokeSent = state.dwell = state.sinceSent = 0;
         }
         void DrainTentReleases()
         {

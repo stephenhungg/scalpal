@@ -31,6 +31,8 @@ namespace Scalpal.Surgery
         PatientIncisions incisions;
         SurgeryBlood blood;
         SurgeryTriggerHint triggerHint;
+        MarkingGuide guide;
+        readonly List<GameObject> hiddenPorts = new List<GameObject>();
         GameObject toolTable;
         OpenSurgeryPanel panel;
         BodyState body;
@@ -43,6 +45,7 @@ namespace Scalpal.Surgery
         public string Status { get; private set; } = "Waiting for an open-body case";
         public OpenBodyInteraction Interaction => interaction;
         public OpenWoundView Wound => wound;
+        public MarkingGuide Guide => guide;
         // Torso-frame proxy for the right ASIS when no registered landmark is bound; the wound sits a third of the way to the umbilicus origin.
         public static readonly Vector3 AuthoredRightAsis = new Vector3(-.13f,-.015f,-.14f);
         public bool Ready => session && session.Practicing && session.RegistrationReady && session.exercise && session.exercise.CanScore && !session.exercise.Completed && GetComponent<NativeProcedureInput>() && GetComponent<NativeProcedureInput>().InteractionReady;
@@ -62,7 +65,7 @@ namespace Scalpal.Surgery
         void Awake() { session = GetComponent<NativeCaseSession>(); }
         void Update()
         {
-            if (!session || !session.exercise || session.exercise.SelectedCase?.procedure?.openBody?.version != 1) return;
+            if (!session || !session.exercise || session.exercise.SelectedCase?.procedure?.openBody?.version != 1) { ShowPorts(); return; }
             if (session.exercise.Body != body) ConfigureAttempt();
             if (body == null || !interaction) return;
             ReportHands();
@@ -138,6 +141,9 @@ namespace Scalpal.Surgery
             interaction.TouchedWithoutTrigger += NeedsTrigger;
             triggerHint = GetComponent<SurgeryTriggerHint>() ?? gameObject.AddComponent<SurgeryTriggerHint>();
             if(rightAsis && umbilicus) interaction.SetLandmarks(rightAsis.position,umbilicus.position,woundFrame.right);
+            guide = GetComponent<MarkingGuide>() ?? gameObject.AddComponent<MarkingGuide>();
+            guide.Initialize(session,interaction,wound,triggerHint,rightAsis,umbilicus,()=>Ready);
+            HidePorts();
             // The old vessel demonstration cannot emit a second unrelated blood pool in this case.
             var legacyVessel = GetComponent<NativeVesselSimulation>(); if(legacyVessel) legacyVessel.enabled=false;
             panel=GetComponent<OpenSurgeryPanel>()??gameObject.AddComponent<OpenSurgeryPanel>();
@@ -244,7 +250,19 @@ namespace Scalpal.Surgery
                 part.GetComponent<Renderer>().sharedMaterial = material;
             }
         }
-        void Marked(IReadOnlyList<Vector3> points) => wound.SetMarker(points);
+        // The marking guide draws the recorded ink on the skin the learner sees (and the live stroke before it).
+        void Marked(IReadOnlyList<Vector3> points) => guide.SetInk(points);
+        // Laparoscopic port targets mean nothing in the open case and would sit on the belly button; restored for other cases.
+        void HidePorts()
+        {
+            foreach (var port in session.patientFrame.GetComponentsInChildren<NativePortMarker>(true))
+                if (port.gameObject.activeSelf) { port.gameObject.SetActive(false); hiddenPorts.Add(port.gameObject); }
+        }
+        void ShowPorts()
+        {
+            foreach (var port in hiddenPorts) if (port) port.SetActive(true);
+            hiddenPorts.Clear();
+        }
         // AR has no virtual body: the real volunteer gets no incisions or blood drawn on air.
         bool VirtualBody() => !session.presentation || !session.presentation.passthrough;
         // The outward-wound collision copy of the rendered mannequin (EnvironmentPreviewBuilder.PatientCollisionName).

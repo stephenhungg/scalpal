@@ -21,9 +21,12 @@ namespace Scalpal.Surgery
         GameObject surfaces, decisions;
         LineRenderer mark;
         Material inkMaterial;
-        bool built, registered = true, marked, showDecision;
+        bool built, registered = true, marked, showDecision, concealed;
         string[] decisionChoices = System.Array.Empty<string>();
         public Transform BasePoint { get; private set; }
+        // Intact skin: the closed teaching wall stays out of sight (no skin window, no layer coupon) until the
+        // marking presenter reveals it. Presentation only; contact and measurement are unaffected.
+        public bool Concealed { get => concealed; set { if (concealed == value) return; concealed = value; SetRegistrationValid(registered); } }
         public void Build()
         {
             if (built) return;
@@ -77,15 +80,15 @@ namespace Scalpal.Surgery
         static readonly int WoundWorldToLocal = Shader.PropertyToID("_ScalpalWoundWorldToLocal"), WoundWindow = Shader.PropertyToID("_ScalpalWoundWindow");
         public void SetRegistrationValid(bool valid)
         {
-            registered = valid; if (surfaces) surfaces.SetActive(valid);
+            registered = valid; if (surfaces) surfaces.SetActive(valid && !concealed);
             // The VR patient skin opens over this wound only while its wall is live (Scalpal/PatientSkin).
             Shader.SetGlobalMatrix(WoundWorldToLocal, transform.worldToLocalMatrix);
-            Shader.SetGlobalFloat(WoundWindow, valid ? 1 : 0);
+            Shader.SetGlobalFloat(WoundWindow, valid && !concealed ? 1 : 0);
         }
         void OnDisable() => Shader.SetGlobalFloat(WoundWindow, 0);
         public void Apply(BodyState body)
         {
-            Build(); surfaces.SetActive(registered && body != null); if (body == null) return;
+            Build(); surfaces.SetActive(registered && body != null && !concealed); if (body == null) return;
             for (int layer = 0; layer < 5; layer++)
             {
                 string id = layerIds[layer];

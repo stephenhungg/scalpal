@@ -34,6 +34,14 @@ namespace Scalpal.Surgery
         public void Show(InstrumentBehaviour tool, string verb, XRNode? hand, Transform head)
         {
             if (!tool || !tool.actionPoint) return;
+            Say(tool.actionPoint, Phrase(verb), hand, head, seconds);
+        }
+
+        // The same hint line for step guidance or a short reason, above any anchor (a tool tip or a guide).
+        // scale shrinks long lines; hand, when given, gets the same short tap.
+        public void Say(Transform anchor, string text, XRNode? hand, Transform head, float duration, float scale = 1)
+        {
+            if (!anchor || string.IsNullOrEmpty(text)) return;
             if (!label)
             {
                 var go = new GameObject("TriggerHint"); go.transform.SetParent(transform, false);
@@ -44,9 +52,10 @@ namespace Scalpal.Surgery
                 label.anchor = TextAnchor.LowerCenter; label.alignment = TextAlignment.Center;
                 label.color = new Color(1, .92f, .55f);
             }
-            label.text = Phrase(verb);
+            if (label.text != text) label.text = text;
+            label.characterSize = .006f * scale;
             label.gameObject.SetActive(true);
-            tip = tool.actionPoint; viewer = head; until = Time.unscaledTime + seconds;
+            tip = anchor; viewer = head; until = Time.unscaledTime + duration;
             Place();
             if (!hand.HasValue) return;
             var device = InputDevices.GetDeviceAtXRNode(hand.Value);
