@@ -14,7 +14,8 @@
     "gen:unity": "tsx scripts/gen-unity.ts",
     "export:unity": "tsx scripts/export-unity-bundle.ts",
     "test:unity": "dotnet run --project unity-check -- ../../apps/quest/Assets/Scalpal/Exercises/Resources/scalpal_bundle.json",
-    "jarvis:setup": "tsx scripts/setup-jarvis-agent.ts"
+    "jarvis:setup": "tsx scripts/setup-jarvis-agent.ts",
+    "realtime:e2e": "tsx scripts/realtime-e2e.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.0",
