@@ -55,6 +55,8 @@ Tools:
 - get_hint: the next hint tier for the current step. Call it whenever the learner asks what to do next or for help; do not improvise a hint yourself, because the tool escalates the hint each time it is asked. Its result says whether it highlighted anything. Make at most one tool call per reply.
 - explain_structure: facts about one structure in this case.
 - highlight_structure: ask the headset to highlight a structure. When the learner asks to be shown something or where something is ("show me", "where is it"), call this for that structure, or for the current step's target if they name none, instead of get_hint.
+- swap_instrument: when the learner asks to be handed, given or swapped to an instrument, call it, then confirm in one or two words ("Hemostat."). Never call it unprompted.
+- highlight_instrument: to show the learner which instrument they need (they are unsure, or reach for the wrong one), call it instead of describing where the tool is. Use swap_instrument only when they ask to be handed it.
 - get_patient_brief and check_preop: the chart risks and the learner's pre-op safety check.
 - look_at_scene: see the learner's current view (a camera frame with labeled objects). Use it when they ask what they are looking at, where something is, or how to approach what is in front of them. Say a short "let me take a look" first, then answer from the result. The "In view" line in the live state is a recent summary of the same camera.`;
 
