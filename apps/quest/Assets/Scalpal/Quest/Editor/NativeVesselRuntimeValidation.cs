@@ -26,12 +26,14 @@ namespace Scalpal.Quest.Editor
                 PauseAndRetry(fixture);
                 ContactControls(fixture);
                 Lifecycle(fixture);
+                IndicatorAndCaches(fixture);
             }
             using (var importedUnits = new Fixture(100))
             {
                 Assert(Near(importedUnits.UnitScale, .01), "100x mesh units are converted to source meters");
                 BladeGates(importedUnits);
                 ContactControls(importedUnits);
+                IndicatorAndCaches(importedUnits);
             }
             Debug.Log("SCALPAL_NATIVE_VESSEL_RUNTIME_VALIDATION_OK checks=" + checks + " synthetic native geometry/contact/lifecycle fixtures; no clinical/headset validation");
         }
@@ -86,7 +88,7 @@ namespace Scalpal.Quest.Editor
             Ledger(f.Vessel.Fluid);
             Vector3 scale = f.Pool.transform.localScale * f.UnitScale;
             double visualVolume = 4 * Math.PI / 3 * scale.x * .5 * scale.y * .5 * scale.z * .5;
-            Assert(Near(visualVolume * 1000000, f.Vessel.Fluid.PooledMilliliters), "local ellipsoid volume matches ledger, without asserting a fluid surface solver");
+            Assert(Near(visualVolume * 1000000, f.Vessel.Fluid.PooledMilliliters), "small uncapped indicator matches ledger before its explicitly bounded display cap");
         }
 
         static void PauseAndRetry(Fixture f)
@@ -178,6 +180,50 @@ namespace Scalpal.Quest.Editor
             Assert(f.Vessel.Fluid.PooledMilliliters < pooled && f.Vessel.Fluid.RemovedMilliliters > 0, "valid suction near rendered pool removes bounded volume");
             Assert(f.Vessel.Fluid.CumulativeLossMilliliters == lost, "suction does not roll back cumulative blood loss");
             Ledger(f.Vessel.Fluid);
+        }
+
+        static void IndicatorAndCaches(Fixture f)
+        {
+            var template = Resources.Load<Material>("TissueOpaque");
+            Assert(template && AssetDatabase.Contains(template) && template.shader && template.shader.name == "Standard" && template.GetFloat("_Mode") == 0,
+                "committed resource explicitly retains opaque Standard shader variant");
+            Assert(f.Pool.GetComponent<Renderer>().sharedMaterial.shader == template.shader &&
+                f.Volume.Wall.GetComponent<Renderer>().sharedMaterials.All(m => m.shader == template.shader),
+                "blood and every wall layer instantiate the authored shader reference");
+            f.Reset(); f.Injure();
+            for (int i = 0; i < 7000; i++) f.Vessel.Fluid.Step(.1);
+            f.Knife.SetHeld(false); f.Vessel.Simulate(Step);
+            Assert(Near(f.Vessel.Fluid.PooledMilliliters, f.Vessel.Fluid.InitialSourceMilliliters),
+                "indicator-cap fixture actually exhausts the 500 mL reservoir");
+            Vector3 scale = f.Pool.transform.localScale * f.UnitScale;
+            Assert(Near(scale.x * .5, NativeVesselSimulation.MaximumPoolIndicatorRadius) && Near(scale.y * .5, NativeVesselSimulation.MaximumPoolIndicatorRadius),
+                "large-volume display remains bounded at 4 cm radius rather than 28 cm");
+            Assert(Vector3.Dot(f.Pool.transform.forward, -Physics.gravity.normalized) > .9999f,
+                "indicator thin axis follows world gravity despite rotated anatomy and artery transforms");
+            var poolQuery = (Func<Vector3, float, bool>)Delegate.CreateDelegate(typeof(Func<Vector3, float, bool>), f.Vessel,
+                typeof(NativeVesselSimulation).GetMethod("TouchesPool", BindingFlags.Instance | BindingFlags.NonPublic));
+            Assert(poolQuery(f.Pool.transform.position + f.Pool.transform.right * .03f, .001f), "suction reaches rotated in-plane indicator edge");
+            Assert(!poolQuery(f.Pool.transform.position + f.Pool.transform.forward * .01f, .001f), "suction rejects point above thin indicator along gravity");
+            Assert(!poolQuery(f.Pool.transform.position + f.Pool.transform.right * .06f, .001f), "suction rejects beyond capped visual indicator");
+            Ledger(f.Vessel.Fluid);
+
+            f.Reset(); f.Injure(); f.AtInjury(f.Seal); Enable(f.Seal); f.Vessel.Simulate(Step);
+            // Warm caches/JIT before measuring managed allocation on the actual hot paths.
+            var sweep = (Action<Vector3, Vector3, Vector3>)Delegate.CreateDelegate(typeof(Action<Vector3, Vector3, Vector3>), f.Vessel,
+                typeof(NativeVesselSimulation).GetMethod("BladeSweep", BindingFlags.Instance | BindingFlags.NonPublic));
+            Vector3 a = f.Volume.Wall.transform.InverseTransformPoint(f.Artery.transform.TransformPoint(new Vector3(-.01f, 0, -.005f) / f.UnitScale));
+            Vector3 b = f.Volume.Wall.transform.InverseTransformPoint(f.Artery.transform.TransformPoint(new Vector3(.01f, 0, -.005f) / f.UnitScale));
+            Vector3 c = f.Volume.Wall.transform.InverseTransformPoint(f.Artery.transform.TransformPoint(new Vector3(0, 0, .005f) / f.UnitScale));
+            for (int i = 0; i < 10; i++) { sweep(a, b, c); f.Vessel.Simulate(Step); }
+            long before = GC.GetAllocatedBytesForCurrentThread();
+            for (int i = 0; i < 1000; i++) sweep(a, b, c);
+            long bladeAllocated = GC.GetAllocatedBytesForCurrentThread() - before;
+            before = GC.GetAllocatedBytesForCurrentThread();
+            for (int i = 0; i < 1000; i++) f.Vessel.Simulate(Step);
+            long simulationAllocated = GC.GetAllocatedBytesForCurrentThread() - before;
+            Assert(bladeAllocated < 4096, "1000 overlapping blade queries reuse mesh buffers, allocated=" + bladeAllocated);
+            Assert(simulationAllocated < 4096, "1000 active seal/clip steps reuse owned tip cache, allocated=" + simulationAllocated);
+            Assert(f.Vessel.Fluid.IsOccluded, "allocation fixture exercised an active intersecting seal tip");
         }
 
         static void Lifecycle(Fixture f)
