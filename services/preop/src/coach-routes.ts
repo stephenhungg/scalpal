@@ -531,6 +531,43 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
     return c.json({ baseline, condition: s.snapshot().condition, actions: coachActions(s.id) });
   });
 
+  // Robot hand attempts (services/motion teleop, scalpal.robot_attempt.v1): the simulated Shadow hand driven
+  // by the Quest controllers, labeled with the surgery step. Kept per session and logged to the dashboard.
+  const robotAttempts = new Map<string, Record<string, unknown>[]>();
+  app.post("/coach/sessions/:sid/robot-attempts", async (c) => {
+    const s = getSession(c);
+    if (!s) return missing(c);
+    const a = await body(c);
+    if (a.schema !== "scalpal.robot_attempt.v1" || typeof a.attemptId !== "string" || typeof a.success !== "boolean") {
+      return bad(c, 400, "invalid_robot_attempt", 'Send a scalpal.robot_attempt.v1 body with attemptId and success.', coachActions(s.id));
+    }
+    const str = (v: unknown, n = 200) => (typeof v === "string" ? v.slice(0, n) : "");
+    const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
+    const attempt = {
+      attemptId: str(a.attemptId, 80), stepId: str(a.stepId, 80), stepTitle: str(a.stepTitle), task: str(a.task, 80),
+      success: a.success, frames: num(a.frames), durationS: num(a.durationS), labeledFraction: num(a.labeledFraction),
+      heldInstruments: Array.isArray(a.heldInstruments) ? a.heldInstruments.filter((x): x is string => typeof x === "string").slice(0, 4) : [],
+      source: str(a.source), createdAt: str(a.createdAt, 40),
+    };
+    const list = robotAttempts.get(s.id) ?? [];
+    list.push(attempt);
+    if (list.length > 50) list.shift();
+    robotAttempts.set(s.id, list);
+    options.realtime?.simLog?.({
+      coachSessionId: s.id,
+      kind: "event",
+      text: `Robot hand attempt ${attempt.success ? "succeeded" : "failed"}${attempt.stepTitle ? ` during "${attempt.stepTitle}"` : ""}: ${attempt.frames} frames, ${attempt.durationS.toFixed(1)} s (simulated Shadow hand, Quest controller teleop).`,
+      data: { robotAttempt: attempt },
+    });
+    return c.json({ stored: true, count: list.length, actions: coachActions(s.id) }, 201);
+  });
+  app.get("/coach/sessions/:sid/robot-attempts", (c) => {
+    const s = getSession(c);
+    if (!s) return missing(c);
+    const list = robotAttempts.get(s.id) ?? [];
+    return c.json({ attempts: list, successes: list.filter((x) => x.success).length, actions: coachActions(s.id) });
+  });
+
   // Demo driver: lets the laptop exercise Scalpal before the headset is wired in.
   app.post("/coach/sessions/:sid/simulate", async (c) => {
     const s = getSession(c);

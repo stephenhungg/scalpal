@@ -92,3 +92,21 @@ describe("laptop sim buttons on open surgery", () => {
     expect(last.snapshot.status).toBe("completed");
   });
 });
+
+describe("robot hand attempts", () => {
+  it("stores attempts per session, logs them for the dashboard, and rejects junk", async () => {
+    const { createApp } = await import("../src/app.js");
+    const { fixtureClient } = await import("./helpers.js");
+    const logs: any[] = [];
+    const realtime = { bound: true, coachMessage() {}, coachStatus() {}, attachEncounter() {}, encounterPhase() {}, encounterResult() {}, highlight: async () => null, simLog: (e: any) => logs.push(e) } as any;
+    const app = createApp({ client: fixtureClient(), now: () => NOW, coachTickMs: 0, realtime });
+    const req = async (method: string, route: string, body?: unknown) => { const r = await app.request(route, { method, headers: body ? { "Content-Type": "application/json" } : {}, body: body ? JSON.stringify(body) : undefined }); return { status: r.status, json: (await r.json()) as any }; };
+    const sid = (await req("POST", "/coach/sessions", { patientId: "patient-demo-sparse" })).json.sessionId;
+    expect((await req("POST", `/coach/sessions/${sid}/robot-attempts`, { schema: "nope" })).status).toBe(400);
+    const ok = await req("POST", `/coach/sessions/${sid}/robot-attempts`, { schema: "scalpal.robot_attempt.v1", attemptId: "a1", success: true, stepId: "mark_incision", stepTitle: "Mark McBurney incision", frames: 212, durationS: 10.6, heldInstruments: ["inst_1"] });
+    expect(ok.status).toBe(201);
+    const list = (await req("GET", `/coach/sessions/${sid}/robot-attempts`)).json;
+    expect(list).toMatchObject({ successes: 1, attempts: [expect.objectContaining({ attemptId: "a1", stepTitle: "Mark McBurney incision" })] });
+    expect(logs.some((l) => /Robot hand attempt succeeded during "Mark McBurney incision"/.test(l.text))).toBe(true);
+  });
+});
