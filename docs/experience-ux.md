@@ -1,10 +1,10 @@
 # Experience and UX Spec
 
-Updated October 3, 2026. This is the recommended UX for the [latest experience flow](current-direction.md#latest-experience-flow): launch → explore patients → full-VR diagnosis office → mixed-reality operating room on a real reclining person → robot replay → recap. It is a design target, not a description of built behavior; the [integration map](system-integration.md#explore--office--or-route) records what exists. Recommendations come from the cited research in [VR shell UX](research/ux-vr-shell.md) and [medical simulation UX](research/ux-medical-sim.md). Numbers marked *derived* are our sizing from published rules, to be checked on the Quest 3S.
+Updated October 3, 2026. This is the recommended UX for the [latest experience flow](current-direction.md#latest-experience-flow): launch → explore patients → full-VR diagnosis office → operating room in AR (real person) or VR (virtual patient) → robot replay → recap. It is a design target, not a description of built behavior; the [integration map](system-integration.md#explore--office--or-route) records what exists. Recommendations come from the cited research in [VR shell UX](research/ux-vr-shell.md) and [medical simulation UX](research/ux-medical-sim.md). Numbers marked *derived* are our sizing from published rules, to be checked on the Quest 3S.
 
 ## Principles
 
-1. **The learner never moves artificially; scenes come to them.** No artificial locomotion and no camera motion. Every VR transition is a fade and the learner is spawned facing the focal point. The OR is passthrough: the real room, a real participant on a table, virtual anatomy registered onto them.
+1. **The learner never moves artificially; scenes come to them.** No artificial locomotion and no camera motion. Every VR transition is a fade and the learner is spawned facing the focal point. In AR mode the OR is passthrough: the real room, a real participant on a table, virtual anatomy registered onto them. In VR mode it is the virtual OR.
 2. **One click to content.** No upfront controls tutorial. Teach each mechanic the first time it is needed.
 3. **The LLM talks; the engine decides.** Exam findings, test results, scoring and step progression come only from authored deterministic state. Voice agents never invent clinical facts or scene effects.
 4. **One voice role at a time, one per space.** Patient in the office, Jarvis as the attending in the office, Jarvis as the coach in the OR. Never two agents speaking at once.
@@ -89,9 +89,9 @@ Recommended (resolves the open decision in [decisions](decisions.md) unless Step
 
 Evidence: productive failure beats instruction-first on conceptual knowledge and transfer (d = 0.36, up to 0.58; Sinha & Kapur 2021), provided the run does not dead-end.
 
-## 5. Operating Room (Mixed Reality)
+## 5. Operating Room (AR or VR)
 
-The office fades into passthrough. The participant reclines on the table; the app detects their body with MediaPipe, shows registration progress and quality, and overlays the case's anatomy once the fit is stable. The operator confirms the fit. Lost registration hides the anatomy and pauses scoring until it reacquires; tools freeze rather than drop. The detailed handoff spec lives in the office-to-OR handoff document once written.
+The learner picks AR (real participant) or VR (virtual patient) at the handoff; both share the same tools, steps, coaching and scoring. In VR the office fades into the virtual OR. In AR the office fades into passthrough. The participant reclines on the table; the app detects their body with MediaPipe, shows registration progress and quality, and overlays the case's anatomy once the fit is stable. The operator confirms the fit. Lost registration hides the anatomy and pauses scoring until it reacquires; tools freeze rather than drop. The detailed handoff spec lives in the office-to-OR handoff document once written.
 
 
 - **Onboarding, 60–90 s, skippable after the first run:** before the case, touch a target with each instrument; learn grip, trigger and the camera/trocar. A ghost hand demonstrates each.
