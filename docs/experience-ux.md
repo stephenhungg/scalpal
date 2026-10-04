@@ -56,6 +56,12 @@ Sort ready first. Filter chips above the grid: All, by procedure (appendix, gall
 
 **Hover and select.** Hover lifts the card 1–2 cm with a haptic tick. Select opens a detail panel beside the grid: chart highlights from `/patients/:id/brief`, a 3D patient bust/preview, and one large **Begin encounter** button. A single accidental click never launches a scene.
 
+### Implemented shell differences
+
+The [Launch/Explore shell](shell.md) implements the above navigation with controller trigger, OpenXR pointer/pinch and Editor Enter. The 4×3 card geometry is retained, but dense card text is below the stated 32/24 mm equivalent minima; a larger selected chart improves detail readability but does not resolve that card-size conflict. The optional patient bust is omitted. The current native office supports two adult IDs, so all other selectable charts say “Interview coming soon.” Offline browsing is labeled and Begin stays disabled until the service reconnects.
+
+The transition uses a stereo geometry fade, not a compositor layer, and unloads/reloads scenes rather than keeping them additive. Pause includes Resume, confirmed Back to Explore, Recenter and the stepper. Restart phase, palm-up pause, seated/standing and text-size controls remain unimplemented. The office's in-flight HTTP operations may complete while presentation and voice are paused. See the component document for verification and physical limits.
+
 ## 3. Diagnosis Office
 
 **Order of work** (i-Human structure): greet → history → exam → orders → present. The learner may move freely between history, exam and orders; presenting ends the encounter.
