@@ -21,7 +21,7 @@ namespace Scalpal.Quest
         public NativePresentation presentation;
         // Full-VR locomotion: left stick walks along the gaze, right stick snap-turns. Off in passthrough,
         // where moving the origin would slide the anatomy off the registered patient.
-        public float moveSpeed = 1.2f, snapDegrees = 30, roamRadius = 3f;
+        public float moveSpeed = 1.2f, snapDegrees = 30, roamRadius = 3f, riseSpeed = .6f, maximumRise = .6f;
         public bool IsReady { get; private set; }
         public event Action ToolsReset;
         public event Action RetryRequested;
@@ -131,6 +131,15 @@ namespace Scalpal.Quest
                 var offset = Vector3.ProjectOnPlane(head - initialHeadFloorPosition, Vector3.up);
                 if (offset.magnitude > roamRadius) next -= offset - offset.normalized * roamRadius;
                 trackingOrigin.position = next;
+            }
+            // Right stick up/down raises or lowers the viewpoint (e.g. to look down into the wound), within ±maximumRise
+            // of the aligned floor height.
+            float rise = XRInput.Stick(XRNode.RightHand).y;
+            if (Mathf.Abs(rise) > .2f)
+            {
+                var position = trackingOrigin.position;
+                position.y = Mathf.Clamp(position.y + rise * riseSpeed * deltaTime, initialHeadFloorPosition.y - maximumRise, initialHeadFloorPosition.y + maximumRise);
+                trackingOrigin.position = position;
             }
             float turn = XRInput.Stick(XRNode.RightHand).x;
             if (Mathf.Abs(turn) < .3f) turnArmed = true;

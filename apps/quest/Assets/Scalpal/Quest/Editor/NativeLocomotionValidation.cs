@@ -45,6 +45,15 @@ namespace Scalpal.Quest.Editor
                 Check(Mathf.Abs(Mathf.DeltaAngle(origin.eulerAngles.y, rig.snapDegrees)) < .01f, "holding the stick does not keep turning");
                 right = Vector2.zero; rig.Locomote(.016f); right = new Vector2(-1, 0); rig.Locomote(.016f);
                 Check(Mathf.Abs(Mathf.DeltaAngle(origin.eulerAngles.y, 0)) < .01f, "releasing and pushing the other way turns back");
+                right = Vector2.zero; origin.position = Vector3.zero; origin.rotation = Quaternion.identity;
+                right = new Vector2(0, 1); rig.Locomote(.5f);
+                Check(Mathf.Abs(origin.position.y - rig.riseSpeed * .5f) < 1e-4f && origin.eulerAngles.y == 0, "right stick up raises the viewpoint without turning");
+                for (int i = 0; i < 20; i++) rig.Locomote(1);
+                Check(Mathf.Abs(origin.position.y - rig.maximumRise) < 1e-4f, "raising stops at the height limit");
+                right = new Vector2(0, -1); for (int i = 0; i < 20; i++) rig.Locomote(1);
+                Check(Mathf.Abs(origin.position.y + rig.maximumRise) < 1e-4f, "right stick down lowers the viewpoint to the limit");
+                right = new Vector2(.1f, .1f); var still = origin.position; rig.Locomote(1);
+                Check(origin.position == still, "a resting right stick does not change height");
                 Debug.Log("SCALPAL_NATIVE_LOCOMOTION_VALIDATION_OK checks=" + checks);
             }
             finally
