@@ -151,7 +151,10 @@ export function TitleMorph({ text, onDone, instant = false }: { text: string; on
             ctx.globalAlpha = 1;
           }
         } else {
+          // Leave the crisp letters on the canvas: React swaps to the real text on its next
+          // commit, and clearing here first would show an empty frame (a blink).
           ctx.clearRect(0, 0, W, H);
+          ctx.drawImage(textMask, 0, 0);
           finish();
           return;
         }
