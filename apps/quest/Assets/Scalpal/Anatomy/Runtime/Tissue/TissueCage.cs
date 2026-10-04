@@ -130,6 +130,47 @@ namespace Scalpal.Anatomy.Tissue
             for (int i=0;i<8;i++) offset += (Positions[i]-Rest[i]) * ((i&1)==0?1-u.x:u.x) * ((i&2)==0?1-u.y:u.y) * ((i&4)==0?1-u.z:u.z);
             return point + offset;
         }
+        // Contact point/correction are in the source-local meter frame. The caller transforms world contact explicitly.
+        public bool ApplyContact(Vector3 localPoint, Vector3 localCorrection)
+        {
+            if (!TryContactCandidate(localPoint, localCorrection, out var candidate)) return false;
+            CommitContact(candidate); return true;
+        }
+        internal bool TryContactCandidate(Vector3 point, Vector3 correction, out Vector3[] candidate)
+        {
+            candidate = null;
+            if (!Finite(point) || !Finite(correction) || correction.sqrMagnitude < 1e-14f || correction.magnitude > .005f) return false;
+            Vector3 u = new Vector3(Mathf.InverseLerp(bounds.min.x,bounds.max.x,point.x),
+                Mathf.InverseLerp(bounds.min.y,bounds.max.y,point.y),Mathf.InverseLerp(bounds.min.z,bounds.max.z,point.z));
+            var influence = new float[8]; float denominator = 0;
+            for (int i=0;i<8;i++)
+            {
+                influence[i] = ((i&1)==0?1-u.x:u.x)*((i&2)==0?1-u.y:u.y)*((i&4)==0?1-u.z:u.z);
+                denominator += weights[i]*influence[i]*influence[i];
+            }
+            if (denominator < .00001f) return false;
+            candidate = (Vector3[])Positions.Clone();
+            for (int i=0;i<8;i++)
+            {
+                if (weights[i] == 0) continue;
+                candidate[i] += correction*(weights[i]*influence[i]/denominator);
+                candidate[i] = Rest[i]+Vector3.ClampMagnitude(candidate[i]-Rest[i],Preset.maxDisplacement);
+                if (!Finite(candidate[i])) { candidate=null; return false; }
+            }
+            for (int t=0;t<5;t++) if (Volume(candidate,t)*volumes[t]<=0 || Mathf.Abs(Volume(candidate,t)/volumes[t]) < .02f)
+            { candidate=null; return false; }
+            Vector3 achieved=Vector3.zero;
+            for (int i=0;i<8;i++) achieved += (candidate[i]-Positions[i])*influence[i];
+            if (Vector3.Dot(achieved,correction) <= correction.sqrMagnitude*.01f) { candidate=null; return false; }
+            return true;
+        }
+        internal void CommitContact(Vector3[] candidate)
+        {
+            Array.Copy(candidate,Positions,8); Array.Copy(candidate,previous,8); Array.Clear(velocity,0,8);
+            MaxDisplacement=0;
+            for(int i=0;i<8;i++) MaxDisplacement=Mathf.Max(MaxDisplacement,Vector3.Distance(Positions[i],Rest[i]));
+        }
+
         public void Reset()
         {
             Array.Copy(Rest,Positions,8); Array.Copy(Rest,previous,8); Array.Clear(velocity,0,8); Handle=-1; MaxDisplacement=0;

@@ -2,7 +2,7 @@
 
 **AI-guided mixed-reality practice that can become demonstrations for robots.**
 
-Scalpal is an MHacks project for Meta Quest 3S. A learner talks to a voice coach, explores a rotating 3D anatomy model, and practices a supported surgery-themed exercise with virtual tools and generic anatomy aligned to a real reclining participant. A recording of the passthrough camera supplies input for estimating human hand motion, retargeting it to a simulated robot hand, and replaying the demonstration.
+Scalpal is an MHacks project for Meta Quest 3S. The learner launches the app, browses a large explore page of synthetic FinchNode patients, picks a case, diagnoses the patient in a full-VR doctor's office through a voice back-and-forth, then performs the surgery that patient needs in a full-VR operating room. A recording of the passthrough camera during the surgery supplies input for estimating human hand motion, retargeting it to a simulated robot hand, and replaying the demonstration. See the [latest experience flow](docs/current-direction.md#latest-experience-flow).
 
 The long-term thesis is that human learning can supply useful robot demonstrations. The proposed demo proves a smaller chain: **one guided exercise → feedback → one video-derived movement sequence → one simulated robot replay.** Replay is not autonomous robot learning.
 

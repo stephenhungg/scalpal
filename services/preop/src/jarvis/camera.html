@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jarvis Camera</title>
+<style>
+  :root { --bg: #0b0e12; --panel: #131820; --line: #222a35; --text: #e6ebf2; --muted: #8a96a8; --accent: #5cc8ff; --ok: #4ade80; --warn: #fbbf24; --danger: #f87171; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 ui-sans-serif, system-ui, -apple-system, sans-serif; }
+  header { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 10px 16px; border-bottom: 1px solid var(--line); }
+  h1 { font-size: 16px; margin: 0; }
+  select, button { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
+  button { cursor: pointer; }
+  button.primary { background: var(--accent); color: #04121c; border-color: var(--accent); font-weight: 600; }
+  .pill { font-size: 12px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+  .pill.on { color: var(--ok); border-color: var(--ok); }
+  .pill.warn { color: var(--warn); border-color: var(--warn); }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; padding: 16px; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .stage { position: relative; background: #000; border-radius: 12px; overflow: hidden; aspect-ratio: 16 / 9; }
+  .stage video, .stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+  .stage.mirror video, .stage.mirror canvas { transform: scaleX(-1); }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; min-width: 0; }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 8px; }
+  .big { font-size: 18px; font-weight: 650; margin: 2px 0 8px; }
+  .kv { display: grid; grid-template-columns: 96px 1fr; gap: 4px 10px; }
+  .kv div:nth-child(odd) { color: var(--muted); }
+  #feed div { font-size: 12px; padding: 4px 0; border-bottom: 1px solid var(--line); }
+  #feed .warning { color: var(--danger); }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .muted { color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Jarvis Camera</h1>
+  <select id="camera" aria-label="Camera"><option>Loading cameras...</option></select>
+  <button id="go" class="primary">Start camera</button>
+  <label class="muted"><input type="checkbox" id="mirror"> mirror view</label>
+  <span id="sess" class="pill">no coach session</span>
+  <span id="track" class="pill">no body</span>
+  <span id="fps" class="pill">0 fps</span>
+  <span id="held" class="pill">holding nothing</span>
+</header>
+<main>
+  <div class="stage" id="stage"><video id="video" playsinline muted></video><canvas id="overlay"></canvas></div>
+  <div>
+    <section>
+      <h2>Current step</h2>
+      <div id="step" class="big">Start a surgery on the Jarvis page, then start the camera.</div>
+      <div class="kv">
+        <div>Targets</div><div id="targets"></div>
+        <div>Finger on</div><div id="focus">nothing</div>
+        <div>Instrument</div><div><select id="instrument"></select></div>
+      </div>
+      <label class="muted"><input type="checkbox" id="follow" checked> use the step's instrument automatically</label><br>
+      <label class="muted"><input type="checkbox" id="byobject"> pick the instrument from the real object I'm holding (boxes)</label>
+      <div class="row"><button id="identify">Identify what I'm pointing at</button><button id="confirm">Confirm step</button></div>
+      <p class="muted">Point with your index finger over the patient's abdomen. Pinch (thumb to index) to use the instrument there. Jarvis hears every action.</p>
+    </section>
+    <section style="margin-top:16px">
+      <h2>What Jarvis just saw</h2>
+      <div id="feed"></div>
+    </section>
+  </div>
+</main>
+<script type="module" src="/jarvis/camera.js"></script>
+</body>
+</html>

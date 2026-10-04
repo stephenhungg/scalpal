@@ -173,8 +173,8 @@ namespace Scalpal.Quest.Editor
         static void ApplySessionSettings()
         {
             PlayerSettings.productName = "Scalpal Surgical Session";
-            PlayerSettings.bundleVersion = "0.4.0-tissue";
-            PlayerSettings.Android.bundleVersionCode = 8;
+            PlayerSettings.bundleVersion = "0.5.1-volume";
+            PlayerSettings.Android.bundleVersionCode = 10;
             // Meta's OpenXR camera-pose plugin requires linear lighting; retain built-in rendering.
             PlayerSettings.colorSpace = ColorSpace.Linear;
             var settings = OpenXRSettings.GetSettingsForBuildTargetGroup(BuildTargetGroup.Android);
@@ -398,6 +398,14 @@ namespace Scalpal.Quest.Editor
             Scalpal.Instruments.Editor.InstrumentRuntimeValidation.Run();
             NativeProcedureInputValidation.Run();
             NativeTissueValidation.Run();
+            NativeVolumeValidation.Run();
+            NativeViscoelasticValidation.Run();
+            NativeCouponValidation.Run();
+            NativeSkinCalibrationBenchmark.Run();
+            NativeVolumeRuntimeValidation.Run();
+            NativeBleedingValidation.Run();
+            NativeVesselRuntimeValidation.Run();
+            NativeTissueContactValidation.Run();
             NativeAppendectomyValidation.Run();
             NativeSessionBoundaryValidation.Run();
             NativeCoachRelayValidation.Run();

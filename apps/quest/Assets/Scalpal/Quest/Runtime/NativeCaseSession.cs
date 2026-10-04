@@ -41,6 +41,8 @@ namespace Scalpal.Quest
         public string Message { get; private set; } = "Loading synthetic case";
         NativeProcedureInput input;
         NativeTissueSimulation tissueSimulation;
+        NativeVolumeSimulation volumeSimulation;
+        NativeVesselSimulation vesselSimulation;
         SurgicalCase candidate;
         string coachSessionId = "", voicePrompt = "", voiceGreeting = "", voiceContext = "";
         string selected = "", highlighted = "";
@@ -81,6 +83,10 @@ namespace Scalpal.Quest
             input.Initialize(exercise, workbench, () => Practicing && SharedMatches && RegistrationReady);
             tissueSimulation = GetComponent<NativeTissueSimulation>() ?? gameObject.AddComponent<NativeTissueSimulation>();
             tissueSimulation.Initialize(anatomy, workbench, () => isActiveAndEnabled && input.InteractionReady);
+            volumeSimulation = GetComponent<NativeVolumeSimulation>() ?? gameObject.AddComponent<NativeVolumeSimulation>();
+            volumeSimulation.Initialize(anatomy.transform.parent, workbench, () => isActiveAndEnabled && input.InteractionReady && anatomy.RegistrationValid);
+            vesselSimulation = GetComponent<NativeVesselSimulation>() ?? gameObject.AddComponent<NativeVesselSimulation>();
+            vesselSimulation.Initialize(anatomy, workbench, volumeSimulation, () => isActiveAndEnabled && input.InteractionReady);
             exercise.anatomy = anatomy; exercise.coach = coach;
             exercise.presentationMode = PresentationMode; exercise.requireCoachSynchronization = true;
             exercise.EventHandled += EventHandled;
@@ -254,6 +260,8 @@ namespace Scalpal.Quest
         {
             if (busy) return;
             if (tissueSimulation) tissueSimulation.ResetTissues();
+            if (volumeSimulation) volumeSimulation.ResetTissues();
+            if (vesselSimulation) vesselSimulation.ResetTissues();
             generation++; voice.Disconnect(); coachSessionId = "";
             sharedAttemptReady = false; attemptFailed = false; attemptRequested = false;
             exercise.StopAttempt(); workbench.ResetWorkbench();

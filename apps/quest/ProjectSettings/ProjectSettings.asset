@@ -142,7 +142,7 @@ PlayerSettings:
   loadStoreDebugModeEnabled: 0
   visionOSBundleVersion: 1.0
   tvOSBundleVersion: 1.0
-  bundleVersion: 0.4.0-tissue
+  bundleVersion: 0.5.1-volume
   preloadedAssets:
   - {fileID: 11400000, guid: a066ed9979e0945508ee163037734b60, type: 2}
   - {fileID: -3447940479724765477, guid: dbd69b20ca3de418588aa0ddd45b66cd, type: 2}
@@ -175,7 +175,7 @@ PlayerSettings:
     iPhone: 0
     tvOS: 0
   overrideDefaultApplicationIdentifier: 1
-  AndroidBundleVersionCode: 8
+  AndroidBundleVersionCode: 10
   AndroidMinSdkVersion: 32
   AndroidTargetSdkVersion: 34
   AndroidPreferredInstallLocation: 1

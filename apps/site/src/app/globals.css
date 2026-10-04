@@ -1,0 +1,57 @@
+@import "tailwindcss";
+
+/* Type and spacing measured from aeterna.framer.ai at 1440x900 and 390x844; dark palette. */
+:root {
+  --bg: rgb(0, 0, 0);
+  --ink: rgb(255, 255, 255);
+  --ink-70: rgba(255, 255, 255, 0.7);
+  --ink-50: rgba(255, 255, 255, 0.5);
+  --cross: rgb(80, 80, 80);
+}
+
+@theme inline {
+  --font-serif: var(--font-serif);
+  --font-mono: var(--font-mono);
+  --color-bg: var(--bg);
+  --color-ink: var(--ink);
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-mono), ui-monospace, monospace;
+}
+
+/* Display heading: Instrument Serif 110/100 with -3px tracking on desktop, 52/50 on phones. */
+.display {
+  font-family: var(--font-serif), serif;
+  font-weight: 400;
+  font-size: clamp(52px, 7.64vw, 110px);
+  line-height: 0.91;
+  letter-spacing: -3px;
+}
+
+/* Subtitle: Geist Mono 18/28 at 70% ink; 16/24 with -0.4px tracking on phones. */
+.lede {
+  font-size: 18px;
+  line-height: 28px;
+  color: var(--ink-70);
+}
+@media (max-width: 809px) {
+  .display {
+    line-height: 0.96;
+  }
+  .lede {
+    font-size: 16px;
+    line-height: 24px;
+    letter-spacing: -0.4px;
+  }
+}
+
+/* From MatthewKim323/adam src/index.css */
+.ascii-adam {
+  display: block;
+  width: 100%;
+  height: 100%;
+}

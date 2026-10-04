@@ -8,22 +8,23 @@ Updated October 3, 2026. "Current direction" means a choice stated or accepted d
 
 | Topic | Current direction | Status / implication |
 | --- | --- | --- |
+| Flow | Launch → Enter → patient explore page → diagnosis office (voice patient + attending) → full-VR surgery → robot replay | Latest user direction, Oct 3; see [current direction](current-direction.md#latest-experience-flow) |
 | Name | `scalpal` | User-requested repository name; preserve this spelling |
 | Platform | Meta Quest 3S, native Unity client | Native camera/immersive sample baseline demonstrated; application not built |
 | Thesis | Human learning plus useful robot demonstrations, with later robot learning | Preserve both goals rather than forcing an education-versus-robotics choice |
-| Presentation modes | Mixed reality on a real reclining person, plus full VR with a virtual patient/room | Explicit user direction; shared core proposed, static VR art prepared, registration and mode switching pending |
-| Participant | A real reclining person in MR; virtual mannequin in VR | Generic teaching anatomy in either mode |
-| Selection | Voice conversation with Jarvis | Supersedes Tinder-style surgery swiping |
-| Selection visuals | Rotating 3D Blender anatomy, controlled by supported voice actions | Explicitly during selection, before participant fitting |
-| Body registration | Pretrained visible body landmarks plus custom torso alignment | MediaPipe is a candidate, not verified on our reclining viewpoint |
+| Presentation modes | Full VR throughout: explore page, diagnosis office and operating room | Latest user direction (Oct 3) supersedes MR-plus-VR for the main flow; MR registration work stays in the repo but is off the main path |
+| Participant | Virtual patient in the office and the OR, driven by the chosen FinchNode case | No real reclining participant in the current flow |
+| Selection | Explore page of FinchNode demo patients, then a voice-driven diagnosis encounter decides the surgery | Supersedes conversational exercise selection with Jarvis |
+| Selection visuals | Case cards with synthetic chart context on a large explore page | Supersedes the rotating 3D anatomy preview during selection |
+| Body registration | Not required by the current flow | MediaPipe/MR body-fit work is preserved but off the main path |
 | Tools | Simulated tools and authored exercise rules | No actual operation on the participant |
-| Robotics input | Recorded passthrough video | Latest explicit correction; do not default back to SDK hand-joint recording |
+| Robotics input | Recorded raw passthrough video of the learner's hands during the VR surgery segment; robot replay is a required ending of every run | Camera recording while rendering full VR is not yet verified for this flow; do not default back to SDK hand-joint recording |
 | First robotics output | Estimated motion retargeted to a simulated robot hand and replayed | No custom neural model needed as initial approach; no policy learned yet |
 | Hand type | An articulated robot hand is the requested concept | Wrist/pinch-to-gripper would be a scope simplification requiring agreement |
 | Robotics processing | Proposed first experiment runs offline on the Mac | Not a commitment to live low-latency teleoperation |
 | Payments / onchain | Removed from project scope | No Solana, wallets, payouts, or money for completing simulated surgeries |
 | Data backend | SpacetimeDB for shared state; private file/object storage for video and replay | Part of [Nathan's assigned implementation lane](nathan-plan.md); not configured or deployed yet |
-| First slice | Appendectomy first (`lap_appendectomy`), then gallbladder and sigmoid colectomy | Anatomy interaction targets and code wiring are implemented; physical validation, robot model, and shared manipulation remain open. See [anatomy integration](anatomy-integration.md) |
+| First slice | Every FinchNode demo patient gets an authored encounter; surgeries needed: `lap_appendectomy`, `lap_cholecystectomy`, `lap_sigmoid_colectomy` | Only the appendectomy surgery scene and 3 encounters exist; see [integration map](system-integration.md#explore--office--or-route) |
 
 ## Important Corrections to Earlier Ideas
 
@@ -35,6 +36,7 @@ The original device setup logs also include earlier failures and pending install
 
 ## Decisions Needed Before Broad Implementation
 
+0. **Explore → office → OR flow (new):** Does the authored case plan force the surgery after diagnosis, or does the learner's chosen procedure load (with wrong choices allowed)? What does the explore page show for the four FinchNode patients that only have a generated fallback case plan? Who authors and reviews the nine missing encounters and the cholecystectomy/colectomy surgery scenes?
 1. **Robot demonstration segment:** Appendectomy is the selected educational demo with authored interaction checks. Which supported movement from it supplies a feasible demonstration for the selected robot?
 2. **Robot model and simulator:** Which articulated hand, optionally attached to an arm, and which simulation environment? What movement will we reproduce first? A render-only animated mesh and a physics simulation are different deliverables.
 3. **Capture and intended use:** Which raw camera recording route, metadata, participant disclosures, storage, retention, and platform permissions support the exact in-app replay, export, sharing, or training use? The video correction changes the relevant SDK restriction but does not establish lab dataset rights.

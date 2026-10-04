@@ -15,6 +15,62 @@ It is an observer interface. It does not run a second voice agent or simulate su
 
 Stack: Vite + React + TypeScript, SpacetimeDB TypeScript SDK 2.10.2.
 
+## Restyling the companion (Silas)
+
+Silas owns the companion's look so it matches the main Scalpal website. Nathan owns the plumbing underneath. You do not need the database, gateway or any keys to work on the UI.
+
+### Run against the live database
+
+```sh
+git checkout nathan/companion-realtime     # or main, once merged
+git checkout -b silas/companion-ui
+cd apps/companion
+npm install
+printf 'VITE_SPACETIMEDB_URI=wss://maincloud.spacetimedb.com\nVITE_SPACETIMEDB_DB=scalpal\n' > .env.local
+npm run dev                                 # http://localhost:5173
+```
+
+To fill every panel with data:
+
+1. Create a session on the home page.
+2. Open **Synthetic headset** (under People and access) and press **Run demo script**.
+3. Click **Record and upload a 5 s synthetic clip**, then **Process** it on the session page. The deployed worker turns it into a replay within a few seconds while a synthetic worker is running; ask Nathan if it stays queued.
+4. Open the viewer invite link in a private window to see what a judge sees.
+
+### Where the design lives
+
+| What | Where | Notes |
+| --- | --- | --- |
+| Colors, fonts, radius, shadows | `src/styles.css`, the `:root` variables at the top | Dark is the default; the light-mode block follows it. Changing these reskins everything |
+| Shared UI pieces | `src/components/ui.tsx` | Panel, Pill (status badges), buttons, toast, brand mark |
+| Panels | `src/components/*.tsx` | LiveView, ExerciseState, Coach, Commands, Learning, Events, Motion, Replay, Members |
+| Pages | `src/pages/*.tsx` | Home, Join, Session (panel layout), HeadsetSimulator |
+| Page title, favicon, web fonts | `index.html`, `public/favicon.svg` | Add a Google Fonts `<link>` in `index.html` and set `--font` |
+| Chart line colors | `PALETTE` in `src/components/Replay.tsx` | |
+
+Suggested order: match the variables first (fastest, lowest risk), then layout and markup if time allows.
+
+### Leave to Nathan
+
+- `src/module_bindings/` (generated)
+- `src/lib/` (WebRTC, uploads, grants, trajectory parsing, router)
+- `src/data/live.tsx` (subscriptions)
+
+If a design change needs different data or behavior, ask; don't edit these directly. Tell Nathan before reworking a component he is also changing.
+
+### Keep these honest labels
+
+- The replay is labelled **replay of recorded motion, not a learned policy**.
+- Anything synthetic stays visibly marked synthetic.
+- Video status (live, connecting, stopped) stays separate from database status.
+- The "assessment paused" notice appears when the anatomy fit is uncertain.
+
+### Shipping a change
+
+Run `npm run build` (it must pass), then open a PR from `silas/companion-ui`. After it is merged, Nathan redeploys to https://scalpal-companion.vercel.app.
+
+To link from the main site, use an invite link such as `https://scalpal-companion.vercel.app/join/ABC123`, which drops the visitor straight into a session. The home page works too.
+
 ## Run locally
 
 Prerequisites: Node 20+, the `spacetime` CLI (`curl -sSf https://install.spacetimedb.com | sh`).
