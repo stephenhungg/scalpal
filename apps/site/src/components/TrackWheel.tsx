@@ -2,7 +2,7 @@
 
 // Infinite marquee of the MHacks tracks / sponsor integrations Scalpal is built on. Logos are
 // rendered as white silhouettes so the row matches the page; the band is centered and fades
-// out at both ends instead of running edge to edge. Pauses on hover.
+// out at both ends instead of running edge to edge.
 const TRACKS = [
   { name: "MHacks", logo: "/tracks/mhacks.png" },
   { name: "ElevenLabs", logo: "/tracks/elevenlabs.svg" },
@@ -27,7 +27,7 @@ function Row({ hidden }: { hidden?: boolean }) {
 export function TrackWheel({ className = "" }: { className?: string }) {
   return (
     <div
-      className={`group mx-auto w-full max-w-[720px] overflow-hidden ${className}`}
+      className={`mx-auto w-full max-w-[720px] overflow-hidden ${className}`}
       style={{
         maskImage: "linear-gradient(90deg, transparent, black 18%, black 82%, transparent)",
         WebkitMaskImage: "linear-gradient(90deg, transparent, black 18%, black 82%, transparent)",
@@ -35,7 +35,7 @@ export function TrackWheel({ className = "" }: { className?: string }) {
     >
       <p className="sr-only">Built for: {TRACKS.map((t) => t.name).join(", ")}</p>
       {/* two copies side by side; sliding by one copy's width loops seamlessly */}
-      <div className="flex w-max animate-[track-wheel_26s_linear_infinite] group-hover:[animation-play-state:paused]">
+      <div className="flex w-max animate-[track-wheel_26s_linear_infinite]">
         <Row />
         <Row hidden />
       </div>
