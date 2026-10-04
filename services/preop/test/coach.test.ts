@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createApp } from "../src/app.js";
 import { buildCase } from "../src/case-builder.js";
-import { CoachSession, renderContext, type CoachAlert } from "../src/coach.js";
+import { CoachSession, reflexLines, renderContext, type CoachAlert } from "../src/coach.js";
 import { buildSystemPrompt } from "../src/coach-prompt.js";
 import { resolveStructure } from "../src/coach-routes.js";
 import { unitySafetyErrors } from "../src/unity-safe.js";
@@ -330,7 +330,8 @@ describe("presentation modes", () => {
     const app = createApp({ client: fixtureClient(), now: () => NOW, coachTickMs: 0 });
     const start = async (mode?: string) =>
       app.request("/coach/sessions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ patientId: "patient-demo-pediatric-asthma", ...(mode ? { mode } : {}) }) });
-    const mr = (await (await start()).json()) as { systemPrompt: string; snapshot: { mode: string } };
+    expect(((await (await start()).json()) as { snapshot: { mode: string } }).snapshot.mode).toBe("virtual"); // full VR is the main path
+    const mr = (await (await start("mixed_reality")).json()) as { systemPrompt: string; snapshot: { mode: string } };
     expect(mr.snapshot.mode).toBe("mixed_reality");
     expect(mr.systemPrompt).toMatch(/real person reclining/);
     const vr = (await (await start("virtual")).json()) as { sessionId: string; systemPrompt: string };
@@ -432,5 +433,50 @@ describe("headset authority and retries", () => {
     expect(r.context).toMatch(/HEADSET DISAGREES/);
     const back = await post(`/coach/sessions/${sid}/events`, { event: { type: "confirm", stepId: "find_appendix" } });
     expect(back.snapshot.desynced).toBe(false);
+  });
+});
+
+describe("bleeding and checkpoints", () => {
+  const theo = () => new CoachSession("coach-bleed", buildCase(fixture("patient-demo-pediatric-asthma"), "", NOW), () => NOW, undefined, "virtual");
+
+  it("warns instantly when a vessel opens, coaches control first, then reports it controlled", () => {
+    const s = theo();
+    while (s.engine.current?.id !== "divide_mesoappendix") s.handle(s.nextCorrectEvent()!);
+    const [warn] = s.handle({ type: "bleeding", structureId: "appendicular_artery", active: true, rateMlPerMin: 40, totalMl: 15 }).alerts;
+    expect(warn).toMatchObject({ kind: "bleeding", tier: "warning", reflexKey: "bleeding.appendicular_artery" });
+    expect(warn!.say).toMatch(/^Stop\. Bleeding from the appendicular artery/);
+    expect(s.handle({ type: "bleeding", structureId: "appendicular_artery", active: true, rateMlPerMin: 25, totalMl: 40 }).alerts).toEqual([]);
+    const snap = s.snapshot();
+    expect(snap.activeBleeds).toEqual([{ structure: { id: "appendicular_artery", name: "Appendicular artery" }, rateMlPerMin: 25 }]);
+    expect(snap.guidance.say).toMatch(/Control the bleeding from the appendicular artery first/);
+    expect(renderContext(snap)).toMatch(/ACTIVE BLEEDING: Appendicular artery at 25 ml\/min\. Total blood loss 40 ml/);
+    const [ok] = s.handle({ type: "bleeding", structureId: "appendicular_artery", active: false, rateMlPerMin: 0, totalMl: 55 }).alerts;
+    expect(ok).toMatchObject({ kind: "bleeding_controlled", tier: "advisory" });
+    expect(renderContext(s.snapshot())).toMatch(/Blood loss so far: 55 ml/);
+  });
+
+  it("pre-renders a bleeding clip for every vessel in the case", () => {
+    const keys = reflexLines(theo().kase).map((l) => l.key);
+    expect(keys).toContain("bleeding.appendicular_artery");
+    expect(keys.some((k) => k === "bleeding.cystic_artery")).toBe(false);
+  });
+
+  it("checkpoints each completed step with mistakes, hints, and blood loss for Jarvis to refer back to", () => {
+    const s = theo();
+    s.handle(s.nextCorrectEvent()!); // umbilical access
+    s.handle({ type: "touch", structureId: "urinary_bladder", instrumentId: "trocar_5mm" }); // mistake on ports step
+    s.requestHint();
+    while (s.engine.current?.id === "working_ports") s.handle(s.nextCorrectEvent()!);
+    const ports = s.snapshot().completedSteps.find((c) => c.stepId === "working_ports")!;
+    expect(ports).toMatchObject({ mistakes: 1, hints: 1, bloodLossMl: 0 });
+    expect(renderContext(s.snapshot())).toMatch(/Earlier: Place working ports \(1 mistake, 1 hint\)/);
+  });
+
+  it("accepts bleeding over HTTP and rejects malformed reports", async () => {
+    const app = createApp({ client: fixtureClient(), now: () => NOW, coachTickMs: 0 });
+    const sid = ((await (await app.request("/coach/sessions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ patientId: "patient-demo-pediatric-asthma" }) })).json()) as { sessionId: string }).sessionId;
+    const post = async (event: unknown) => (await app.request(`/coach/sessions/${sid}/events`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ event }) })).status;
+    expect(await post({ type: "bleeding", structureId: "appendicular_artery", active: true, rateMlPerMin: 30, totalMl: 5 })).toBe(200);
+    expect(await post({ type: "bleeding", structureId: "appendicular_artery", active: true, rateMlPerMin: -1, totalMl: 5 })).toBe(400);
   });
 });

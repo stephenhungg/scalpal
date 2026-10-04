@@ -181,7 +181,7 @@ export function createEncounterFlow({
       clearError();
       $("encounter").hidden = true;
       $("surgery").hidden = false;
-      onScrubIn();
+      onScrubIn(enc?.encounterId ?? "");
     },
 
     async stop() {

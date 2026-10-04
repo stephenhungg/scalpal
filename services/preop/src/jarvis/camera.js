@@ -22,7 +22,8 @@ let detections = [], held = "", frameNo = 0;
 const OBJECT_TO_INSTRUMENT = { scissors: "lap_scissors", knife: "scalpel", fork: "atraumatic_grasper", toothbrush: "hook_cautery", spoon: "suction_irrigator" };
 let snapshot = null, kase = null, allowed = null, names = new Map();
 let pinched = false, focus = "", focusCandidate = "", focusSince = 0, trackingValid = null, lostSince = 0;
-let highlighted = "", lastUV = null, frames = 0, fpsAt = performance.now();
+let highlighted = "", lastUV = null, frames = 0, fpsAt = performance.now(), lastTorso = null, lastFrameAt = 0, sendingFrame = false;
+const FRAME_EVERY_MS = 2000;
 const video = $("video"), canvas = $("overlay"), ctx = canvas.getContext("2d");
 
 function feed(text, cls = "") {
@@ -198,11 +199,44 @@ function frame() {
     pinched = nowPinched;
 
     draw(torso, hand, region);
+    lastTorso = torso;
+    if (sid && now - lastFrameAt > FRAME_EVERY_MS && !sendingFrame) { lastFrameAt = now; sendFrame(); }
     frames += 1;
   }
   if (now - fpsAt > 1000) { $("fps").textContent = `${frames} fps`; frames = 0; fpsAt = now; }
 }
 const loop = createFrameLoop((cb) => requestAnimationFrame(cb), frame, (e) => feed(`vision frame failed: ${e?.message ?? e}`, "warning"));
+
+// Jarvis's eyes: the composited view (camera plus overlay) with labeled boxes, every couple of seconds.
+// Region boxes come from the body map (exact for this rig); object boxes come from the detector.
+const frameCanvas = document.createElement("canvas");
+function regionMarks(torso) {
+  if (!torso) return [];
+  return REGIONS.filter((r) => !allowed || allowed.has(r.id)).map((r) => {
+    const pts = [[r.u[0], r.v[0]], [r.u[1], r.v[0]], [r.u[1], r.v[1]], [r.u[0], r.v[1]]].map(([u, v]) => uvToImage(torso, u, v));
+    const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y);
+    const x = Math.max(0, Math.min(...xs)), y = Math.max(0, Math.min(...ys));
+    return { label: nameOf(r.id), id: r.id, source: "scene", box: { x, y, w: Math.min(1, Math.max(...xs)) - x, h: Math.min(1, Math.max(...ys)) - y } };
+  }).filter((m) => m.box.w > 0 && m.box.h > 0);
+}
+async function sendFrame() {
+  sendingFrame = true;
+  try {
+    const scale = Math.min(1, 1024 / video.videoWidth);
+    frameCanvas.width = Math.round(video.videoWidth * scale);
+    frameCanvas.height = Math.round(video.videoHeight * scale);
+    const fctx = frameCanvas.getContext("2d");
+    fctx.drawImage(video, 0, 0, frameCanvas.width, frameCanvas.height);
+    fctx.drawImage(canvas, 0, 0, frameCanvas.width, frameCanvas.height);
+    const image = frameCanvas.toDataURL("image/jpeg", 0.7);
+    const marks = [...regionMarks(lastTorso), ...detections.map((d) => ({ label: d.label, id: OBJECT_TO_INSTRUMENT[d.label] ?? "", source: "detector", box: d.box }))];
+    await api("POST", `/coach/sessions/${sid}/frame`, { image, marks, source: "camera" });
+  } catch (e) {
+    console.warn("frame upload failed", e);
+  } finally {
+    sendingFrame = false;
+  }
+}
 
 function draw(torso, hand, region) {
   const W = canvas.width, H = canvas.height;

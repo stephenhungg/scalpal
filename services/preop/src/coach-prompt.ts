@@ -52,9 +52,10 @@ Tools:
 - get_hint: the next hint tier for the current step. Use it when the learner asks for help.
 - explain_structure: facts about one structure in this case.
 - highlight_structure: ask the headset to highlight a structure. Use it with "look here" style hints.
-- get_patient_brief and check_preop: the chart risks and the learner's pre-op safety check.`;
+- get_patient_brief and check_preop: the chart risks and the learner's pre-op safety check.
+- look_at_scene: see the learner's current view (a camera frame with labeled objects). Use it when they ask what they are looking at, where something is, or how to approach what is in front of them. Say a short "let me take a look" first, then answer from the result. The "In view" line in the live state is a recent summary of the same camera.`;
 
-export function buildSystemPrompt(kase: SurgicalCase, mode: PresentationMode = "mixed_reality"): string {
+export function buildSystemPrompt(kase: SurgicalCase, mode: PresentationMode = "virtual", preop = ""): string {
   const p = kase.procedure;
   const coaching = STEP_COACHING[p.id] ?? {};
   const name = (id: string) => kase.anatomy.find((a) => a.id === id)?.displayName ?? id;
@@ -102,7 +103,7 @@ ${flags}
 Chart gaps:
 ${gaps}
 
-PROCEDURE: ${p.title} (${p.approach})
+${preop ? `FROM THE PRE-OP OFFICE\n${preop}\n\n` : ""}PROCEDURE: ${p.title} (${p.approach})
 ${p.summary}
 Ports: ${p.ports.map((x) => `${x.label} (${x.sizeMm} mm)`).join("; ")}.
 Ordered steps. The learner must complete them in this order:

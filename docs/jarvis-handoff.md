@@ -260,3 +260,13 @@ Reviewed 59f1d98. The office uses the encounter engine as intended (one server s
 - Surgery: `POST /coach/sessions/:id/transcript {"speaker": "learner" | "coach", "text": ...}` and `POST /coach/sessions/:id/voice-status {"status": "listening" | "speaking" | ...}` on mode changes.
 
 The coach service writes these to `coach_message` and `encounter_event` in SpacetimeDB, so the companion shows the live conversation. Strip expressive tags like `[wince]` before posting (the browser uses `/\[[a-z ]{2,24}\]\s*/gi`).
+
+## Bleeding and checkpoints (for Stephen's tissue model)
+
+The coach accepts a `bleeding` event: `{"type": "bleeding", "structureId": "<anatomy id>", "active": true | false, "rateMlPerMin": <number>, "totalMl": <cumulative ml this attempt>}`. Send it through `CoachRelay` (or `POST /coach/sessions/:id/events`) when `VesselBleeding` opens an injury (`active: true`), periodically while it bleeds (rate updates are silent), and when it is controlled (`active: false`).
+
+- Opening a bleed plays an instant warning clip in Jarvis's voice ("Stop. Bleeding from the appendicular artery. Get control first."), pre-rendered for every vessel in the case.
+- While any bleed is active, Jarvis's context leads with it and his guidance becomes "control the bleeding first".
+- Control is acknowledged silently in context with the running total.
+
+Every completed step is now a checkpoint (`completedSteps[]`: seconds, mistakes, hints, blood loss at the time), and the context reminds Jarvis of earlier rough steps so he can refer back.

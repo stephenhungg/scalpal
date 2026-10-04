@@ -55,7 +55,7 @@
 <header>
   <h1>Jarvis</h1>
   <select id="patient" aria-label="Patient"><option>Loading patients...</option></select>
-  <select id="presentation" aria-label="Presentation mode"><option value="mixed_reality">Mixed reality (real person)</option><option value="virtual">Full VR (virtual patient)</option></select>
+  <select id="presentation" aria-label="Presentation mode"><option value="virtual">Full VR (virtual patient)</option><option value="mixed_reality">Mixed reality (real person)</option></select>
   <button id="start" class="primary" disabled>Start</button>
   <button id="stop" disabled>End</button>
   <span id="voice" class="pill">voice off</span>
@@ -109,6 +109,8 @@
         <button data-sim="look_at_danger">Look at danger</button>
         <button data-sim="tracking_lost">Lose tracking</button>
         <button data-sim="tracking_restored">Restore tracking</button>
+        <button data-sim="bleed">Open a vessel</button>
+        <button data-sim="stop_bleed">Control bleeding</button>
       </div>
       <label class="row muted" style="margin-top:8px;font-size:12px"><input type="checkbox" id="autoack" checked> act as headset: auto-apply highlight requests</label>
     </div>

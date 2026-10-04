@@ -4,8 +4,9 @@ import { streamSSE } from "hono/streaming";
 import { ANATOMY, ANATOMY_BY_ID } from "./catalog/anatomy.js";
 import { STRUCTURE_FACTS } from "./catalog/coach-knowledge.js";
 import { INSTRUMENTS_BY_ID } from "./catalog/instruments.js";
-import { CoachSession, PRESENTATION_MODES, contextKey, reflexLines, renderContext, type CoachEvent, type StuckPolicy } from "./coach.js";
+import { CoachSession, PRESENTATION_MODES, bleedingStructures, contextKey, reflexLines, renderContext, type CoachEvent, type StuckPolicy } from "./coach.js";
 import { explainStructure, runTool } from "./coach-tools.js";
+import type { Frame, FrameMark, SceneVision } from "./scene-vision.js";
 import { ReflexAudio } from "./reflex.js";
 import { NO_REALTIME, type RealtimeBridge, type RealtimeSink } from "./realtime-bridge.js";
 import { buildSystemPrompt, firstMessage } from "./coach-prompt.js";
@@ -27,6 +28,29 @@ export interface CoachRouteOptions {
   realtime?: RealtimeSink;
   bridge?: RealtimeBridge | null; // the live connection, for /realtime status and join
   encounters?: EncounterVoices; // live encounters, so /jarvis/connection can bind a voice to one
+  encounterFor?: (id: string) => { kase: SurgicalCase; carryover(): string } | null;
+  vision?: SceneVision | null; // Jarvis's eyes; null when no vision model is configured
+  watchMs?: number; // minimum gap between background scene summaries (0 disables watching)
+}
+
+const MAX_FRAME_CHARS = 4_000_000; // about 3 MB of JPEG
+const FRAME_FRESH_MS = 8000;
+
+function parseMarks(raw: unknown): FrameMark[] {
+  if (!Array.isArray(raw)) return [];
+  const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? Math.min(Math.max(v, 0), 1) : 0);
+  return raw.slice(0, 50).flatMap((m) => {
+    if (!m || typeof m !== "object") return [];
+    const o = m as Record<string, unknown>;
+    const box = (o.box ?? {}) as Record<string, unknown>;
+    if (typeof o.label !== "string" || !o.label.trim()) return [];
+    return [{
+      label: o.label.slice(0, 80),
+      id: typeof o.id === "string" ? o.id.slice(0, 120) : "",
+      source: o.source === "scene" ? "scene" : "detector",
+      box: { x: num(box.x), y: num(box.y), w: num(box.w), h: num(box.h) },
+    }];
+  });
 }
 
 const MAX_SESSIONS = 50;
@@ -53,6 +77,9 @@ const coachActions = (sid: string): Action[] => [
 
 export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
   const sessions = new Map<string, CoachSession>();
+  const frames = new Map<string, Frame>();
+  const watching = new Map<string, { inFlight: boolean; lastAt: number }>();
+  const watchMs = options.watchMs ?? 4000;
   const reflex =
     options.reflex ?? (options.elevenLabs?.apiKey && options.elevenLabs.voiceId ? new ReflexAudio({ apiKey: options.elevenLabs.apiKey, voiceId: options.elevenLabs.voiceId }) : null);
   let ticker: ReturnType<typeof setInterval> | null = null;
@@ -82,8 +109,9 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
   const body = async (c: Context) => (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
 
   app.post("/coach/sessions", async (c) => {
-    const { patientId, mode: rawMode } = await body(c);
-    const mode = rawMode === undefined ? "mixed_reality" : PRESENTATION_MODES.find((m) => m === rawMode);
+    const { patientId, mode: rawMode, encounterId } = await body(c);
+    // Full VR is the main path (explore, office, operating room); mixed reality is still supported.
+    const mode = rawMode === undefined ? "virtual" : PRESENTATION_MODES.find((m) => m === rawMode);
     if (!mode) return bad(c, 400, "invalid_mode", 'mode must be "mixed_reality" or "virtual".', [{ id: "choose_patient", label: "Choose a patient", method: "GET", route: "/patients" }]);
     const kase = typeof patientId === "string" ? await options.loadCase(patientId) : null;
     if (!kase) return bad(c, 404, "patient_not_found", 'Send {"patientId": "<FinchNode subject>"} for a known patient.', [{ id: "choose_patient", label: "Choose a patient", method: "GET", route: "/patients" }]);
@@ -92,6 +120,9 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
     if (sessions.size >= MAX_SESSIONS) sessions.delete(sessions.keys().next().value!);
     const sid = `coach-${crypto.randomUUID().replaceAll("-", "").slice(0, 16)}`;
     const session = new CoachSession(sid, kase, options.now, options.stuckPolicy, mode);
+    // Office to operating room: the scored encounter for this patient informs the surgery coaching.
+    const office = typeof encounterId === "string" ? options.encounterFor?.(encounterId) : null;
+    const preop = office && office.kase.patientId === kase.patientId ? office.carryover() : "";
     sessions.set(sid, session);
     const snapshot = session.snapshot();
     return c.json(
@@ -99,7 +130,7 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
         sessionId: sid,
         snapshot,
         context: renderContext(snapshot), contextKey: contextKey(snapshot),
-        systemPrompt: buildSystemPrompt(kase, mode),
+        systemPrompt: buildSystemPrompt(kase, mode, preop),
         firstMessage: firstMessage(kase),
         actions: coachActions(sid),
       },
@@ -180,10 +211,46 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
     });
   });
 
+  // Point-of-view frames from the camera rig or the Quest (passthrough plus overlay), with labeled boxes.
+  app.post("/coach/sessions/:sid/frame", async (c) => {
+    const s = getSession(c);
+    if (!s) return missing(c);
+    const b = await body(c);
+    const image = typeof b.image === "string" ? b.image.replace(/^data:image\/jpeg;base64,/, "") : "";
+    if (!image || image.length > MAX_FRAME_CHARS || !/^[A-Za-z0-9+/=]+$/.test(image.slice(0, 200))) {
+      return bad(c, 400, "invalid_frame", 'Send {"image": "<base64 JPEG>", "marks": [...]} under about 3 MB.', coachActions(s.id));
+    }
+    const frame: Frame = { jpegBase64: image, marks: parseMarks(b.marks), source: b.source === "quest" ? "quest" : "camera", at: options.now().getTime() };
+    frames.set(s.id, frame);
+    // Background watcher: a fresh one-line summary at most every watchMs, never two at once.
+    const w = watching.get(s.id) ?? { inFlight: false, lastAt: 0 };
+    watching.set(s.id, w);
+    const due = Boolean(options.vision) && watchMs > 0 && !w.inFlight && frame.at - w.lastAt >= watchMs;
+    if (due && options.vision) {
+      w.inFlight = true;
+      w.lastAt = frame.at;
+      void options.vision
+        .watch(frame, s.snapshot())
+        .then((summary) => s.setScene(summary, frame.source))
+        .catch(() => {})
+        .finally(() => (w.inFlight = false));
+    }
+    return c.json({ stored: true, marks: frame.marks.length, watching: due, actions: coachActions(s.id) });
+  });
+
   // One implementation of Jarvis's client tools for every voice client (laptop page, Quest native voice).
   app.post("/coach/sessions/:sid/tools/:name", async (c) => {
     const s = getSession(c);
     if (!s) return missing(c);
+    if (c.req.param("name") === "look_at_scene") {
+      const { question } = await body(c);
+      const frame = frames.get(s.id);
+      let result: string;
+      if (!options.vision) result = "My vision isn't set up yet, so I can only go by the simulator's state.";
+      else if (!frame || options.now().getTime() - frame.at > FRAME_FRESH_MS) result = "I can't see your view right now. Make sure the camera feed is on.";
+      else result = await options.vision.look(frame, s.snapshot(), typeof question === "string" ? question : "");
+      return c.json({ result, actions: coachActions(s.id) });
+    }
     const result = await runTool(s, c.req.param("name") ?? "", await body(c), {
       renderContext: (x) => renderContext(x.snapshot()),
       resolveStructure,
@@ -329,11 +396,21 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
       case "tracking_lost":
         events = [{ type: "tracking", valid: false }];
         break;
+      case "bleed":
+      case "stop_bleed": {
+        // Open (or control) a bleed in the vessel nearest this step: a step target first, else any case vessel.
+        const vessels = bleedingStructures(s.kase).map((v) => v.id);
+        const step = s.engine.current;
+        const vessel = vessels.find((v) => step?.targets.includes(v)) ?? vessels.find((v) => step?.mistakes.some((m) => m.structure === v)) ?? vessels[0];
+        const total = s.snapshot().bloodLossMl;
+        events = vessel ? [{ type: "bleeding", structureId: vessel, active: kind === "bleed", rateMlPerMin: kind === "bleed" ? 45 : 0, totalMl: total + (kind === "bleed" ? 20 : 35) }] : [];
+        break;
+      }
       case "tracking_restored":
         events = [{ type: "tracking", valid: true }];
         break;
       default:
-        return bad(c, 400, "invalid_simulation", "kind must be correct_action, complete_step, mistake, wrong_instrument, off_target, look_at_danger, tracking_lost, or tracking_restored.", coachActions(s.id));
+        return bad(c, 400, "invalid_simulation", "kind must be correct_action, complete_step, mistake, wrong_instrument, off_target, look_at_danger, tracking_lost, tracking_restored, bleed, or stop_bleed.", coachActions(s.id));
     }
     const results = [...stepResults, ...events.map((e) => s.handle(e))];
     const snapshot = s.snapshot();
@@ -458,8 +535,15 @@ function parseEvent(e: unknown): CoachEvent | string {
       return str("structureId") === "" ? { type: "focus", structureId: "" } : id("structureId") || { type: "focus", structureId: str("structureId") };
     case "tracking":
       return typeof ev.valid === "boolean" ? { type: "tracking", valid: ev.valid } : "tracking needs a boolean valid";
+    case "bleeding": {
+      const num = (k: string) => (typeof ev[k] === "number" && Number.isFinite(ev[k]) && (ev[k] as number) >= 0 ? (ev[k] as number) : null);
+      if (typeof ev.active !== "boolean") return "bleeding needs a boolean active";
+      const rate = num("rateMlPerMin"), total = num("totalMl");
+      if (rate == null || total == null) return "bleeding needs non-negative rateMlPerMin and totalMl";
+      return id("structureId") || { type: "bleeding", structureId: str("structureId"), active: ev.active, rateMlPerMin: rate, totalMl: total };
+    }
     default:
-      return "type must be place_port, touch, identify, confirm, focus, or tracking";
+      return "type must be place_port, touch, identify, confirm, focus, tracking, or bleeding";
   }
 }
 
