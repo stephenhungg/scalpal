@@ -66,31 +66,6 @@ export interface ScoreSection {
   missed: string[];
 }
 
-// A chart risk flag and whether the interview surfaced it, for the operating room Time-Out card.
-export interface CarryoverRisk {
-  id: string; // brief flag id, e.g. "flag_bleeding"
-  type: string;
-  label: string;
-  severity: string;
-  source: string; // the interview item that surfaces it, e.g. "history:medications"
-}
-
-// Which interview items surface each chart risk flag. Flags the learner cannot elicit by asking (age,
-// an incomplete chart) are not carried as found or missed.
-const FLAG_SURFACED_BY: Record<string, string[]> = {
-  bleeding: ["history:medications", "history:past_medical"],
-  latex: ["history:allergies"],
-  contrast: ["history:allergies"],
-  allergy: ["history:allergies"],
-  renal: ["history:past_medical", "test:bmp"],
-  metformin_renal: ["history:medications"],
-  diabetes: ["history:past_medical", "history:medications"],
-  anemia: ["history:past_medical", "test:cbc"],
-  cardiac: ["history:past_medical"],
-  airway: ["history:past_medical"],
-  polypharmacy: ["history:medications"],
-};
-
 export interface Scorecard {
   patientId: string;
   patientName: string;
@@ -111,8 +86,6 @@ export interface Scorecard {
   diagnosisResult: "correct" | "partial" | "incorrect" | "missing";
   differentialNamed: string[];
   differentialSuggestions: string[];
-  risksFound: CarryoverRisk[];
-  risksMissed: CarryoverRisk[];
   feedback: string[];
   spoken: string;
 }
@@ -300,27 +273,6 @@ export class EncounterSession {
     return this.tests.includes(item.id);
   }
 
-  private surfaced(key: string): boolean {
-    const [kind, id] = key.split(":");
-    if (kind === "history") return this.history.has(id as HistoryTopic);
-    if (kind === "exam") return this.exams.has(id as ExamManeuver);
-    return this.tests.includes(id as TestId);
-  }
-
-  // Chart risks split by whether the learner asked about or tested for them.
-  risks(): { found: CarryoverRisk[]; missed: CarryoverRisk[] } {
-    const found: CarryoverRisk[] = [];
-    const missed: CarryoverRisk[] = [];
-    for (const f of this.kase.brief.flags) {
-      const keys = FLAG_SURFACED_BY[f.type];
-      if (!keys) continue;
-      const hit = keys.find((k) => this.surfaced(k));
-      const risk = { id: f.id, type: f.type, label: f.title, severity: f.severity, source: hit ?? keys[0] ?? "" };
-      (hit ? found : missed).push(risk);
-    }
-    return { found, missed };
-  }
-
   score(): Scorecard {
     const e = this.encounter;
     const a = this.assessment ?? { diagnosis: "", differential: [], procedure: "", urgency: "" };
@@ -380,7 +332,6 @@ export class EncounterSession {
     };
 
     const sections = [history, exam, workup, diagnosis, plan, differential];
-    const risks = this.risks();
     const total = sections.reduce((s, x) => s + x.score, 0);
     const toItem = (x: RubricItem): FoundItem => ({ kind: x.kind, id: x.id, label: labelOf(x.id), why: x.why });
     const criticalMissed = e.critical.filter((x) => !this.has(x)).map(toItem);
@@ -430,8 +381,6 @@ export class EncounterSession {
       diagnosisResult,
       differentialNamed: named.map((d) => d.label),
       differentialSuggestions: differential.missed,
-      risksFound: risks.found,
-      risksMissed: risks.missed,
       feedback,
       spoken: spokenParts.join(" "),
     };
@@ -445,8 +394,10 @@ export class EncounterSession {
       `Pre-op interview score ${card.total}/100 (${card.grade}). The learner diagnosed "${this.assessment.diagnosis || "nothing"}" (${card.diagnosisResult}).`,
       card.procedureChosenCorrectly ? "" : `They proposed "${this.assessment.procedure || "no procedure"}"; the case needs a ${this.kase.procedure.title.toLowerCase()}.`,
       card.criticalMissed.length ? `In the interview they missed: ${card.criticalMissed.map((m) => m.label).join(", ")}. Bring these up when they matter during the operation.` : "They covered every critical item in the interview.",
-      card.risksFound.length ? `Chart risks they found: ${card.risksFound.map((r) => r.label).join(", ")}.` : "",
-      card.risksMissed.length ? `Chart risks they did not elicit: ${card.risksMissed.map((r) => r.label).join(", ")}.` : "",
+      ...(["found", "missed"] as const).map((status) => {
+        const labels = card.carryoverItems.filter((i) => i.status === status).map((i) => i.label);
+        return labels.length ? `Chart risks they ${status === "found" ? "found" : "did not elicit"}: ${labels.join(", ")}.` : "";
+      }),
     ];
     return lines.filter(Boolean).join(" ");
   }

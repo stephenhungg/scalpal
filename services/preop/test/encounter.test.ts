@@ -560,8 +560,8 @@ describe("office to operating room", () => {
     await req("POST", `/encounters/${id}/attending`);
     await req("POST", `/encounters/${id}/tools/record_assessment`, { diagnosis: "appendicitis", differential: [], procedure: "laparoscopic appendectomy", urgency: "urgent" });
     const card = (await req("GET", `/encounters/${id}/score`)).json.scorecard;
-    expect(card.risksFound).toEqual([expect.objectContaining({ type: "latex", source: "history:allergies" })]);
-    expect(card.risksMissed).toEqual([expect.objectContaining({ type: "anemia", source: "history:past_medical" })]);
+    const byType = Object.fromEntries(card.carryoverItems.map((i: { type: string; status: string }) => [i.type, i.status]));
+    expect(byType).toMatchObject({ latex: "found", anemia: "missed" });
     const surgery = await req("POST", "/coach/sessions", { patientId: "patient-demo-multi-source", encounterId: id });
     expect(surgery.json.firstMessage).toBe("Scrubbed in with you. Time-out: confirm patient, procedure and site.");
     expect(surgery.json.systemPrompt).toMatch(/did not elicit: Anemia/);
