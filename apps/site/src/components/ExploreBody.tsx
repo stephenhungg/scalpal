@@ -30,7 +30,7 @@ export function ExploreBody({ apkUrl, videoUrl }: { apkUrl: string; videoUrl: st
       <HandsBackdrop />
       <Shell className="z-10 flex flex-col">
         <motion.section
-          className="relative z-10 flex flex-col items-center px-[15px] pb-16 pt-8 text-center min-[810px]:px-[30px] min-[810px]:pt-12"
+          className="relative z-10 flex flex-col items-center px-[15px] pb-4 pt-6 text-center min-[810px]:px-[30px] min-[810px]:pt-12"
           animate={leaving ? { opacity: 0, filter: "blur(6px)", y: -10 } : { opacity: 1, filter: "blur(0px)", y: 0 }}
           transition={EXIT}
         >
@@ -41,7 +41,7 @@ export function ExploreBody({ apkUrl, videoUrl }: { apkUrl: string; videoUrl: st
             <BlurWords text={LEDE} start={wordCount(TITLE)} />
           </p>
 
-          <FadeIn delay={0.55} className="mt-8 w-full max-w-[800px]">
+          <FadeIn delay={0.55} className="mt-6 w-full max-w-[min(800px,calc((100dvh-430px)*16/9))]">
             {videoUrl ? (
                 <video className="block aspect-video w-full bg-black" src={videoUrl} controls playsInline preload="metadata" />
               ) : (
@@ -51,7 +51,7 @@ export function ExploreBody({ apkUrl, videoUrl }: { apkUrl: string; videoUrl: st
               )}
           </FadeIn>
 
-          <FadeIn delay={0.75} className="mt-10 flex flex-col items-center gap-4">
+          <FadeIn delay={0.75} className="mt-7 flex flex-col items-center gap-3">
             <div className="flex items-center gap-6">
               {apkUrl ? (
                 <RollButton href={apkUrl} download label="Download for Quest" hoverLabel="Get the APK" />
@@ -69,7 +69,7 @@ export function ExploreBody({ apkUrl, videoUrl }: { apkUrl: string; videoUrl: st
 
         {/* bottom center of the page: pinned to the bottom when the content fits, after it otherwise */}
         <motion.div
-          className="relative z-10 mt-auto w-full px-[15px] pb-6 min-[810px]:px-[30px]"
+          className="relative z-10 mt-auto w-full px-[15px] pb-5 pt-4 min-[810px]:px-[30px]"
           animate={leaving ? { opacity: 0 } : { opacity: 1 }}
           transition={EXIT}
         >
