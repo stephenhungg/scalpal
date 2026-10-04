@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "scalpal.run_result.v1",
+  "runId": "sample-run", "sessionId": "sample-session", "attemptId": "sample-attempt", "encounterId": "sample-encounter",
+  "patientId": "patient-demo-multi-source", "procedureId": "open_appendectomy", "isSample": true,
+  "diagnosis": {
+    "total": 82, "max": 100, "grade": "B", "procedureId": "open_appendectomy", "procedureTitle": "Open appendectomy",
+    "procedureChosenCorrectly": true, "sections": [{"id":"history","label":"History","score":24,"max":30,"found":["migration"],"missed":["medications"]},{"id":"exam","label":"Examination","score":18,"max":20,"found":["rebound"],"missed":[]}],
+    "criticalFound": [{"kind":"history","id":"migration","label":"Pain migration","why":"Authored fixture"}],
+    "criticalMissed": [{"kind":"history","id":"medications","label":"Medication history","why":"Authored fixture"}],
+    "diagnosisGiven":"Acute appendicitis", "diagnosisExpected":"Acute appendicitis", "diagnosisResult":"correct", "differentialNamed":[], "differentialSuggestions":[], "risksFound":[], "risksMissed":[], "feedback":[], "spoken":""
+  },
+  "surgery": {"available":true,"total":76,"max":100,"grade":"Developing","bloodLossMl":32,
+    "milestones":[{"id":"delivery","label":"Appendix delivered","atSeconds":52},{"id":"base","label":"Base secured","atSeconds":71}],
+    "guardrailViolations":[{"id":"contact","label":"Off-target contact","atSeconds":48}],"orderDeviations":[],
+    "decisions":[{"id":"base_choice","label":"True base identified","atSeconds":66,"correct":true}],
+    "economy":{"available":false,"leftPathMeters":0,"rightPathMeters":0,"durationSeconds":0},
+    "hints":[{"id":"hint_1","label":"Review the base","atSeconds":60}]},
+  "replay":{"jobId":"","status":"failed","failureReason":"No learner clip in this synthetic preview.","sourceVideoUrl":"","replayVideoUrl":"","source":"sample","durationSeconds":20,"captureStartRunSeconds":40,"clockAligned":false},
+  "demo":{"enabled":true,"patientId":"patient-demo-multi-source","showSuggestedQuestions":true,"skipMarking":true,"preExpose":true,"timeLapseNonKeySteps":true,"replayHighlightSeconds":20}
+}

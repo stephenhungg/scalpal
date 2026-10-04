@@ -1,0 +1,19 @@
+# Run Ending
+
+Open `Scenes/RunEnding.unity`, or use **Scalpal → Recap → Prepare and Verify**. The scene is independently authored and does not modify the shell's build list. It uses the office's glass materials, world-text shader and licensed Inter font. The built-in Unity Video module is required and enabled in the project manifest.
+
+Without a bound run it displays the explicitly synthetic fixture. Real integration uses `RecapRunContext` on the persistent run root, `Begin(RunResult)`, then `EndSurgery(attemptId, graderResult)`. See the [integration contract](../../../../../docs/system-integration.md#run-ending-contract--recap-lane-october-3) for capture, clock, retry and demo obligations. The shell must include this scene in its player and route to it after OR completion. The independent scene includes its own XR rig; disable that rig when retaining a shared shell rig and route selects to `RecapButton.Press()`.
+
+The replay polls the authenticated gateway for the attached motion job, including jobs attached after the scene opens. Configure `gatewayUrl`, `clientToken` (existing SpacetimeDB client identity), `voiceServiceUrl`, and `coachSessionId` on the context. Credentials are never serialized. Ready output plays beside the source; missing/failed video uses the bundled **synthetic sample**, with the real job status still visible. Recorded outputs can already contain the worker's source/robot composite. Playback is kinematic, fixed wrist, one hand; neither metric wrist recovery nor a learned policy is claimed.
+
+Grip is hold-to-talk for the single Jarvis reaction; trigger selects world-space controls. Editor mouse selects controls and space enables speech input. Jarvis receives a static server-built reflection prompt through the existing `QuestJarvisVoice` API. Missing endpoint/voice sessions retain on-screen questions. The next button advances self-assessment then independent scorecards. Feedback is deterministic selection from logged facts, at most two strengths and two improvements. No LLM grades or invents performance facts.
+
+The replay's Demo mode button toggles the documented run flags; this scene enforces a maximum 20-second highlight. Other phases must consume their own flags. The callback-based retry creates no attempt itself: the shell owns reset and new attempt identity. Choose another patient uses the shell’s public fade/load API to return to `Launch`, then calls `HubController.Enter()` to open explore. Unbound retry shows a specific missing-interface message. `ExportResultJson()` returns the same wire payload accepted by the companion `/recap` import; automatic publishing is not connected.
+
+## Verification
+
+`Scalpal.Recap.Editor.RecapPlaybackValidation.Run` is a graphics-enabled Play Mode smoke test; invoke without `-quit` because it exits itself on pass/failure. It exercises the real decoder, seeking, play/pause, reflection progression, separate scores and return to explore.
+
+Run Unity 6000.0.66f2 in batch mode with `-executeMethod Scalpal.Recap.Editor.RecapBuild.PrepareAndVerify`. Assertion failure throws and fails the editor invocation. `Scalpal.Recap.Editor.RecapBuild.CapturePreviews` renders component preview PNGs into `SCALPAL_RECAP_PREVIEW` (default `/tmp/scalpal-recap-preview`); run with graphics enabled. Set `SCALPAL_RECAP_SAMPLE_FRAME` to an extracted PNG frame of the bundled sample to illustrate the replay surface in the static preview. These are component previews, not headset evidence.
+
+The new semantic body/predicate engine on main `1965cb34` exposes milestones, mistakes and simulated blood loss, but **does not yet export a complete end grade**. Keep `surgery.available=false` until the owning thread supplies it; do not infer a score from step count. Missing metric hand travel remains unavailable. Physical headset playback, OR-to-recap transition, actual learner capture, server/provider voice and live result publication need end-to-end verification.

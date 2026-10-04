@@ -8,6 +8,7 @@ import { loadConfig } from '../../src/config';
 import { createApp } from '../../src/http';
 import type { Realtime } from '../../src/realtime';
 import { LocalStorage } from '../../src/storage';
+import type { AuthorizeSession } from '../../src/recap';
 
 export const W1 = 'unit-worker-token-w1-0000';
 export const W2 = 'unit-worker-token-w2-0000';
@@ -35,7 +36,7 @@ export function runningJob(patch: Record<string, unknown> = {}) {
   };
 }
 
-export function startFakeGateway() {
+export function startFakeGateway(authorizeSession?: AuthorizeSession) {
   const saved = { ...process.env };
   Object.assign(process.env, {
     PUBLIC_BASE_URL: BASE,
@@ -69,7 +70,7 @@ export function startFakeGateway() {
   // Only the members createApp touches are provided.
   const rt = { isReady: true, isService: true, identityHex: 'ab', connection: conn, require: () => conn };
   const storage = new LocalStorage(config.storage.local, config.publicBaseUrl);
-  const app = createApp(config, rt as unknown as Realtime, storage);
+  const app = createApp(config, rt as unknown as Realtime, storage, authorizeSession);
 
   return {
     app,

@@ -270,3 +270,12 @@ The coach accepts a `bleeding` event: `{"type": "bleeding", "structureId": "<ana
 - Control is acknowledged silently in context with the running total.
 
 Every completed step is now a checkpoint (`completedSteps[]`: seconds, mistakes, hints, blood loss at the time), and the context reminds Jarvis of earlier rough steps so he can refer back.
+
+## State tracker events (tools in hand, tool contact)
+
+Jarvis has two parts. The state tracker (`CoachSession` in `services/preop/src/coach.ts`) is deterministic: it turns headset events into facts and pushes a fresh `[LIVE SURGERY STATE vN]` context to the voice agent whenever something meaningful changes (300 ms debounce on the laptop page). The voice agent only talks from that context and its tools. Two events feed the tracker without scoring anything:
+
+- `{"type": "instrument", "instrumentId": "scalpel", "hand": "left" | "right", "held": true | false}` when a tool is picked up or put down.
+- `{"type": "contact", "instrumentId": "scalpel", "structureId": "skin"}` when a tool tip first touches a tissue or structure (send once per contact, not every frame). In open surgery, the first contact with a critical structure (cecum, terminal ileum, iliac vessels, ureter) gives a one-time caution.
+
+Send them through `CoachRelay` / `POST /coach/sessions/:id/events` like the others. With them, the context shows "In hand: right scalpel" and a timed recent history ("0:03 Scalpel touched the skin. 0:05 Scalpel: cut the skin, 52 mm (cut across the fibers)."). Body actions (`surgery` events) and milestones appear in the same history in plain words.
