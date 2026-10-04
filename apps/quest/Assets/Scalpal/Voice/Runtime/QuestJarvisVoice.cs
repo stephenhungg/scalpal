@@ -430,7 +430,7 @@ namespace Scalpal.Voice
             for (int i = 0; i < 32 && connection.Incoming.TryDequeue(out var json); i++)
             {
                 try { Handle(json); }
-                catch (Exception exception) { Fail("Voice protocol failed (" + exception.GetType().Name + ")."); return; }
+                catch (Exception exception) { Debug.LogWarning("SCALPAL_VOICE_PROTOCOL " + exception.GetType().Name + ": " + exception.Message); Fail("Voice protocol failed (" + exception.GetType().Name + ")."); return; }
                 if (active != connection) return;
             }
             ReleaseSilentInterruption(Time.realtimeSinceStartup);
