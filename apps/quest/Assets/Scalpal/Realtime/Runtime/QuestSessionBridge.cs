@@ -33,11 +33,14 @@ namespace Scalpal.Realtime
         public event Action<string> AttemptStarted;
         public event Action<string> ResultCommitted;
 
+        const float AttemptTimeoutSeconds = 10;
+
         DbConnection connection;
         SubscriptionHandle subscription;
-        bool subscribed, connecting, stopping, dirty, snapshotInFlight, attemptInFlight, attemptCommitted;
-        float reconnectAt, nextPublish, connectStarted;
-        string attemptBeforeStart, requestedExercise, requestedVersion;
+        bool subscribed, connecting, stopping, dirty, snapshotInFlight, attemptInFlight, attemptCommitted, joinRejected;
+        float reconnectAt, nextPublish, connectStarted, attemptStartedAt;
+        string attemptBeforeStart, requestedExercise, requestedVersion, committedAttemptId;
+        DateTimeOffset committedAttemptAt;
         long generation, sentGeneration, acknowledgedGeneration;
         string sentAttempt;
         Snapshot latest;
@@ -87,8 +90,19 @@ namespace Scalpal.Realtime
                         connecting = false;
                         SaveToken(token);
                         HookReducers(conn);
+                        // Invites authorize joining, not an existing identity's reads. A rotated
+                        // invite must not prevent a persisted headset member from resubscribing.
+                        subscription = conn.SubscriptionBuilder().OnApplied(context =>
+                            { if (!stopping && conn == connection) subscribed = true; })
+                            .OnError((context, error) =>
+                            {
+                                if (stopping || conn != connection) return;
+                                subscribed = false; Paired = false;
+                                SetStatus("Session subscription unavailable");
+                            })
+                            .Subscribe(new[] { "SELECT * FROM my_sessions", "SELECT * FROM my_memberships", "SELECT * FROM session_exercise_state", "SELECT * FROM session_commands" });
                         conn.Reducers.JoinSession(joinCode.Trim().ToUpperInvariant(), displayName);
-                        SetStatus("Connected: pairing headset invite");
+                        SetStatus("Connected: checking headset membership");
                     })
                     .OnConnectError(error => Disconnected("Connection unavailable"))
                     .OnDisconnect((conn, error) => { if (conn == connection) Disconnected("Disconnected"); })
@@ -102,16 +116,22 @@ namespace Scalpal.Realtime
         {
             conn.Reducers.OnJoinSession += (ctx, code, name) =>
             {
-                if (!(ctx.Event.Status is SpacetimeDB.Status.Committed)) { SetStatus("Pairing rejected: check headset invite"); return; }
-                subscription = conn.SubscriptionBuilder().OnApplied(context => subscribed = true)
-                    .OnError((context, error) => { subscribed = false; Paired = false; SetStatus("Session subscription unavailable"); })
-                    .Subscribe(new[] { "SELECT * FROM my_sessions", "SELECT * FROM my_memberships", "SELECT * FROM session_exercise_state", "SELECT * FROM session_commands" });
+                if (stopping || conn != connection) return;
+                joinRejected = !(ctx.Event.Status is SpacetimeDB.Status.Committed);
+                // ObserveSession decides pairing only after the membership subscription applies.
             };
             conn.Reducers.OnStartAttempt += (ctx, session, exercise, version) =>
             {
-                if (!attemptInFlight || session != SessionId) return;
-                if (ctx.Event.Status is SpacetimeDB.Status.Committed) attemptCommitted = true;
-                else { attemptInFlight = false; attemptCommitted = false; SetStatus("Attempt request rejected"); AttemptFailed?.Invoke("Shared attempt request rejected; A: retry"); }
+                if (conn != connection || !attemptInFlight || session != SessionId ||
+                    exercise != requestedExercise || version != requestedVersion ||
+                    !(conn.Identity is Identity identity) || !identity.Equals(ctx.Event.CallerIdentity)) return;
+                if (ctx.Event.Status is SpacetimeDB.Status.Committed)
+                {
+                    attemptCommitted = true;
+                    committedAttemptAt = (DateTimeOffset)ctx.Event.Timestamp;
+                    CaptureCommittedAttempt();
+                }
+                else FailAttempt("Attempt request rejected", "Shared attempt request rejected; retry explicitly");
             };
             conn.Reducers.OnPublishExerciseState += (ctx, session, attempt, mode, step, index, count, selected, clearSelected, highlighted, clearHighlighted, rotating, paused, registration, reason, recording) =>
             {
@@ -159,6 +179,11 @@ namespace Scalpal.Realtime
                 catch (Exception) { CloseConnection(); Disconnected("Network processing unavailable"); }
             }
             if (connecting && Time.realtimeSinceStartup - connectStarted > 15) Disconnected("Connection timed out");
+            if (attemptInFlight && Time.realtimeSinceStartup - attemptStartedAt >= AttemptTimeoutSeconds)
+            {
+                FailAttempt("Attempt confirmation timed out", "Shared attempt was not confirmed within 10 seconds; check the session and retry explicitly");
+                return;
+            }
             if (!Connected)
             {
                 if (autoConnect && !stopping && !connecting && Time.realtimeSinceStartup >= reconnectAt)
@@ -191,7 +216,12 @@ namespace Scalpal.Realtime
                     chosen = candidate;
                 }
             }
-            if (chosen == null) { Paired = false; ObservedState = null; SetStatus("Unpaired: no active headset membership"); return; }
+            if (chosen == null)
+            {
+                Paired = false; ObservedState = null;
+                SetStatus(joinRejected ? "Pairing rejected: no active headset membership; check invite" : "Unpaired: no active headset membership");
+                return;
+            }
             bool hadSession = !string.IsNullOrEmpty(SessionId);
             bool changed = SessionId != chosen.SessionId || AttemptId != chosen.CurrentAttemptId;
             SessionId = chosen.SessionId;
@@ -205,13 +235,30 @@ namespace Scalpal.Realtime
                 dispatchedIds.Clear(); dispatchOrder.Clear();
                 if (hadSession && !attemptInFlight) { latest = null; dirty = false; }
             }
-            if (attemptInFlight && attemptCommitted && AttemptId != attemptBeforeStart &&
+            CaptureCommittedAttempt();
+            if (Paired && attemptInFlight && attemptCommitted && AttemptId == committedAttemptId &&
                 chosen.ExerciseId == requestedExercise && chosen.ExerciseVersion == requestedVersion)
             {
                 attemptInFlight = false; attemptCommitted = false;
                 AttemptStarted?.Invoke(AttemptId);
             }
-            if (Paired && (changed || Status.StartsWith("Connected:", StringComparison.Ordinal))) SetStatus("Paired");
+            if (Paired && (changed || Status.StartsWith("Connected:", StringComparison.Ordinal) ||
+                Status.StartsWith("Unpaired:", StringComparison.Ordinal) || Status.StartsWith("Pairing rejected:", StringComparison.Ordinal))) SetStatus("Paired");
+        }
+
+        void CaptureCommittedAttempt()
+        {
+            if (!attemptInFlight || !attemptCommitted || !string.IsNullOrEmpty(committedAttemptId)) return;
+            // The server start reducer stamps this state with its transaction's timestamp and
+            // sender. Bind that commit to one attempt rather than adopting any later matching
+            // exercise. SDK v2 applies reducer DB updates before invoking its callback; delayed
+            // state is still allowed, but an uncorrelated cache must fail at the deadline.
+            var state = connection.Db.SessionExerciseState.SessionId.Find(SessionId);
+            if (state == null || state.AttemptId == attemptBeforeStart ||
+                state.ExerciseId != requestedExercise || state.ExerciseVersion != requestedVersion ||
+                (DateTimeOffset)state.UpdatedAt != committedAttemptAt ||
+                !(connection.Identity is Identity identity) || !identity.Equals(state.UpdatedBy)) return;
+            committedAttemptId = state.AttemptId;
         }
 
         public bool BeginAttempt(string exerciseId, string version)
@@ -220,9 +267,20 @@ namespace Scalpal.Realtime
             attemptBeforeStart = AttemptId;
             requestedExercise = exerciseId; requestedVersion = version;
             attemptInFlight = true; attemptCommitted = false;
+            committedAttemptId = null;
+            attemptStartedAt = Time.realtimeSinceStartup;
             latest = null; dirty = false;
             try { connection.Reducers.StartAttempt(SessionId, exerciseId, version); return true; }
             catch (Exception) { attemptInFlight = false; SetStatus("Attempt could not be sent"); return false; }
+        }
+
+        void FailAttempt(string status, string reason)
+        {
+            attemptInFlight = false; attemptCommitted = false;
+            // A pending scene snapshot is not confirmation of this uncertain attempt.
+            latest = null; dirty = false;
+            SetStatus(status);
+            AttemptFailed?.Invoke(reason);
         }
 
         public void PublishSnapshot(string phase, string stepId, uint index, uint count,
@@ -337,7 +395,7 @@ namespace Scalpal.Realtime
         void Disconnected(string status)
         {
             bool uncertainAttempt = attemptInFlight;
-            connecting = false; subscribed = false; Paired = false; ObservedState = null;
+            connecting = false; subscribed = false; joinRejected = false; Paired = false; ObservedState = null;
             snapshotInFlight = false; acknowledgedGeneration = 0; dirty = latest != null;
             dispatchedCommand = null; resolution = null; resolutionInFlight = false;
             // A lost attempt acknowledgement must not create another attempt on retry.
