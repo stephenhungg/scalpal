@@ -472,10 +472,52 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
     return c.json({ command, actions: coachActions(s.id) });
   });
 
+  // Feeds Stephen's shared patient_condition row (SpacetimeDB advances it at 1 Hz for the Live OR panel)
+  // from the same facts the coach uses: the baseline, body blood loss and active bleeds, region injuries and
+  // the end of the case. Death is detected there too, from the same physiology.
+  function feedPatientCondition(session: CoachSession) {
+    const sink = options.realtime;
+    if (!sink?.patientCondition) return;
+    const send = sink.patientCondition.bind(sink);
+    const startView = session.condition.view();
+    const b = session.condition.currentBaseline;
+    send({ kind: "start", coachSessionId: session.id, baseline: { hr: b.hr, rr: b.rr, sys: b.sys, dia: b.dia, spo2: startView.vitals.spo2 >= 0 ? startView.vitals.spo2 : 98, source: b.source ?? "authored" }, weightKg: startView.weightKg, mlPerKg: session.condition.bloodVolumeMlPerKg });
+    let baselineKey = JSON.stringify(b);
+    let bodyKey = "";
+    const regions = new Map<string, boolean>();
+    let ended = false;
+    session.subscribe(({ snapshot }) => {
+      const cb = session.condition.currentBaseline;
+      const bk = JSON.stringify(cb);
+      if (bk !== baselineKey) {
+        baselineKey = bk;
+        send({ kind: "baseline", baseline: { hr: cb.hr, rr: cb.rr, sys: cb.sys, dia: cb.dia, source: cb.source ?? "authored" } });
+      }
+      const bleeds = snapshot.activeBleeds.map((x) => ({ name: x.structure.name, rateMlPerMin: x.rateMlPerMin }));
+      const key = JSON.stringify([snapshot.bloodLossMl, bleeds]);
+      if (key !== bodyKey) {
+        bodyKey = key;
+        send({ kind: "body", bloodLostMl: snapshot.bloodLossMl, bleeds });
+      }
+      for (const r of snapshot.condition.regions) {
+        if (regions.get(r.region) !== r.bleeding) {
+          regions.set(r.region, r.bleeding);
+          send({ kind: "injury", region: r.region, controlled: !r.bleeding });
+        }
+      }
+      const result = snapshot.condition.outcome.result;
+      if (!ended && (result === "completed" || result === "ended")) {
+        ended = true;
+        send({ kind: "end", result, cause: snapshot.condition.outcome.cause });
+      }
+    });
+  }
+
   // Operating-room logs for the companion dashboard: new timeline lines, alerts, a vitals sample at most
   // every 2 s (and on every class change), checklist progress and the outcome. Logs only, no video.
   function forwardLogs(session: CoachSession) {
     const sink = options.realtime;
+    feedPatientCondition(session);
     if (!sink?.simLog) return;
     const log = (kind: "event" | "alert" | "vitals" | "checklist" | "outcome", text: string, data?: unknown) => sink.simLog!({ coachSessionId: session.id, kind, text, data });
     let lastLine = "";
