@@ -129,6 +129,21 @@ def cmd_import_episode(args: argparse.Namespace) -> None:
     import_episode(Path(args.episode), args.hand, Path(args.out) if args.out else None, render=not args.no_render)
 
 
+def cmd_learn(args: argparse.Namespace) -> None:
+    from .learning import evaluate as ev
+
+    tag = args.tag
+    if args.stage in ("extract", "all"):
+        paths = [Path(p) for p in args.motion] or [ev.SAMPLE_MOTION]
+        ev.stage_extract(paths)
+    if args.stage in ("sweep", "all"):
+        ev.stage_sweep([int(n) for n in args.n.split(",")], args.seeds, args.budget, args.steps, args.workers, tag)
+    if args.stage in ("report", "all"):
+        ev.stage_report(tag)
+    if args.stage in ("video", "all"):
+        ev.stage_video(args.video_n or max(int(n) for n in args.n.split(",")), tag=tag)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="scalpal-motion", description=__doc__)
     sub = parser.add_subparsers(required=True)
@@ -203,6 +218,18 @@ def main() -> None:
     p.add_argument("--out", default=None, help="default: <episode>/robot")
     p.add_argument("--no-render", action="store_true")
     p.set_defaults(func=cmd_import_episode)
+
+    p = sub.add_parser("learn", help="proof-of-learning experiment: human demos -> sim data -> BC policy -> held-out eval")
+    p.add_argument("stage", choices=["extract", "sweep", "report", "video", "all"])
+    p.add_argument("--motion", nargs="*", default=[], help="extract: motion.json files (import-episode output)")
+    p.add_argument("--n", default="1,5,10,20", help="sweep: comma-separated numbers of human demos")
+    p.add_argument("--seeds", type=int, default=3, help="sweep: training seeds per N")
+    p.add_argument("--budget", type=int, default=1000, help="sweep: generated sim episodes per N (before filtering)")
+    p.add_argument("--steps", type=int, default=6000, help="sweep: gradient steps per policy")
+    p.add_argument("--workers", type=int, default=8)
+    p.add_argument("--video-n", type=int, default=None)
+    p.add_argument("--tag", default="", help="suffix for results/chart/video files (e.g. _smoke)")
+    p.set_defaults(func=cmd_learn)
 
     args = parser.parse_args()
     if getattr(args, "video", None) and args.func is cmd_run and args.out is None:
