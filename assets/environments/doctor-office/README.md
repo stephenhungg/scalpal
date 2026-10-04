@@ -30,6 +30,12 @@ blender --background --disable-autoexec --python scripts/environments/doctor_off
 
 If the human library is missing, the office script fails with a clear prerequisite message. For a deliberate fresh source build, `--office-only` creates the floral room first, then the human command above supplies the patients. It does not silently fall back to prototype people.
 
+## Native Lighting
+
+The Unity office is fully baked for Quest: no realtime lights, shadow maps or post-processing. `EncounterOfficeBuild.Prepare` calls `EncounterOfficeLighting` to add a closed ceiling, a warm window "sun" spot with a procedural blinds cookie, a cool window-sky area light, two ceiling-diffuser area lights and a warm floor-lamp point light, then bakes with the Progressive GPU lightmapper (40 texels/m, AO, 4 bounces, non-directional, one 1024 atlas). Patients are dynamic and lit by a baked light-probe group; one box-projected baked reflection probe gives the floor and metal their highlights. Prepare needs a graphics device (run it without `-nographics`); the bake output under `Scenes/DiagnosisOffice/` is committed. `EncounterOfficeLightingValidation` (part of `Verify`) fails if the bake, probes or lightmap UVs are missing or collapsed.
+
+The office FBX carries Blender-authored lightmap UVs in its second UV set (`Lightmap`, Smart UV Project). Unity's import-time unwrapper is left off because it collapsed the bevelled window frame into a black sliver. `previews/office-lighting-before.png`, `office-lighting-after.png` and `office-lighting-after-room.png` (UI hidden) are mono Editor renders from the seated learner eye, made with `Scalpal/Encounter Office/Capture Lighting Preview`.
+
 ## Native Contract
 
 `PatientFemale` presents the fictional Priya Ramaswamy, age 40, `patient-demo-multi-source`; `PatientMale` presents fictional Jonah Okoye, age 30, `patient-demo-sparse`. Their artist-selected visual appearances do not establish additional case demographics or match real people.

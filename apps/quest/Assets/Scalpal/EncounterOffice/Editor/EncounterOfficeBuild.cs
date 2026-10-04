@@ -28,6 +28,7 @@ namespace Scalpal.EncounterOffice.Editor
             glass=Glass("office_glass_card",new Color(.055f,.082f,.086f,.78f));
             glassBorder=Glass("office_glass_border",new Color(.73f,.83f,.78f,.35f));
             glassButton=Glass("office_glass_button",new Color(.26f,.36f,.33f,.78f));
+            EncounterOfficeLighting.EnsureLightmapUVs();
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             var office = Art("DoctorOffice", "BotanicalDoctorOffice");
             office.transform.position = Vector3.zero;
@@ -91,8 +92,6 @@ namespace Scalpal.EncounterOffice.Editor
             ForegroundPanel(assessment,new Vector3(0,.922f,.90f),.556f);
             ForegroundPanel(keys,new Vector3(0,.705f,.90f),.556f);
             keys.gameObject.SetActive(false);
-            var light = new GameObject("WarmDaylight").AddComponent<Light>(); light.type=LightType.Directional; light.transform.rotation=Quaternion.Euler(45,-30,0);light.intensity=.8f;light.color=new Color(1,.96f,.88f);light.shadows=LightShadows.None;
-            RenderSettings.ambientMode=AmbientMode.Flat;RenderSettings.ambientLight=new Color(.74f,.76f,.7f);
             // Measure imported face rather than assume Blender/FBX handedness.
             var nose = female.GetComponentsInChildren<Transform>(true).FirstOrDefault(t=>t.name=="NoseTip");
             var headPivot = female.GetComponentsInChildren<Transform>(true).First(t=>t.name=="HeadPivot");
@@ -103,12 +102,14 @@ namespace Scalpal.EncounterOffice.Editor
             Debug.Log("SCALPAL_ENCOUNTER_ART_FACING importedNoseOffsetZ="+faceZ+" clinician=positiveZ artYawCorrection="+(faceZ<0?180:0));
             systems.SetActive(true);patients.Select(null);ui.Refresh();
             foreach(var fit in UnityEngine.Object.FindObjectsByType<EncounterOfficeText>(FindObjectsInactive.Include,FindObjectsSortMode.None))fit.Fit();
+            EncounterOfficeLighting.Apply(office,female,male);
             EditorSceneManager.SaveScene(scene,ScenePath);AssetDatabase.SaveAssets();
+            EncounterOfficeLighting.Bake(scene);
             CleanupUnusedGeneratedAssets();
             Debug.Log("SCALPAL_ENCOUNTER_OFFICE_PREPARED scene="+ScenePath+" globalBuildSettingsUnchanged=true");
         }
         [MenuItem("Scalpal/Encounter Office/Verify Diagnosis Office")]
-        public static void Verify() { EncounterOfficeValidation.Run(); EncounterRouteValidation.Run(); Scalpal.Shell.Editor.DialogueBoxValidation.Run(); }
+        public static void Verify() { EncounterOfficeValidation.Run(); EncounterRouteValidation.Run(); Scalpal.Shell.Editor.DialogueBoxValidation.Run(); EncounterOfficeLightingValidation.Run(); }
         public static void PrepareAndVerify() { Prepare(); Verify(); }
 
         static void ForegroundPanel(Transform panel,Vector3 position,float scale)
