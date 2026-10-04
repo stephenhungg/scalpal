@@ -22,6 +22,8 @@ export interface RealtimeSink {
   // Operating-room logs for the companion dashboard (docs/operation-flow.md "Dashboard"): what the state
   // tracker saw, alerts, vitals samples, checklist changes and the case outcome. Fire and forget.
   simLog?(entry: SimLogEntry): void;
+  // The robot learner's verdict for a step, as a robot_result row every member subscribes to. Fire and forget.
+  robotResult?(entry: RobotResultEntry): void;
   // Resolves to the headset's resolution, or null when the shared session cannot carry the command.
   highlight(targetId: string, timeoutMs?: number): Promise<{ status: string; reason: string } | null>;
 }
@@ -31,6 +33,16 @@ export interface SimLogEntry {
   kind: "event" | "alert" | "vitals" | "checklist" | "outcome";
   text: string; // one human-readable line
   data?: unknown; // structured payload, JSON-serialized when stored
+}
+
+export interface RobotResultEntry {
+  stepId: string;
+  success: boolean;
+  pathErrorMm: number | null;
+  policySuccessRate: number | null; // 0..1
+  demosHuman: number;
+  demosSynthetic: number;
+  videoUrl: string | null;
 }
 
 export const NO_REALTIME: RealtimeSink = {
@@ -217,6 +229,22 @@ export class RealtimeBridge implements RealtimeSink {
     }
     this.call("appendSimLog", (c) =>
       c.reducers.appendSimLog({ sessionId: this.sessionId, coachSessionId: entry.coachSessionId.slice(0, 120), kind: entry.kind, text, dataJson }),
+    );
+  }
+
+  robotResult(entry: RobotResultEntry) {
+    const count = (n: number) => Math.max(0, Math.min(2 ** 32 - 1, Math.round(n)));
+    this.call("postRobotResult", (c) =>
+      c.reducers.postRobotResult({
+        sessionId: this.sessionId,
+        stepId: entry.stepId.slice(0, 120),
+        success: entry.success,
+        pathErrorMm: entry.pathErrorMm ?? undefined,
+        policySuccessRate: entry.policySuccessRate ?? undefined,
+        demosHuman: count(entry.demosHuman),
+        demosSynthetic: count(entry.demosSynthetic),
+        videoUrl: entry.videoUrl ?? undefined,
+      }),
     );
   }
 

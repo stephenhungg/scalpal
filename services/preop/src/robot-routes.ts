@@ -184,6 +184,10 @@ export function registerRobotRoutes(app: Hono, options: RobotRouteOptions) {
       text: `Simulated robot ${r.success ? "completed" : "missed"} "${r.stepTitle}"${r.pathErrorMm === null ? "" : `, path error ${r.pathErrorMm.toFixed(1)} mm`}${rate} (${r.demos.human} headset + ${r.demos.synthetic} synthetic demos; sim only).`,
       data: { robotResult: r },
     });
+    options.realtime?.robotResult?.({
+      stepId: r.stepId, success: r.success, pathErrorMm: r.pathErrorMm, policySuccessRate: r.policySuccessRate,
+      demosHuman: r.demos.human, demosSynthetic: r.demos.synthetic, videoUrl: r.videoUrl,
+    });
     return c.json({ stored: true }, 201);
   });
 
