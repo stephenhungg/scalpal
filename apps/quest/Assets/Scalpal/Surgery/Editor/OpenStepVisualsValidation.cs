@@ -23,6 +23,7 @@ namespace Scalpal.Surgery.Editor
     {
         const float Dt = .02f;
         static int checks;
+        static string demoFolder;
         static string renders = "", pixels = "";
         static readonly MethodInfo AutoClose = typeof(OpenSurgerySession).GetMethod("AutoClose", BindingFlags.Instance | BindingFlags.NonPublic);
         static readonly MethodInfo HintLateUpdate = typeof(SurgeryTriggerHint).GetMethod("LateUpdate", BindingFlags.Instance | BindingFlags.NonPublic);
@@ -55,6 +56,19 @@ namespace Scalpal.Surgery.Editor
                 if (tissue) tissue.Dispose();
                 OpenSurgeryBuild.RestoreScenes(previous);
             }
+        }
+
+        // Optional reel export: the real synthetic step fixture, with matching incision/closure
+        // cameras and wider organ stages. Does not modify validation views or pixel thresholds.
+        [MenuItem("Scalpal/Surgery/Export Demo Step Renders")]
+        public static void ExportDemo()
+        {
+            demoFolder = Environment.GetEnvironmentVariable("SCALPAL_DEMO_RENDERS");
+            if (string.IsNullOrEmpty(demoFolder))
+                throw new InvalidOperationException("Set SCALPAL_DEMO_RENDERS to the demo output directory");
+            Directory.CreateDirectory(demoFolder);
+            try { Run(); Debug.Log("SCALPAL_DEMO_STEP_RENDERS_OK: 1920x1080 synthetic Editor views; " + demoFolder); }
+            finally { demoFolder = null; }
         }
 
         sealed class Rig
@@ -309,9 +323,77 @@ namespace Scalpal.Surgery.Editor
                 }
             }
             finally { foreach (var r in tools) if (r) r.forceRenderingOff = false; }
+            if (label != null && !string.IsNullOrEmpty(demoFolder)) RenderDemo(s, label);
             if (label != null) renders += (renders == "" ? "" : ",") + label;
             return result;
         }
+        static void RenderDemo(Rig s, string label)
+        {
+            var go = new GameObject("SyntheticDemoCamera");
+            var camera = go.AddComponent<Camera>();
+            // 60 mm incision spans roughly 40% of the 150 mm horizontal field.
+            // Camera only: no wound, body, organ, tool or scoring frame is moved.
+            camera.transform.position = s.wound.position + Vector3.up * .225f - s.frame.right * .035f;
+            camera.transform.LookAt(s.wound.position, s.frame.forward);
+            bool organs = label == "5_delivered" || label == "6_mesoappendix" || label == "7_base" || label == "8_clean";
+            camera.orthographic = true; camera.orthographicSize = organs ? .073f : .043f;
+            camera.nearClipPlane = .005f; camera.farClipPlane = 4f;
+            camera.clearFlags = CameraClearFlags.SolidColor;
+            camera.backgroundColor = new Color(.035f, .055f, .065f);
+            var target = new RenderTexture(1920, 1080, 24) { antiAliasing = 8 };
+            var previous = RenderTexture.active; Texture2D image = null;
+            var lights = UnityEngine.Object.FindObjectsByType<Light>(FindObjectsSortMode.None);
+            var intensities = lights.Select(light => light.intensity).ToArray();
+            var ambientMode = RenderSettings.ambientMode; var ambientLight = RenderSettings.ambientLight;
+            foreach (var light in lights) light.intensity *= .45f;
+            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
+            RenderSettings.ambientLight = new Color(.62f, .62f, .62f);
+            Material seamOverlay = null; UnityEngine.Rendering.CommandBuffer closureDraw = null;
+            // The collision hull used by the existing seam does not exactly match the coarse
+            // visible mannequin. In this synthetic export only, draw those original seam
+            // vertices above the skin depth. No line is enlarged, relocated or newly scored.
+            var seam = s.wound.Find("AssistedClosure_SeamAndInterruptedStitches");
+            if (seam && seam.gameObject.activeInHierarchy)
+            {
+                seamOverlay = new Material(Shader.Find("Hidden/Internal-Colored"));
+                seamOverlay.SetColor("_Color", new Color(.21f, .10f, .10f));
+                seamOverlay.SetInt("_ZTest", (int)UnityEngine.Rendering.CompareFunction.Always);
+                seamOverlay.SetInt("_ZWrite", 0);
+                seamOverlay.SetInt("_Cull", (int)UnityEngine.Rendering.CullMode.Off);
+                closureDraw = new UnityEngine.Rendering.CommandBuffer { name = "Synthetic closure seam visibility" };
+                foreach (var line in seam.GetComponentsInChildren<LineRenderer>()) closureDraw.DrawRenderer(line, seamOverlay);
+                camera.AddCommandBuffer(UnityEngine.Rendering.CameraEvent.AfterEverything, closureDraw);
+            }
+            var hint = s.session.GetComponent<SurgeryTriggerHint>(); if (hint) hint.Hide();
+            // Scene labels can obscure the specimen in this tight export. The final screen
+            // caption explicitly retains assisted-display provenance instead.
+            var sceneText = UnityEngine.Object.FindObjectsByType<TextMesh>(FindObjectsSortMode.None)
+                .SelectMany(text => text.GetComponentsInChildren<Renderer>(true))
+                .Concat(UnityEngine.Object.FindObjectsByType<TMPro.TMP_Text>(FindObjectsSortMode.None)
+                    .SelectMany(text => text.GetComponentsInChildren<Renderer>(true)));
+            var tools = s.session.workbench.tools.Where(t => t).SelectMany(t => t.GetComponentsInChildren<Renderer>(true))
+                .Concat(sceneText).Where(r => r && !r.forceRenderingOff).Distinct().ToArray();
+            foreach (var r in tools) r.forceRenderingOff = true;
+            try
+            {
+                camera.targetTexture = target; camera.Render(); RenderTexture.active = target;
+                image = new Texture2D(1920, 1080, TextureFormat.RGB24, false);
+                image.ReadPixels(new Rect(0, 0, 1920, 1080), 0, 0); image.Apply();
+                File.WriteAllBytes(Path.Combine(demoFolder, "demo-step-" + label.Replace('_', '-') + ".png"), image.EncodeToPNG());
+            }
+            finally
+            {
+                foreach (var r in tools) if (r) r.forceRenderingOff = false;
+                for (int i = 0; i < lights.Length; i++) if (lights[i]) lights[i].intensity = intensities[i];
+                RenderSettings.ambientMode = ambientMode; RenderSettings.ambientLight = ambientLight;
+                if (closureDraw != null) { camera.RemoveAllCommandBuffers(); closureDraw.Release(); }
+                if (seamOverlay) UnityEngine.Object.DestroyImmediate(seamOverlay);
+                RenderTexture.active = previous; camera.targetTexture = null;
+                if (image) UnityEngine.Object.DestroyImmediate(image);
+                target.Release(); UnityEngine.Object.DestroyImmediate(target); UnityEngine.Object.DestroyImmediate(go);
+            }
+        }
+
         static int Changed(Color32[] a, Color32[] b)
         {
             int count = 0;

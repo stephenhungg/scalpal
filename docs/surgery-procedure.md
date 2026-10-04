@@ -133,3 +133,45 @@ Final synchronized checks: preop274 passing / two skipped, typecheck, and the op
 The [visual audit](surgery-visual-audit.md) records the actual ten-stage graphics-backed Editor sequence and [research criteria](research/open-appendectomy-visuals.md). Wounds and stains persist through elapsed time, accepted bleeding control, inspection and registration recovery. A puncture beside the incision is no longer swallowed by the former rectangular skin exclusion. Fixed mark budgets retain old wounds instead of overwriting them; additional disconnected marks beyond64 remain a limitation.
 
 The shared AR/VR composition now uses incision-local ordered tissue surfaces, a local measured membrane tent, a render-only cavity lining, source-envelope cecum appearance, accepted ligatures/divided source views and an explicit assisted closure seam. These views read existing facts and emit no progress. The actual wall/contact/topology remains active; semantic wound surfaces replace its rectangular draw. Source anatomy/contact is not modified by ligature, specimen or closure presentation. A specimen is an assisted separated display rather than a new grabbable physical body. The cecum/source layout and rigid mobile group still obscure the base from one learner angle; the mannequin remains low polygon. Neither the appearance nor the physics is clinically calibrated.
+
+## Synthetic Demo Visual Exports — October 4
+
+`Scalpal.Surgery.Editor.OpenStepVisualsValidation.ExportDemo` optionally exports
+1920×1080 views while running the actual synthetic tracked-pose step fixture.
+Set `SCALPAL_DEMO_RENDERS` to the output directory and run the Unity 6000.0.66f2
+Editor with `-batchmode -quit -projectPath apps/quest -executeMethod
+Scalpal.Surgery.Editor.OpenStepVisualsValidation.ExportDemo -logFile <log>`.
+The existing `Run` validation views, pixel thresholds and scene anchors remain
+unchanged. The export uses the same overhead camera for incision and closure,
+with the 60 mm incision spanning approximately 40% of frame width. Organ stages
+5–8 widen the camera to keep the delivered structures in view; scene text is
+hidden only for the export and assisted-display provenance moves to the screen
+caption. Runtime
+`OpenWoundView` gloss is .20 skin, .35 fat/fascia, .46 muscle, .84 membrane.
+
+For this synthetic export only, a depth visibility overlay draws the original
+closure seam vertices and widths above the visible mannequin skin. The coarse
+visible surface and collision hull do not exactly agree, so camera/gloss alone
+left sutures occluded. This is disclosed on the closure image; it is not a new
+closure mechanic or a relocation of stitches, tools, wound anchors or organs.
+The tissue and mannequin remain illustrative, not photorealistic or calibrated.
+
+Then run `services/motion/.venv/bin/python scripts/anatomy/export_demo_reel.py
+<output-directory> --video` to label the surgery views and produce a sequential
+Skin → Muscle → Organs → operative-region atlas reveal. The atlas is a crop of
+`assets/anatomy/briefing-preview.png`, with a source hash in
+`demo-visual-provenance.json`; it does not infer hidden anatomy. The reveal is
+three seconds, 1920×1080 H.264/yuv420p with faststart. Each view states synthetic
+Editor/atlas provenance; none is physical-headset evidence. Launch is unchanged
+and should occupy only one second in the reel.
+
+The main exports are `demo-step-0-mark.png` through `demo-step-9-closed.png`,
+plus before/retry views; intermediate existing exports also receive synthetic
+labels. `demo-atlas-reveal-1-skin.png`, `-2-muscle.png`, `-3-organs.png`,
+`-4-operative-region.png` and `demo-atlas-reveal.mp4` are ready for editing.
+Assets are exported outside Git into the reel assets directory.
+
+Verification: the final optional graphics export passed 147 existing assertions;
+`python3 scripts/quest/verify_session.py --suite player` passed on main `403b917`
+plus the presentation edits (`SCALPAL_PLAYER_VERIFY_OK`, no failed checks).
+The gate explicitly reports physical playthrough unverified.

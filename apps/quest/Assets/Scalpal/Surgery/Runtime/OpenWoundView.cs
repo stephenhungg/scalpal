@@ -104,7 +104,7 @@ namespace Scalpal.Surgery
                 var template=Resources.Load<Material>("OpenTissueSurface");
                 if(!template||!template.shader)throw new InvalidOperationException("Missing serialized OpenTissueSurface material/shader");
                 var material=new Material(template){name=go.name+"Surface",color=colors[layer]};
-                material.SetFloat("_Layer",layer);material.SetFloat("_Glossiness",layer==0?.30f:layer==4?.84f:.56f);materials.Add(material);
+                material.SetFloat("_Layer",layer);material.SetFloat("_Glossiness",layer==0?.20f:layer==4?.84f:layer<=2?.35f:.46f);materials.Add(material);
                 var renderer=go.AddComponent<MeshRenderer>();renderer.sharedMaterial=material;
                 renderer.shadowCastingMode=UnityEngine.Rendering.ShadowCastingMode.Off;
                 Shape(mesh, layer, side, 0, 0, 0);go.SetActive(false);
