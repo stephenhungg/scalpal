@@ -15,7 +15,7 @@ import { TitleMorph } from "./TitleMorph";
 import { Footer } from "./Footer";
 
 const TITLE = "scalpal.";
-const LEDE = "A mixed reality operating room with Jarvis in your ear, coaching every cut. Then a robot hand replays your moves.";
+const LEDE = "A mixed reality operating room experience guided by Jarvis, your all-knowing assistant.";
 
 // Loader: only the hands are on screen until the fingertips touch. Then the Scalpal mark dithers
 // in where the title goes, holds, and dithers into "Scalpal."; after that the nav, subtitle
