@@ -7,7 +7,7 @@
 | Sex | Male |
 | Speaker | Patient (speaks for himself) |
 | Subject id | `patient-demo-sparse` |
-| Procedure | Laparoscopic appendectomy with peritoneal washout (`lap_appendectomy`) |
+| Procedure | Open appendectomy with peritoneal washout (`open_appendectomy`) |
 | Urgency | Emergency |
 | Voice preset | `adult_male` |
 
@@ -252,4 +252,4 @@ Although phlegmon or abscess alone can be managed non-operatively in stable pati
 5. **Clinically off: rubric wording on penicillin.** The critical-item rationale says the penicillin allergy "changes the antibiotic for an infected abdomen." That is true (no pip-tazo), but Jarvis should not penalize ceftriaxone plus metronidazole. Under the 2022 practice parameter, a cephalosporin is acceptable for a remote non-anaphylactic penicillin history. Consider a sentence in the rubric to avoid teaching "penicillin allergy means no beta-lactams." **Resolved 2026-10-03:** the rationale now steers away from piperacillin-tazobactam and states that ceftriaxone with metronidazole is appropriate.
 6. **Clinically: phlegmon on CT.** Phlegmon without abscess is often managed non-operatively in stable patients. The case justifies emergency surgery through **generalized peritonitis plus sepsis**, which is correct. Jarvis should anchor the urgency to the peritonitis and sepsis, not to the phlegmon.
 7. **cases.ts matches encounters.ts**: 2 days, diffuse, guarding, 38.9 C, HR 118. The "suspected perforated appendicitis" indication is consistent with the CT. Age (30 on 2026-10-03) and sex match the chart.
-8. The procedure keywords include "washout," which is good. `lap_appendectomy` in procedures.ts doesn't model a washout or irrigation step beyond `irrigate` (hemostasis role). That fits.
+8. The procedure keywords include "washout," which is good. `open_appendectomy` doesn't model a washout or irrigation step beyond `irrigate` (hemostasis role). That fits.

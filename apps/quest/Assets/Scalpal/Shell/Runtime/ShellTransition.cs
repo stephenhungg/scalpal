@@ -168,7 +168,8 @@ namespace Scalpal.Shell
             var rig=FindFirstObjectByType<EncounterOfficeRig>();
             if (!rig) { gatedRig=null; rigSession=null; transitionInput.enabled=false; return; }
             gatedRig=rig; rigWasEnabled=rig.enabled || Paused; rigSession=rig.session;
-            var session=FindFirstObjectByType<NativeEncounterSession>(); if(session) session.StopVoice();
+            // No StopVoice here: the interview starts after this gate, and StopVoice is the learner's Voice off,
+            // which left every Begin with the patient's live voice disabled (canned greeting, silent replies).
             rig.enabled=false;
             // The rig must run to align, but cannot accept office actions or hold-to-talk under black.
             rig.session=null;

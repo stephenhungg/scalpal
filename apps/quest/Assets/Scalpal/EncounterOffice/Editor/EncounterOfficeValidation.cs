@@ -343,7 +343,11 @@ namespace Scalpal.EncounterOffice.Editor
                 Call(session,"OnApplicationFocus",false);
                 Check(!session.TalkHeld&&!voice.AnswerRecording&&voice.MicrophoneMuted,"focus loss cancels a held answer");
                 Set(voice,"microphoneClip",null);
+                Property(voice,"Status","disconnected");
                 Call(session,"OnApplicationFocus",true);
+                // Quest drops focus constantly; a live interview must reconnect its (muted-mic) patient voice on return.
+                if(session.VoiceEnabled&&session.State!=null&&session.State.phase=="interview")
+                    Check(voice.Status!="disconnected"&&voice.Status!="offline","focus return attempts to reconnect the interview patient voice (fixture has no provider): "+voice.Status);
                 UnityEngine.Object.DestroyImmediate(tap);
                 Property(voice,"Status","connected");Call(voice,"OnApplicationFocus",false);
                 Check(!voice.Connected&&voice.MicrophoneMuted&&!voice.PlaybackActive,"focus loss disconnects active speech");

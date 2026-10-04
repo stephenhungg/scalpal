@@ -100,6 +100,10 @@ namespace Scalpal.Quest.Editor
                 ended.condition.outcome.at="1970-01-01T00:00:00.000Z";
                 Tick(monitor,ended,16);
                 Require(monitor.HasFreshSample&&!monitor.Flatline&&monitor.DisplayText.Contains("Outcome: ended"),"upstream early ending is displayed without fabricating completion or death");
+                Require(!line.enabled&&monitor.DisplayText.Contains("HR 70 bpm")&&!monitor.DisplayText.Contains("Cause:")&&!monitor.DisplayText.Contains("(simulated)\n"),
+                    "an early ending keeps the frozen vitals and never shows the death flatline or cause");
+                var endedAsystole=Decode(Death).condition;endedAsystole.outcome.result="ended";
+                Require(!NativePatientMonitor.ValidCondition(endedAsystole),"asystole is accepted only with a death outcome, never with an early ending");
                 var nan=Decode(Baseline).condition;nan.vitals.hr=float.NaN;
                 Require(!NativePatientMonitor.ValidCondition(nan),"nonfinite server vitals refuse");
                 var unmarked=Decode(Baseline).condition;unmarked.vitals.simulated=false;

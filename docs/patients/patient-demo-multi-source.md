@@ -7,7 +7,7 @@
 | Sex | Female |
 | Speaker | Patient (speaks for herself) |
 | Subject id | `patient-demo-multi-source` |
-| Procedure | Laparoscopic appendectomy (`lap_appendectomy`) |
+| Procedure | Open appendectomy (`open_appendectomy`) |
 | Urgency | Urgent |
 | Voice preset | `adult_female` |
 

@@ -159,6 +159,7 @@ namespace Scalpal.Shell.Editor
                         Check(SessionState.GetBool(Prefix + "httpOnlyOffice", false) && office.realtime == null && UnityEngine.Object.FindObjectsByType<QuestSessionBridge>(FindObjectsInactive.Include, FindObjectsSortMode.None).All(bridge => !bridge.enabled), "component fixture disables realtime invite pairing before office Start; no realtime integration is claimed");
                         Check(string.IsNullOrEmpty(ShellTransition.LastError), "asynchronous office handoff completed without transition error");
                         Check(office.baseUrl == endpoint && office.State.patientId == Female && !string.IsNullOrEmpty(office.State.encounterId) && office.State.phase == "interview", "loaded office creates actual authoritative encounter for exact selected patient and endpoint");
+                        Check(office.VoiceEnabled, "Begin keeps the patient's live voice enabled so she answers each pick");
                         Check(!ShellTransition.TryConsumeSelection(out _), "scene activation consumed the selected-patient handoff exactly once");
                         var pause = ShellPause.Instance;
                         Check(pause && !pause.IsPaused && Mathf.Approximately(Time.timeScale, 1) && !AudioListener.pause, "global pause survives hub-to-office transition in resumed state");

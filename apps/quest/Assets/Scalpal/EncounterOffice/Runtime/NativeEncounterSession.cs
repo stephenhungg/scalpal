@@ -396,7 +396,9 @@ namespace Scalpal.EncounterOffice
         // Also used from within a completing request (interview start), where Busy is still true.
         void ConnectVoice()
         {
-            if (!focused || paused || !voice || State == null || State.phase != "interview") return;
+            if (!voice || State == null || State.phase != "interview") return;
+            // Without focus, defer: ResumeInterviewVoice connects when focus returns.
+            if (!focused || paused) { Suspended = true; Debug.Log("SCALPAL_VOICE_DEFERRED focus=" + focused + " paused=" + paused); return; }
             Suspended = false;
             try
             {
@@ -531,15 +533,23 @@ namespace Scalpal.EncounterOffice
             try { return JsonUtility.FromJson<T>(json); }
             catch (ArgumentException) { return null; }
         }
-        void OnApplicationFocus(bool focus) { focused = focus; if (!focus) SuspendVoice(); }
-        void OnApplicationPause(bool pause) { paused = pause; if (pause) SuspendVoice(); }
+        void OnApplicationFocus(bool focus) { focused = focus; if (!focus) SuspendVoice(); else ResumeInterviewVoice(); }
+        void OnApplicationPause(bool pause) { paused = pause; if (pause) SuspendVoice(); else ResumeInterviewVoice(); }
+        // The interview keeps the microphone muted (the patient hears only picks), so returning focus safely
+        // reconnects the patient voice. Quest drops focus constantly (proximity, system menu), and without
+        // this the patient silently stayed off for the rest of the interview.
+        void ResumeInterviewVoice()
+        {
+            if (!focused || paused || !VoiceEnabled || State == null || State.phase != "interview" || VoiceLive) return;
+            ConnectVoice();
+        }
         void SuspendVoice()
         {
             Suspended = true;
             if (TalkHeld && voice) voice.CancelAnswerRecording();
             TalkHeld = false;
             if (voice) voice.MicrophoneMuted = true;
-            // The transport handles the OS microphone permission prompt separately. Never reconnect on focus return.
+            // The transport handles the OS microphone permission prompt separately. Interviews reconnect on focus return (mic stays muted).
             if (patient) patient.SetState("resting");
             SetStatus("Voice paused. Select Voice on to hear the patient again; choices still work.");
         }
