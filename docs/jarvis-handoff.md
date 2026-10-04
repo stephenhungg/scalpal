@@ -251,3 +251,12 @@ The module changes are additive (two tables, four reducers for coach or operator
 **Run it locally:** `spacetime start`, then in `services/realtime` run `npm run publish:local`. Start the coach service with `SPACETIMEDB_URI=ws://127.0.0.1:3000` and join a session with its coach invite code (`POST /realtime/join {"code": "..."}` or `SPACETIMEDB_COACH_INVITE`). `npm run realtime:e2e` in `services/preop` checks the whole path with three identities (operator, coach, simulated headset). Measured October 4 locally: all checks pass; highlight round trip (Jarvis -> SpacetimeDB -> headset applied -> Jarvis) about 50 ms.
 
 **For Nathan:** the companion can show the encounter and scorecard from `session_encounters` / `session_encounter_events` with no new plumbing; the coach panel already shows `coach_message` and now includes patient lines. **For Stephen:** recopy `services/realtime/bindings/csharp` into `apps/quest/Assets/Scalpal/Realtime/Generated` only if the headset needs the encounter tables; nothing in the headset path requires it.
+
+## Diagnosis office (Stephen's `codex/diagnosis-office`): transcript mirroring
+
+Reviewed 59f1d98. The office uses the encounter engine as intended (one server scorer, patient voice per encounter, attending through Jarvis). One gap: `QuestJarvisVoice.Transcript` lines are not posted anywhere, so the shared session gets every question topic, exam, test, phase, and score, but not what was actually said. Post each final line:
+
+- Encounter: `POST /encounters/:id/transcript {"speaker": "learner" | "patient" | "coach", "text": ...}` (user lines are `learner`; agent lines are `patient` while interviewing and `coach` while presenting to the attending).
+- Surgery: `POST /coach/sessions/:id/transcript {"speaker": "learner" | "coach", "text": ...}` and `POST /coach/sessions/:id/voice-status {"status": "listening" | "speaking" | ...}` on mode changes.
+
+The coach service writes these to `coach_message` and `encounter_event` in SpacetimeDB, so the companion shows the live conversation. Strip expressive tags like `[wince]` before posting (the browser uses `/\[[a-z ]{2,24}\]\s*/gi`).
