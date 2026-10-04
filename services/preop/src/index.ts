@@ -18,5 +18,7 @@ export default createApp({
     // Optional ck_test_ sandbox key: enables real Connect admissions. Without it, demo records only.
     apiKey: process.env.FINCHNODE_API_KEY || undefined,
   }),
+  // Comma-separated browser origins allowed besides localhost and same-origin pages, e.g. a deployed companion.
+  corsOrigins: (process.env.PREOP_CORS_ORIGINS ?? "").split(",").map((o) => o.trim()).filter(Boolean),
   elevenLabs: { apiKey: process.env.ELEVENLABS_API_KEY ?? "", agentId: process.env.ELEVENLABS_AGENT_ID ?? "", voiceId: process.env.JARVIS_VOICE_ID ?? "", patientAgentId: process.env.PATIENT_AGENT_ID ?? "" },
 });

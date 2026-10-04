@@ -18,11 +18,11 @@ The Quest app opens on a start screen. Pressing Enter (keyboard in editor, contr
 
 ## 2. Explore Patients
 
-A large browsable explore view shows every synthetic FinchNode demo patient as a case card: name, age, presenting story and chart highlights from `GET /patients` and `GET /patients/:id/brief`. Data is synthetic and labeled as such; the acute presentation is authored fiction.
+A large browsable explore view shows every synthetic FinchNode demo patient as a case card (FinchNode lists 12 scenarios; 10 have a patient, while `connect-cancelled` and `connect-failed` are connection-flow scenarios with no patient): name, age, presenting story and chart highlights from `GET /patients` and `GET /patients/:id/brief`. Data is synthetic and labeled as such; the acute presentation is authored fiction.
 
 Cards render actual service states. `needs_review` charts are playable (the gaps become something the learner must catch). `blocked` (revoked consent) and `retry` (rate limit or upstream down) show the reason and a way onward. The offline `/unity/bundle` may populate the page when the service is unreachable, labeled as offline.
 
-Choosing a card fixes the patient for this run and opens the diagnosis office. A patient without an authored encounter is not playable; requirement: every demo patient has one.
+Choosing a card fixes the patient for this run and opens the diagnosis office. A patient without an authored encounter is not playable; requirement: every demo patient has one. Today 3 of the 10 have an authored encounter, so 7 are missing.
 
 ## 3. Diagnosis Office
 

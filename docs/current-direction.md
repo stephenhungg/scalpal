@@ -13,7 +13,11 @@ The user replaced the selection and presentation flow on October 3, 2026. This s
 5. **Surgery simulation.** Full-VR operating room with a virtual patient, the shared tool/anatomy/exercise core and Jarvis coaching. The real-person MR body fit is no longer on the main path.
 6. **Robot replay (required ending).** Raw passthrough video recorded during the surgery segment is processed into hand motion and replayed on the simulated robot hand. Every run ends with this step.
 
-Every FinchNode demo patient needs an authored diagnosis encounter. Surgical simulations must exist for each procedure a diagnosis can lead to. See the [demo flow](demo-flow.md) for acceptance details, [experience UX](experience-ux.md) for the recommended interaction design, and the [integration map](system-integration.md#explore--office--or-route) for the current gaps.
+Every FinchNode demo patient needs an authored diagnosis encounter: FinchNode lists 12 scenarios, 10 of them with a patient (`connect-cancelled` and `connect-failed` have none); 8 have an authored case plan and 3 have an authored encounter, so 7 encounters are missing. Surgical simulations must exist for each procedure a diagnosis can lead to. See the [demo flow](demo-flow.md) for acceptance details, [experience UX](experience-ux.md) for the recommended interaction design, and the [integration map](system-integration.md#explore--office--or-route) for the current gaps.
+
+## Diagnosis Office Component
+
+The Quest 3S diagnosis office is a core stage of the latest flow. Its current independently buildable checkpoint supports two fictional adult cases, Matthew's existing encounter engine, distinct patient/attending voices and a usable visual fallback. Its Blender room follows the user's flowery MHacks theme request, with CC0 MakeHuman characters and rounded glass panels using Inter. Explore-selected subject IDs, remaining patient encounters and a same-attempt OR handoff are the next integration work; the forced-versus-learner-choice procedure policy remains unresolved. Existing surgical/tissue work is preserved. See [diagnosis office](diagnosis-office.md) for exact sources and verified limits.
 
 ## Abdominal Tissue Direction
 

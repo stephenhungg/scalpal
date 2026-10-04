@@ -2,9 +2,12 @@
 // MediaPipe finds the patient's torso and the learner's hand; the fingertip is mapped onto the generic
 // anatomy, and the result goes to the live coach session exactly like headset events: focus when the
 // finger rests on a structure, touch when the learner pinches, tracking validity when the body is lost.
-// The page also plays the headset's part for Jarvis's highlights: it draws them and acks them.
+// Acting as the headset (sending those events and acking Jarvis's highlights) is opt-in via the
+// "act as the headset" toggle and needs a running camera; by default the page only observes, so it never
+// competes with a real Quest on the same session. The camera is requested only when Start is clicked.
 import { FilesetResolver, HandLandmarker, ObjectDetector, PoseLandmarker } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/vision_bundle.mjs";
 import { REGIONS, imageToUV, pinchState, portAt, portToUV, regionAt, torsoFromPose, uvToImage } from "/jarvis/body-map.js";
+import { createFrameLoop, createRigSession } from "/jarvis/camera-rig.js";
 
 const $ = (id) => document.getElementById(id);
 const api = async (method, path, body) => {
@@ -17,7 +20,7 @@ let pose = null, hands = null, objects = null, stream = null;
 let detections = [], held = "", frameNo = 0;
 // Real objects the 80-class COCO detector knows that can stand in for an instrument in the hand.
 const OBJECT_TO_INSTRUMENT = { scissors: "lap_scissors", knife: "scalpel", fork: "atraumatic_grasper", toothbrush: "hook_cautery", spoon: "suction_irrigator" };
-let sid = "", snapshot = null, kase = null, allowed = null, names = new Map();
+let snapshot = null, kase = null, allowed = null, names = new Map();
 let pinched = false, focus = "", focusCandidate = "", focusSince = 0, trackingValid = null, lostSince = 0;
 let highlighted = "", lastUV = null, frames = 0, fpsAt = performance.now(), lastTorso = null, lastFrameAt = 0, sendingFrame = false;
 const FRAME_EVERY_MS = 2000;
@@ -35,8 +38,9 @@ const nameOf = (id) => names.get(id) ?? id.replaceAll("_", " ");
 const nameOfInstrument = (id) => kase?.instruments.find((i) => i.id === id)?.displayName.toLowerCase() ?? id.replaceAll("_", " ");
 
 async function send(event) {
-  if (!sid) return;
-  const { ok, json } = await api("POST", `/coach/sessions/${sid}/events`, { event: { ...event, eventId: `cam-${crypto.randomUUID().replaceAll("-", "")}` } });
+  const res = await rig.send(event).catch((e) => { feed(`event failed: ${e?.message ?? e}`, "warning"); return null; });
+  if (!res) return; // observing only, or no session yet
+  const { ok, json } = res;
   if (!ok) return feed(`rejected: ${json.error?.message ?? "error"}`, "warning");
   if (json.snapshot) applySnapshot(json.snapshot);
   for (const a of json.alerts ?? []) feed(`${a.kind}: ${a.say}`, a.tier === "warning" ? "warning" : "");
@@ -53,34 +57,31 @@ function applySnapshot(s) {
   if ($("follow").checked && st.instrumentId && $("instrument").value !== st.instrumentId) $("instrument").value = st.instrumentId;
 }
 
+const option = (value, text) => Object.assign(document.createElement("option"), { value, textContent: text });
+
 // Find the live coach session (started from the Jarvis page) and keep its state fresh.
-async function attach() {
-  const cur = await api("GET", "/coach/current");
-  if (cur.ok && cur.json.sessionId && cur.json.sessionId !== sid) {
-    sid = cur.json.sessionId;
-    const kaseRes = await api("GET", `/patients/${cur.json.patientId}/case`);
-    kase = kaseRes.json;
+const rig = createRigSession({
+  api,
+  actsAsHeadset: () => $("headset").checked && loop.running,
+  onAttach: (k) => {
+    kase = k;
     allowed = new Set(kase.anatomy.map((a) => a.id));
     names = new Map(kase.anatomy.map((a) => [a.id, a.displayName]));
-    $("instrument").innerHTML = kase.instruments.map((i) => `<option value="${i.id}">${i.displayName}</option>`).join("");
+    $("instrument").replaceChildren(...kase.instruments.map((i) => option(i.id, i.displayName)));
     $("sess").textContent = `${kase.patient.displayLabel} · ${kase.procedure.shortTitle}`;
     $("sess").className = "pill on";
     feed(`attached to ${kase.procedure.title} for ${kase.patient.displayLabel}`);
     trackingValid = null;
-  }
-  if (sid) {
-    const s = await api("GET", `/coach/sessions/${sid}`);
-    if (s.ok) applySnapshot(s.json.snapshot);
-    // Act as the headset for Jarvis's highlight requests: draw it, then ack.
-    const cmds = await api("GET", `/coach/sessions/${sid}/commands`);
-    for (const c of cmds.json.commands ?? []) {
-      highlighted = c.action === "highlight" ? c.targetId : "";
-      await api("POST", `/coach/sessions/${sid}/commands/${c.commandId}/ack`, { status: "applied" });
-      feed(c.action === "highlight" ? `Jarvis highlighted ${nameOf(c.targetId)}` : "Jarvis cleared the highlight");
-    }
-  }
-}
-setInterval(attach, 700);
+  },
+  onSnapshot: applySnapshot,
+  // Acting as the headset for Jarvis's highlight requests: draw it (the ack already went out).
+  onCommand: (c) => {
+    highlighted = c.action === "highlight" ? c.targetId : "";
+    feed(c.action === "highlight" ? `Jarvis highlighted ${nameOf(c.targetId)}` : "Jarvis cleared the highlight");
+  },
+  feed,
+});
+setInterval(rig.attach, 700);
 
 async function loadModels() {
   const fileset = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm");
@@ -99,13 +100,13 @@ async function loadModels() {
   objects = await make(ObjectDetector, `${MODELS}/object_detector/efficientdet_lite0/float16/latest/efficientdet_lite0.tflite`, { scoreThreshold: 0.4, maxResults: 6 });
 }
 
-async function listCameras() {
-  const tmp = await navigator.mediaDevices.getUserMedia({ video: true }).catch(() => null);
-  const cams = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "videoinput");
-  tmp?.getTracks().forEach((t) => t.stop());
-  $("camera").innerHTML = cams.map((c, i) => `<option value="${c.deviceId}">${c.label || `Camera ${i + 1}`}</option>`).join("");
-  const iphone = cams.find((c) => /iphone|continuity/i.test(c.label));
-  if (iphone) $("camera").value = iphone.deviceId;
+// Lists cameras without asking for permission; before Start grants it, browsers hide names and ids,
+// so the list is just "Default camera".
+async function listCameras(selected = "") {
+  const cams = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "videoinput" && d.deviceId);
+  $("camera").replaceChildren(...(cams.length ? cams.map((c, i) => option(c.deviceId, c.label || `Camera ${i + 1}`)) : [option("", "Default camera")]));
+  const iphone = selected ? null : cams.find((c) => /iphone|continuity/i.test(c.label));
+  if (selected || iphone) $("camera").value = selected || iphone.deviceId;
 }
 
 async function start() {
@@ -113,13 +114,16 @@ async function start() {
   feed("loading body and hand models...");
   if (!pose) await loadModels();
   stream?.getTracks().forEach((t) => t.stop());
-  stream = await navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: $("camera").value }, width: { ideal: 1280 }, height: { ideal: 720 } } });
+  const deviceId = $("camera").value;
+  stream = await navigator.mediaDevices.getUserMedia({ video: { ...(deviceId ? { deviceId: { exact: deviceId } } : {}), width: { ideal: 1280 }, height: { ideal: 720 } } });
   video.srcObject = stream;
   await video.play();
+  // Permission is granted now, so the list can show real camera names.
+  await listCameras(stream.getVideoTracks()[0]?.getSettings().deviceId ?? "").catch((e) => feed(`camera list failed: ${e.message ?? e}`, "warning"));
   feed("camera live. Lie down in view (or face the camera), then point at the abdomen.");
   $("go").disabled = false;
   $("go").textContent = "Switch camera";
-  requestAnimationFrame(loop);
+  loop.start(); // no-op when switching cameras: one detection loop only
 }
 
 function setTracking(valid) {
@@ -127,10 +131,10 @@ function setTracking(valid) {
   trackingValid = valid;
   $("track").textContent = valid ? "body locked" : "body lost";
   $("track").className = `pill ${valid ? "on" : "warn"}`;
-  if (sid) send({ type: "tracking", valid });
+  send({ type: "tracking", valid });
 }
 
-function loop() {
+function frame() {
   if (!stream) return;
   const now = performance.now();
   if (video.readyState >= 2) {
@@ -200,8 +204,8 @@ function loop() {
     frames += 1;
   }
   if (now - fpsAt > 1000) { $("fps").textContent = `${frames} fps`; frames = 0; fpsAt = now; }
-  requestAnimationFrame(loop);
 }
+const loop = createFrameLoop((cb) => requestAnimationFrame(cb), frame, (e) => feed(`vision frame failed: ${e?.message ?? e}`, "warning"));
 
 // Jarvis's eyes: the composited view (camera plus overlay) with labeled boxes, every couple of seconds.
 // Region boxes come from the body map (exact for this rig); object boxes come from the detector.
@@ -285,5 +289,10 @@ $("mirror").onchange = () => $("stage").classList.toggle("mirror", $("mirror").c
 $("identify").onclick = () => { if (focus) { feed(`identified ${nameOf(focus)}`); send({ type: "identify", structureId: focus }); } else feed("point at a structure first", "warning"); };
 $("confirm").onclick = () => { feed("confirmed step"); send({ type: "confirm" }); };
 $("instrument").onchange = () => { $("follow").checked = false; };
+$("headset").onchange = () => {
+  if (!$("headset").checked) return feed("observing only: no events or acks are sent");
+  feed(loop.running ? "acting as the headset: events and highlight acks go to the coach session" : "acting as the headset once the camera starts");
+  if (trackingValid !== null) send({ type: "tracking", valid: trackingValid });
+};
 listCameras().catch((e) => feed(`camera list failed: ${e.message ?? e}`, "warning"));
-attach();
+rig.attach();

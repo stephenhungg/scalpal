@@ -28,6 +28,7 @@ namespace Scalpal.Quest.Editor
         [MenuItem("Scalpal/Quest/Validate Tissue Contact")]
         public static void Run()
         {
+            NativeSessionBuild.Validate();
             checks=0;
             var root=new GameObject("SyntheticTwoBodyContact");
             Mesh sourceA=null,sourceB=null;
@@ -35,7 +36,7 @@ namespace Scalpal.Quest.Editor
             {
                 var a=Body(root,"A",out sourceA);var b=Body(root,"B",out sourceB);
                 var originalA=sourceA.vertices;var originalB=sourceB.vertices;var originalTrianglesA=sourceA.triangles;
-                var solver=new TissueContactSolver();solver.Initialize(new[]{a,b});
+                using var solver=new TissueContactSolver();solver.Initialize(new[]{a,b});
                 Assert(solver.SupportedBodies==2,"closed outward surface probes initialize both bodies");
                 a.transform.localPosition=new Vector3(-.019f,0,0);b.transform.localPosition=new Vector3(.019f,.005f,-.005f);
                 var beforeA=Copy(a.Cage);var beforeB=Copy(b.Cage);
@@ -109,7 +110,7 @@ namespace Scalpal.Quest.Editor
                 closed.RestoreSource();closedMesh.triangles=retained.ToArray();Assert(closed.Initialize(TissuePreset.Bowel),"open terminal source initializes cage before proxy validation");
                 var openVertices=closedMesh.vertices;var openTriangles=closedMesh.triangles;
                 var vesselPart=closed.gameObject.AddComponent<Scalpal.Anatomy.AnatomyPart>();vesselPart.stableId="appendicular_artery";
-                var solver=new TissueContactSolver();solver.Initialize(new[]{closed});var report=solver.SurfaceReports[0];
+                using var solver=new TissueContactSolver();solver.Initialize(new[]{closed});var report=solver.SurfaceReports[0];
                 Assert(solver.SupportedBodies==1&&report.ArtificiallyCappedContactProxy&&report.OriginalOpenOrNonmanifoldEdges==4&&report.OpenOrNonmanifoldEdges==0,"simple planar terminal loop gets explicit closed contact proxy rather than altered source geometry");
                 Assert(report.CapLoops==1&&report.AdditionalCapTriangles==4&&report.MaximumCapPlaneErrorMeters<1e-7f,"terminal fan reports bounded cap provenance and metric planarity");
                 Assert(solver.TryCopyContactProxy("appendicular_artery",out var proxyVertices,out var proxyTriangles),"contact proxy geometry is independently inspectable");
@@ -158,7 +159,7 @@ namespace Scalpal.Quest.Editor
                 tube.AddComponent<MeshFilter>().sharedMesh=mesh;tube.AddComponent<MeshCollider>().sharedMesh=mesh;
                 var part=tube.AddComponent<Scalpal.Anatomy.AnatomyPart>();part.stableId="appendicular_artery";
                 var tissue=tube.AddComponent<DeformableTissue>();tissues.Add(tissue);Assert(tissue.Initialize(TissuePreset.Artery),"sub-millimeter tube has valid source-meter cage");
-                var solver=new TissueContactSolver();solver.Initialize(new[]{tissue});var report=solver.SurfaceReports[0];
+                using var solver=new TissueContactSolver();solver.Initialize(new[]{tissue});var report=solver.SurfaceReports[0];
                 Assert(report.Supported&&report.ArtificiallyCappedContactProxy&&report.CapLoops==2&&report.AdditionalCapTriangles==24,"tiny planar vessel endpoints retain nonzero area normals and close both twelve-edge loops");
                 Assert(report.OriginalBoundaryEdgeCount==24&&report.OriginalNonmanifoldEdgeCount==0&&report.OriginalInconsistentWindingEdgeCount==0&&report.BoundaryEdgeCount==0&&report.FailureReason==""&&report.CapFailureReason=="","tiny terminal proxy reports original and postclosure topology separately");
                 Assert(solver.TryCopyContactProxy("appendicular_artery",out var proxyVertices,out var proxyTriangles),"tiny generated vessel proxy remains inspectable");
@@ -198,7 +199,7 @@ namespace Scalpal.Quest.Editor
                 var beforeA=Copy(a.Cage);var beforeB=Copy(b.Cage);
                 // Baseline acquisition deliberately ignores a hidden presentation and enabled colliders.
                 a.gameObject.SetActive(false);b.GetComponent<MeshCollider>().enabled=false;
-                var solver=new TissueContactSolver();solver.Initialize(new[]{a,b},true);
+                using var solver=new TissueContactSolver();solver.Initialize(new[]{a,b},true);
                 Assert(solver.PreservesAuthoredRestOverlap&&solver.MaximumAuthoredOverlapMeters>0,"opt-in reports real authored overlap even while presentation is hidden");
                 a.gameObject.SetActive(true);b.GetComponent<MeshCollider>().enabled=true;
                 solver.Solve(true);
@@ -247,6 +248,50 @@ namespace Scalpal.Quest.Editor
             Assert(Mathf.Abs(volume-expectedVolume)<expectedVolume*.001f,"terminal contact cap encloses known physical volume with outward winding");
         }
 
+        static void ValidateBvhQueries(TissueContactSolver solver,List<DeformableTissue> tissues)
+        {
+            foreach(var tissue in tissues)
+            {
+                string id=tissue.GetComponent<Scalpal.Anatomy.AnatomyPart>().stableId;
+                Assert(solver.TryCopyContactProxy(id,out var source,out var triangles),"BVH oracle reads real capped contact proxy: "+id);
+                var world=new Vector3[source.Length];var points=new Vector3[128];
+                using var acceleration=new TissueSurfaceBvh(source,triangles,points.Length);
+                for(int pose=0;pose<3;pose++)
+                {
+                    if(pose==1)Assert(tissue.ApplyContact(tissue.Cage.Rest[0],new Vector3(.0002f,-.0001f,-.0002f)),"BVH fixture genuinely deforms current cage");
+                    var rotation=pose==2?Quaternion.Euler(23,41,-17):Quaternion.identity;
+                    for(int i=0;i<source.Length;i++)world[i]=rotation*tissue.ToMeters(tissue.DeformSurfacePoint(source[i]))*1.3f+new Vector3(.2f,-.1f,.3f);
+                    for(int i=0;i<points.Length;i++)
+                    {
+                        int at=i*source.Length/points.Length;
+                        points[i]=world[at]+rotation*new Vector3((i%3-1)*.0011f,(i%5-2)*.0007f,(i%7-3)*.0004f);
+                    }
+                    acceleration.Refit(world);acceleration.Query(points,points.Length);
+                    int full=points.Length*triangles.Length/3;
+                    Assert(acceleration.LastTriangleTests<full/3,"real-source BVH prunes at least two thirds of full triangle scans: "+id);
+                    for(int query=0;query<points.Length;query++)
+                    {
+                        float nearest=float.PositiveInfinity,signed=0;
+                        for(int t=0;t<triangles.Length;t+=3)
+                        {
+                            var a=world[triangles[t]];var b=world[triangles[t+1]];var c=world[triangles[t+2]];
+                            var n=Vector3.Cross(b-a,c-a);float length=n.magnitude;if(length*length<=1e-20f)continue;n/=length;
+                            var closest=TissueVolume.ClosestTriangle(points[query],a,b,c);float d=(points[query]-closest).sqrMagnitude,dot=Vector3.Dot(points[query]-closest,n);
+                            if(d>nearest+1e-12f||(Mathf.Abs(d-nearest)<1e-12f&&dot<signed))continue;
+                            nearest=d;signed=dot;
+                        }
+                        var hit=acceleration.Result(query);float expected=(signed<0?1:-1)*Mathf.Sqrt(nearest);
+                        Assert(hit.triangle>=0&&Mathf.Abs(hit.penetration-expected)<.000003f,"Burst BVH agrees with independent brute-force signed closest-distance oracle in deformed/transformed source: "+id);
+                    }
+                }
+                var watch=System.Diagnostics.Stopwatch.StartNew();
+                for(int repeat=0;repeat<64;repeat++)acceleration.Query(points,points.Length);
+                watch.Stop();
+                Debug.Log($"SCALPAL_NATIVE_CONTACT_BVH_BENCH id={id} triangles={triangles.Length/3} probes={points.Length} closestQueries={acceleration.LastTriangleTests} bruteForceQueries={points.Length*triangles.Length/3} editorMeanQueryMs={watch.Elapsed.TotalMilliseconds/64:F4} questTimingMeasured=false");
+                tissue.ResetTissue();
+            }
+        }
+
         static void AuditNativeMeshes()
         {
             var session=UnityEngine.Object.FindFirstObjectByType<NativeCaseSession>();
@@ -273,7 +318,7 @@ namespace Scalpal.Quest.Editor
                     Assert(factor.x>0&&Mathf.Abs(factor.x-factor.y)<factor.x*.001f&&Mathf.Abs(factor.x-factor.z)<factor.x*.001f,"actual native FBX source units are uniform: "+ids[i]);
                     Assert(body.Initialize(presets[i],factor.x),"actual source binds metric deformation cage: "+ids[i]);tissues.Add(body);
                 }
-                var solver=new TissueContactSolver();solver.Initialize(tissues);
+                using var solver=new TissueContactSolver();solver.Initialize(tissues);
                 Assert(solver.SurfaceReports.Count==3,"every native target receives explicit contact support report");
                 int supported=0;
                 foreach(var report in solver.SurfaceReports)
@@ -290,6 +335,7 @@ namespace Scalpal.Quest.Editor
                 }
                 Assert(solver.SupportedBodies==supported,"native solver count agrees with audited supported sources");
                 Assert(supported==3,"all three native tissue surfaces must support declared contact after FBX unit normalization; true geometry holes require a fix");
+                ValidateBvhQueries(solver,tissues);
                 var artery=solver.SurfaceReports.Single(report=>report.BodyId=="appendicular_artery");
                 Assert(artery.ArtificiallyCappedContactProxy&&artery.OriginalOpenOrNonmanifoldEdges>0&&artery.CapLoops>0&&artery.CapLoops<=TissueContactSolver.MaximumTerminalLoops&&artery.AdditionalCapTriangles>0,
                     "native open vessel endpoints receive explicitly disclosed bounded contact caps");
@@ -330,8 +376,8 @@ namespace Scalpal.Quest.Editor
                 Assert(rawA.SourceUnitScale==100&&rawB.SourceUnitScale==100,"FBX import factor is explicit rather than interpreted as display meters");
                 for(int i=0;i<8;i++)Assert(Vector3.Distance(meterA.Cage.Rest[i],rawA.Cage.Rest[i])<1e-7f,"100x FBX import produces same physical meter cage");
                 Assert(Vector3.Distance(rawA.FromMeters(rawA.ToMeters(sourceRawA.vertices[0])),sourceRawA.vertices[0])<1e-9f,"raw-to-meter coordinate conversion round trips");
-                var meterSolver=new TissueContactSolver();meterSolver.Initialize(new[]{meterA,meterB});
-                var rawSolver=new TissueContactSolver();rawSolver.Initialize(new[]{rawA,rawB});
+                using var meterSolver=new TissueContactSolver();meterSolver.Initialize(new[]{meterA,meterB});
+                using var rawSolver=new TissueContactSolver();rawSolver.Initialize(new[]{rawA,rawB});
                 Assert(rawSolver.SupportedBodies==2,"unit conversion preserves manifold support for 100x import geometry");
                 Assert(Mathf.Abs(meterSolver.SurfaceReports[0].SignedReferenceVolumeM3-rawSolver.SurfaceReports[0].SignedReferenceVolumeM3)<1e-9f,"signed volume uses cubic meters irrespective of import units");
                 Assert(Mathf.Abs(meterSolver.SurfaceReports[0].SamplingGapSourceMeters-rawSolver.SurfaceReports[0].SamplingGapSourceMeters)<1e-6f,"sampling gap uses source meters rather than raw FBX units");

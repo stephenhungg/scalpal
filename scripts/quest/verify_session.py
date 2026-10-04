@@ -17,7 +17,7 @@ UNITY_DEFAULT = "/Applications/Unity/Hub/Editor/6000.0.66f2/Unity.app/Contents/M
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--suite", choices=("all", "services", "unity", "voice", "motion", "registration"), default="all")
+    parser.add_argument("--suite", choices=("all", "services", "unity", "voice", "encounter", "motion", "registration"), default="all")
     parser.add_argument("--headset", action="store_true", help="Also check the installed player over USB.")
     parser.add_argument("--config", type=Path, help="Private development pairing JSON for --headset.")
     args = parser.parse_args()
@@ -75,6 +75,26 @@ def main():
         if api_ready:
             check("real subscription/reconnect/attempt boundaries on throwaway database",
                   [node, str(tsx), str(REPO / "scripts/quest/session-check/live-realtime.ts")])
+            check("authoritative encounters + actual coach bridge on throwaway database",
+                  [node, str(tsx), str(REPO / "scripts/quest/encounter-check/live-exchange.ts")])
+
+    if args.suite in {"all", "encounter"}:
+        service = REPO / "services/preop"
+        if not (service / "node_modules").is_dir():
+            check("encounter fixture dependencies", ["npm", "ci"], service)
+        unity = environment.get("SCALPAL_UNITY", UNITY_DEFAULT)
+        encounter_log = Path(tempfile.gettempdir()) / ("scalpal-encounter-" + uuid.uuid4().hex + ".log")
+        passed = check("floral office scene + native encounter coroutines + isolated HTTP", [unity,
+                       "-batchmode", "-nographics", "-projectPath", str(REPO / "apps/quest"),
+                       "-buildTarget", "Android", "-executeMethod",
+                       "Scalpal.EncounterOffice.Editor.EncounterOfficeBuild.Verify", "-quit", "-logFile", str(encounter_log)], timeout=300)
+        output = encounter_log.read_text(errors="replace") if encounter_log.exists() else ""
+        if passed and "SCALPAL_ENCOUNTER_OFFICE_VERIFY_OK" not in output:
+            failures.append("encounter office verification marker absent")
+        for line in output.splitlines():
+            if line.startswith("SCALPAL_") or "error CS" in line:
+                print(line)
+        print("Encounter diagnostic log:", encounter_log)
 
     if args.suite in {"all", "voice"}:
         check("native voice PCM/protocol", [sys.executable, str(REPO / "scripts/quest/voice-check/run.py")])

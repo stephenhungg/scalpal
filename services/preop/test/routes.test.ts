@@ -203,3 +203,32 @@ describe("ElevenLabs tools", () => {
     expect(first.json.stepId).toBe("access_umbilical");
   });
 });
+
+// Any web page the demo laptop opens could otherwise drive the scored coach session (or read it) through
+// the learner's browser. Browsers are limited to an allowlist; native clients (Unity) send no Origin.
+describe("browser origins", () => {
+  const guarded = createApp({ client: fixtureClient(), now: () => NOW, coachTickMs: 0, corsOrigins: ["https://companion.example"] });
+  const from = async (origin: string | null, url = "http://192.168.1.5:8787/patients", method = "GET") => {
+    const res = await guarded.request(url, {
+      method,
+      headers: { ...(origin ? { Origin: origin } : {}), ...(method === "POST" ? { "Content-Type": "application/json" } : {}) },
+      body: method === "POST" ? JSON.stringify({ patientId: "patient-demo-sparse" }) : undefined,
+    });
+    return { status: res.status, allow: res.headers.get("Access-Control-Allow-Origin") };
+  };
+
+  it("rejects other sites, including simple requests that skip preflight", async () => {
+    expect(await from("https://evil.example")).toMatchObject({ status: 403, allow: null });
+    expect((await from("https://evil.example", "http://192.168.1.5:8787/coach/sessions", "POST")).status).toBe(403);
+    expect((await from("https://evil.example", "http://192.168.1.5:8787/coach/sessions", "OPTIONS")).allow).toBeNull();
+    expect((await from("null")).status).toBe(403);
+  });
+
+  it("allows localhost on any port, same-origin pages, configured origins and native clients", async () => {
+    for (const origin of ["http://localhost:5173", "http://127.0.0.1:3000", "http://192.168.1.5:8787", "https://companion.example"]) {
+      expect(await from(origin), origin).toMatchObject({ status: 200, allow: origin });
+    }
+    expect((await from(null)).status).toBe(200);
+    expect((await from("http://192.168.1.5:8787", "http://192.168.1.5:8787/coach/sessions", "POST")).status).toBe(201);
+  });
+});

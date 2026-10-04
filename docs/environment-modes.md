@@ -1,6 +1,8 @@
 # Mixed Reality and Full VR Modes
 
-Updated October 3, 2026 from the user's explicit direction: support a real reclining person with generic virtual organs and a separate entirely virtual surgery-themed demo. These share one exercise, tool behavior, voice coach and state flow. The two modes are a product direction; a standalone native full-VR workbench now combines the room art, XR rig and instrument patch. The native case/coach and organ assembly are now connected. The AR/body-fit milestone uses a cached native environment-raycast grid plus MediaPipe for automatic generic torso alignment; physical participant alignment remains pending. See [body registration](body-registration.md) and [native session](native-session.md).
+> **Scope notice:** the current product flow is the [latest experience flow](current-direction.md#latest-experience-flow): launch → explore patients → diagnosis office → full-VR surgery → required robot replay. Mixed reality with a real participant, conversational selection and the rotating preview are off the main path. Where this document disagrees, current direction wins. This page records the earlier two-mode engineering.
+
+Updated October 3, 2026 from the user's explicit direction: support a real reclining person with generic virtual organs and a separate entirely virtual surgery-themed demo. These share one exercise, tool behavior, voice coach and state flow. The two modes were the product direction at the time; the main flow is now full VR only, with MR kept off the main path; a standalone native full-VR workbench now combines the room art, XR rig and instrument patch. The native case/coach and organ assembly are now connected. The AR/body-fit milestone uses a cached native environment-raycast grid plus MediaPipe for automatic generic torso alignment; physical participant alignment remains pending. See [body registration](body-registration.md) and [native session](native-session.md).
 
 ## Shared Core
 

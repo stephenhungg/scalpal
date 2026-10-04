@@ -121,5 +121,6 @@ namespace Scalpal.Quest
             accumulator=surfaceClock=0; wasReady=false;
         }
         void OnDisable() => ResetTissues();
+        void OnDestroy() => contactSolver.Dispose();
     }
 }

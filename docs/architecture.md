@@ -1,17 +1,19 @@
 # Architecture
 
+> **Scope notice:** the current product flow is the [latest experience flow](current-direction.md#latest-experience-flow): launch → explore patients → diagnosis office → full-VR surgery → required robot replay. Mixed reality with a real participant, conversational selection and the rotating preview are off the main path. Where this document disagrees, current direction wins.
+
 Updated October 3, 2026. Use the [system integration map](system-integration.md) for audited commits, actual routes, missing adapters and shipping checks. This document describes the current target architecture; it does not claim the components are connected. Earlier wallet/challenge architecture is superseded and remains recoverable in Git history.
 
 ## Shared Native Runtime
 
-Scalpal has one Unity application with two presentations: mixed reality over a real reclining participant and full VR around an authored patient/table. Both use the same anatomy identities, tools, authored exercise rules, Jarvis and session flow. A mode changes the background and patient-fit source. It does not instantiate another coach, scorer or storage system.
+Scalpal has one Unity application. The main flow is full VR around an authored virtual patient/table; the earlier mixed-reality presentation over a real reclining participant remains in the repository off the main path. Both presentations use the same anatomy identities, tools, authored exercise rules, Jarvis and session flow. A mode changes the background and patient-fit source. It does not instantiate another coach, scorer or storage system.
 
 | Layer | Owns | Runs where |
 | --- | --- | --- |
 | Device foundation | Native XR rig, controller tracking, passthrough, camera permission/acquisition | Quest / Stephen |
 | Registration and presentation | Accepted real surface/body fit or authored virtual fit; validity and recovery; anatomy-to-torso conversion | Quest / Stephen |
-| Simulation and experience | Selection preview, anatomy controls, virtual tools/effects, one authored case and feedback | Quest / Stephen + Matthew |
-| Coach | Reviewed case context, conversational selection, guidance, bounded application requests | Matthew's service/browser voice client + Unity action binding |
+| Simulation and experience | Explore page, diagnosis office, anatomy controls, virtual tools/effects, one authored case and feedback | Quest / Stephen + Matthew |
+| Coach | Reviewed case context, diagnosis-office patient and attending voices, guidance, bounded application requests | Matthew's service/browser voice client + Unity action binding |
 | Shared coordination | Membership, confirmed session/exercise state, commands/outcomes, artifacts and job progress | Nathan's SpacetimeDB module and client adapters |
 | Media and artifacts | Composited spectator stream; separately private raw clips, manifests and derived output files | WebRTC publisher/viewer + Nathan's gateway/storage |
 | Motion and replay | Decode permitted video, estimate hand motion, robot-specific retargeting, replay and validity signals | Silas's external worker; companion playback |
@@ -46,4 +48,4 @@ Camera time, Unity monotonic time, decoded video PTS and backend wall time are d
 
 ## Success
 
-One explicitly paired attempt completes selection → preview → valid fit → authored practice/feedback → permitted recording → real processing → compatible replay, while an observer sees actual composited media and confirmed state. Repeat it in both presentations, including tracking loss, reset, reconnect, failed processing and stale commands/results. The [shipping checks](system-integration.md#shipping-checks) define the concrete evidence required before calling it integrated.
+One explicitly paired attempt completes explore → diagnosis office → full-VR authored practice/feedback → permitted recording → real processing → compatible replay, while an observer sees actual composited media and confirmed state. Repeat it, including tracking loss, reset, reconnect, failed processing and stale commands/results. The [shipping checks](system-integration.md#shipping-checks) define the concrete evidence required before calling it integrated.
