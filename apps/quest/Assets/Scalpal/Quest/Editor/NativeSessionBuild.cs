@@ -406,6 +406,7 @@ namespace Scalpal.Quest.Editor
             NativeCouponValidation.Run();
             NativeSkinCalibrationBenchmark.Run();
             NativeVolumeRuntimeValidation.Run();
+            NativeOpenWallValidation.Run();
             NativeBleedingValidation.Run();
             NativeVesselRuntimeValidation.Run();
             NativeTissueContactValidation.Run();

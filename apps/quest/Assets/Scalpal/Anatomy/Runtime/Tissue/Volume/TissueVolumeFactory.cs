@@ -37,8 +37,15 @@ namespace Scalpal.Anatomy.Tissue
                 new VolumeMaterial{id="muscle",youngPascals=60000,poissonRatio=.45f,densityKgPerCubicMeter=1050,color=new Color(.5f,.12f,.1f),measurementSource="authored open teaching layer; uncalibrated"},
                 new VolumeMaterial{id="peritoneum",youngPascals=6790000,poissonRatio=.45f,densityKgPerCubicMeter=1000,color=new Color(.73f,.58f,.57f),measurementSource="authored thickness; Kriener median modulus, no calibration"}
             };
-            return Grid(new Bounds(new Vector3(0,0,.014f),new Vector3(.16f,.10f,.028f)),8,5,
-                new[]{0f,.002f,.014f,.019f,.027f,.028f},materials,new[]{0,1,2,3,4},true);
+            var depths=new float[OpenWallLayers.Count+1];var layers=new int[OpenWallLayers.Count];
+            for(int i=0;i<OpenWallLayers.Count;i++)
+            {
+                var layer=OpenWallLayers.Get(i);
+                if(materials[i].id!=layer.id)throw new InvalidOperationException("Open wall material/descriptor mismatch");
+                depths[i]=layer.startDepthMeters;depths[i+1]=layer.endDepthMeters;layers[i]=i;
+            }
+            return Grid(new Bounds(new Vector3(0,0,depths[depths.Length-1]*.5f),new Vector3(.16f,.10f,depths[depths.Length-1])),8,5,
+                depths,materials,layers,true);
         }
         static TissueVolume Grid(Bounds bounds,int nx,int ny,float[] depths,VolumeMaterial[] materials,int[] layer,bool pinPerimeter)
         {

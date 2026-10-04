@@ -7,12 +7,38 @@ using UnityEngine;
 
 namespace Scalpal.Quest
 {
-    // Local mechanics, deliberately unscored: the existing case has no incision rubric.
+    // Case-independent wall mechanics. Surgery consumes accepted geometry; this component never awards milestones.
     [DefaultExecutionOrder(115)]
     public sealed class NativeVolumeSimulation : MonoBehaviour
     {
         struct Blade {public InstrumentBehaviour tool;public Transform start,end;public Vector3 previousStart,previousEnd;public bool previous;}
         readonly List<Blade> blades=new List<Blade>();
+        readonly int[] cutCounts=new int[OpenWallLayers.Count];
+        sealed class LayerGrip
+        {
+            public string layer;
+            public Vector3 baseline;
+            public long stepAtAcquisition;
+        }
+        readonly Dictionary<int,LayerGrip> layerGrips=new Dictionary<int,LayerGrip>();
+        int nextGripToken;
+        bool openLayers;
+        public struct LayerHandleMeasurement
+        {
+            public string layerId;
+            public Vector3 worldPosition, worldDisplacement;
+            public float outwardLiftMillimeters;
+            public bool hasAcceptedStep, lastStepAccepted;
+            public int topologyRevision;
+        }
+        public struct LayerFracture
+        {
+            public string layerId, verb;
+            public int newlyBrokenFaces, topologyRevision;
+            public float fiberAngleDegrees;
+        }
+        // Mechanical facts only; the shared Surgery/CaseRunner path owns scoring.
+        public event Action<LayerFracture> LayerFractured;
         NativeWorkbench workbench;
         Func<bool> ready;
         InstrumentBehaviour grasper;
@@ -23,13 +49,14 @@ namespace Scalpal.Quest
         double nextTiming;
         float peakFrameMs;
         public VolumetricTissue Wall {get;private set;}
-        // Triangle points use the shared source atlas frame in meters, not patientFrame axes.
+        // Triangle points are Wall-local material metres: source atlas for the legacy coupon, wound-local for the open wall.
         public event Action<Vector3,Vector3,Vector3> BladeSwept;
         public void Initialize(Transform sourceFrame,NativeWorkbench rig,Func<bool> canInteract,bool openBodyLayers=false)
         {
             if(!sourceFrame||!rig) return;
             if(Wall){Wall.SetVisible(false);if(Application.isPlaying)Destroy(Wall.gameObject);else DestroyImmediate(Wall.gameObject);}
-            var wall=new GameObject("GenericAbdominalWall_Unscored");wall.transform.SetParent(sourceFrame,false);
+            openLayers=openBodyLayers;
+            var wall=new GameObject(openLayers?"OpenAbdominalWall_TeachingPhysics":"GenericAbdominalWall_Unscored");wall.transform.SetParent(sourceFrame,false);
             Wall=wall.AddComponent<VolumetricTissue>();Wall.Initialize(openBodyLayers?TissueVolumeFactory.OpenAbdominalWall():TissueVolumeFactory.AbdominalWall(AppendixProjection(sourceFrame)));
             workbench=rig;ready=canInteract;blades.Clear();
             foreach(var tool in rig.tools??Array.Empty<InstrumentBehaviour>())
@@ -46,6 +73,88 @@ namespace Scalpal.Quest
                 else Debug.LogWarning("SCALPAL_VOLUME_BLADE_UNAVAILABLE id="+tool.instrumentId);
             }
             ClearTransient();
+        }
+        // Wound-local volume is centered at its parent's McBurney origin supplied by Surgery.
+        // Do not reproject it from atlas appendix bounds or claim measured ASIS landmarks.
+        bool ValidLayerFrame(out float scale)
+        {
+            scale=0;
+            if(!openLayers||!Wall||!isActiveAndEnabled||ready==null||!ready())return false;
+            Matrix4x4 matrix=Wall.transform.localToWorldMatrix;
+            Vector3 x=matrix.MultiplyVector(Vector3.right),y=matrix.MultiplyVector(Vector3.up),z=matrix.MultiplyVector(Vector3.forward);
+            scale=x.magnitude;
+            if(!TissueCage.Finite(Wall.transform.position)||!TissueCage.Finite(x)||!TissueCage.Finite(y)||!TissueCage.Finite(z)||scale<=1e-6f||
+                Mathf.Abs(y.magnitude-scale)>scale*.001f||Mathf.Abs(z.magnitude-scale)>scale*.001f||
+                Mathf.Abs(Vector3.Dot(x,y))>scale*scale*.001f||Mathf.Abs(Vector3.Dot(x,z))>scale*scale*.001f||
+                Mathf.Abs(Vector3.Dot(y,z))>scale*scale*.001f||Vector3.Dot(Vector3.Cross(x,y),z)<=0)return false;
+            if(frameValid&&matrix!=lastFrame)ClearTransient();
+            lastFrame=matrix;frameValid=true;return true;
+        }
+        bool LayerReady(out float scale)
+        {
+            if(ValidLayerFrame(out scale))return true;
+            ClearTransient();return false;
+        }
+        public bool TryContactLayer(string layerId,Vector3 worldPoint,float worldRadius,out Vector3 worldContact)
+        {
+            worldContact=Vector3.zero;
+            if(!LayerReady(out float scale)||!TissueCage.Finite(worldPoint)||!OpenWallLayers.TryGet(layerId,out _)||
+                !(worldRadius>0)||float.IsInfinity(worldRadius)||worldRadius>.01f)return false;
+            if(!Wall.Volume.TryMaterialContact(layerId,Wall.transform.InverseTransformPoint(worldPoint),worldRadius/scale,out Vector3 local))return false;
+            worldContact=Wall.transform.TransformPoint(local);return true;
+        }
+        public bool TryBeginLayerHandle(string layerId,Vector3 worldPoint,float worldRadius,out int token)
+        {
+            token=0;
+            if(!TryContactLayer(layerId,worldPoint,worldRadius,out _)||nextGripToken==int.MaxValue)return false;
+            int id=++nextGripToken;
+            float scale=Wall.transform.localToWorldMatrix.MultiplyVector(Vector3.right).magnitude;
+            if(!Wall.Volume.BeginMaterialHandle(id,layerId,Wall.transform.InverseTransformPoint(worldPoint),worldRadius/scale)||
+                !Wall.Volume.TryMaterialHandlePosition(id,out Vector3 local))return false;
+            layerGrips.Add(id,new LayerGrip{layer=layerId,baseline=local,stepAtAcquisition=Wall.Volume.AcceptedStepSequence});token=id;return true;
+        }
+        public bool TrySetLayerHandleTarget(int token,Vector3 worldPoint)
+        {
+            if(!LayerReady(out _)||!layerGrips.ContainsKey(token)||!TissueCage.Finite(worldPoint))return false;
+            return Wall.Volume.SetMaterialHandleTarget(token,Wall.transform.InverseTransformPoint(worldPoint));
+        }
+        public bool TryMeasureLayerHandle(int token,out LayerHandleMeasurement measurement)
+        {
+            measurement=default;
+            if(!LayerReady(out _)||!layerGrips.TryGetValue(token,out var grip)||!Wall.Volume.TryMaterialHandlePosition(token,out Vector3 local))return false;
+            Vector3 displacement=Wall.transform.TransformVector(local-grip.baseline);
+            measurement=new LayerHandleMeasurement{layerId=grip.layer,worldPosition=Wall.transform.TransformPoint(local),
+                worldDisplacement=displacement,outwardLiftMillimeters=Vector3.Dot(displacement,-Wall.transform.forward)*1000,
+                hasAcceptedStep=Wall.Volume.AcceptedStepSequence>grip.stepAtAcquisition,lastStepAccepted=Wall.Volume.LastStepAccepted,topologyRevision=Wall.Volume.TopologyRevision};return true;
+        }
+        public void ReleaseLayerHandle(int token)
+        { layerGrips.Remove(token);Wall?.Volume.ReleaseMaterialHandle(token); }
+        // Signed increase in actual material separation across the authored +X fibers.
+        // A repeated token or raw requested controller travel cannot satisfy a split.
+        public bool TryMeasureMuscleSplit(int first,int second,out float increaseMillimeters)
+        {
+            increaseMillimeters=0;
+            if(first==second||!TryMeasureLayerHandle(first,out var a)||!TryMeasureLayerHandle(second,out var b)||
+                a.layerId!="muscle"||b.layerId!="muscle"||!a.hasAcceptedStep||!b.hasAcceptedStep)return false;
+            Vector3 axis=Wall.transform.up;
+            Vector3 initial=Wall.transform.TransformVector(layerGrips[first].baseline-layerGrips[second].baseline);
+            increaseMillimeters=(Mathf.Abs(Vector3.Dot(a.worldPosition-b.worldPosition,axis))-Mathf.Abs(Vector3.Dot(initial,axis)))*1000;return true;
+        }
+        // Caller supplies a finite material split surface (two triangles if needed).
+        // This is a mechanical separation, not a blade cut or an awarded milestone.
+        public bool TrySplitMuscle(Vector3 worldA,Vector3 worldB,Vector3 worldC,out LayerFracture fracture)
+        {
+            fracture=default;
+            if(!LayerReady(out float scale)||!TissueCage.Finite(worldA)||!TissueCage.Finite(worldB)||!TissueCage.Finite(worldC))return false;
+            Vector3 a=Wall.transform.InverseTransformPoint(worldA),b=Wall.transform.InverseTransformPoint(worldB),c=Wall.transform.InverseTransformPoint(worldC);
+            Vector3 normal=Vector3.Cross(b-a,c-a);
+            // A split plane contains the fibers and the wall-depth axis; across-fiber planes refuse.
+            if(normal.sqrMagnitude<1e-12f||Mathf.Abs(Vector3.Dot(normal.normalized,Vector3.up))<Mathf.Cos(25*Mathf.Deg2Rad))return false;
+            int count=Wall.Volume.FractureMaterialSweep("muscle",a,b,c,.0005f/scale);
+            if(count==0)return false;
+            OpenWallLayers.TryFiberAngle("muscle",Vector3.Cross(Vector3.forward,normal),out float angle);
+            fracture=new LayerFracture{layerId="muscle",verb="split",newlyBrokenFaces=count,topologyRevision=Wall.Volume.TopologyRevision,fiberAngleDegrees=angle};
+            LayerFractured?.Invoke(fracture);return true;
         }
         // This remains a generic anterior teaching coupon, not a laparoscopic port/incision model.
         static Vector2? AppendixProjection(Transform sourceFrame)
@@ -71,6 +180,7 @@ namespace Scalpal.Quest
             double begin=Time.realtimeSinceStartupAsDouble;
             if(!Wall)return;
             bool valid=isActiveAndEnabled&&ready!=null&&ready()&&seconds>0&&!float.IsNaN(seconds)&&!float.IsInfinity(seconds);
+            if(valid&&openLayers)valid=ValidLayerFrame(out _);
             Wall.SetVisible(valid);
             if(!valid){ClearTransient();return;}
             Matrix4x4 current=Wall.transform.localToWorldMatrix;
@@ -85,13 +195,14 @@ namespace Scalpal.Quest
                 if(!TissueCage.Finite(start)||!TissueCage.Finite(end)||length<.002f||length>.06f){blade.previous=false;blades[i]=blade;continue;}
                 if(blade.previous&&(start-blade.previousStart).magnitude<=.04f&&(end-blade.previousEnd).magnitude<=.04f)
                 {
-                    ApplyBlade(blade.previousStart,blade.previousEnd,end);
-                    ApplyBlade(blade.previousStart,end,start);
+                    Vector3 stroke=(start+end-blade.previousStart-blade.previousEnd)*.5f;
+                    ApplyBlade(blade.previousStart,blade.previousEnd,end,stroke);
+                    ApplyBlade(blade.previousStart,end,start,stroke);
                 }
                 blade.previousStart=start;blade.previousEnd=end;blade.previous=true;blades[i]=blade;
             }
             if(grasper&&(!ValidTool(grasper)||!grasper.actionPoint))ReleaseHandle();
-            if(!grasper)FindHandle();
+            if(!openLayers&&!grasper)FindHandle();
             clock=Mathf.Min(clock+Mathf.Clamp(seconds,0,.05f),.05f);
             int steps=0;
             while(clock>=1f/90&&steps++<4)
@@ -122,16 +233,28 @@ namespace Scalpal.Quest
                 grasper=tool;handleOffset=Wall.Volume.HandlePosition-point;break;
             }
         }
-        void ApplyBlade(Vector3 a,Vector3 b,Vector3 c)
+        void ApplyBlade(Vector3 a,Vector3 b,Vector3 c,Vector3 stroke)
         {
             if(Vector3.Cross(b-a,c-a).sqrMagnitude<1e-12f)return;
-            Wall.Volume.CutSweep(a,b,c,.0005f);BladeSwept?.Invoke(a,b,c);
+            if(openLayers)for(int i=0;i<cutCounts.Length;i++)cutCounts[i]=Wall.Volume.CutFacesForMaterial(OpenWallLayers.Get(i).id);
+            // Open-wall contact is a physical 0.5 mm tolerance in either presentation.
+            // Legacy coupon retains its original material-coordinate calibration fixture.
+            float tolerance=openLayers?.0005f/Wall.transform.localToWorldMatrix.MultiplyVector(Vector3.right).magnitude:.0005f;
+            Wall.Volume.CutSweep(a,b,c,tolerance);BladeSwept?.Invoke(a,b,c);
+            if(openLayers)for(int i=0;i<cutCounts.Length;i++)
+            {
+                var layer=OpenWallLayers.Get(i);int difference=Wall.Volume.CutFacesForMaterial(layer.id)-cutCounts[i];
+                if(difference<=0)continue;
+                OpenWallLayers.TryFiberAngle(layer.id,stroke,out float angle);
+                LayerFractured?.Invoke(new LayerFracture{layerId=layer.id,verb="cut",newlyBrokenFaces=difference,
+                    topologyRevision=Wall.Volume.TopologyRevision,fiberAngleDegrees=angle});
+            }
         }
         void ReleaseHandle(){Wall?.Volume.ReleaseHandle();grasper=null;}
         void ClearTransient()
         {
             for(int i=0;i<blades.Count;i++){var blade=blades[i];blade.previous=false;blades[i]=blade;}
-            ReleaseHandle();Wall?.Volume.Freeze();clock=surfaceClock=0;frameValid=false;
+            ReleaseHandle();layerGrips.Clear();Wall?.Volume.Freeze();clock=surfaceClock=0;frameValid=false;
         }
         public void ResetTissues(){ClearTransient();if(Wall)Wall.ResetTissue();}
         void OnDisable(){ClearTransient();if(Wall)Wall.SetVisible(false);}
