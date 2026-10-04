@@ -7,6 +7,7 @@ import { INSTRUMENTS_BY_ID } from "./catalog/instruments.js";
 import { CoachSession, PRESENTATION_MODES, bleedingStructures, contextKey, reflexLines, renderContext, type CoachEvent, type StuckPolicy } from "./coach.js";
 import { explainStructure, runTool } from "./coach-tools.js";
 import type { Frame, FrameMark, SceneVision } from "./scene-vision.js";
+import type { FrameDetector } from "./frame-detector.js";
 import { ReflexAudio } from "./reflex.js";
 import { NO_REALTIME, type RealtimeBridge, type RealtimeSink } from "./realtime-bridge.js";
 import { buildSystemPrompt, firstMessage } from "./coach-prompt.js";
@@ -31,6 +32,7 @@ export interface CoachRouteOptions {
   encounterFor?: (id: string) => { kase: SurgicalCase; carryover(): string } | null;
   vision?: SceneVision | null; // Jarvis's eyes; null when no vision model is configured
   watchMs?: number; // minimum gap between background scene summaries (0 disables watching)
+  detector?: FrameDetector | null; // real-camera instrument and hand boxes (services/vision); null when not running
 }
 
 const MAX_FRAME_CHARS = 4_000_000; // about 3 MB of JPEG
@@ -81,6 +83,14 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
   const officeCarryover = new Map<string, string>();
   const frames = new Map<string, Frame>();
   const watching = new Map<string, { inFlight: boolean; lastAt: number }>();
+  // Latest detector boxes per session. Detection runs about once a second, so it trails the newest frame.
+  const detected = new Map<string, { marks: FrameMark[]; at: number; inFlight: boolean }>();
+  const DETECT_FRESH_MS = 4000;
+  const withDetections = (sid: string, frame: Frame): Frame => {
+    const d = detected.get(sid);
+    if (!d || !d.marks.length || frame.at - d.at > DETECT_FRESH_MS) return frame;
+    return { ...frame, marks: [...frame.marks, ...d.marks] };
+  };
   const watchMs = options.watchMs ?? 4000;
   const reflex =
     options.reflex ?? (options.elevenLabs?.apiKey && options.elevenLabs.voiceId ? new ReflexAudio({ apiKey: options.elevenLabs.apiKey, voiceId: options.elevenLabs.voiceId }) : null);
@@ -229,6 +239,17 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
     }
     const frame: Frame = { jpegBase64: image, marks: parseMarks(b.marks), source: b.source === "quest" ? "quest" : "camera", at: options.now().getTime() };
     frames.set(s.id, frame);
+    const d = detected.get(s.id) ?? { marks: [], at: 0, inFlight: false };
+    detected.set(s.id, d);
+    if (options.detector && !d.inFlight) {
+      d.inFlight = true;
+      const labels = [...s.kase.instruments.map((i) => i.id), "hand"].slice(0, 32);
+      void options.detector
+        .detect(image, labels)
+        .then((marks) => Object.assign(d, { marks, at: frame.at }))
+        .catch(() => {})
+        .finally(() => (d.inFlight = false));
+    }
     // Background watcher: a fresh one-line summary at most every watchMs, never two at once.
     const w = watching.get(s.id) ?? { inFlight: false, lastAt: 0 };
     watching.set(s.id, w);
@@ -237,7 +258,7 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
       w.inFlight = true;
       w.lastAt = frame.at;
       void options.vision
-        .watch(frame, s.snapshot())
+        .watch(withDetections(s.id, frame), s.snapshot())
         .then((summary) => s.setScene(summary, frame.source))
         .catch(() => {})
         .finally(() => (w.inFlight = false));
@@ -255,7 +276,7 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
       let result: string;
       if (!options.vision) result = "My vision isn't set up yet, so I can only go by the simulator's state.";
       else if (!frame || options.now().getTime() - frame.at > FRAME_FRESH_MS) result = "I can't see your view right now. Make sure the camera feed is on.";
-      else result = await options.vision.look(frame, s.snapshot(), typeof question === "string" ? question : "");
+      else result = await options.vision.look(withDetections(s.id, frame), s.snapshot(), typeof question === "string" ? question : "");
       return c.json({ result, actions: coachActions(s.id) });
     }
     const result = await runTool(s, c.req.param("name") ?? "", await body(c), {

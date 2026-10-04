@@ -1,6 +1,7 @@
 import { createApp } from "./app.js";
 import { createFinchNodeClient } from "./finchnode.js";
 import { realtimeFromEnv } from "./realtime-bridge.js";
+import { frameDetectorFromEnv } from "./frame-detector.js";
 import { sceneVisionFromEnv } from "./scene-vision.js";
 
 // Optional: the shared SpacetimeDB session (SPACETIMEDB_URI). Without it the HTTP coach API works alone.
@@ -13,6 +14,8 @@ export default createApp({
   // Jarvis's eyes (ANTHROPIC_API_KEY): the look_at_scene tool and the background scene watcher.
   vision: sceneVisionFromEnv(process.env),
   watchMs: Number(process.env.JARVIS_WATCH_MS ?? 4000),
+  // Real-camera instrument and hand boxes from services/vision (VISION_DETECT_URL, e.g. http://127.0.0.1:8791).
+  detector: frameDetectorFromEnv(process.env),
   client: createFinchNodeClient({
     baseUrl: process.env.FINCHNODE_BASE_URL || undefined,
     // Optional ck_test_ sandbox key: enables real Connect admissions. Without it, demo records only.

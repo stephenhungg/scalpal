@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createApp } from "../src/app.js";
 import type { CoachSnapshot } from "../src/coach.js";
+import type { FrameDetector } from "../src/frame-detector.js";
 import { describeMarks, type Frame, type SceneVision } from "../src/scene-vision.js";
 import { NOW, fixtureClient } from "./helpers.js";
 
@@ -15,9 +16,9 @@ function fakeVision() {
   return { calls, vision };
 }
 
-function rig(vision: SceneVision | null, watchMs = 4000) {
+function rig(vision: SceneVision | null, watchMs = 4000, detector: FrameDetector | null = null) {
   let t = NOW.getTime();
-  const app = createApp({ client: fixtureClient(), now: () => new Date(t), coachTickMs: 0, vision, watchMs });
+  const app = createApp({ client: fixtureClient(), now: () => new Date(t), coachTickMs: 0, vision, watchMs, detector });
   const req = async (method: string, route: string, body?: unknown) => {
     const res = await app.request(route, { method, headers: body ? { "Content-Type": "application/json" } : {}, body: body ? JSON.stringify(body) : undefined });
     return { status: res.status, json: (await res.json()) as Record<string, any> };
@@ -57,6 +58,32 @@ describe("scene vision", () => {
     expect(calls[0]!.frame.source).toBe("quest");
     advance(9000);
     expect(await look()).toMatch(/can't see your view/);
+  });
+
+  it("adds fresh detector boxes for the case's instruments to what Jarvis looks at", async () => {
+    const { calls, vision } = fakeVision();
+    const asked: string[][] = [];
+    const detector: FrameDetector = {
+      detect: async (_jpeg, labels) => (asked.push(labels), [{ label: "scissors", id: "lap_scissors", source: "detector", box: { x: 0.5, y: 0.5, w: 0.1, h: 0.1 } }]),
+    };
+    const { req, advance } = rig(vision, 0, detector);
+    const sid = (await req("POST", "/coach/sessions", { patientId: "patient-demo-pediatric-asthma" })).json.sessionId;
+    await req("POST", `/coach/sessions/${sid}/frame`, { image: JPEG, marks: [] });
+    await new Promise((r) => setTimeout(r, 10));
+    expect(asked[0]).toContain("hand");
+    expect(asked[0]!.length).toBeGreaterThan(1);
+    await req("POST", `/coach/sessions/${sid}/tools/look_at_scene`, { question: "what's in my hand?" });
+    expect(calls.at(-1)!.frame.marks.map((m) => m.label)).toEqual(["scissors"]);
+    advance(5000); // the detection is now older than the newest frame allows
+    await req("POST", `/coach/sessions/${sid}/frame`, { image: JPEG, marks: [] });
+    await req("POST", `/coach/sessions/${sid}/tools/look_at_scene`, {});
+    expect(calls.at(-1)!.frame.marks.map((m) => m.label)).toEqual(["scissors"]); // refreshed by the new detection
+    // A detector that never answers adds nothing.
+    const stale = rig(vision, 0, { detect: () => new Promise(() => {}) });
+    const sid2 = (await stale.req("POST", "/coach/sessions", { patientId: "patient-demo-pediatric-asthma" })).json.sessionId;
+    await stale.req("POST", `/coach/sessions/${sid2}/frame`, { image: JPEG, marks: [] });
+    await stale.req("POST", `/coach/sessions/${sid2}/tools/look_at_scene`, {});
+    expect(calls.at(-1)!.frame.marks).toEqual([]);
   });
 
   it("says vision is not set up when no model is configured, and rejects bad frames", async () => {
