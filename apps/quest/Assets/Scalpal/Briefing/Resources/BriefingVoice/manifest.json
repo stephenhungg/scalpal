@@ -1,0 +1,55 @@
+{
+  "voiceModel": "eleven_flash_v2_5",
+  "clips": [
+    {
+      "stepId": "mark_incision",
+      "text": "First, find the hip bone and the belly button. A third of the way along that line is McBurney's point. Mark five to eight centimeters along the skin lines.",
+      "resourcePath": "BriefingVoice/mark_incision"
+    },
+    {
+      "stepId": "incise_skin",
+      "text": "One smooth stroke along your mark, through skin and fat only.",
+      "resourcePath": "BriefingVoice/incise_skin"
+    },
+    {
+      "stepId": "open_fascia",
+      "text": "Under the fat is the external oblique aponeurosis. Open it along its fibers, never across them.",
+      "resourcePath": "BriefingVoice/open_fascia"
+    },
+    {
+      "stepId": "split_muscle",
+      "text": "The internal oblique and transversus come next. Split them with two retractors. Pull, don't cut, so the muscle keeps its nerves.",
+      "resourcePath": "BriefingVoice/split_muscle"
+    },
+    {
+      "stepId": "open_peritoneum",
+      "text": "Lift the peritoneum with forceps so the bowel falls away, then nick it.",
+      "resourcePath": "BriefingVoice/open_peritoneum"
+    },
+    {
+      "stepId": "deliver_appendix",
+      "text": "Find the cecum, follow its taenia to the appendix, and lift it gently out into the wound.",
+      "resourcePath": "BriefingVoice/deliver_appendix"
+    },
+    {
+      "stepId": "divide_mesoappendix",
+      "text": "The appendicular artery runs in the mesoappendix. Clamp twice, cut between, and tie both sides. No bleeding before you move on.",
+      "resourcePath": "BriefingVoice/divide_mesoappendix"
+    },
+    {
+      "stepId": "ligate_base",
+      "text": "Find the true base where the taeniae meet. Crush it, tie within five millimeters of the cecum, and cut above your tie.",
+      "resourcePath": "BriefingVoice/ligate_base"
+    },
+    {
+      "stepId": "inspect_clean",
+      "text": "Suction the field dry and check the stump and the tied vessels.",
+      "resourcePath": "BriefingVoice/inspect_clean"
+    },
+    {
+      "stepId": "close",
+      "text": "Then close in layers.",
+      "resourcePath": "BriefingVoice/close"
+    }
+  ]
+}

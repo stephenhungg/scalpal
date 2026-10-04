@@ -211,6 +211,13 @@ namespace Scalpal.EncounterOffice.Editor
             Check(surgery.PresentationMode == "virtual" && !surgery.TryChangePresentation(true), "chosen virtual OR core refuses AR while operator preflight is red");
             Check(surgery.realtime.SessionId == sharedSessionId && surgery.realtime.AttemptId == attemptId && !surgery.realtime.AttemptPending,
                 "OR adopts the existing attempt without a replacement request");
+            // The pre-surgery briefing sits between the fit and the Time-Out; this gate skips it like a learner can.
+            yield return Wait(() => FlowPhase == "briefing" || FlowPhase == "timeout", "fit leads to the briefing or Time-Out");
+            if (FlowPhase == "briefing")
+            {
+                yield return Wait(() => UnityEngine.Object.FindFirstObjectByType<Scalpal.Briefing.BriefingDirector>() != null, "briefing spawns in the OR");
+                UnityEngine.Object.FindFirstObjectByType<Scalpal.Briefing.BriefingDirector>().Skip();
+            }
             yield return Wait(() => surgery.CoachPrepared && !surgery.Busy && FlowPhase == "timeout",
                 "actual Time-Out creates coach before practice", 30);
             Check(!surgery.Practicing && !surgery.exercise.CanScore && !ticket.AllConfirmed, "practice remains gated before six Time-Out confirmations");

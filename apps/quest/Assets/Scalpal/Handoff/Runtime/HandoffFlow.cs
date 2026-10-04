@@ -24,7 +24,8 @@ namespace Scalpal.Handoff
         string phase = "office", rendered = "", failure = "";
         float entered, nextRefresh, nextCoachRetry, nextHealth, nextImport, lossStarted = -1;
         int realigns;
-        bool shellPaused, loading, healthBusy, focused = true, suspended, fitConfirmed, coachTried, menuDown;
+        bool shellPaused, loading, healthBusy, focused = true, suspended, fitConfirmed, coachTried, menuDown, briefingDone;
+        Scalpal.Briefing.BriefingDirector briefing;
         const string DefaultPoseEndpoint = "http://localhost:8790";
         HandoffTicket Ticket => HandoffRun.Current;
         string ReturnLabel
@@ -64,6 +65,7 @@ namespace Scalpal.Handoff
         {
             phase = value; entered = Time.unscaledTime; rendered = "";
             if (value != "practice") lossStarted = -1; // The 15/45 s fit-loss ladder is per practice interval.
+            if (briefing && value != "briefing") briefing.gameObject.SetActive(false); // Paused/realigning: resumes on re-entry.
             if (surgery) surgery.SetHandoffVoiceAllowed(ExpectedRole(value) == "coach");
             if (ExpectedRole(value) == "none") DisconnectAll();
         }
@@ -171,6 +173,7 @@ namespace Scalpal.Handoff
             }
             else if (phase == "theatre") Theatre();
             else if (phase == "register") Registration();
+            else if (phase == "briefing") Briefing();
             else if (phase == "timeout") TimeOut();
             else if (phase == "practice") Practice();
             else if (phase == "paused") Show("Paused", "Press to continue. In AR, alignment must be checked again before scoring resumes.", new[] { "Resume", "Virtual OR (new attempt)", Ticket.presentationMode == "mixed_reality" ? "End AR" : ReturnLabel }, i =>
@@ -232,7 +235,7 @@ namespace Scalpal.Handoff
                 Show("Case unavailable", surgery.Message, new[] { "Try again", ReturnLabel }, i => { if (i == 0) surgery.Retry(); else BackToExplore(); }); return;
             }
             // Re-entering registration mid-practice must return to the paused card, never to Time-Out.
-            if (Ticket.presentationMode == "virtual") { fitConfirmed = true; SetPhase(Ticket.practiceStarted ? "paused" : "timeout"); return; }
+            if (Ticket.presentationMode == "virtual") { fitConfirmed = true; SetPhase(AfterFit(Ticket.practiceStarted, briefingDone)); return; }
             var registration = surgery.bodyRegistration;
             if (!registration) { Show("Body detection unavailable", "Continue in the virtual OR.", new[] { "Virtual OR" }, _ => SwitchToVirtual()); return; }
 #if UNITY_ANDROID && !UNITY_EDITOR
@@ -247,7 +250,7 @@ namespace Scalpal.Handoff
             if (valid)
             {
                 Show("Fit: Good · Check alignment", "Do the organs sit inside the torso? Lean gently left and right to check stability.\nGeneric teaching anatomy, not this person's organs.",
-                    new[] { "Looks right", "Realign", "Virtual OR" }, i => { if (i == 0) { fitConfirmed = true; SetPhase(Ticket.practiceStarted ? "paused" : "timeout"); } else if (i == 1) Realign(); else SwitchToVirtual(); }); return;
+                    new[] { "Looks right", "Realign", "Virtual OR" }, i => { if (i == 0) { fitConfirmed = true; SetPhase(AfterFit(Ticket.practiceStarted, briefingDone)); } else if (i == 1) Realign(); else SwitchToVirtual(); }); return;
             }
             string dots = ""; string[] names = { "Left shoulder", "Right shoulder", "Left hip", "Right hip" };
             for (int i = 0; i < 4; i++) dots += (registration.VisibleLandmarks[i] ? "[seen] " : "[waiting] ") + names[i] + "  ";
@@ -261,14 +264,33 @@ namespace Scalpal.Handoff
                 "\n2 Measuring torso surface: " + (registration.SurfaceMeasured ? "Ready" : "Waiting") + "\n3 Holding still: " + registration.StableObservations + "/3\nFit: Check alignment\n" + hint,
                 new[] { "Keep trying", "Virtual OR", "End AR" }, i => { if (i == 0) entered = Time.unscaledTime; else if (i == 1) SwitchToVirtual(); else EndAR(); });
         }
+        /// <summary>After a confirmed fit: a started attempt resumes paused; otherwise the briefing once per OR entry, then the Time-Out.</summary>
+        public static string AfterFit(bool practiceStarted, bool briefingDone) => practiceStarted ? "paused" : briefingDone ? "timeout" : "briefing";
+        // Pre-surgery briefing (skippable). It never needs the network; finishing or skipping both lead to the Time-Out.
+        void Briefing()
+        {
+            if (Ticket.practiceStarted) { SetPhase("paused"); return; }
+            if (briefingDone) { SetPhase("timeout"); return; }
+            card.Hide(); rendered = "";
+            if (!briefing) briefing = Scalpal.Briefing.BriefingDirector.Begin(card.viewer ? card.viewer.transform : Camera.main ? Camera.main.transform : null);
+            else if (!briefing.Finished && !briefing.gameObject.activeSelf) briefing.gameObject.SetActive(true);
+            if (!briefing.Finished) return;
+            briefingDone = true; EndBriefing(); SetPhase("timeout");
+        }
+        void EndBriefing()
+        {
+            if (briefing) { if (Application.isPlaying) Destroy(briefing.gameObject); else DestroyImmediate(briefing.gameObject); }
+            briefing = null;
+        }
         void Realign() { realigns++; fitConfirmed = false; surgery.bodyRegistration.ResetFit(); SetPhase("register"); }
         void SwitchToVirtual()
         {
             if (Ticket?.presentationMode == "virtual" || !surgery) return;
+            bool started = Ticket.practiceStarted;
             // The OR core refuses mode changes mid-practice; an explicit new attempt comes first (office score kept).
             if (Ticket.practiceStarted) { surgery.Retry(); if (Ticket.practiceStarted) return; }
             if (!surgery.TryChangePresentation(false)) return;
-            Ticket.modeChosenBy = "fallback"; fitConfirmed = true; coachTried = false; nextCoachRetry = 0; SetPhase("timeout");
+            Ticket.modeChosenBy = "fallback"; fitConfirmed = true; coachTried = false; nextCoachRetry = 0; SetPhase(started || briefingDone ? "timeout" : "briefing");
         }
         public void EndAR()
         {
@@ -436,6 +458,7 @@ namespace Scalpal.Handoff
         void ResetRunState()
         {
             failure = ""; lossStarted = -1; coachTried = false; nextCoachRetry = 0; realigns = 0; fitConfirmed = false; nextImport = 0;
+            briefingDone = false; EndBriefing();
         }
         // Return from a headset/shell interruption. Practice only resumes through the paused card.
         void ResumeGate()
