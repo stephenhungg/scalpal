@@ -40,6 +40,7 @@ namespace Scalpal.Handoff.Editor
                 ("F4 volunteer consent ends with the run", ConsentEndsWithRun),
                 ("F5 Time-Out sends only individually confirmed risks", RiskReviewSendsOnlyConfirmed),
                 ("F6/F8 Time-Out clears stale errors and releases its loading latch", TimeOutClearsErrorAndLatch),
+                ("F14 AR Time-Out captures the measured vitals baseline; VR keeps the chart", TimeOutBaselineOnlyInAr),
                 ("F6/F7 a new office run starts without old errors or coach/fit-loss state", NewRunResetsState),
                 ("F7 the fit-loss ladder restarts after leaving practice", FitLossLadderIsPerPractice),
                 ("F9 legacy office route starts in the virtual OR", LegacyOfficeRouteStartsVirtual),
@@ -48,6 +49,7 @@ namespace Scalpal.Handoff.Editor
                 ("F12 waiting card has a way back and does not import every frame", WaitingCardReturnsAndThrottles),
                 ("F13 voice gate follows the actual phase transitions", VoiceGateFollowsPhases),
                 ("F13 unified scene order is checked against the product order", SceneOrderIsIndependent),
+                ("F15 OR entry shows no connection error while the case loads or the session joins", EntryShowsNoConnectionErrorWhileLoading),
             };
             try
             {
@@ -117,6 +119,27 @@ namespace Scalpal.Handoff.Editor
             Assert(ticket.practiceStarted && ticket.attemptId == attempt && ticket.AllConfirmed, "attempt, practice progress and Time-Out survive the resume");
         }
 
+        // The learner reaches the OR with every required service up. Loading the case (about a second over adb) and the OR's
+        // own SpacetimeDB join are normal; the card must not offer "Retry connection" as if something failed.
+        static void EntryShowsNoConnectionErrorWhileLoading()
+        {
+            var flow = Flow(out var card); var native = Native(flow.gameObject); Ticket("virtual");
+            Set(flow, "surgery", native); Set(flow, "phase", "register");
+            bool NoError() => Actions(card).All(label => label.IndexOf("retry", StringComparison.OrdinalIgnoreCase) < 0 && label.IndexOf("connection", StringComparison.OrdinalIgnoreCase) < 0);
+            Set(native, "busy", true);
+            Call(flow, "Registration");
+            Assert(Heading(card) == "Preparing the operating room" && NoError(), "case loading shows a quiet preparing card without a connection retry (was " + Heading(card) + ")");
+            Set(native, "busy", false);
+            Call(flow, "Registration");
+            Assert(Heading(card) == "Case unavailable" && Actions(card)[0] == "Try again", "an actual load failure offers one plain retry");
+            ReadyForTimeOut(flow, native); Property(native.realtime, "Paired", false); Set(native.realtime, "connecting", true); Set(native.realtime, "connectStarted", Time.realtimeSinceStartup);
+            Call(flow, "TimeOut");
+            Assert(Heading(card) == "Preparing the operating room" && NoError(), "joining the shared session shows the preparing card, not a connection error (was " + Heading(card) + ")");
+            Set(native.realtime, "connecting", false);
+            Call(flow, "TimeOut");
+            Assert(Heading(card) == "Shared headset session unavailable", "a session that is really unreachable still says so");
+        }
+
         // The learner returns to the office picker and starts patient B; patient A's Theatre card must not survive.
         static void OfficePatientChangeClearsTicket()
         {
@@ -180,6 +203,21 @@ namespace Scalpal.Handoff.Editor
             Assert(routine.MoveNext() && Get<string>(flow, "failure") == "", "a new Begin practice clears the previous error");
             HandoffRun.Clear();
             Assert(!routine.MoveNext() && !Get<bool>(flow, "loading"), "a response for a cleared ticket releases the loading latch");
+        }
+
+        // AR: the coach freezes the volunteer's Presage baseline at the Time-Out (POST with an empty body).
+        // VR has no volunteer, so the charted vitals stay and nothing is posted.
+        static void TimeOutBaselineOnlyInAr()
+        {
+            var flow = Flow(out _); var native = Native(flow.gameObject);
+            Set(native, "coachSessionId", "coach-fixture");
+            Assert(native.TimeOutBaseline() == null, "VR Time-Out posts no baseline");
+            native.presentation.passthrough = true;
+            var request = native.TimeOutBaseline();
+            Assert(request != null && Field<string>(request, "method") == "POST" && Field<string>(request, "path") == "/coach/sessions/coach-fixture/vitals/baseline"
+                && Field<string>(request, "body") == "{}", "AR Time-Out posts an empty body to the session's vitals baseline");
+            Set(native, "coachSessionId", "");
+            Assert(native.TimeOutBaseline() == null, "a captions-only Time-Out without a coach session posts nothing");
         }
 
         static void NewRunResetsState()

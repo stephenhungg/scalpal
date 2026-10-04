@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { createApp } from "../src/app.js";
-import { letterFrom, type AnswerClassifier } from "../src/answer-classifier.js";
+import { letterFrom, wordMatch, type AnswerClassifier } from "../src/answer-classifier.js";
 import { validateInterview, type InterviewChoice, type InterviewRound, type PatientInterview } from "../src/interview-types.js";
 import { NOW, fixtureClient } from "./helpers.js";
 
@@ -57,6 +57,21 @@ describe("interview content", () => {
     expect(letterFrom("I'll go with d")).toBe("D");
     expect(letterFrom("the second one")).toBe("B");
     expect(letterFrom("I would ask about her allergies")).toBeNull();
+  });
+
+  // Without ANTHROPIC_API_KEY a paraphrased move must still land: learners speak the question, not the option.
+  it("matches a paraphrased move by shared words, and refuses a tie or a vague reply", () => {
+    const choices = [
+      { key: "A" as const, text: "Ask whether anyone in her family has had bowel cancer" },
+      { key: "B" as const, text: "Ask when the pain started and whether it has moved since then" },
+      { key: "C" as const, text: "Ask her to rate the pain from zero to ten" },
+      { key: "D" as const, text: "Ask what usually sets off her migraines" },
+    ];
+    expect(wordMatch("When did your pain start, and has it moved anywhere?", choices)).toBe("B");
+    expect(wordMatch("Does anyone in your family have bowel cancer?", choices)).toBe("A");
+    expect(wordMatch("On a scale of zero to ten how bad is it", choices)).toBe("C");
+    expect(wordMatch("tell me about the pain", choices)).toBeNull();
+    expect(wordMatch("hmm I'm not sure", choices)).toBeNull();
   });
 });
 
@@ -127,5 +142,25 @@ describe("choice-based office interview", () => {
   it("says when a patient has no authored interview", async () => {
     const { req } = rig();
     expect((await req("POST", "/interviews", { patientId: "patient-demo-sparse" })).json.error.code).toBe("no_interview");
+  });
+});
+
+describe("spoken answer fallback", () => {
+  it("uses shared words only without a model or when the model fails, never over a model's unclear", async () => {
+    const { wordMatch } = await import("../src/answer-classifier.js");
+    const choices = [{ key: "A" as const, text: "Ask where the pain is now" }, { key: "B" as const, text: "Order a chest x-ray" }];
+    expect(wordMatch("where is your pain right now", choices)).toBe("A");
+    const run = async (classifier: AnswerClassifier) => {
+      const root = mkdtempSync(join(tmpdir(), "content-"));
+      mkdirSync(join(root, "patient-demo-multi-source"), { recursive: true });
+      writeFileSync(join(root, "patient-demo-multi-source", "interview.json"), JSON.stringify(INTERVIEW));
+      writeFileSync(join(root, "patient-demo-multi-source", "patient.md"), "You are Priya.");
+      const app = createApp({ client: fixtureClient(), now: () => NOW, coachTickMs: 0, interviewContentRoot: root, answerClassifier: classifier });
+      const post = async (route: string, body: unknown) => (await app.request(route, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })).status;
+      const id = ((await (await app.request("/interviews", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ patientId: "patient-demo-multi-source" }) })).json()) as any).interviewId;
+      return post(`/interviews/${id}/answer`, { text: "location option A or maybe location option B" });
+    };
+    expect(await run({ classify: async () => null })).toBe(422); // the model said unclear: ask again
+    expect(await run({ classify: async () => { throw new Error("down"); } })).toBe(422); // two matches tie: still unclear
   });
 });

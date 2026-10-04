@@ -47,7 +47,8 @@ namespace Scalpal.Quest.Editor
             room.transform.position += delta;
             var mannequin = patient.GetComponentsInChildren<Renderer>(true).Single();
             var patientBounds = mannequin.bounds;
-            mannequin.sharedMaterials = mannequin.sharedMaterials.Select(_ => PatientGhost()).ToArray();
+            // The VR patient reads as solid skin; it is hidden in AR, where only the anatomy overlay is drawn.
+            mannequin.sharedMaterials = mannequin.sharedMaterials.Select(_ => PatientSkin()).ToArray();
             PrefabUtility.RecordPrefabInstancePropertyModifications(mannequin);
             var unbound = patient.transform.Find("AnatomyRoot_Unbound");
             if (unbound) UnityEngine.Object.DestroyImmediate(unbound.gameObject);
@@ -155,6 +156,9 @@ namespace Scalpal.Quest.Editor
             workbench.status.transform.position = new Vector3(-0.15f, 1.65f, 0.3f);
             workbench.status.characterSize = 0.012f;
             workbench.status.text = "Scalpal | Appendectomy rehearsal\nReview the case and confirm selection\nGrip: pick up   Trigger: use   B: review / confirm\nX: identify   Y: voice   A: reset tools   Left menu: retry";
+            // Diagnostic status stays bound for the session (still written each frame) but is never shown in the
+            // learner's OR. The learner sees the checklist, Jarvis's line and the vitals monitor.
+            workbench.status.gameObject.SetActive(false);
 
             // AnatomyPart captures these enabled flags as authored defaults at runtime Awake.
             // The practice controller then hides geometry until its explicit validity gate opens.
@@ -204,7 +208,7 @@ namespace Scalpal.Quest.Editor
             return bundle;
         }
 
-        static Material PatientGhost() => Material("AuthoredPatientGhost", new Color(0.65f, 0.5f, 0.4f, 0.13f), true);
+        static Material PatientSkin() => Material("AuthoredPatientSkin", new Color(0.65f, 0.5f, 0.4f, 1f), false);
         static Material PortMaterial() => Material("AuthoredPortSite", new Color(0.2f, 0.7f, 0.85f), false);
 
         static Material Material(string name, Color color, bool transparent)
@@ -279,6 +283,7 @@ namespace Scalpal.Quest.Editor
                 || session.status != session.workbench.status || session.exercise.presentationMode != "mixed_reality" || !session.exercise.requireCoachSynchronization
                 || !session.workbench.externalSessionControls)
                 throw new InvalidOperationException("Native case/coach/preview bindings are inconsistent.");
+            ValidateLearnerText(roots);
             if (roots.SelectMany(root => root.GetComponentsInChildren<AnatomyExerciseBinding>(true)).Count() != 1
                 || roots.SelectMany(root => root.GetComponentsInChildren<AnatomyController>(true)).Count() != 3
                 || roots.SelectMany(root => root.GetComponentsInChildren<CoachRelay>(true)).Count() != 1)
@@ -326,6 +331,17 @@ namespace Scalpal.Quest.Editor
                 throw new InvalidOperationException("Unexpected whole-body/detail atlas dependency in the native session.");
             Debug.Log("SCALPAL_NATIVE_SESSION_SCENE_VALIDATED tools=15 controllers=2 practiceParts=9 practiceTriangles=93399 overviewParts=81 overviewTriangles=120125 ports=3 initialValidity=false "
                 + "sourceBounds=" + MeshBounds(session.anatomy.gameObject));
+        }
+
+        // The OR scene carries no always-on world text. Learner text is spawned only by the checklist (top-left),
+        // Jarvis's dialogue line, the vitals monitor, the pointing label and the flow cards, each gated by its owner.
+        public static void ValidateLearnerText(GameObject[] roots)
+        {
+            var shown = roots.SelectMany(root => root.GetComponentsInChildren<TextMesh>(false).Cast<Component>()
+                    .Concat(root.GetComponentsInChildren<TMPro.TMP_Text>(false)))
+                .Where(text => text.gameObject.activeInHierarchy && text.GetComponent<Renderer>() && text.GetComponent<Renderer>().enabled).Select(text => text.name).ToArray();
+            if (shown.Length != 0)
+                throw new InvalidOperationException("Learner OR view shows debug/status world text: " + string.Join(", ", shown));
         }
 
         static void ValidatePresentation(NativeCaseSession session)
@@ -407,6 +423,8 @@ namespace Scalpal.Quest.Editor
             NativeBodyAtlasValidation.Run();
             NativeBodyRegistrationValidation.Run();
             NativeOperatingRoomModeValidation.Run();
+            NativeOperatingRoomPhysicsValidation.Run();
+            NativeLocomotionValidation.Run();
             Scalpal.Instruments.Editor.InstrumentRuntimeValidation.Run();
             NativeProcedureInputValidation.Run();
             NativeInteriorContactValidation.Run();
@@ -432,6 +450,7 @@ namespace Scalpal.Quest.Editor
             NativeCoachRelayValidation.Run();
             Scalpal.Capture.Editor.CaptureValidation.Run();
             Scalpal.Shell.Editor.DialogueBoxValidation.Run();
+            NativeControllerHands.Validate();
             // Fixtures must not leave temporary poses, offline gates or substituted bindings in the player.
             Validate();
             Debug.Log("SCALPAL_NATIVE_SESSION_VERIFY_OK");

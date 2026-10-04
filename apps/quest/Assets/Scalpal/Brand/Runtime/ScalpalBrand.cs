@@ -45,6 +45,8 @@ namespace Scalpal.Brand
         public static readonly Color AccentGold = new Color32(156, 156, 162, 255);
         // Flat uses (icons, chips) take the spark's midpoint; rims and rays use the full gradient.
         public static readonly Color Accent = Color.Lerp(AccentOrange, AccentGold, .45f);
+        // Surgical green for in-room clinical overlays (pointing box and label, monitor trace and heart rate).
+        public static readonly Color SurgicalGreen = new Color32(74, 222, 128, 255);
         public static readonly Color GlassTint = new Color(.016f, .016f, .019f, .95f);
         public static readonly Color Hairline = new Color(1, 1, 1, .16f);
         public static readonly Color ButtonTint = new Color(.055f, .055f, .062f, .96f);

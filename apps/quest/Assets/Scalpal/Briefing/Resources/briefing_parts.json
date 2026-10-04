@@ -1,0 +1,2065 @@
+{
+ "version": 1,
+ "frame": {
+  "units": "meters",
+  "up": "+Y",
+  "anterior": "+Z",
+  "patientRight": "+X",
+  "space": "Unity mesh space after FBX import (left-handed)",
+  "scaleFromSource": 1.599315,
+  "sourceCenterBlender": [
+   0.0,
+   -0.006542,
+   0.972493
+  ],
+  "crop": "Z-Anatomy source z 0.785..1.160 m (lower costal margin to below pubis)"
+ },
+ "landmarks": {
+  "asis_r": [
+   0.18862,
+   -0.04377,
+   0.07921
+  ],
+  "asis_l": [
+   -0.18862,
+   -0.04377,
+   0.07921
+  ],
+  "umbilicus": [
+   0.0,
+   0.07102,
+   0.17217
+  ],
+  "mcburney_point": [
+   0.12575,
+   -0.0055,
+   0.1102
+  ]
+ },
+ "steps": [
+  {
+   "id": "mark_incision",
+   "peelThroughLayer": -1,
+   "focus": [
+    "umbilicus",
+    "skeletal__hip_bone_r"
+   ]
+  },
+  {
+   "id": "incise_skin",
+   "peelThroughLayer": -1,
+   "focus": [
+    "skin",
+    "subcutaneous_fat"
+   ]
+  },
+  {
+   "id": "open_fascia",
+   "peelThroughLayer": 1,
+   "focus": [
+    "external_oblique_aponeurosis_r"
+   ]
+  },
+  {
+   "id": "split_muscle",
+   "peelThroughLayer": 2,
+   "focus": [
+    "muscular__internal_abdominal_oblique_muscle_r",
+    "muscular__transversus_abdominis_muscle_r"
+   ]
+  },
+  {
+   "id": "open_peritoneum",
+   "peelThroughLayer": 5,
+   "focus": [
+    "peritoneum"
+   ]
+  },
+  {
+   "id": "deliver_appendix",
+   "peelThroughLayer": 7,
+   "focus": [
+    "cecum",
+    "appendix"
+   ]
+  },
+  {
+   "id": "divide_mesoappendix",
+   "peelThroughLayer": 7,
+   "focus": [
+    "mesoappendix",
+    "appendicular_artery"
+   ]
+  },
+  {
+   "id": "ligate_base",
+   "peelThroughLayer": 7,
+   "focus": [
+    "appendix",
+    "cecum"
+   ]
+  },
+  {
+   "id": "inspect_clean",
+   "peelThroughLayer": 7,
+   "focus": [
+    "mesoappendix",
+    "appendix"
+   ]
+  },
+  {
+   "id": "close",
+   "peelThroughLayer": -1,
+   "focus": []
+  }
+ ],
+ "attribution": "Z-Anatomy (Lluis Vinent), BodyParts3D (c) DBCLS, CC BY-SA 4.0; see assets/anatomy/attribution/",
+ "parts": [
+  {
+   "index": 0,
+   "id": "skin",
+   "name": "Skin (abdominal wall)",
+   "system": "integumentary",
+   "layer": 0,
+   "center": [
+    0.0,
+    0.0313,
+    0.0
+   ],
+   "min": [
+    -0.24644,
+    -0.23729,
+    -0.2012
+   ],
+   "max": [
+    0.24644,
+    0.29989,
+    0.2012
+   ],
+   "triStart": 0,
+   "triCount": 14000,
+   "color": [
+    0.93,
+    0.74,
+    0.62
+   ],
+   "synthetic": false,
+   "tissueId": "skin",
+   "source": [
+    "surface/Epigastric region.r",
+    "surface/Epigastric region.l",
+    "surface/Hypochondriac region.r",
+    "surface/Hypochondriac region.l",
+    "surface/Umbilical region.r",
+    "surface/Umbilical region.l",
+    "surface/Lateral region of abdomen.r",
+    "surface/Lateral region of abdomen.l",
+    "surface/Hypogastric region.r",
+    "surface/Hypogastric region.l",
+    "surface/Inguinal region.r",
+    "surface/Inguinal region.l",
+    "surface/Lumbar region.r",
+    "surface/Lumbar region.l",
+    "surface/Sacral region.r",
+    "surface/Sacral region.l",
+    "surface/Vertebral region.r",
+    "surface/Vertebral region.l"
+   ]
+  },
+  {
+   "index": 1,
+   "id": "umbilicus",
+   "name": "Umbilicus",
+   "system": "integumentary",
+   "layer": 0,
+   "center": [
+    0.0,
+    0.07102,
+    0.17217
+   ],
+   "min": [
+    -0.02561,
+    0.05085,
+    0.16123
+   ],
+   "max": [
+    0.02561,
+    0.09118,
+    0.1831
+   ],
+   "triStart": 14000,
+   "triCount": 80,
+   "color": [
+    0.82,
+    0.58,
+    0.5
+   ],
+   "synthetic": false,
+   "tissueId": "skin",
+   "source": [
+    "surface/Umbilicus.r",
+    "surface/Umbilicus.l"
+   ]
+  },
+  {
+   "index": 2,
+   "id": "subcutaneous_fat",
+   "name": "Subcutaneous fat",
+   "system": "integumentary",
+   "layer": 1,
+   "center": [
+    0.0,
+    0.0313,
+    2e-05
+   ],
+   "min": [
+    -0.24324,
+    -0.23729,
+    -0.19802
+   ],
+   "max": [
+    0.24324,
+    0.29989,
+    0.19806
+   ],
+   "triStart": 14080,
+   "triCount": 13951,
+   "color": [
+    0.98,
+    0.84,
+    0.36
+   ],
+   "synthetic": true,
+   "tissueId": "fat",
+   "source": [
+    "synthetic offset of skin"
+   ]
+  },
+  {
+   "index": 3,
+   "id": "external_oblique_aponeurosis_r",
+   "name": "External oblique aponeurosis (right)",
+   "system": "muscular",
+   "layer": 2,
+   "center": [
+    0.09685,
+    0.06126,
+    0.04581
+   ],
+   "min": [
+    0.00753,
+    -0.1774,
+    -0.09799
+   ],
+   "max": [
+    0.18617,
+    0.29993,
+    0.1896
+   ],
+   "triStart": 28031,
+   "triCount": 5000,
+   "color": [
+    0.93,
+    0.92,
+    0.87
+   ],
+   "synthetic": false,
+   "tissueId": "fascia",
+   "source": [
+    "muscular/External abdominal oblique muscle.r"
+   ],
+   "derived": "split from Z-Anatomy external oblique: medial to rectus border or below ASIS"
+  },
+  {
+   "index": 4,
+   "id": "external_oblique_aponeurosis_l",
+   "name": "External oblique aponeurosis (left)",
+   "system": "muscular",
+   "layer": 2,
+   "center": [
+    -0.09693,
+    0.06127,
+    0.04566
+   ],
+   "min": [
+    -0.18617,
+    -0.1774,
+    -0.09814
+   ],
+   "max": [
+    -0.00769,
+    0.29995,
+    0.18947
+   ],
+   "triStart": 33031,
+   "triCount": 3000,
+   "color": [
+    0.93,
+    0.92,
+    0.87
+   ],
+   "synthetic": false,
+   "tissueId": "fascia",
+   "source": [
+    "muscular/External abdominal oblique muscle.l"
+   ],
+   "derived": "split from Z-Anatomy external oblique: medial to rectus border or below ASIS"
+  },
+  {
+   "index": 5,
+   "id": "muscular__external_abdominal_oblique_muscle_r",
+   "name": "External oblique muscle (right)",
+   "system": "muscular",
+   "layer": 2,
+   "center": [
+    0.17488,
+    0.12224,
+    0.04078
+   ],
+   "min": [
+    0.12707,
+    -0.05545,
+    -0.08888
+   ],
+   "max": [
+    0.22269,
+    0.29994,
+    0.17044
+   ],
+   "triStart": 36031,
+   "triCount": 4000,
+   "color": [
+    0.72,
+    0.19,
+    0.17
+   ],
+   "synthetic": false,
+   "tissueId": "muscle",
+   "source": [
+    "muscular/External abdominal oblique muscle.r"
+   ],
+   "derived": "fleshy remainder of Z-Anatomy external oblique after aponeurosis split"
+  },
+  {
+   "index": 6,
+   "id": "muscular__external_abdominal_oblique_muscle_l",
+   "name": "External oblique muscle (left)",
+   "system": "muscular",
+   "layer": 2,
+   "center": [
+    -0.17484,
+    0.12224,
+    0.04087
+   ],
+   "min": [
+    -0.22261,
+    -0.05545,
+    -0.0887
+   ],
+   "max": [
+    -0.12707,
+    0.29994,
+    0.17044
+   ],
+   "triStart": 40031,
+   "triCount": 3000,
+   "color": [
+    0.72,
+    0.19,
+    0.17
+   ],
+   "synthetic": false,
+   "tissueId": "muscle",
+   "source": [
+    "muscular/External abdominal oblique muscle.l"
+   ],
+   "derived": "fleshy remainder of Z-Anatomy external oblique after aponeurosis split"
+  },
+  {
+   "index": 7,
+   "id": "muscular__inguinal_ligament_r",
+   "name": "Inguinal ligament (right)",
+   "system": "muscular",
+   "layer": 2,
+   "center": [
+    0.11441,
+    -0.12215,
+    0.07304
+   ],
+   "min": [
+    0.03079,
+    -0.21268,
+    0.06562
+   ],
+   "max": [
+    0.19804,
+    -0.03161,
+    0.08046
+   ],
+   "triStart": 43031,
+   "triCount": 800,
+   "color": [
+    0.93,
+    0.92,
+    0.87
+   ],
+   "synthetic": false,
+   "tissueId": "fascia",
+   "source": [
+    "muscular/Inguinal ligament.r"
+   ]
+  },
+  {
+   "index": 8,
+   "id": "muscular__inguinal_ligament_l",
+   "name": "Inguinal ligament (left)",
+   "system": "muscular",
+   "layer": 2,
+   "center": [
+    -0.1145,
+    -0.12215,
+    0.07304
+   ],
+   "min": [
+    -0.19804,
+    -0.21268,
+    0.06562
+   ],
+   "max": [
+    -0.03096,
+    -0.03161,
+    0.08046
+   ],
+   "triStart": 43831,
+   "triCount": 600,
+   "color": [
+    0.93,
+    0.92,
+    0.87
+   ],
+   "synthetic": false,
+   "tissueId": "fascia",
+   "source": [
+    "muscular/Inguinal ligament.l"
+   ]
+  },
+  {
+   "index": 9,
+   "id": "muscular__linea_alba",
+   "name": "Linea alba",
+   "system": "muscular",
+   "layer": 2,
+   "center": [
+    -0.00165,
+    0.0449,
+    0.11194
+   ],
+   "min": [
+    -0.01607,
+    -0.21009,
+    0.0523
+   ],
+   "max": [
+    0.01277,
+    0.29988,
+    0.17158
+   ],
+   "triStart": 44431,
+   "triCount": 230,
+   "color": [
+    0.93,
+    0.92,
+    0.87
+   ],
+   "synthetic": false,
+   "tissueId": "fascia",
+   "source": [
+    "muscular/Linea alba"
+   ]
+  },
+  {
+   "index": 10,
+   "id": "muscular__internal_abdominal_oblique_muscle_r",
+   "name": "Internal oblique muscle (right)",
+   "system": "muscular",
+   "layer": 3,
+   "center": [
+    0.10399,
+    0.05197,
+    0.04412
+   ],
+   "min": [
+    0.00478,
+    -0.19599,
+    -0.09552
+   ],
+   "max": [
+    0.2032,
+    0.29993,
+    0.18376
+   ],
+   "triStart": 44661,
+   "triCount": 6999,
+   "color": [
+    0.7,
+    0.18,
+    0.17
+   ],
+   "synthetic": false,
+   "tissueId": "muscle",
+   "source": [
+    "muscular/Internal abdominal oblique muscle.r"
+   ]
+  },
+  {
+   "index": 11,
+   "id": "muscular__internal_abdominal_oblique_muscle_l",
+   "name": "Internal oblique muscle (left)",
+   "system": "muscular",
+   "layer": 3,
+   "center": [
+    -0.10397,
+    0.05197,
+    0.04412
+   ],
+   "min": [
+    -0.20315,
+    -0.19599,
+    -0.09561
+   ],
+   "max": [
+    -0.00478,
+    0.29994,
+    0.18386
+   ],
+   "triStart": 51660,
+   "triCount": 4500,
+   "color": [
+    0.7,
+    0.18,
+    0.17
+   ],
+   "synthetic": false,
+   "tissueId": "muscle",
+   "source": [
+    "muscular/Internal abdominal oblique muscle.l"
+   ]
+  },
+  {
+   "index": 12,
+   "id": "muscular__rectus_abdominis_muscle_r",
+   "name": "Rectus abdominis (right)",
+   "system": "muscular",
+   "layer": 3,
+   "center": [
+    0.06789,
+    0.05198,
+    0.12054
+   ],
+   "min": [
+    0.00506,
+    -0.19597,
+    0.06151
+   ],
+   "max": [
+    0.13072,
+    0.29993,
+    0.17958
+   ],
+   "triStart": 56160,
+   "triCount": 4000,
+   "color": [
+    0.76,
+    0.22,
+    0.2
+   ],
+   "synthetic": false,
+   "tissueId": "muscle",
+   "source": [
+    "muscular/Rectus abdominis muscle.r"
+   ]
+  },
+  {
+   "index": 13,
+   "id": "muscular__rectus_abdominis_muscle_l",
+   "name": "Rectus abdominis (left)",
+   "system": "muscular",
+   "layer": 3,
+   "center": [
+    -0.06789,
+    0.05198,
+    0.12054
+   ],
+   "min": [
+    -0.13072,
+    -0.19597,
+    0.06151
+   ],
+   "max": [
+    -0.00506,
+    0.29993,
+    0.17958
+   ],
+   "triStart": 60160,
+   "triCount": 4000,
+   "color": [
+    0.76,
+    0.22,
+    0.2
+   ],
+   "synthetic": false,
+   "tissueId": "muscle",
+   "source": [
+    "muscular/Rectus abdominis muscle.l"
+   ]
+  },
+  {
+   "index": 14,
+   "id": "muscular__transversus_abdominis_muscle_r",
+   "name": "Transversus abdominis (right)",
+   "system": "muscular",
+   "layer": 4,
+   "center": [
+    0.10556,
+    0.045,
+    0.02291
+   ],
+   "min": [
+    0.00566,
+    -0.21,
+    -0.10576
+   ],
+   "max": [
+    0.20545,
+    0.3,
+    0.15158
+   ],
+   "triStart": 64160,
+   "triCount": 6998,
+   "color": [
+    0.64,
+    0.16,
+    0.16
+   ],
+   "synthetic": false,
+   "tissueId": "muscle",
+   "source": [
+    "muscular/Transversus abdominis muscle.r"
+   ]
+  },
+  {
+   "index": 15,
+   "id": "muscular__transversus_abdominis_muscle_l",
+   "name": "Transversus abdominis (left)",
+   "system": "muscular",
+   "layer": 4,
+   "center": [
+    -0.10556,
+    0.04499,
+    0.02277
+   ],
+   "min": [
+    -0.20545,
+    -0.21,
+    -0.10576
+   ],
+   "max": [
+    -0.00566,
+    0.29998,
+    0.15131
+   ],
+   "triStart": 71158,
+   "triCount": 4499,
+   "color": [
+    0.64,
+    0.16,
+    0.16
+   ],
+   "synthetic": false,
+   "tissueId": "muscle",
+   "source": [
+    "muscular/Transversus abdominis muscle.l"
+   ]
+  },
+  {
+   "index": 16,
+   "id": "muscular__transversalis_fascia",
+   "name": "Transversalis fascia",
+   "system": "muscular",
+   "layer": 5,
+   "center": [
+    0.0,
+    0.05311,
+    0.01872
+   ],
+   "min": [
+    -0.18651,
+    -0.19367,
+    -0.0967
+   ],
+   "max": [
+    0.18651,
+    0.29988,
+    0.13415
+   ],
+   "triStart": 75657,
+   "triCount": 3993,
+   "color": [
+    0.9,
+    0.86,
+    0.8
+   ],
+   "synthetic": false,
+   "tissueId": "peritoneum",
+   "source": [
+    "muscular/Transversalis fascia"
+   ]
+  },
+  {
+   "index": 17,
+   "id": "peritoneum",
+   "name": "Parietal peritoneum",
+   "system": "peritoneal",
+   "layer": 6,
+   "center": [
+    0.0,
+    0.05311,
+    0.01856
+   ],
+   "min": [
+    -0.18412,
+    -0.19367,
+    -0.09478
+   ],
+   "max": [
+    0.18412,
+    0.29988,
+    0.13189
+   ],
+   "triStart": 79650,
+   "triCount": 3993,
+   "color": [
+    0.96,
+    0.7,
+    0.72
+   ],
+   "synthetic": true,
+   "tissueId": "peritoneum",
+   "source": [
+    "synthetic offset of transversalis fascia"
+   ]
+  },
+  {
+   "index": 18,
+   "id": "greater_omentum",
+   "name": "Greater omentum",
+   "system": "digestive",
+   "layer": 7,
+   "center": [
+    -0.00535,
+    0.07563,
+    0.07486
+   ],
+   "min": [
+    -0.17474,
+    -0.14864,
+    0.01927
+   ],
+   "max": [
+    0.16403,
+    0.29989,
+    0.13046
+   ],
+   "triStart": 83643,
+   "triCount": 7000,
+   "color": [
+    0.98,
+    0.86,
+    0.5
+   ],
+   "synthetic": false,
+   "tissueId": "",
+   "source": [
+    "visceral/Greater omentum"
+   ]
+  },
+  {
+   "index": 19,
+   "id": "cecum",
+   "name": "Cecum",
+   "system": "digestive",
+   "layer": 8,
+   "center": [
+    0.14042,
+    -0.05178,
+    0.01351
+   ],
+   "min": [
+    0.09884,
+    -0.10456,
+    -0.02647
+   ],
+   "max": [
+    0.182,
+    0.001,
+    0.05349
+   ],
+   "triStart": 90643,
+   "triCount": 1216,
+   "color": [
+    0.86,
+    0.58,
+    0.55
+   ],
+   "synthetic": false,
+   "tissueId": "cecum",
+   "source": [
+    "exercise-targets/anat_cecum"
+   ]
+  },
+  {
+   "index": 20,
+   "id": "appendix",
+   "name": "Vermiform appendix",
+   "system": "digestive",
+   "layer": 8,
+   "center": [
+    0.08579,
+    -0.03693,
+    -0.00544
+   ],
+   "min": [
+    0.03017,
+    -0.05138,
+    -0.03663
+   ],
+   "max": [
+    0.14142,
+    -0.02248,
+    0.02575
+   ],
+   "triStart": 91859,
+   "triCount": 442,
+   "color": [
+    0.9,
+    0.48,
+    0.46
+   ],
+   "synthetic": false,
+   "tissueId": "appendix",
+   "source": [
+    "visceral/Vermiform appendix"
+   ]
+  },
+  {
+   "index": 21,
+   "id": "mesoappendix",
+   "name": "Mesoappendix",
+   "system": "digestive",
+   "layer": 8,
+   "center": [
+    0.07559,
+    -0.0061,
+    -0.00473
+   ],
+   "min": [
+    0.03598,
+    -0.04128,
+    -0.03103
+   ],
+   "max": [
+    0.11521,
+    0.02908,
+    0.02156
+   ],
+   "triStart": 92301,
+   "triCount": 468,
+   "color": [
+    0.98,
+    0.8,
+    0.58
+   ],
+   "synthetic": false,
+   "tissueId": "mesoappendix",
+   "source": [
+    "visceral/Meso-appendix"
+   ]
+  },
+  {
+   "index": 22,
+   "id": "appendicular_artery",
+   "name": "Appendicular artery",
+   "system": "vascular",
+   "layer": 8,
+   "center": [
+    0.06211,
+    0.01241,
+    0.00143
+   ],
+   "min": [
+    0.03501,
+    -0.03987,
+    -0.02832
+   ],
+   "max": [
+    0.08921,
+    0.0647,
+    0.03119
+   ],
+   "triStart": 92769,
+   "triCount": 2006,
+   "color": [
+    0.8,
+    0.08,
+    0.08
+   ],
+   "synthetic": false,
+   "tissueId": "appendicular_artery",
+   "source": [
+    "cardiovascular/Appendicular artery"
+   ]
+  },
+  {
+   "index": 23,
+   "id": "terminal_ileum",
+   "name": "Terminal ileum",
+   "system": "digestive",
+   "layer": 8,
+   "center": [
+    0.07139,
+    -0.00072,
+    0.02075
+   ],
+   "min": [
+    0.00977,
+    -0.05601,
+    -0.00233
+   ],
+   "max": [
+    0.13301,
+    0.05456,
+    0.04383
+   ],
+   "triStart": 94775,
+   "triCount": 496,
+   "color": [
+    0.92,
+    0.64,
+    0.6
+   ],
+   "synthetic": false,
+   "tissueId": "terminal_ileum",
+   "source": [
+    "exercise-targets/anat_terminal_ileum"
+   ]
+  },
+  {
+   "index": 24,
+   "id": "visceral__ascending_colon",
+   "name": "Ascending colon",
+   "system": "digestive",
+   "layer": 8,
+   "center": [
+    0.14085,
+    0.07329,
+    0.01341
+   ],
+   "min": [
+    0.09966,
+    -0.08053,
+    -0.03145
+   ],
+   "max": [
+    0.18204,
+    0.2271,
+    0.05827
+   ],
+   "triStart": 95271,
+   "triCount": 9000,
+   "color": [
+    0.86,
+    0.58,
+    0.55
+   ],
+   "synthetic": false,
+   "tissueId": "",
+   "source": [
+    "visceral/Ascending colon"
+   ]
+  },
+  {
+   "index": 25,
+   "id": "visceral__free_taenia",
+   "name": "Taenia coli (free taenia)",
+   "system": "digestive",
+   "layer": 8,
+   "center": [
+    -0.00319,
+    0.07473,
+    -0.00121
+   ],
+   "min": [
+    -0.12404,
+    -0.08684,
+    -0.07631
+   ],
+   "max": [
+    0.11767,
+    0.23629,
+    0.07389
+   ],
+   "triStart": 104271,
+   "triCount": 3500,
+   "color": [
+    0.96,
+    0.88,
+    0.8
+   ],
+   "synthetic": false,
+   "tissueId": "",
+   "source": [
+    "visceral/Free taenia"
+   ]
+  },
+  {
+   "index": 26,
+   "id": "visceral__jejunum",
+   "name": "Small bowel (jejunum and ileum)",
+   "system": "digestive",
+   "layer": 8,
+   "center": [
+    -0.0142,
+    0.02064,
+    0.06938
+   ],
+   "min": [
+    -0.16052,
+    -0.14623,
+    0.01973
+   ],
+   "max": [
+    0.13212,
+    0.1875,
+    0.11902
+   ],
+   "triStart": 107771,
+   "triCount": 10000,
+   "color": [
+    0.92,
+    0.64,
+    0.6
+   ],
+   "synthetic": false,
+   "tissueId": "",
+   "source": [
+    "visceral/Jejunum"
+   ]
+  },
+  {
+   "index": 27,
+   "id": "transverse_colon",
+   "name": "Transverse colon",
+   "system": "digestive",
+   "layer": 8,
+   "center": [
+    -0.00943,
+    0.20547,
+    0.05932
+   ],
+   "min": [
+    -0.15858,
+    0.15082,
+    -0.00096
+   ],
+   "max": [
+    0.13973,
+    0.26013,
+    0.11959
+   ],
+   "triStart": 117771,
+   "triCount": 5000,
+   "color": [
+    0.86,
+    0.58,
+    0.55
+   ],
+   "synthetic": false,
+   "tissueId": "",
+   "source": [
+    "visceral/Transverse colon"
+   ]
+  },
+  {
+   "index": 28,
+   "id": "descending_colon",
+   "name": "Descending colon",
+   "system": "digestive",
+   "layer": 8,
+   "center": [
+    -0.07679,
+    0.04865,
+    -0.0283
+   ],
+   "min": [
+    -0.18289,
+    -0.16182,
+    -0.10342
+   ],
+   "max": [
+    0.02931,
+    0.25912,
+    0.04681
+   ],
+   "triStart": 122771,
+   "triCount": 5000,
+   "color": [
+    0.86,
+    0.58,
+    0.55
+   ],
+   "synthetic": false,
+   "tissueId": "",
+   "source": [
+    "visceral/Descending colon"
+   ]
+  },
+  {
+   "index": 29,
+   "id": "sigmoid_colon",
+   "name": "Sigmoid colon",
+   "system": "digestive",
+   "layer": 8,
+   "center": [
+    -0.00727,
+    -0.17181,
+    -0.0857
+   ],
+   "min": [
+    -0.05654,
+    -0.26987,
+    -0.12518
+   ],
+   "max": [
+    0.042,
+    -0.07375,
+    -0.04622
+   ],
+   "triStart": 127771,
+   "triCount": 3000,
+   "color": [
+    0.86,
+    0.58,
+    0.55
+   ],
+   "synthetic": false,
+   "tissueId": "",
+   "source": [
+    "visceral/Sigmoid colon"
+   ]
+  },
+  {
+   "index": 30,
+   "id": "cardiovascular__ileocolic_artery",
+   "name": "Ileocolic artery",
+   "system": "vascular",
+   "layer": 8,
+   "center": [
+    0.06388,
+    0.10571,
+    0.03848
+   ],
+   "min": [
+    0.00954,
+    0.06222,
+    0.01405
+   ],
+   "max": [
+    0.11823,
+    0.1492,
+    0.06292
+   ],
+   "triStart": 130771,
+   "triCount": 1770,
+   "color": [
+    0.8,
+    0.08,
+    0.08
+   ],
+   "synthetic": false,
+   "tissueId": "",
+   "source": [
+    "cardiovascular/Ileocolic artery",
+    "cardiovascular/Colic branch of ileocolic artery",
+    "cardiovascular/Ileal branch of ileocolic artery"
+   ]
+  },
+  {
+   "index": 31,
+   "id": "cardiovascular__superior_mesenteric_artery",
+   "name": "Superior mesenteric artery",
+   "system": "vascular",
+   "layer": 8,
+   "center": [
+    0.00342,
+    0.13485,
+    0.05175
+   ],
+   "min": [
+    -0.10885,
+    0.0184,
+    0.012
+   ],
+   "max": [
+    0.11569,
+    0.2513,
+    0.0915
+   ],
+   "triStart": 132541,
+   "triCount": 3500,
+   "color": [
+    0.8,
+    0.08,
+    0.08
+   ],
+   "synthetic": false,
+   "tissueId": "",
+   "source": [
+    "cardiovascular/Superior mesenteric artery"
+   ]
+  },
+  {
+   "index": 32,
+   "id": "cardiovascular__superior_mesenteric_vein",
+   "name": "Superior mesenteric vein",
+   "system": "vascular",
+   "layer": 8,
+   "center": [
+    0.04799,
+    0.15068,
+    0.04256
+   ],
+   "min": [
+    -0.00377,
+    0.02046,
+    0.00971
+   ],
+   "max": [
+    0.09976,
+    0.2809,
+    0.0754
+   ],
+   "triStart": 136041,
+   "triCount": 2360,
+   "color": [
+    0.15,
+    0.27,
+    0.72
+   ],
+   "synthetic": false,
+   "tissueId": "",
+   "source": [
+    "cardiovascular/Superior mesenteric vein"
+   ]
+  },
+  {
+   "index": 33,
+   "id": "right_ureter",
+   "name": "Right ureter",
+   "system": "urinary",
+   "layer": 9,
+   "center": [
+    0.04062,
+    0.0139,
+    -0.01794
+   ],
+   "min": [
+    0.01595,
+    -0.16383,
+    -0.05816
+   ],
+   "max": [
+    0.0653,
+    0.19163,
+    0.02229
+   ],
+   "triStart": 138401,
+   "triCount": 2500,
+   "color": [
+    0.95,
+    0.88,
+    0.6
+   ],
+   "synthetic": false,
+   "tissueId": "ureter",
+   "source": [
+    "visceral/Ureter.r"
+   ]
+  },
+  {
+   "index": 34,
+   "id": "left_ureter",
+   "name": "Left ureter",
+   "system": "urinary",
+   "layer": 9,
+   "center": [
+    -0.05505,
+    0.03095,
+    -0.02179
+   ],
+   "min": [
+    -0.07288,
+    -0.15884,
+    -0.06742
+   ],
+   "max": [
+    -0.03723,
+    0.22074,
+    0.02384
+   ],
+   "triStart": 140901,
+   "triCount": 1500,
+   "color": [
+    0.95,
+    0.88,
+    0.6
+   ],
+   "synthetic": false,
+   "tissueId": "",
+   "source": [
+    "visceral/Ureter.l"
+   ]
+  },
+  {
+   "index": 35,
+   "id": "right_kidney",
+   "name": "Right kidney",
+   "system": "urinary",
+   "layer": 9,
+   "center": [
+    0.09436,
+    0.19403,
+    -0.02625
+   ],
+   "min": [
+    0.04866,
+    0.11052,
+    -0.06396
+   ],
+   "max": [
+    0.14006,
+    0.27753,
+    0.01146
+   ],
+   "triStart": 142401,
+   "triCount": 2322,
+   "color": [
+    0.55,
+    0.18,
+    0.15
+   ],
+   "synthetic": false,
+   "tissueId": "",
+   "source": [
+    "visceral/Kidney.r"
+   ]
+  },
+  {
+   "index": 36,
+   "id": "left_kidney",
+   "name": "Left kidney",
+   "system": "urinary",
+   "layer": 9,
+   "center": [
+    -0.09854,
+    0.21933,
+    -0.03966
+   ],
+   "min": [
+    -0.14455,
+    0.13878,
+    -0.07213
+   ],
+   "max": [
+    -0.05252,
+    0.29988,
+    -0.0072
+   ],
+   "triStart": 144723,
+   "triCount": 2860,
+   "color": [
+    0.55,
+    0.18,
+    0.15
+   ],
+   "synthetic": false,
+   "tissueId": "",
+   "source": [
+    "visceral/Kidney.l"
+   ]
+  },
+  {
+   "index": 37,
+   "id": "cardiovascular__abdominal_aorta",
+   "name": "Abdominal aorta",
+   "system": "vascular",
+   "layer": 9,
+   "center": [
+    -0.01222,
+    0.19484,
+    0.02152
+   ],
+   "min": [
+    -0.03047,
+    0.0898,
+    -0.01118
+   ],
+   "max": [
+    0.00603,
+    0.29988,
+    0.05421
+   ],
+   "triStart": 147583,
+   "triCount": 648,
+   "color": [
+    0.8,
+    0.08,
+    0.08
+   ],
+   "synthetic": false,
+   "tissueId": "",
+   "source": [
+    "cardiovascular/Abdominal aorta"
+   ]
+  },
+  {
+   "index": 38,
+   "id": "cardiovascular__inferior_vena_cava_abdominal_part",
+   "name": "Inferior vena cava",
+   "system": "vascular",
+   "layer": 9,
+   "center": [
+    0.01514,
+    0.19647,
+    0.02332
+   ],
+   "min": [
+    0.00034,
+    0.09305,
+    0.00189
+   ],
+   "max": [
+    0.02994,
+    0.29988,
+    0.04474
+   ],
+   "triStart": 148231,
+   "triCount": 234,
+   "color": [
+    0.15,
+    0.27,
+    0.72
+   ],
+   "synthetic": false,
+   "tissueId": "",
+   "source": [
+    "cardiovascular/Inferior vena cava (abdominal part)"
+   ]
+  },
+  {
+   "index": 39,
+   "id": "cardiovascular__common_iliac_artery_r",
+   "name": "Right common iliac artery",
+   "system": "vascular",
+   "layer": 9,
+   "center": [
+    0.0157,
+    0.053,
+    0.02635
+   ],
+   "min": [
+    -0.02282,
+    0.01002,
+    -0.00148
+   ],
+   "max": [
+    0.05422,
+    0.09598,
+    0.05418
+   ],
+   "triStart": 148465,
+   "triCount": 236,
+   "color": [
+    0.8,
+    0.08,
+    0.08
+   ],
+   "synthetic": false,
+   "tissueId": "iliac_vessels",
+   "source": [
+    "cardiovascular/Common iliac artery.r"
+   ]
+  },
+  {
+   "index": 40,
+   "id": "cardiovascular__external_iliac_artery_r",
+   "name": "Right external iliac artery",
+   "system": "vascular",
+   "layer": 9,
+   "center": [
+    0.0662,
+    -0.05313,
+    0.01199
+   ],
+   "min": [
+    0.03824,
+    -0.12948,
+    -0.01793
+   ],
+   "max": [
+    0.09416,
+    0.02322,
+    0.04191
+   ],
+   "triStart": 148701,
+   "triCount": 354,
+   "color": [
+    0.8,
+    0.08,
+    0.08
+   ],
+   "synthetic": false,
+   "tissueId": "iliac_vessels",
+   "source": [
+    "cardiovascular/External iliac artery.r"
+   ]
+  },
+  {
+   "index": 41,
+   "id": "cardiovascular__internal_iliac_artery_r",
+   "name": "Right internal iliac artery",
+   "system": "vascular",
+   "layer": 9,
+   "center": [
+    0.04929,
+    -0.01508,
+    -0.00758
+   ],
+   "min": [
+    0.03824,
+    -0.05338,
+    -0.03081
+   ],
+   "max": [
+    0.06034,
+    0.02322,
+    0.01565
+   ],
+   "triStart": 149055,
+   "triCount": 236,
+   "color": [
+    0.8,
+    0.08,
+    0.08
+   ],
+   "synthetic": false,
+   "tissueId": "iliac_vessels",
+   "source": [
+    "cardiovascular/Internal iliac artery.r"
+   ]
+  },
+  {
+   "index": 42,
+   "id": "cardiovascular__common_iliac_vein_r",
+   "name": "Right common iliac vein",
+   "system": "vascular",
+   "layer": 9,
+   "center": [
+    0.01942,
+    0.05107,
+    0.02148
+   ],
+   "min": [
+    0.00033,
+    0.00739,
+    -0.00019
+   ],
+   "max": [
+    0.03851,
+    0.09476,
+    0.04315
+   ],
+   "triStart": 149291,
+   "triCount": 118,
+   "color": [
+    0.15,
+    0.27,
+    0.72
+   ],
+   "synthetic": false,
+   "tissueId": "iliac_vessels",
+   "source": [
+    "cardiovascular/Common iliac vein.r"
+   ]
+  },
+  {
+   "index": 43,
+   "id": "cardiovascular__external_iliac_vein_r",
+   "name": "Right external iliac vein",
+   "system": "vascular",
+   "layer": 9,
+   "center": [
+    0.04906,
+    -0.06345,
+    0.02421
+   ],
+   "min": [
+    0.01905,
+    -0.14553,
+    -0.0129
+   ],
+   "max": [
+    0.07906,
+    0.01864,
+    0.06132
+   ],
+   "triStart": 149409,
+   "triCount": 236,
+   "color": [
+    0.15,
+    0.27,
+    0.72
+   ],
+   "synthetic": false,
+   "tissueId": "iliac_vessels",
+   "source": [
+    "cardiovascular/External iliac vein.r"
+   ]
+  },
+  {
+   "index": 44,
+   "id": "left_iliac_arteries",
+   "name": "Left iliac arteries",
+   "system": "vascular",
+   "layer": 9,
+   "center": [
+    -0.04429,
+    -0.01675,
+    0.01169
+   ],
+   "min": [
+    -0.09416,
+    -0.12948,
+    -0.03081
+   ],
+   "max": [
+    0.00558,
+    0.09598,
+    0.05419
+   ],
+   "triStart": 149645,
+   "triCount": 708,
+   "color": [
+    0.8,
+    0.08,
+    0.08
+   ],
+   "synthetic": false,
+   "tissueId": "",
+   "source": [
+    "cardiovascular/Common iliac artery.l",
+    "cardiovascular/External iliac artery.l",
+    "cardiovascular/Internal iliac artery.l"
+   ]
+  },
+  {
+   "index": 45,
+   "id": "left_iliac_veins",
+   "name": "Left iliac veins",
+   "system": "vascular",
+   "layer": 9,
+   "center": [
+    -0.02587,
+    -0.02537,
+    0.01275
+   ],
+   "min": [
+    -0.07906,
+    -0.14553,
+    -0.03582
+   ],
+   "max": [
+    0.02732,
+    0.09478,
+    0.06132
+   ],
+   "triStart": 150353,
+   "triCount": 708,
+   "color": [
+    0.15,
+    0.27,
+    0.72
+   ],
+   "synthetic": false,
+   "tissueId": "",
+   "source": [
+    "cardiovascular/Common iliac vein.l",
+    "cardiovascular/External iliac vein.l",
+    "cardiovascular/Internal iliac vein.l"
+   ]
+  },
+  {
+   "index": 46,
+   "id": "muscular__psoas_major_r",
+   "name": "Psoas major (right)",
+   "system": "muscular",
+   "layer": 9,
+   "center": [
+    0.09294,
+    -0.00366,
+    -0.0136
+   ],
+   "min": [
+    0.01306,
+    -0.29997,
+    -0.07595
+   ],
+   "max": [
+    0.17283,
+    0.29266,
+    0.04875
+   ],
+   "triStart": 151061,
+   "triCount": 3500,
+   "color": [
+    0.72,
+    0.19,
+    0.17
+   ],
+   "synthetic": false,
+   "tissueId": "",
+   "source": [
+    "muscular/Psoas major.r"
+   ]
+  },
+  {
+   "index": 47,
+   "id": "muscular__psoas_major_l",
+   "name": "Psoas major (left)",
+   "system": "muscular",
+   "layer": 9,
+   "center": [
+    -0.09294,
+    -0.00364,
+    -0.0136
+   ],
+   "min": [
+    -0.17283,
+    -0.29995,
+    -0.07595
+   ],
+   "max": [
+    -0.01306,
+    0.29266,
+    0.04875
+   ],
+   "triStart": 154561,
+   "triCount": 2999,
+   "color": [
+    0.72,
+    0.19,
+    0.17
+   ],
+   "synthetic": false,
+   "tissueId": "",
+   "source": [
+    "muscular/Psoas major.l"
+   ]
+  },
+  {
+   "index": 48,
+   "id": "muscular__iliacus_muscle_r",
+   "name": "Iliacus (right)",
+   "system": "muscular",
+   "layer": 9,
+   "center": [
+    0.1449,
+    -0.12493,
+    -0.00137
+   ],
+   "min": [
+    0.10001,
+    -0.29989,
+    -0.07032
+   ],
+   "max": [
+    0.1898,
+    0.05003,
+    0.06758
+   ],
+   "triStart": 157560,
+   "triCount": 3000,
+   "color": [
+    0.72,
+    0.19,
+    0.17
+   ],
+   "synthetic": false,
+   "tissueId": "",
+   "source": [
+    "muscular/Iliacus muscle.r"
+   ]
+  },
+  {
+   "index": 49,
+   "id": "muscular__iliacus_muscle_l",
+   "name": "Iliacus (left)",
+   "system": "muscular",
+   "layer": 9,
+   "center": [
+    -0.14489,
+    -0.12498,
+    -0.00134
+   ],
+   "min": [
+    -0.18977,
+    -0.3,
+    -0.07032
+   ],
+   "max": [
+    -0.10001,
+    0.05003,
+    0.06764
+   ],
+   "triStart": 160560,
+   "triCount": 2499,
+   "color": [
+    0.72,
+    0.19,
+    0.17
+   ],
+   "synthetic": false,
+   "tissueId": "",
+   "source": [
+    "muscular/Iliacus muscle.l"
+   ]
+  },
+  {
+   "index": 50,
+   "id": "skeletal__hip_bone_r",
+   "name": "Right hip bone (ASIS)",
+   "system": "skeletal",
+   "layer": 10,
+   "center": [
+    0.11022,
+    -0.10852,
+    -0.03502
+   ],
+   "min": [
+    0.0047,
+    -0.28013,
+    -0.14926
+   ],
+   "max": [
+    0.21574,
+    0.06309,
+    0.07921
+   ],
+   "triStart": 163059,
+   "triCount": 3788,
+   "color": [
+    0.92,
+    0.88,
+    0.78
+   ],
+   "synthetic": false,
+   "tissueId": "",
+   "source": [
+    "skeletal/Hip bone.r"
+   ]
+  },
+  {
+   "index": 51,
+   "id": "skeletal__hip_bone_l",
+   "name": "Left hip bone",
+   "system": "skeletal",
+   "layer": 10,
+   "center": [
+    -0.11022,
+    -0.10852,
+    -0.03502
+   ],
+   "min": [
+    -0.21574,
+    -0.28013,
+    -0.14926
+   ],
+   "max": [
+    -0.0047,
+    0.06309,
+    0.07921
+   ],
+   "triStart": 166847,
+   "triCount": 3788,
+   "color": [
+    0.92,
+    0.88,
+    0.78
+   ],
+   "synthetic": false,
+   "tissueId": "",
+   "source": [
+    "skeletal/Hip bone.l"
+   ]
+  },
+  {
+   "index": 52,
+   "id": "skeletal__sacrum",
+   "name": "Sacrum",
+   "system": "skeletal",
+   "layer": 10,
+   "center": [
+    6e-05,
+    -0.07864,
+    -0.0893
+   ],
+   "min": [
+    -0.09803,
+    -0.17065,
+    -0.16234
+   ],
+   "max": [
+    0.09815,
+    0.01337,
+    -0.01626
+   ],
+   "triStart": 170635,
+   "triCount": 3999,
+   "color": [
+    0.92,
+    0.88,
+    0.78
+   ],
+   "synthetic": false,
+   "tissueId": "",
+   "source": [
+    "skeletal/Sacrum"
+   ]
+  },
+  {
+   "index": 53,
+   "id": "lumbar_vertebrae",
+   "name": "Lumbar vertebrae L1-L5",
+   "system": "skeletal",
+   "layer": 10,
+   "center": [
+    0.0,
+    0.11687,
+    -0.05158
+   ],
+   "min": [
+    -0.08463,
+    -0.02394,
+    -0.12363
+   ],
+   "max": [
+    0.08463,
+    0.25769,
+    0.02048
+   ],
+   "triStart": 174634,
+   "triCount": 9000,
+   "color": [
+    0.92,
+    0.88,
+    0.78
+   ],
+   "synthetic": false,
+   "tissueId": "",
+   "source": [
+    "skeletal/Vertebra L1",
+    "skeletal/Vertebra L2",
+    "skeletal/Vertebra L3",
+    "skeletal/Vertebra L4",
+    "skeletal/Vertebra L5"
+   ]
+  },
+  {
+   "index": 54,
+   "id": "lower_ribs_r",
+   "name": "Lower ribs (right)",
+   "system": "skeletal",
+   "layer": 10,
+   "center": [
+    0.1222,
+    0.21711,
+    0.00443
+   ],
+   "min": [
+    0.03103,
+    0.13425,
+    -0.13561
+   ],
+   "max": [
+    0.21336,
+    0.29996,
+    0.14447
+   ],
+   "triStart": 183634,
+   "triCount": 4000,
+   "color": [
+    0.92,
+    0.88,
+    0.78
+   ],
+   "synthetic": false,
+   "tissueId": "",
+   "source": [
+    "skeletal/Tenth rib.r",
+    "skeletal/Eleventh rib.r",
+    "skeletal/Twelfth rib.r",
+    "skeletal/Costal cartilage of ninth rib.r",
+    "skeletal/Costal cartilage of tenth rib.r",
+    "skeletal/Ninth rib.r"
+   ]
+  },
+  {
+   "index": 55,
+   "id": "lower_ribs_l",
+   "name": "Lower ribs (left)",
+   "system": "skeletal",
+   "layer": 10,
+   "center": [
+    -0.12219,
+    0.21711,
+    0.00442
+   ],
+   "min": [
+    -0.21336,
+    0.13425,
+    -0.13561
+   ],
+   "max": [
+    -0.03103,
+    0.29997,
+    0.14446
+   ],
+   "triStart": 187634,
+   "triCount": 3500,
+   "color": [
+    0.92,
+    0.88,
+    0.78
+   ],
+   "synthetic": false,
+   "tissueId": "",
+   "source": [
+    "skeletal/Tenth rib.l",
+    "skeletal/Eleventh rib.l",
+    "skeletal/Twelfth rib.l",
+    "skeletal/Costal cartilage of ninth rib.l",
+    "skeletal/Costal cartilage of tenth rib.l",
+    "skeletal/Ninth rib.l"
+   ]
+  }
+ ]
+}

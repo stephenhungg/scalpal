@@ -23,12 +23,12 @@ export type EncounterPhase = "interview" | "attending" | "scored";
 export const DEFAULT_PATIENT_VOICES: Record<Encounter["persona"]["voiceKey"], string> = {
   adult_female: "EXAVITQu4vr4xnSDxMaL", // Sarah, young female
   parent_female: "XrExE9yKIg1WjnnlVkGX", // Matilda, middle-aged female
-  adult_male: "iP95p4xoKVk53GoZ742B", // Chris, middle-aged male
+  adult_male: "U7wWSnxIJwCjioxt86mk", // chosen by Matthew for Jonah and every male patient
   mature_female: "hpp4J3VqNfWAUOO0d1Us", // Bella, middle-aged female
   middle_female: "XrExE9yKIg1WjnnlVkGX", // Matilda, for an adult patient speaking for herself
   older_female: "Xb7hH8MSUJpSbSDYk0k2", // Alice, middle-aged British female
   senior_female: "pFZP5JQG7iQjIQuC4Bku", // Lily, middle-aged British female (closest to elderly)
-  middle_male: "nPczCjzI2devNBz1zQrb", // Brian, middle-aged male
+  middle_male: "U7wWSnxIJwCjioxt86mk", // same male patient voice (Matthew)
 };
 
 // Authored demo symptoms attach only to the chart they were written for. The persona's sex is the sick

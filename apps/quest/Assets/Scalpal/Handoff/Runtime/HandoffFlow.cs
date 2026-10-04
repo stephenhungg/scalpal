@@ -227,7 +227,9 @@ namespace Scalpal.Handoff
             { Show("Shared attempt interrupted", surgery.Message, new[] { "Start matching attempt", ReturnLabel }, i => { if (i == 0) surgery.Retry(); else BackToExplore(); }); return; }
             if (!surgery.HandoffVerified)
             {
-                Show("Checking the handoff", surgery.Message, new[] { "Retry connection", ReturnLabel }, i => { if (i == 0) surgery.Retry(); else BackToExplore(); }); return;
+                // Loading the case and confirming the office result is the normal first second in the OR, not a failure.
+                if (surgery.Busy) { Show("Preparing the operating room", "Loading " + Ticket.procedureTitle + ".", new[] { ReturnLabel }, _ => BackToExplore()); return; }
+                Show("Case unavailable", surgery.Message, new[] { "Try again", ReturnLabel }, i => { if (i == 0) surgery.Retry(); else BackToExplore(); }); return;
             }
             // Re-entering registration mid-practice must return to the paused card, never to Time-Out.
             if (Ticket.presentationMode == "virtual") { fitConfirmed = true; SetPhase(Ticket.practiceStarted ? "paused" : "timeout"); return; }
@@ -279,6 +281,9 @@ namespace Scalpal.Handoff
             if (Ticket.practiceStarted) { SetPhase("paused"); return; }
             if (!surgery || !surgery.HandoffVerified || surgery.AttemptNeedsRetry) { SetPhase("register"); return; }
             if (!surgery.RegistrationReady || !fitConfirmed) { fitConfirmed = false; SetPhase("register"); return; }
+            // The OR opens its own shared-session connection on entry; joining is not a connection error.
+            if (!surgery.realtime.Paired && surgery.realtime.Joining)
+            { Show("Preparing the operating room", "Joining the shared session.", new[] { ReturnLabel }, _ => BackToExplore()); return; }
             if (!surgery.realtime.Paired)
             { Show("Shared headset session unavailable", surgery.realtime.Status + "\nPair the headset with the companion before beginning this attempt.", new[] { "Retry shared connection", ReturnLabel }, i => { if (i == 0) surgery.realtime.Reconnect(); else BackToExplore(); }); return; }
             surgery.SetHandoffVoiceAllowed(true);

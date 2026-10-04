@@ -5,6 +5,7 @@ import { StepEngine, perfectEvents, type EngineEvent } from "./engine.js";
 import { bodyAction, isBodyTelemetry, type BodyAction, type BodyPredicate, type BodyState } from "./open-body.js";
 import { CLASS_LINES, DEATH_LINE, PatientCondition, REGIONS, type ConditionView, type RegionId } from "./patient-condition.js";
 import type { Baseline } from "./physiology.js";
+import { briefingLines } from "./briefing.js";
 import type { ProcedureStep, Severity, StepAction, SurgicalCase } from "./types.js";
 
 // Live coaching state for one surgery attempt. Wraps the reference StepEngine (same semantics as
@@ -1055,7 +1056,8 @@ export function reflexLines(kase: SurgicalCase, mode: PresentationMode = "mixed_
     { key: "vitals.class4", text: CLASS_LINES[4] },
     { key: "outcome.died", text: DEATH_LINE },
   ];
-  return [...unique, { key: "tracking_lost", text: trackingLostLine(mode) }, ...bleeds, ...callouts, ...hints, ...condition];
+  const briefing = briefingLines(kase).map(({ key, text }) => ({ key, text }));
+  return [...unique, { key: "tracking_lost", text: trackingLostLine(mode) }, ...bleeds, ...callouts, ...hints, ...condition, ...briefing];
 }
 
 // True when the authored hint mostly repeats the coaching sentence, so the nudge says it once.

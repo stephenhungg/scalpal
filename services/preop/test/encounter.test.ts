@@ -93,7 +93,9 @@ describe("encounter catalog", () => {
     }
     const shared = [...byVoice.values()].filter((v) => v.length > 1);
     // Six female speakers share five premade female voices: Dolores reuses Matilda, who voices Theo's mother.
-    expect(shared).toEqual([["patient-demo-pediatric-asthma", "patient-demo-messy-coding"]]);
+    // Every male patient uses the one male voice Matthew chose (Jonah and Sam).
+    expect(shared).toEqual(expect.arrayContaining([["patient-demo-pediatric-asthma", "patient-demo-messy-coding"], ["patient-demo-sparse", "patient-demo-consent-partial"]]));
+    expect(shared).toHaveLength(2);
   });
 });
 

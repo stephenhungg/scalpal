@@ -10,7 +10,6 @@ using UnityEditor.XR.Management.Metadata;
 using UnityEditor.XR.OpenXR.Features;
 using UnityEngine;
 using UnityEngine.Rendering;
-using UnityEngine.XR;
 using UnityEngine.XR.Management;
 using UnityEngine.XR.OpenXR;
 using UnityEngine.XR.OpenXR.Features.Interactions;
@@ -67,13 +66,7 @@ namespace Scalpal.Quest.Editor
             foreach (var input in runtime.inputs)
             {
                 input.enabled = false;
-                var marker = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-                marker.name = "ControllerGripMarker";
-                marker.transform.SetParent(input.transform, false); marker.transform.localScale = Vector3.one * 0.035f;
-                UnityEngine.Object.DestroyImmediate(marker.GetComponent<Collider>());
-                var material = AssetDatabase.LoadAssetAtPath<Material>("Assets/Scalpal/Instruments/Materials/" +
-                    (input.controller == XRNode.LeftHand ? "scalpal_accent_blue.mat" : "scalpal_accent_gold.mat"));
-                marker.GetComponent<Renderer>().sharedMaterial = material;
+                NativeControllerHands.Install(input);
             }
             var floor = GameObject.CreatePrimitive(PrimitiveType.Cube);
             floor.name = "ToolCatchFloor";

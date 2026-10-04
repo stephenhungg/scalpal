@@ -18,7 +18,6 @@ namespace Scalpal.Quest
     [DefaultExecutionOrder(195)]
     public sealed class NativeProcedureChecklist : MonoBehaviour
     {
-        public const string GuidanceCaption="guidance — any tool/action remains available";
         public readonly struct Row
         {
             public readonly string Id, Title;
@@ -113,7 +112,7 @@ namespace Scalpal.Quest
             view.transform.SetPositionAndRotation(viewer.position,viewer.rotation);
             var brand=ScalpalBrand.Active;
             const float left=-.68f,top=.43f,depth=1.25f;
-            float height=.21f+rows.Length*RowSpacing;
+            float height=.10f+rows.Length*RowSpacing;
             var glass=new GameObject("ChecklistGlass",typeof(MeshFilter),typeof(MeshRenderer));glass.transform.SetParent(view.transform,false);
             glass.transform.localPosition=new Vector3(left+Width*.5f,top-height*.5f+.015f,depth+.01f);
             glassMesh=new Mesh{name="ChecklistReadOnlyGlass"};
@@ -123,17 +122,13 @@ namespace Scalpal.Quest
             glass.GetComponent<MeshFilter>().sharedMesh=glassMesh;glass.GetComponent<MeshRenderer>().sharedMaterial=brand.glass;
             var renderer=glass.GetComponent<MeshRenderer>();renderer.shadowCastingMode=UnityEngine.Rendering.ShadowCastingMode.Off;renderer.receiveShadows=false;
             brand.Text(view.transform,"ChecklistTitle",procedure.shortTitle??procedure.title??"procedure",ScalpalTextRole.Title,new Vector3(left,top,depth),.045f,Width,.065f,TextAnchor.UpperLeft,true);
-            brand.Text(view.transform,"ChecklistHistoryLabel","x = completed | > = current guidance",ScalpalTextRole.Caption,
-                new Vector3(left,top-.068f,depth),.031f,Width,.055f,TextAnchor.UpperLeft,true);
             rowText=new TextMeshPro[rows.Length];
             for(int i=0;i<rows.Length;i++)
             {
                 rowText[i]=brand.Text(view.transform,"ChecklistRow_"+rows[i].Id,Line(i,rows[i]),ScalpalTextRole.Body,
-                    new Vector3(left,top-.12f-i*RowSpacing,depth),.031f,Width,.055f,TextAnchor.UpperLeft,true);
+                    new Vector3(left,top-.075f-i*RowSpacing,depth),.031f,Width,.055f,TextAnchor.UpperLeft,true);
                 rowText[i].color=rows[i].Completed||rows[i].Current?ScalpalBrand.Ink:ScalpalBrand.Ink70;
             }
-            brand.Text(view.transform,"ChecklistGuidance",GuidanceCaption,ScalpalTextRole.Caption,
-                new Vector3(left,top-.13f-rows.Length*RowSpacing,depth),.031f,Width,.055f,TextAnchor.UpperLeft,true);
             ScalpalBrandLayout.SizeForViewer(view.transform,viewer.position);
         }
         public void Hide(){if(view)view.SetActive(false);}

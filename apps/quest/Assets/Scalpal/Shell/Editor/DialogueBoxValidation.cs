@@ -294,6 +294,8 @@ namespace Scalpal.Shell.Editor
                 typeof(NativeEncounterSession).GetField("encounterId", Private).SetValue(session, "int-validation01");
                 Call(session, "Transcript", "agent", "It hurts on the right side.");
                 Check(box.SpeakerLabel == "Priya Ramaswamy · Patient", "office patient voice transcript labels the patient by name");
+                Call(session, "Transcript", "agent", "[slow] It hurts [wince] when I move.");
+                Check(session.LastResponse == "It hurts when I move.", "voice delivery tags like [slow] never reach the patient's transcript");
                 Call(session, "Transcript", "user", "[CLINICIAN] Ask where it hurts");
                 Check(box.SpeakerLabel == "Priya Ramaswamy · Patient", "the agent's echo of a pick is not shown as learner speech");
                 session.State.speaker = "parent"; session.State.patientName = "Theo Abernathy"; session.State.speakerName = "Laura Abernathy";

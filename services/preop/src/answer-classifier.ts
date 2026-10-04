@@ -31,6 +31,19 @@ export function letterFrom(heard: string): ChoiceKey | null {
   return null;
 }
 
+const STOP = new Set("a an and are as ask at be but by can could did do does for from had has have he her his how i if in is it its me my of on or our she so that the their them they this to was we were what when where whether which who why will with would you your about any".split(" "));
+const stem = (w: string) => w.replace(/(?:ing|ed|es|s)$/, "");
+const words = (t: string) => new Set(t.toLowerCase().match(/[a-z]+/g)?.filter((w) => w.length > 2 && !STOP.has(w)).map(stem) ?? []);
+
+// No-model fallback for a paraphrased move ("has your stomach pain moved?"): the choice sharing the most
+// content words, only when it shares at least two and clearly beats every other choice.
+export function wordMatch(heard: string, choices: { key: ChoiceKey; text: string }[]): ChoiceKey | null {
+  const said = words(heard);
+  const scored = choices.map((c) => ({ key: c.key, n: [...words(c.text)].filter((w) => said.has(w)).length })).sort((a, b) => b.n - a.n);
+  const [best, next] = scored;
+  return best && best.n >= 2 && best.n > (next?.n ?? 0) ? best.key : null;
+}
+
 export class ClaudeAnswerClassifier implements AnswerClassifier {
   constructor(
     private readonly client: Anthropic = new Anthropic({ timeout: 8000, maxRetries: 1 }),
@@ -51,9 +64,10 @@ export class ClaudeAnswerClassifier implements AnswerClassifier {
       });
       const out = res.content.map((b) => (b.type === "text" ? b.text : "")).join("").trim().toUpperCase();
       const key = out.match(/^[ABCD]\b/)?.[0] as ChoiceKey | undefined;
-      return key && KEYS.includes(key) ? key : null;
-    } catch {
-      return null;
+      return key && KEYS.includes(key) ? key : null; // null: the model judged the answer unclear
+    } catch (e) {
+      // Unreachable or failing model: let the caller fall back instead of treating it as unclear.
+      throw new Error(`answer classifier unavailable: ${(e as Error).message}`);
     }
   }
 }

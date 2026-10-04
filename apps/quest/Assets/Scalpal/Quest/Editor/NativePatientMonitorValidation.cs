@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Scalpal.Brand;
 using Scalpal.Exercises.Coach;
 using Scalpal.Instruments;
@@ -53,33 +54,59 @@ namespace Scalpal.Quest.Editor
                 input.display=false;Require(!monitor.HeadsetInputReady,"stopped actual XR display refuses monitor input");input.display=true;
                 input.floor=false;Require(!monitor.HeadsetInputReady,"unknown tracking frame refuses monitor input");input.floor=true;
                 Tick(monitor,baseline,0);
-                Require(monitor.HasFreshSample&&!monitor.Flatline&&monitor.DisplayText.Contains("HR 70 bpm")&&monitor.DisplayText.Contains("BP 120/80")&&
-                    monitor.DisplayText.Contains("SpO2 98%")&&monitor.DisplayText.Contains("Baseline: chart")&&monitor.DisplayText.Contains("Not real volunteer vitals"),"visible baseline is correctly labeled simulated");
-                monitor.EnsureView(viewer.transform);
-                Require(monitor.ViewRoot&&monitor.ViewRoot.GetComponentsInChildren<TMPro.TextMeshPro>().Length==2,"runtime monitor creates branded world text");
+                Require(monitor.HasFreshSample&&!monitor.Flatline&&monitor.HeartRateValue=="HR 70"&&monitor.PressureValue=="BP 120/80"&&monitor.OxygenValue=="SpO2 98%"
+                    &&monitor.RespirationValue=="RR 14"&&monitor.StateValue=="Stable"&&monitor.SourceValue=="Simulated from chart baseline","baseline sample fills every live field and is labeled simulated");
+                var frame=new GameObject("SyntheticPatientFrame").transform;frame.SetParent(root.transform,false);frame.position=new Vector3(0,1.05f,0);
+                viewer.transform.position=frame.TransformPoint(new Vector3(-.65f,.55f,0));
+                monitor.EnsureView(viewer.transform);monitor.Place(frame,0);
+                var view=monitor.ViewRoot;
+                Require(view,"runtime creates the bedside monitor");
+                foreach(var part in new[]{"MonitorHousing","MonitorScreen","MonitorMount","MonitorStandPole","MonitorStandBase"})
+                {
+                    var renderer=view.Find(part)?view.Find(part).GetComponent<MeshRenderer>():null;
+                    Require(renderer&&renderer.enabled&&renderer.sharedMaterial&&!renderer.GetComponent<Collider>(),"monitor body part "+part+" is a rendered mesh with no contact collider");
+                }
+                var local=frame.InverseTransformPoint(view.position);
+                Require(local.z>.6f&&local.x>.4f&&view.position.y>frame.position.y+.3f,"monitor stands at the head of the table on the patient's left, above the table");
+                Require(Vector3.Dot(-view.forward,(viewer.transform.position-view.position).normalized)>.9f,"the screen faces the learner at the patient's right side");
+                var stand=view.Find("MonitorStandBase").GetComponent<Renderer>().bounds;
+                Require(Mathf.Abs(stand.min.y)<.01f,"the stand reaches the floor");
+                var texts=view.GetComponentsInChildren<TMPro.TextMeshPro>(true);
+                Require(texts.Length==7&&texts.All(text=>text.font==ScalpalBrand.Active.label||text.font==ScalpalBrand.Active.body),"monitor screen uses only the brand Geist Mono faces");
+                TMPro.TextMeshPro Field(string name)=>texts.Single(text=>text.name==name);
+                Require(Field("MonitorHeartRate").text=="HR 70"&&Field("MonitorPressure").text=="BP 120/80"&&Field("MonitorOxygen").text=="SpO2 98%"
+                    &&Field("MonitorRespiration").text=="RR 14"&&Field("MonitorState").text=="Stable"&&Field("MonitorSource").text=="Simulated from chart baseline","screen draws the live snapshot fields");
+                Require(Field("MonitorHeartRate").color==ScalpalBrand.SurgicalGreen&&monitor.Trace.startColor==ScalpalBrand.SurgicalGreen,"heart rate and ECG trace are surgical green");
                 Readable(monitor,viewer.transform.position);
+                Require(monitor.Trace.enabled&&monitor.Trace.positionCount==NativePatientMonitor.TracePoints,"a fresh sample shows the ECG trace");
+                monitor.DrawTrace(100);Require(Beats(monitor.Trace)>=4&&Beats(monitor.Trace)<=6,"ECG trace beats at 70 bpm over four seconds: "+Beats(monitor.Trace));
                 Tick(monitor,blood,1);
-                Require(monitor.DisplayText.Contains("HR 118 bpm")&&monitor.DisplayText.Contains("Raw loss 150 ml")&&monitor.DisplayText.Contains("demo x8")&&monitor.DisplayText.Contains("Class 2"),
-                    "display distinguishes raw blood loss and demo acceleration");
+                Require(Field("MonitorHeartRate").text=="HR 118"&&Field("MonitorPressure").text=="BP 115/85"&&Field("MonitorRespiration").text=="RR 29"&&Field("MonitorState").text=="Bleeding 29%",
+                    "a newer snapshot updates the screen; blood loss reads plainly instead of as a class number");
+                Require(!monitor.DisplayText.Contains("Raw loss")&&!monitor.DisplayText.Contains("demo x")&&!monitor.DisplayText.Contains("Class"),"service internals stay off the learner's monitor");
+                monitor.DrawTrace(100);Require(Beats(monitor.Trace)>=7&&Beats(monitor.Trace)<=9,"ECG trace follows the new heart rate of 118 bpm: "+Beats(monitor.Trace));
                 Readable(monitor,viewer.transform.position);
                 Tick(monitor,Decode(AliveClassFour,3),2);
-                Require(monitor.HasFreshSample&&!monitor.Flatline&&monitor.DisplayText.Contains("Class 4")&&!monitor.DisplayText.Contains("Outcome: died"),"high hemorrhage class never independently declares death");
+                Require(monitor.HasFreshSample&&!monitor.Flatline&&monitor.StateValue=="Bleeding 46%"&&monitor.Outcome=="in_progress","high hemorrhage class never independently declares death");
                 Tick(monitor,Decode(Death,4),3);
-                Require(monitor.HasFreshSample&&monitor.Flatline&&monitor.DisplayText.Contains("HR 0 bpm")&&monitor.DisplayText.Contains("Outcome: died (simulated)")&&monitor.DisplayText.Contains("hemorrhage"),
-                    "flatline appears only from actual validated server death outcome");
-                var line=monitor.ViewRoot.GetComponentInChildren<LineRenderer>();
-                Require(line&&line.enabled&&line.positionCount==2&&line.GetPosition(0).y==line.GetPosition(1).y,"actual server outcome enables the flatline visual");
+                Require(monitor.HasFreshSample&&monitor.Flatline&&Field("MonitorHeartRate").text=="HR 0"&&Field("MonitorState").text=="Asystole"&&monitor.Outcome=="died",
+                    "asystole appears only from actual validated server death outcome");
+                monitor.DrawTrace(100);Require(monitor.Trace.enabled&&Beats(monitor.Trace)==0&&Flat(monitor.Trace),"death draws a flat ECG line");
+                Tick(monitor,null,3+NativePatientMonitor.FreshSeconds+1,false);
+                Require(monitor.Holding&&monitor.Flatline&&Field("MonitorState").text=="Asystole","death stays on the monitor after practice stops and polling ends");
                 Readable(monitor,viewer.transform.position);
                 Tick(monitor,Decode(Blood,3),3.5);
-                Require(!monitor.HasFreshSample&&!monitor.Flatline&&!line.enabled&&!monitor.DisplayText.Contains("HR 118"),"old version cannot replace the current outcome or leave a misleading flatline");
+                Require(!monitor.HasFreshSample&&!monitor.Flatline&&!monitor.Trace.enabled&&!monitor.DisplayText.Contains("HR 118")&&Field("MonitorState").text=="No signal","old version cannot replace the current outcome or leave a misleading flatline");
+                Require(Field("MonitorHeartRate").text=="HR --"&&texts.All(text=>!text.text.Contains("coach")&&!text.text.Contains("Paused")&&!text.text.Contains("Rejected")),
+                    "no signal shows dashes, never the diagnostic reason");
                 Tick(monitor,Decode(UnknownSpo2,5),4);
-                Require(monitor.HasFreshSample&&monitor.DisplayText.Contains("SpO2 unavailable")&&!monitor.DisplayText.Contains("SpO2 0%"),"service -1 SpO2 sentinel displays unavailable");
+                Require(monitor.HasFreshSample&&monitor.OxygenValue=="SpO2 --"&&!monitor.DisplayText.Contains("SpO2 0%"),"service -1 SpO2 sentinel displays as unavailable");
                 var repeated=Decode(UnknownSpo2,6);Tick(monitor,repeated,5);Tick(monitor,repeated,5+NativePatientMonitor.FreshSeconds+.01);
-                Require(!monitor.HasFreshSample&&!monitor.DisplayText.Contains("HR 72 bpm"),"re-reading cached relay object cannot renew freshness");
+                Require(!monitor.HasFreshSample&&!monitor.DisplayText.Contains("HR 72"),"re-reading cached relay object cannot renew freshness");
                 Tick(monitor,Decode(UnknownSpo2,6),9);
                 Require(monitor.HasFreshSample,"fresh same-version poll is valid when server state is unchanged");
                 Tick(monitor,Decode(Baseline,7),10,false);
-                Require(!monitor.HasFreshSample&&!monitor.Flatline&&!monitor.DisplayText.Contains("HR 70 bpm"),"tracking/fit/focus/lifecycle pause removes numeric readings");
+                Require(!monitor.HasFreshSample&&!monitor.Flatline&&!monitor.DisplayText.Contains("HR 70"),"tracking/fit/focus/lifecycle pause removes numeric readings of a live case");
                 var resumed=Decode(Baseline,8);Tick(monitor,resumed,11,false);Tick(monitor,resumed,11.1);
                 Require(!monitor.HasFreshSample,"resume does not reuse the last paused sample");
                 Tick(monitor,Decode(Baseline,8),11.2);
@@ -91,7 +118,7 @@ namespace Scalpal.Quest.Editor
                 Tick(monitor,Decode(Baseline,11,"mixed_reality"),14,mode:"virtual");
                 Require(!monitor.HasFreshSample,"presentation mode mismatch is refused");
                 Tick(monitor,Decode(Blood,1,"mixed_reality","new-session"),15,sid:"new-session",mode:"mixed_reality");
-                Require(monitor.HasFreshSample&&monitor.DisplayText.Contains("Class 2")&&monitor.DisplayText.Contains("Not real volunteer vitals"),"new matched AR session resets old version floor and retains simulation attribution");
+                Require(monitor.HasFreshSample&&monitor.HeartRateValue=="HR 118"&&monitor.SourceValue.StartsWith("Simulated",StringComparison.Ordinal),"new matched AR session resets old version floor and retains simulation attribution");
                 Readable(monitor,viewer.transform.position);
                 monitor.ResetMonitor();
                 Require(!monitor.HasFreshSample&&!monitor.Flatline&&!monitor.DisplayText.Contains("HR 118"),"explicit retry/reset clears sample and terminal visualization");
@@ -99,9 +126,12 @@ namespace Scalpal.Quest.Editor
                 ended.condition.outcome.cause="ended before the case goals were reached";
                 ended.condition.outcome.at="1970-01-01T00:00:00.000Z";
                 Tick(monitor,ended,16);
-                Require(monitor.HasFreshSample&&!monitor.Flatline&&monitor.DisplayText.Contains("Outcome: ended"),"upstream early ending is displayed without fabricating completion or death");
-                Require(!line.enabled&&monitor.DisplayText.Contains("HR 70 bpm")&&!monitor.DisplayText.Contains("Cause:")&&!monitor.DisplayText.Contains("(simulated)\n"),
-                    "an early ending keeps the frozen vitals and never shows the death flatline or cause");
+                Require(monitor.HasFreshSample&&!monitor.Flatline&&monitor.StateValue=="Case ended"&&monitor.HeartRateValue=="HR 70","upstream early ending is displayed without fabricating completion or death");
+                monitor.DrawTrace(16);var still=new Vector3[NativePatientMonitor.TracePoints];monitor.Trace.GetPositions(still);
+                monitor.DrawTrace(17.37);var later=new Vector3[NativePatientMonitor.TracePoints];monitor.Trace.GetPositions(later);
+                Require(still.SequenceEqual(later)&&Beats(monitor.Trace)>=4,"an early ending freezes calm vitals and the last trace, never the death flatline");
+                Tick(monitor,null,30,false);
+                Require(monitor.Holding&&monitor.StateValue=="Case ended"&&monitor.HeartRateValue=="HR 70","the ended state stays frozen on screen after polling stops");
                 var endedAsystole=Decode(Death).condition;endedAsystole.outcome.result="ended";
                 Require(!NativePatientMonitor.ValidCondition(endedAsystole),"asystole is accepted only with a death outcome, never with an early ending");
                 var nan=Decode(Baseline).condition;nan.vitals.hr=float.NaN;
@@ -110,7 +140,7 @@ namespace Scalpal.Quest.Editor
                 Require(!NativePatientMonitor.ValidCondition(unmarked),"unmarked real-vitals interpretation refuses");
             }
             finally{UnityEngine.Object.DestroyImmediate(root);UnityEngine.Object.DestroyImmediate(viewer);XRInput.Source=originalInput;}
-            Debug.Log("SCALPAL_PATIENT_MONITOR_VALIDATION_OK checks="+checks+" actualServiceFixtureJson=true brandedTextFloor=true synthetic=true hardware=false");
+            Debug.Log("SCALPAL_PATIENT_MONITOR_VALIDATION_OK checks="+checks+" actualServiceFixtureJson=true bedsideMonitor=true ecgAtHeartRate=true brandedTextFloor=true synthetic=true hardware=false");
         }
         sealed class MonitorInput:IXRInputSource
         {
@@ -123,10 +153,21 @@ namespace Scalpal.Quest.Editor
             public float Trigger(XRNode node)=>0;
             public bool Button(XRNode node,XRInputButton button)=>false;
         }
+        // R waves: local maxima above half the trace amplitude.
+        static int Beats(LineRenderer trace)
+        {
+            var points=new Vector3[trace.positionCount];trace.GetPositions(points);int beats=0;
+            for(int i=1;i<points.Length-1;i++)
+                if(points[i].y-NativePatientMonitor.TraceBaseline>NativePatientMonitor.TraceAmplitude*.5f&&points[i].y>=points[i-1].y&&points[i].y>points[i+1].y)beats++;
+            return beats;
+        }
+        static bool Flat(LineRenderer trace)
+        {var points=new Vector3[trace.positionCount];trace.GetPositions(points);return points.All(point=>Mathf.Abs(point.y-NativePatientMonitor.TraceBaseline)<1e-6f);}
         static void Readable(NativePatientMonitor monitor,Vector3 viewer)
         {
+            ScalpalBrandLayout.SizeForViewer(monitor.ViewRoot,viewer);
             var measures=ScalpalBrandLayout.Measure(monitor.ViewRoot,viewer,true);
-            Require(measures.Count==2,"both actual monitor text surfaces are measured");
+            Require(measures.Count==7,"every monitor text surface is measured");
             foreach(var measure in measures)Require(measure.Passes,"monitor visible line extent meets its brand readability floor: "+measure.fit.name+" "+measure.mmAt1m);
         }
     }

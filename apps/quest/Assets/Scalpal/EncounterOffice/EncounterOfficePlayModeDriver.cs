@@ -131,13 +131,22 @@ namespace Scalpal.EncounterOffice.Editor
             // The office auto-connects the patient voice when an encounter starts. Like the surgery Time-Out, this
             // synthetic fixture disables the transport so that attempt fails before mic permission or provider HTTP.
             office.voice.enabled = false;
+            // Headless Unity reports OS focus=false. Supply the same explicit synthetic
+            // focus input as the XR source; keep the actual Start/request/voice path.
+            office.SendMessage("OnApplicationFocus", true, SendMessageOptions.RequireReceiver);
+            Check(Read<bool>(office, "focused"), "synthetic focused office input reaches the production focus callback");
             yield return ReadFixture();
             Check(fixture.attemptCount == fixture.initialAttemptCount && fixture.encounterCreates == 0, "office list does not silently create an attempt or encounter");
             office.StartPatient(jonah.patientId);
-            yield return Wait(() => office.State?.phase == "interview" && !office.Busy && office.RoundVisible,
-                "real selected-patient path confirms new shared attempt, creates the HTTP interview and shows round 1");
+            yield return Wait(() => office.State?.phase == "interview" && !office.Busy,
+                "real selected-patient path confirms new shared attempt and creates the HTTP interview");
             Check((office.voice.Status == "error" || office.voice.Status == "offline") && office.voice.LastError.Length > 0 && office.patient.Patient && office.patient.Patient.activeSelf,
                 "interview start seats the patient and attempts the patient voice automatically (disabled fixture transport fails safely)");
+            // Provider failure now falls back to a cached greeting. The disabled voice
+            // component cannot drain audio in Update, so explicitly finish only that
+            // fixture playback; the production office Update must release the round.
+            office.voice.InterruptPlayback();
+            yield return Wait(() => office.RoundVisible, "production office Update releases round 1 after fixture greeting playback finishes");
             encounterId = office.State.encounterId; sharedSessionId = office.realtime.SessionId; attemptId = office.realtime.AttemptId;
             procedureId = office.AuthoredProcedureId;
             Check(office.State.patientId == jonah.patientId && encounterId.StartsWith("int-", StringComparison.Ordinal) && !string.IsNullOrEmpty(attemptId), "selected canonical patient and interview identity match");
@@ -161,6 +170,8 @@ namespace Scalpal.EncounterOffice.Editor
                 "wrong plan pick retains the case's surgery and the exact picked plan");
             Check(office.Score.carryoverItems != null, "interview score carries structured surgery carryover");
             assessmentJson = JsonUtility.ToJson(office.State.assessment); scoreJson = JsonUtility.ToJson(office.Score);
+            yield return ReadFixture();
+            int officeRouteCount = fixture.routes.Length;
             yield return Wait(() => office.realtime.TryGetEncounterBinding(encounterId, out var session, out var attempt, out var patient, out var phase)
                 && session == sharedSessionId && attempt == attemptId && patient == jonah.patientId && phase == "scored", "actual scored reducer row is committed before scene transition");
             office.ContinueToSurgery();
@@ -242,9 +253,10 @@ namespace Scalpal.EncounterOffice.Editor
                 "actual coach prompt contains this patient's interview result and the wrong plan pick");
             var routes = fixture.routes;
             int coachIndex = Array.IndexOf(routes, "POST /coach/sessions");
-            Check(coachIndex > 0 && routes.Take(coachIndex).Count(route => route == "GET /interviews/" + encounterId + "/score") >= 2
-                && routes.Take(coachIndex).Contains("GET /interviews/" + encounterId)
-                && routes.Take(coachIndex).Count(route => route == "GET /patients/" + jonah.patientId + "/case") >= 2,
+            var orVerificationRoutes = routes.Skip(officeRouteCount).Take(Math.Max(0, coachIndex - officeRouteCount)).ToArray();
+            Check(coachIndex > officeRouteCount && orVerificationRoutes.Contains("GET /interviews/" + encounterId + "/score")
+                && orVerificationRoutes.Contains("GET /interviews/" + encounterId)
+                && orVerificationRoutes.Contains("GET /patients/" + jonah.patientId + "/case"),
                 "actual OR rechecks live case, encounter and score before coach POST");
             Check(routes.Contains("POST /patients/" + jonah.patientId + "/preop-check"), "actual Time-Out submits the structured risk review");
             Check(!surgery.voice.enabled && fixture.providerUnavailableCount == 0 && fixture.providerFetchAttempts == 0
