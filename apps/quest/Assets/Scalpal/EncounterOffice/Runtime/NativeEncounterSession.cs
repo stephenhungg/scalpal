@@ -6,7 +6,6 @@ using System.IO;
 using Scalpal.Voice;
 using Scalpal.Exercises.Data;
 using Scalpal.Realtime;
-using UnityEngine.SceneManagement;
 using UnityEngine;
 using UnityEngine.Networking;
 
@@ -178,20 +177,25 @@ namespace Scalpal.EncounterOffice
                     PlayAuthoredSpeech("greeting", "", greeting);
                 });
         }
-        public void ContinueToSurgery()
+        // Snapshot the scored encounter's original shared attempt before changing scenes.
+        // The handoff flow owns presentation choice, transition and Time-Out.
+        public bool TryPrepareHandoff(out EncounterSurgeryHandoff handoff, out string reason)
         {
-            if (Busy || !SurgeryReady) { SetStatus("Complete Jarvis feedback before entering the OR."); return; }
-            if (!Application.CanStreamedLevelBeLoaded(EncounterOfficeRoute.SurgeryScene))
-            { SetStatus("The operating room is not included in this player."); return; }
+            handoff = null;
+            if (Busy || !SurgeryReady)
+            { reason = "Complete Jarvis feedback before entering the OR."; return false; }
             if (realtime && (!realtime.Paired || realtime.SessionId != sharedSessionId || realtime.AttemptId != sharedAttemptId
                 || !realtime.TryGetEncounterBinding(encounterId, out var boundSession, out var boundAttempt, out var boundPatient, out var boundPhase)
                 || boundSession != sharedSessionId || boundAttempt != sharedAttemptId || boundPatient != patientId || boundPhase != "scored"))
-            { SetStatus("The scored encounter must belong to the current paired attempt before entering the OR."); return; }
-            if (!EncounterOfficeRoute.PrepareSurgery(State, Score, AuthoredProcedureId, baseUrl, out var reason, sharedSessionId, sharedAttemptId))
-            { SetStatus(reason); return; }
-            Invalidate();
-            SceneManager.LoadScene(EncounterOfficeRoute.SurgeryScene);
+            { reason = "The scored encounter must belong to the current paired attempt before entering the OR."; return false; }
+            if (!EncounterOfficeRoute.PrepareSurgery(State, Score, AuthoredProcedureId, baseUrl, out reason, sharedSessionId, sharedAttemptId))
+                return false;
+            if (!EncounterOfficeRoute.TakeSurgery(out handoff))
+            { reason = "The scored encounter handoff could not be prepared. Refresh the scorecard."; return false; }
+            reason = "";
+            return true;
         }
+        public void ContinueToSurgery() => Scalpal.Handoff.HandoffFlow.OpenFromOffice(this);
         public void Ask(string topic) => Tool("answer", JsonUtility.ToJson(new TopicRequest { topic = topic }));
         public void Examine(string maneuver) => Tool("examine", JsonUtility.ToJson(new ExamRequest { maneuver = maneuver }));
         public void OrderTest(string test) => Tool("order_test", JsonUtility.ToJson(new TestRequest { test = test }));

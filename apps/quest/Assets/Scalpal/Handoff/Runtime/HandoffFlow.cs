@@ -67,6 +67,24 @@ namespace Scalpal.Handoff
         {
             foreach (var voice in FindObjectsByType<QuestJarvisVoice>(FindObjectsSortMode.None)) voice.Disconnect();
         }
+        public static bool OpenFromOffice(NativeEncounterSession session)
+        {
+            var flow = FindFirstObjectByType<HandoffFlow>();
+            return flow && flow.ImportOffice(session);
+        }
+        bool ImportOffice(NativeEncounterSession session)
+        {
+            if (!session) { failure = "Office unavailable"; return false; }
+            if (!session.TryPrepareHandoff(out var source, out var reason))
+            { failure = reason; return false; }
+            if (Ticket?.encounterId == source.encounterId) { SetPhase("score"); return true; }
+            try
+            {
+                var ticket = HandoffRun.Begin(session.State, session.Score, session.baseUrl);
+                HandoffRun.BindOfficeSource(ticket, source); office = session; SetPhase("score"); return true;
+            }
+            catch (ArgumentException exception) { HandoffRun.Clear(); failure = exception.Message; return false; }
+        }
         void Update()
         {
             if (!card) return;
@@ -93,8 +111,7 @@ namespace Scalpal.Handoff
             menuDown = menu;
             if (office && office.Score != null && office.State?.phase == "scored" && (Ticket == null || Ticket.encounterId != office.State.encounterId))
             {
-                try { HandoffRun.Begin(office.State, office.Score, office.baseUrl); SetPhase("score"); }
-                catch (ArgumentException e) { Show("Handoff unavailable", e.Message, new[] { "Refresh scorecard" }, _ => office.RefreshState()); return; }
+                if (!ImportOffice(office)) { Show("Waiting for scored office attempt", failure, new[] { "Refresh scorecard" }, _ => office.RefreshState()); return; }
             }
             if (office && Time.unscaledTime >= nextHealth && !healthBusy)
             { nextHealth = Time.unscaledTime + 10; StartCoroutine(CheckPreflight()); }

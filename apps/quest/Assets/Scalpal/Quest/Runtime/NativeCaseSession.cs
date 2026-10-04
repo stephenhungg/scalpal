@@ -47,7 +47,7 @@ namespace Scalpal.Quest
         public bool AttemptNeedsRetry => attemptFailed;
         public SurgicalCase ReviewedCase => candidate;
         public const string ContentVersion = "0.1.0";
-        string standalonePatientId = PatientId, standaloneProcedureId = "";
+        string standalonePatientId = PatientId, standaloneProcedureId = ProcedureId;
         public string SelectedPatientId { get => HandoffRun.Current?.patientId ?? standalonePatientId; private set => standalonePatientId = value; }
         public string SelectedProcedureId { get => HandoffRun.Current?.procedureId ?? standaloneProcedureId; private set => standaloneProcedureId = value; }
         public EncounterSurgeryHandoff OfficeHandoff { get; private set; }
@@ -67,7 +67,8 @@ namespace Scalpal.Quest
         string boundSharedSession = "", boundSharedAttempt = "";
         Vector3 previewScale;
         bool SharedMatches => sharedAttemptReady && realtime.Paired && realtime.SessionId == boundSharedSession && realtime.AttemptId == boundSharedAttempt
-            && (OfficeHandoff == null || OfficeSharedMatches(out _));
+            && (OfficeHandoff == null || OfficeSharedMatches(out _))
+            && (!HasHandoff || HandoffRun.Current.sourceOffice == null || HandoffSourceMatches(out _));
         int generation, completedSteps, mistakes;
         float nextUi, nextContext;
         string lastVoiceContextKey = "";
@@ -189,7 +190,8 @@ namespace Scalpal.Quest
                 EncounterReply stateReply = null, scoreReply = null;
                 try { if (stateJson != null) stateReply = JsonUtility.FromJson<EncounterReply>(stateJson); if (scoreJson != null) scoreReply = JsonUtility.FromJson<EncounterReply>(scoreJson); } catch (ArgumentException) { }
                 busy = false;
-                if (!HandoffRun.Verify(HandoffRun.Current, stateReply?.state, scoreReply?.scorecard, candidate, out var refusal))
+                if (!EncounterSurgeryBinding.Validate(HandoffRun.Current.sourceOffice, candidate, stateReply, scoreReply, out var refusal)
+                    || !HandoffRun.Verify(HandoffRun.Current, stateReply?.state, scoreReply?.scorecard, candidate, out refusal))
                 { candidate = null; Message = refusal; yield break; }
                 HandoffVerified = true; HandoffRun.Current.scorecard = scoreReply.scorecard; HandoffRun.Current.verifiedCase = candidate;
                 reviewed = true; Phase = "Confirmed"; preview.gameObject.SetActive(false);
@@ -249,6 +251,17 @@ namespace Scalpal.Quest
         void RequestAttempt()
         {
             if (attemptRequested || !realtime.Paired || candidate == null) return;
+            if (HasHandoff && HandoffRun.Current.sourceOffice != null)
+            {
+                if (!HandoffSourceMatches(out var sourceReason)) { Message = sourceReason; return; }
+                var ticket = HandoffRun.Current;
+                if (!string.IsNullOrEmpty(ticket.attemptId))
+                {
+                    if (realtime.SessionId == ticket.sharedSessionId && realtime.AttemptId == ticket.attemptId) AttemptStarted(ticket.attemptId);
+                    else { attemptFailed = true; Message = "The office attempt changed. Start a matching OR attempt explicitly."; }
+                    return;
+                }
+            }
             if (OfficeHandoff != null)
             {
                 if (OfficeSharedMatches(out var reason)) AttemptStarted(OfficeHandoff.attemptId);
@@ -256,6 +269,15 @@ namespace Scalpal.Quest
                 return;
             }
             attemptRequested = realtime.BeginAttempt(SelectedProcedureId, ContentVersion);
+        }
+        bool HandoffSourceMatches(out string reason)
+        {
+            var ticket = HandoffRun.Current;
+            reason = "Waiting for the committed scored office encounter in the paired session.";
+            if (ticket?.sourceOffice == null || !realtime || !realtime.Paired || realtime.SessionId != ticket.sourceOffice.sharedSessionId) return false;
+            if (!realtime.TryGetEncounterBinding(ticket.encounterId, out var session, out var attempt, out var patient, out var phase)
+                || !HandoffRun.SourceBindingMatches(ticket, session, attempt, patient, phase)) return false;
+            reason = ""; return true;
         }
         bool OfficeSharedMatches(out string reason)
         {
@@ -275,6 +297,8 @@ namespace Scalpal.Quest
         void AttemptStarted(string id)
         {
             if (OfficeHandoff != null && (id != OfficeHandoff.attemptId || !OfficeSharedMatches(out _))) return;
+            if (HasHandoff && HandoffRun.Current.sourceOffice != null && (!HandoffSourceMatches(out _)
+                || !string.IsNullOrEmpty(HandoffRun.Current.attemptId) && id != HandoffRun.Current.attemptId)) return;
             attemptRequested = false; sharedAttemptReady = true; attemptFailed = false;
             boundSharedSession = realtime.SessionId; boundSharedAttempt = id;
             if (HasHandoff) { HandoffRun.Current.sharedSessionId = boundSharedSession; HandoffRun.Current.attemptId = id; }
@@ -402,7 +426,11 @@ namespace Scalpal.Quest
                 return;
             }
             ResetHandoffRecovery();
-            if (HasHandoff) { HandoffRun.Current.ResetTimeOut(); HandoffRun.Current.practiceStarted = false; }
+            if (HasHandoff)
+            {
+                if (HandoffRun.Current.practiceStarted || attemptFailed) HandoffRun.Current.attemptId = "";
+                HandoffRun.Current.ResetTimeOut(); HandoffRun.Current.practiceStarted = false;
+            }
             if (tissueSimulation) tissueSimulation.ResetTissues();
             if (volumeSimulation) volumeSimulation.ResetTissues();
             if (vesselSimulation) vesselSimulation.ResetTissues();

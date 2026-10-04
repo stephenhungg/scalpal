@@ -57,6 +57,7 @@ namespace Scalpal.Handoff.Editor
                 SceneBoundary(ticket, candidate);
                 VoiceRoles();
                 HandoffShellValidation.Verify();
+                HandoffOfficeBindingValidation.Verify();
                 Debug.Log("SCALPAL_HANDOFF_VALIDATION_OK checks=" + checks + " synthetic DTOs and real scene consumers; no HTTP, reducer commit, voice-provider or headset verification");
             }
             finally

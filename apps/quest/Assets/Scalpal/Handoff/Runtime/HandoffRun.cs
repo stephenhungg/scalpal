@@ -22,6 +22,7 @@ namespace Scalpal.Handoff
         public string schema = "scalpal.handoff.v1", runId, patientId, encounterId, procedureId, procedureTitle;
         public string presentationMode = "virtual", modeChosenBy = "learner", contentVersion = "0.1.0";
         public string sharedSessionId = "", attemptId = "", serviceUrl, issuedAt, learnerProcedure;
+        public EncounterSurgeryHandoff sourceOffice;
         public EncounterScore scorecard;
         public bool escalated, challengeSeen, consequenceSeen, practiceStarted, timeOutConfirmed, revisedAfterPrompt;
         public bool patientConfirmed, procedureConfirmed, siteConfirmed, risksConfirmed, antibioticsReviewed, imagingReviewed;
@@ -53,6 +54,17 @@ namespace Scalpal.Handoff
                 presentationMode = Preflight.DefaultMode, issuedAt = DateTime.UtcNow.ToString("O") };
             return Current;
         }
+        public static void BindOfficeSource(HandoffTicket ticket, EncounterSurgeryHandoff source)
+        {
+            if (ticket == null || source == null || source.patientId != ticket.patientId || source.encounterId != ticket.encounterId
+                || source.procedureId != ticket.procedureId || string.IsNullOrEmpty(source.sharedSessionId) || string.IsNullOrEmpty(source.attemptId))
+                throw new ArgumentException("The scored office shared attempt is required before theatre.");
+            ticket.sourceOffice = JsonUtility.FromJson<EncounterSurgeryHandoff>(JsonUtility.ToJson(source));
+            ticket.sharedSessionId = source.sharedSessionId; ticket.attemptId = source.attemptId;
+        }
+        public static bool SourceBindingMatches(HandoffTicket ticket, string session, string attempt, string patient, string phase)
+            => ticket?.sourceOffice != null && session == ticket.sourceOffice.sharedSessionId
+                && attempt == ticket.sourceOffice.attemptId && patient == ticket.patientId && phase == "scored";
         public static bool Verify(HandoffTicket ticket, EncounterState state, EncounterScore score, SurgicalCase candidate, out string reason)
         {
             reason = "Encounter or case identity changed. Return to the office and refresh the scorecard.";
