@@ -53,8 +53,7 @@ scalpal/
 └── scripts/                      # Shared build/run/demo helpers when needed
 ```
 
-Choose the actual motion module layout, web stack, and SpacetimeDB module language when initializing those components. The conceptual subfolders are ownership boundaries, not a requirement to make a package for every step. Import runtime anatomy into Unity with stable `.meta` files; keep its source and attribution in `assets/anatomy/`. Do not commit generated caches, binaries, participant footage, or secret-bearing artifacts. The old `programs/challenges/` README is a retired historical scaffold, not an implementation task.
-
+Choose the actual motion module layout, web stack, and SpacetimeDB module language when initializing those components. The conceptual subfolders are ownership boundaries, not a requirement to make a package for every step. Import runtime anatomy into Unity with stable `.meta` files; keep its source and attribution in `assets/anatomy/`. Do not commit generated caches, binaries, participant footage, or secret-bearing artifacts.
 ## Ownership
 
 | Person | Owns | Primary paths | First tangible result |
