@@ -86,6 +86,12 @@ namespace Scalpal.Handoff.Editor
                 Call(native, "WorkbenchRetry");
                 Assert(Get<int>(native, "generation") == generation && pausedTicket.patientConfirmed,
                     "native menu retry cannot bypass handoff recap ownership");
+                native.presentation = fixture.AddComponent<NativePresentation>(); native.presentation.passthrough = false;
+                pausedTicket.presentationMode = "virtual"; pausedTicket.practiceStarted = true;
+                Set(flow, "phase", "paused"); Set(flow, "surgery", native);
+                Call(flow, "SwitchToVirtual");
+                Assert(Get<string>(flow, "phase") == "paused" && pausedTicket.practiceStarted,
+                    "redundant virtual-mode choice cannot reopen Time-Out or reset practice on the same attempt");
                 Debug.Log("SCALPAL_HANDOFF_SHELL_VALIDATION_OK checks=" + checks
                     + " actual handoff coroutines/update; synthetic shell state and HTTP callbacks; no headset or network evidence");
             }

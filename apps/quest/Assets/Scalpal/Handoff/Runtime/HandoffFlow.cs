@@ -142,7 +142,7 @@ namespace Scalpal.Handoff
                 if (i == 2) { if (Ticket.presentationMode == "mixed_reality") EndAR(); else BackToExplore(); } else if (i == 1) SwitchToVirtual();
                 else if (surgery && surgery.RegistrationReady) { surgery.ResumeHandoffPractice(); SetPhase("practice"); surgery.ReconnectTimeOutVoice(); card.Hide(); }
                 else { fitConfirmed = false; SetPhase("register"); }
-            });
+            }, new[] { true, Ticket.presentationMode != "virtual", true });
             else if (phase == "stopped") Show("Volunteer stopped · Practice paused", "The volunteer can get up. Continue in the virtual OR with a new attempt; your office score is kept.", new[] { "Virtual OR (new attempt)", ReturnLabel }, i => { if (i == 0) SwitchToVirtual(); else BackToExplore(); });
             else if (phase == "recap") Show("Practice complete", surgery.Message + "\nClinical reasoning: " + Ticket.scorecard.total + "/100 · " + Ticket.scorecard.grade +
                 "\nReplay unavailable: native hand recording is not connected.", new[] { "Retry surgery", ReturnLabel }, i => { if (i == 1) BackToExplore(); else { surgery.Retry(); fitConfirmed = false; SetPhase("register"); } });
@@ -231,7 +231,7 @@ namespace Scalpal.Handoff
         void Realign() { realigns++; fitConfirmed = false; surgery.bodyRegistration.ResetFit(); SetPhase("register"); }
         void SwitchToVirtual()
         {
-            if (!surgery || !surgery.TryChangePresentation(false)) return;
+            if (Ticket?.presentationMode == "virtual" || !surgery || !surgery.TryChangePresentation(false)) return;
             Ticket.modeChosenBy = "fallback"; fitConfirmed = true; coachTried = false; nextCoachRetry = 0; SetPhase("timeout");
         }
         public void EndAR()
