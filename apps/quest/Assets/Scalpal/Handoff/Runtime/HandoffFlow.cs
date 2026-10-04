@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using Scalpal.EncounterOffice;
@@ -195,7 +196,7 @@ namespace Scalpal.Handoff
             }
             var preflight = HandoffRun.Preflight;
             var summary = Ticket.scorecard.patientName + "\n" + Ticket.procedureTitle + " · " + Ticket.scorecard.urgency + "\n" +
-                (preflight.ArAvailable ? "Volunteer ready. AR recommended." : "AR unavailable: " + preflight.UnavailableReason + ". Virtual OR recommended.") +
+                (preflight.ArAvailable ? "Permissions and services ready. AR recommended." : "AR unavailable: " + preflight.UnavailableReason + ". Virtual OR recommended.") +
                 "\nVirtual organs are generic teaching anatomy." + (failure.Length > 0 ? "\n" + failure : "");
             Show("To theatre", summary, new[] { "Volunteer patient (AR)", "Virtual OR (VR)", "Theatre setup (operator)" }, i =>
             { if (i == 2) SetPhase("setup"); else ChooseMode(i == 0 ? "mixed_reality" : "virtual"); }, new[] { preflight.ArAvailable, true, true });
@@ -243,7 +244,7 @@ namespace Scalpal.Handoff
             HandoffRun.Preflight.sceneGranted = Permission.HasUserAuthorizedPermission("com.oculus.permission.USE_SCENE");
 #endif
             if (!HandoffRun.Preflight.cameraGranted || !HandoffRun.Preflight.sceneGranted)
-            { Show("Camera access is off", "Continue in the virtual OR. Camera and spatial permissions can be restored in operator setup.", new[] { "Virtual OR", ReturnLabel }, i => { if (i == 0) SwitchToVirtual(); else BackToExplore(); }); return; }
+            { Show("Camera access is off", "Continue in the virtual OR. Camera and spatial permissions can be restored in Quest settings.", new[] { "Virtual OR", ReturnLabel }, i => { if (i == 0) SwitchToVirtual(); else BackToExplore(); }); return; }
             registration.BeginPreflightedDetection();
             float elapsed = Time.unscaledTime - entered;
             bool valid = registration.Accepted && registration.CandidateValid;
@@ -399,17 +400,32 @@ namespace Scalpal.Handoff
         void SetupCard()
         {
             var p = HandoffRun.Preflight;
-            Show("Theatre setup · Operator", "Volunteer present and consented: " + p.volunteerConsented + "\nCamera permission: " + p.cameraGranted + " · Spatial permission: " + p.sceneGranted +
-                "\nBody detection: " + (p.poseServiceOk ? "Online" : "Offline") + " · Coach: " + (p.coachServiceOk ? "Online" : "Offline") + "\nAR is available only when every check is green. Participant images are used for local detection, not saved." +
-                "\nLearner agreed to hand recording for robot replay: " + p.learnerCaptureConsented + " (in AR the volunteer is in frame; their consent must cover the clip).",
-                new[] { p.volunteerConsented ? "Withdraw volunteer consent" : "Volunteer present and agreed", "Grant camera and spatial permission", "Back to theatre", p.learnerCaptureConsented ? "Withdraw hand-recording consent" : "Learner agreed to hand recording" }, i =>
-                { if (i == 3) p.learnerCaptureConsented = !p.learnerCaptureConsented; else if (i == 0) p.volunteerConsented = !p.volunteerConsented; else if (i == 1) RequestPermissions(); else if (Ticket == null) { SetPhase("office"); card.Hide(); } else SetPhase(Ticket.escalated && !Ticket.consequenceSeen ? "score" : "theatre"); });
-        }
-        static void RequestPermissions()
-        {
-#if UNITY_ANDROID && !UNITY_EDITOR
-            Permission.RequestUserPermissions(new[] { "horizonos.permission.HEADSET_CAMERA", "com.oculus.permission.USE_SCENE" });
-#endif
+            var labels = new List<string> { "Back to theatre",
+                p.learnerCaptureConsented ? "Withdraw hand-recording consent" : "Learner agreed to hand recording" };
+            string recording = "\nRecording is optional and is not required to use AR.";
+            if (p.learnerCaptureConsented)
+            {
+                recording += "\nHand recording enabled. Participant recording permission: " + p.volunteerConsented +
+                    " (required only to record an AR clip with the participant in frame).";
+                labels.Add(p.volunteerConsented ? "Withdraw participant recording permission" : "Participant recording agreed");
+            }
+            Show("Theatre setup · Operator", "Camera permission: " + p.cameraGranted + " · Spatial permission: " + p.sceneGranted +
+                "\nBody detection: " + (p.poseServiceOk ? "Online" : "Offline") + " · Coach: " + (p.coachServiceOk ? "Online" : "Offline") +
+                "\nAR is available when permissions and services are ready. Detection images are not saved." + recording,
+                labels.ToArray(), i =>
+                {
+                    if (i == 1)
+                    {
+                        p.learnerCaptureConsented = !p.learnerCaptureConsented;
+                        if (!p.learnerCaptureConsented) p.volunteerConsented = false;
+                    }
+                    else if (i == 2 && p.learnerCaptureConsented) p.volunteerConsented = !p.volunteerConsented;
+                    else if (i == 0)
+                    {
+                        if (Ticket == null) { SetPhase("office"); card.Hide(); }
+                        else SetPhase(Ticket.escalated && !Ticket.consequenceSeen ? "score" : "theatre");
+                    }
+                });
         }
         IEnumerator CheckPreflight()
         {

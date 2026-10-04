@@ -50,13 +50,13 @@ namespace Scalpal.Handoff.Editor
                 camera.stereoTargetEye = StereoTargetEyeMask.None; camera.fieldOfView = 58;
                 var card = new GameObject("PreviewHandoffCard").AddComponent<HandoffCard>(); Bind(card); card.viewer = camera;
                 Directory.CreateDirectory(output);
-                card.Show("To theatre", "Priya Ramaswamy, 40\nLaparoscopic appendectomy · Urgent\nVolunteer patient: virtual organs on a real person.\nVirtual OR: a virtual patient in the operating room.\nThe operator has checked the volunteer and services.",
+                card.Show("To theatre", "Priya Ramaswamy, 40\nLaparoscopic appendectomy · Urgent\nVolunteer patient: virtual organs on a real person.\nVirtual OR: a virtual patient in the operating room.\nCamera/spatial permissions and tracking services are ready.",
                     new[] { "Volunteer patient (AR) · Recommended", "Virtual OR (VR)" }, null);
                 Capture(camera, Path.Combine(output, "theatre.png"));
                 card.Show("Time-Out", "Priya Ramaswamy, 40 · Urgent\nLaparoscopic appendectomy · Abdomen\nFOUND: Penicillin allergy\nMISSED: Anticoagulation history\nJarvis is your coach. Confirm patient and procedure.\nMistakes are expected; this is practice.",
                     new[] { "Confirm and begin practice", "Change theatre" }, null);
                 Capture(camera, Path.Combine(output, "time-out.png"));
-                card.Show("To theatre", "Priya Ramaswamy, 40\nLaparoscopic appendectomy · Urgent\nVolunteer patient unavailable: no volunteer checked in.\nContinue in the virtual operating room.",
+                card.Show("To theatre", "Priya Ramaswamy, 40\nLaparoscopic appendectomy · Urgent\nAR unavailable: body detection offline.\nContinue in the virtual operating room.",
                     new[] { "Volunteer patient (AR) · Unavailable", "Virtual OR (VR) · Recommended" }, null, new[] { false, true });
                 Capture(camera, Path.Combine(output, "theatre-ar-unavailable.png"));
                 Debug.Log("SCALPAL_HANDOFF_PREVIEW_OK monoEditorOnly=true output=" + output);

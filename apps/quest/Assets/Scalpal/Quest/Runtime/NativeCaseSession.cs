@@ -720,7 +720,7 @@ namespace Scalpal.Quest
             if (PresentationMode == mode) return true; // Idempotent: preserve fit, coach and Time-Out.
             if (busy || ending || (Phase != "Selecting" && Phase != "Confirmed" && Phase != "Recap"))
             { reason = "Finish or explicitly retry the current practice before changing mode."; return false; }
-            // This is capability/consent gating, not the old office-specific VR policy.
+            // This is capability gating, not the old office-specific VR policy.
             if (mode == "mixed_reality" && (HasHandoff || OfficeHandoff != null) && !HandoffRun.Preflight.ArAvailable)
             { reason = HandoffRun.Preflight.UnavailableReason; return false; }
             if (mode == "mixed_reality" && !bodyRegistration)

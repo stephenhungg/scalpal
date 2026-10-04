@@ -1,5 +1,8 @@
 # Current Direction
 
+**October 4 AR setup update:** Stephen removed the extra volunteer-consent confirmation for AR mode selection. AR availability depends on camera/spatial permissions and pose/coach readiness; accepted body registration still gates practice. Recording remains optional with separate learner and participant-in-frame permissions. The AR flow does not open permission dialogs; missing OS grants are restored in Quest settings. No checkbox is automatically accepted.
+
+
 ## Latest Experience Flow
 
 **Final vision (October 4, 2026, Matthew): [operation flow](operation-flow.md).** It takes precedence over everything below and in older documents.

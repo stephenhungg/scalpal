@@ -8,12 +8,14 @@ namespace Scalpal.Handoff
 {
     [Serializable] public sealed class TheatrePreflight
     {
-        public bool volunteerConsented, cameraGranted, sceneGranted, poseServiceOk, coachServiceOk, demoMode;
+        // Optional participant recording permission; kept under its existing name for capture manifests.
+        // It never gates AR availability or body detection.
+        public bool volunteerConsented;
+        public bool cameraGranted, sceneGranted, poseServiceOk, coachServiceOk, demoMode;
         // Learner agreed that the headset camera records their hands for the robot replay.
         // Independent of AR availability; capture checks it (and volunteer consent in AR).
         public bool learnerCaptureConsented;
-        public string UnavailableReason => !volunteerConsented ? "No volunteer checked in and consented" :
-            !cameraGranted || !sceneGranted ? "Camera and spatial permissions are off" :
+        public string UnavailableReason => !cameraGranted || !sceneGranted ? "Camera and spatial permissions are off" :
             !poseServiceOk ? "Body detection offline" : !coachServiceOk ? "Coach service offline" : "";
         public bool ArAvailable => UnavailableReason.Length == 0;
         public string DefaultMode => ArAvailable ? "mixed_reality" : "virtual";
@@ -98,7 +100,7 @@ namespace Scalpal.Handoff
             reason = ""; return true;
         }
         public static void Clear() => Current = null;
-        // A run ends on return to explore or a new office patient; the next volunteer must consent again.
+        // A run ends on return to explore or a new office patient; participant recording permission does not carry into another run.
         public static void EndRun() { Current = null; Preflight.volunteerConsented = false; }
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void Reset() { Current = null; Preflight = new TheatrePreflight(); }

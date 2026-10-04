@@ -37,7 +37,8 @@ namespace Scalpal.Handoff.Editor
             var scenarios = new (string name, Action run)[] {
                 ("F1 headset resume keeps the paused card and the started attempt", ResumeKeepsPracticePaused),
                 ("F3 another office patient clears the previous ticket", OfficePatientChangeClearsTicket),
-                ("F4 volunteer consent ends with the run", ConsentEndsWithRun),
+                ("F4 participant recording permission ends with the run", ConsentEndsWithRun),
+                ("F17 setup separates AR availability and optional recording", SetupSeparatesArAndRecording),
                 ("F5 Time-Out sends only individually confirmed risks", RiskReviewSendsOnlyConfirmed),
                 ("F6/F8 Time-Out clears stale errors and releases its loading latch", TimeOutClearsErrorAndLatch),
                 ("F14 AR Time-Out captures the measured vitals baseline; VR keeps the chart", TimeOutBaselineOnlyInAr),
@@ -149,19 +150,43 @@ namespace Scalpal.Handoff.Editor
             Set(flow, "office", office); Set(flow, "phase", "theatre");
             Tick(flow);
             Assert(HandoffRun.Current == null && Phase(flow) == "office", "a different office encounter drops the previous patient's ticket");
-            Assert(!HandoffRun.Preflight.volunteerConsented, "a new office run asks the volunteer to consent again");
+            Assert(!HandoffRun.Preflight.volunteerConsented, "a new office run clears participant recording permission");
             Assert(!card.Visible || !Heading(card).StartsWith("To theatre", StringComparison.Ordinal), "patient A's Theatre card is not shown for patient B");
             Assert(ticket.encounterId != office.State.encounterId, "fixture compares two encounters");
         }
 
-        // Back to explore (Shell scene with neither office nor OR) ends the run for this volunteer.
+        static void SetupSeparatesArAndRecording()
+        {
+            var flow = Flow(out var card);
+            var p = HandoffRun.Preflight;
+            p.cameraGranted = p.sceneGranted = p.poseServiceOk = p.coachServiceOk = true;
+            p.learnerCaptureConsented = p.volunteerConsented = false;
+            var ticket = Ticket("mixed_reality"); ticket.consequenceSeen = true;
+            Call(flow, "SetupCard");
+            Assert(p.ArAvailable && Actions(card).Length == 2 && Actions(card)[0] == "Back to theatre", "AR-ready setup has no volunteer confirmation or permission-request control");
+            Assert(!Scalpal.Capture.HandCaptureRecorder.ConsentGranted(ticket, p, out _), "AR availability never starts recording");
+            Select(card, 1); Call(flow, "SetupCard");
+            Assert(p.learnerCaptureConsented && !p.volunteerConsented && p.ArAvailable && Actions(card).Length == 3,
+                "actual recording callback enables only learner recording and reveals optional participant permission");
+            Assert(!Scalpal.Capture.HandCaptureRecorder.ConsentGranted(ticket, p, out _), "learner recording permission alone cannot capture the participant");
+            Select(card, 2); Call(flow, "SetupCard");
+            Assert(p.volunteerConsented && Scalpal.Capture.HandCaptureRecorder.ConsentGranted(ticket, p, out _),
+                "participant recording requires its own explicit callback");
+            Select(card, 1); Call(flow, "SetupCard");
+            Assert(!p.learnerCaptureConsented && !p.volunteerConsented && p.ArAvailable && Actions(card).Length == 2,
+                "turning recording off clears both permissions while AR stays available");
+            Select(card, 0);
+            Assert(Phase(flow) == "theatre", "reindexed Back to theatre callback returns to the mode choice");
+        }
+
+        // Back to explore ends the run and clears optional participant recording permission.
         static void ConsentEndsWithRun()
         {
             var flow = Flow(out _);
             Ticket("virtual"); HandoffRun.Preflight.volunteerConsented = true; HandoffRun.Preflight.cameraGranted = true;
             Set(flow, "failure", "old failure"); Set(flow, "coachTried", true); Set(flow, "lossStarted", 3f); Set(flow, "realigns", 2);
             Call(flow, "BindScene");
-            Assert(HandoffRun.Current == null && !HandoffRun.Preflight.volunteerConsented, "returning to explore clears the ticket and volunteer consent");
+            Assert(HandoffRun.Current == null && !HandoffRun.Preflight.volunteerConsented, "returning to explore clears the ticket and participant recording permission");
             Assert(HandoffRun.Preflight.cameraGranted, "measured permission state is not discarded with consent");
             Assert(Get<string>(flow, "failure") == "" && !Get<bool>(flow, "coachTried") && Get<float>(flow, "lossStarted") < 0 && Get<int>(flow, "realigns") == 0,
                 "per-run error, coach-retry and fit-loss state do not leak into the next run");
