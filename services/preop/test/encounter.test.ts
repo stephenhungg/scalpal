@@ -108,7 +108,10 @@ describe("patient facts come only from tools", () => {
   it("never tells the patient model its diagnosis", () => {
     for (const e of ENCOUNTERS) {
       const prompt = patientPrompt(encounterFor(e.planSubject)).toLowerCase();
-      expect(prompt).toContain("never name or guess any diagnosis or medical condition");
+      expect(prompt).toContain("never name or guess any diagnosis or medical condition for your current problem");
+      // Elective patients (interval cholecystectomy, recurrent diverticulitis) were told earlier diagnoses;
+      // they may repeat what a tool returns, but never guess today's.
+      expect(prompt).toContain("a condition a doctor already told you about in the past");
       for (const word of [e.diagnosis.label, ...e.diagnosis.keywords.flat(), ...(e.diagnosis.partial?.keywords.flat() ?? [])]) {
         expect(prompt, `${e.planSubject}: ${word}`).not.toContain(word.toLowerCase());
       }
