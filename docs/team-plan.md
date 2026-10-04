@@ -4,13 +4,13 @@
 
 > Implementation update: team feature branches now contain component code. Read the [system integration map](system-integration.md) for audited commits, actual routes, missing adapters and verification. The plan below describes intended responsibilities, not proof of a connected deployment.
 
-> Current scope: Solana and monetary completion rewards are removed. Nathan now owns the companion website + SpacetimeDB/routing lane, and Matthew continues his Jarvis work. Read [current direction](current-direction.md) and [Nathan's implementation plan](nathan-plan.md) before older design notes.
+> Current scope: Solana and monetary completion rewards are removed. Nathan now owns the companion website + SpacetimeDB/routing lane, and Matthew continues his Scalpal work. Read [current direction](current-direction.md) and [Nathan's implementation plan](nathan-plan.md) before older design notes.
 
-Updated October 3, 2026. This is an ownership plan and folder scaffold, not a running application. Nathan's companion/realtime lane is the latest explicit assignment. Stephen's hardware/integration, Matthew's broader anatomy-experience, and Silas's robotics responsibilities retain the earlier split; Matthew's current Jarvis work is confirmed by the user. Nathan's GitHub identity is not assumed from the earlier `nakim12` entry.
+Updated October 3, 2026. This is an ownership plan and folder scaffold, not a running application. Nathan's companion/realtime lane is the latest explicit assignment. Stephen's hardware/integration, Matthew's broader anatomy-experience, and Silas's robotics responsibilities retain the earlier split; Matthew's current Scalpal work is confirmed by the user. Nathan's GitHub identity is not assumed from the earlier `nakim12` entry.
 
 ## First Shared Outcome
 
-Build one connected session: choose a FinchNode patient on the explore page, diagnose them in the full-VR office with the voice patient and the Jarvis attending, perform the matching surgery on a virtual patient in the full-VR operating room, receive feedback, and process a short passthrough recording into a simulated articulated robot-hand replay. Nathan's companion website shows the session live and follows shared state and processing results.
+Build one connected session: choose a FinchNode patient on the explore page, diagnose them in the full-VR office with the voice patient and the Scalpal attending, perform the matching surgery on a virtual patient in the full-VR operating room, receive feedback, and process a short passthrough recording into a simulated articulated robot-hand replay. Nathan's companion website shows the session live and follows shared state and processing results.
 
 Keep two paths distinct while integrating them: the educational result and the quality of the motion contribution. A completed lesson can produce an unusable clip. Robot replay is the immediate goal; policy training is later.
 
@@ -30,7 +30,7 @@ scalpal/
 │   │   │   ├── Capture/          # Camera acquisition and recording
 │   │   │   ├── Registration/     # Body inference and torso alignment
 │   │   │   ├── Experience/       # Anatomy preview, practice, feedback UI
-│   │   │   ├── Voice/            # Validated Jarvis client actions
+│   │   │   ├── Voice/            # Validated Scalpal client actions
 │   │   │   ├── Exercises/        # One authored exercise and scene bindings
 │   │   │   ├── Prefabs/          # Independently owned reusable scene objects
 │   │   │   └── Scenes/           # Bootstrap plus independently edited scenes
@@ -59,11 +59,11 @@ Choose the actual motion module layout, web stack, and SpacetimeDB module langua
 | Person | Owns | Primary paths | First tangible result |
 | --- | --- | --- | --- |
 | Stephen (`stephenhungg`) | Quest runtime, capture, body registration, final integration | `apps/quest/` runtime/capture/registration, bootstrap scene, Unity settings; `scripts/` | App runs on Quest; explicit short recording with documented metadata; separately, torso debug points and honest valid/uncertain state |
-| Matthew (`MatthewKim323`) | Anatomy experience, exercise content, Jarvis behavior/client | Quest experience/voice/exercise code and prefabs; `assets/anatomy/` | Authored diagnosis encounters plus validated voice actions and an authored practice/result flow |
+| Matthew (`MatthewKim323`) | Anatomy experience, exercise content, Scalpal behavior/client | Quest experience/voice/exercise code and prefabs; `assets/anatomy/` | Authored diagnosis encounters plus validated voice actions and an authored practice/result flow |
 | Silas (`silaswu4`) | Video inference, robot retargeting, simulation/replay; main project website and the companion's visual design | `services/motion/`, `assets/robots/`; companion styling (`apps/companion/src/styles.css`, component/page markup) | A supplied clip produces estimates and a derived replay on one articulated robot hand, with invalid segments reported |
 | Nathan (GitHub identity not confirmed) | Companion website, SpacetimeDB, storage/worker/provider routing | `apps/companion/`, `services/realtime/`, `services/api/` | Two authorized clients share session state; a separate live feed shows the composited headset view; artifact/job results reach the viewer |
 
-Stephen is the final integrator, not the author of everyone's component. Matthew owns the Jarvis agent, its organ/state context, and voice semantics. Nathan supplies shared-state routing and service-side credential/session support where Matthew needs it; he does not create a second agent. Silas supplies reconstruction/retargeting outputs and quality signals. Nathan exposes their real status/results rather than inventing successful processing. No person can silently redefine another lane's success criteria. Silas restyles the companion to match the main website he is building; Nathan keeps the companion's data, media and storage plumbing (`apps/companion/src/lib/`, `src/data/`, generated bindings), and the two coordinate before editing the same component. Restyling keeps the honesty labels (replay is not a learned policy, synthetic data is marked, video and database status stay separate).
+Stephen is the final integrator, not the author of everyone's component. Matthew owns the Scalpal agent, its organ/state context, and voice semantics. Nathan supplies shared-state routing and service-side credential/session support where Matthew needs it; he does not create a second agent. Silas supplies reconstruction/retargeting outputs and quality signals. Nathan exposes their real status/results rather than inventing successful processing. No person can silently redefine another lane's success criteria. Silas restyles the companion to match the main website he is building; Nathan keeps the companion's data, media and storage plumbing (`apps/companion/src/lib/`, `src/data/`, generated bindings), and the two coordinate before editing the same component. Restyling keeps the honesty labels (replay is not a learned policy, synthetic data is marked, video and database status stay separate).
 
 ## Shared Files and Unity Rules
 
@@ -106,7 +106,7 @@ Everyone can move without blocking on the headset continuously. Exchange a real 
 
 ### Checkpoint 2: Connect the Boundaries
 
-Matthew's preview and practice consume Stephen's runtime/registration state. Stephen's raw capture artifact goes to Silas through Nathan's storage/job route. Silas's real output becomes visible through Nathan's service and companion website. Matthew's existing Jarvis consumes current context and requests supported actions, with Unity validating and acknowledging them. Nathan's live-video source uses the composited mirror independently of raw reconstruction input.
+Matthew's preview and practice consume Stephen's runtime/registration state. Stephen's raw capture artifact goes to Silas through Nathan's storage/job route. Silas's real output becomes visible through Nathan's service and companion website. Matthew's existing Scalpal consumes current context and requests supported actions, with Unity validating and acknowledging them. Nathan's live-video source uses the composited mirror independently of raw reconstruction input.
 
 Use one fixed exercise, artifact, processor configuration, and robot version for the first integrated session. Agree a replay format the companion can display; a headset replay panel is additional scope, not a requirement to build two renderers. Nathan's live companion view is now required by his work order, not satisfied by a metadata-only dashboard.
 
@@ -122,11 +122,11 @@ These are task briefs for teammates to give their own agents. They are not messa
 
 ### Stephen: Quest Foundation
 
-Read `AGENTS.md`, current direction, the hardware baseline, team plan, and integration contracts. Work within Quest runtime/capture/registration and the assigned bootstrap/settings files. Establish the native app and a short raw passthrough capture with documented metadata, and the launch → explore → office → OR scene flow. Torso registration is off the main path. Coordinate the capture manifest with Silas, session events and the composited mirror source with Nathan, and experience state with Matthew. Preserve honest uncertainty and verify on the physical headset. Do not take over Jarvis or the robot pipeline.
+Read `AGENTS.md`, current direction, the hardware baseline, team plan, and integration contracts. Work within Quest runtime/capture/registration and the assigned bootstrap/settings files. Establish the native app and a short raw passthrough capture with documented metadata, and the launch → explore → office → OR scene flow. Torso registration is off the main path. Coordinate the capture manifest with Silas, session events and the composited mirror source with Nathan, and experience state with Matthew. Preserve honest uncertainty and verify on the physical headset. Do not take over Scalpal or the robot pipeline.
 
 ### Matthew: Experience and Coach
 
-Continue Matthew's existing Jarvis work with context about organs and exercise state. Read current direction and coordinate supported action requests/results with Stephen and Nathan. The current split covers authored diagnosis encounters (patient and attending) and the authored practice/result flow; the rotating selection preview is superseded; agree those assets/tasks with the team rather than duplicating an existing implementation. Nathan supplies backend/companion integration and scoped provider support where needed. Do not change capture/registration internals, bootstrap scenes, or global Unity configuration without coordination.
+Continue Matthew's existing Scalpal work with context about organs and exercise state. Read current direction and coordinate supported action requests/results with Stephen and Nathan. The current split covers authored diagnosis encounters (patient and attending) and the authored practice/result flow; the rotating selection preview is superseded; agree those assets/tasks with the team rather than duplicating an existing implementation. Nathan supplies backend/companion integration and scoped provider support where needed. Do not change capture/registration internals, bootstrap scenes, or global Unity configuration without coordination.
 
 ### Silas: Video to Robot
 

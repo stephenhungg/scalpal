@@ -44,13 +44,9 @@ namespace Scalpal.Recap.Editor
             var none=RunResultContract.Feedback(empty);
             Check(none.strengths.Count==0&&none.improvements.Count==0,"missing scores cannot create praise");
             Check(RecapPanel.Clinical(r).Contains("82 / 100")&&RecapPanel.Procedural(r).Contains("76 / 100"),"both displayed scorecards keep separate scores");
-            Check(RecapPanel.Clinical(empty).Contains("Not available")&&RecapPanel.Procedural(empty).Contains("Not available"),"missing scores stay unavailable, not zero");
+            Check(RecapPanel.Clinical(empty)=="Unavailable"&&RecapPanel.Procedural(empty)=="Unavailable","missing scores stay unavailable, not zero");
             var demo=DemoFlags.JudgePath(true);Check(demo.enabled&&demo.showSuggestedQuestions&&demo.skipMarking&&demo.preExpose&&demo.timeLapseNonKeySteps&&demo.replayHighlightSeconds==20,"judge flags complete");
             Check(!DemoFlags.JudgePath(false).skipMarking,"demo off clears bypass flag");
-            Check(RecapVideo.PlaybackWindow(60, demo)==20 && RecapVideo.PlaybackWindow(60, DemoFlags.JudgePath(false))==60,"actual video window honors demo flag");
-            r.replay.jobId="job-a";var reply=new RecapController.GatewayReplay{schemaVersion="scalpal.replay.v1",sessionId=r.sessionId,attemptId="old",jobId="job-a",status="processing",source="learner",sourceArtifactId="source-a",jobRun=1};
-            Check(!RecapController.ApplyGateway(r,reply),"old attempt response rejected");reply.attemptId=r.attemptId;Check(RecapController.ApplyGateway(r,reply)&&r.replay.status=="processing","gateway running status consumed");
-            reply.status="ready";reply.replayArtifactId="replay-a";reply.replayVideoUrl="https://example.invalid/a.mp4";reply.replayKind="physics";Check(!RecapController.ApplyGateway(r,reply),"nonkinematic output not mislabeled");reply.replayKind="kinematic";Check(RecapController.ApplyGateway(r,reply),"actual ready response accepted");
             var go=new GameObject("Validation run context");var context=go.AddComponent<RecapRunContext>();context.Begin(RunResultContract.Parse(json));
             Check(context.EndSurgery("sample-attempt",r.surgery),"segment end accepted once");Check(!context.EndSurgery("sample-attempt",r.surgery),"duplicate segment end rejected");
             Check(context.result.replay.status=="failed"&&context.result.replay.failureReason.Contains("adapter"),"missing capture adapter honest");
@@ -60,12 +56,7 @@ namespace Scalpal.Recap.Editor
             context.result.replay.sourceVideoUrl="https://example.invalid/source?secret=capability";context.result.replay.replayVideoUrl="https://example.invalid/replay?secret=capability";
             string exported=context.ExportResultJson();Check(!exported.Contains("secret=capability"),"export stores identities without signed capabilities");
             var fresh=RunResultContract.Parse(json);fresh.attemptId="sample-attempt-2";context.Begin(fresh);Check(!context.SegmentClosed,"fresh attempt resets closure");UnityEngine.Object.DestroyImmediate(go);
-            var scene=EditorSceneManager.OpenScene(RecapBuild.ScenePath,OpenSceneMode.Single);var c=UnityEngine.Object.FindFirstObjectByType<RecapController>();
-            Check(c&&c.panel&&c.replay&&c.voice&&c.previewResult,"scene required bindings");Check(c.replay.sampleClip&&c.replay.sampleClip.length>=19.9,"20 second fallback asset bound");
-            Check(c.replay.robotPlayer.targetTexture&&c.replay.sourcePlayer.targetTexture,"both video panels bound");Check(c.panel.leftCard!=c.panel.rightCard,"scores use separate panels");
-            Check(c.panel.errors.Length==3&&c.panel.exploreButton&&c.panel.retryButton,"error markers and next actions bound");
-            var rig=UnityEngine.Object.FindFirstObjectByType<RecapInput>();Check(rig&&rig.origin&&rig.head&&rig.left&&rig.right,"headset rig bound");
-            Check(!c.replay.robotPlayer.playOnAwake && !c.replay.sourcePlayer.playOnAwake,"videos require explicit playback");
+            RecapScreenValidation.Run();
             Debug.Log("SCALPAL_RECAP_VERIFY_OK checks="+checks+" headset=false provider=false");
         }
     }

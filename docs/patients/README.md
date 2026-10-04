@@ -2,7 +2,7 @@
 
 Voice-agent dossiers for the diagnosis office, one per FinchNode demo patient with an authored encounter. Synthetic patients; illustrative teaching content, not clinical guidance.
 
-Each dossier has: **Patient knowledge** (safe to give the patient agent: life story, speech style, emotional arc, lay beliefs, symptom story by topic, 25+ off-script answers, a never-say list), **Clinician key** (never given to the patient agent: diagnosis, must-not-miss differential, key findings, chart-driven risks, a model presentation, Socratic probes for Jarvis, cited sources), and **Consistency notes** against `services/preop/src/catalog/encounters.ts`, `cases.ts` and the live FinchNode chart.
+Each dossier has: **Patient knowledge** (safe to give the patient agent: life story, speech style, emotional arc, lay beliefs, symptom story by topic, 25+ off-script answers, a never-say list), **Clinician key** (never given to the patient agent: diagnosis, must-not-miss differential, key findings, chart-driven risks, a model presentation, Socratic probes for Scalpal, cited sources), and **Consistency notes** against `services/preop/src/catalog/encounters.ts`, `cases.ts` and the live FinchNode chart.
 
 `encounters.ts` stays the source of truth for scored facts. Dossiers add depth for questions outside the authored topics; any conflict is listed in the dossier's consistency notes and should be fixed in the catalog, not by the agent.
 

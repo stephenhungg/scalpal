@@ -1,0 +1,91 @@
+---
+title: "Run it locally"
+description: "Start the services on a Mac and point the headset and dashboard at them."
+---
+
+## Prerequisites
+
+- Node 22 or newer and npm
+- [uv](https://docs.astral.sh/uv/) with Python 3.11, for the Python services
+- The SpacetimeDB CLI 2.10.2 (`curl -sSf https://install.spacetimedb.com | sh`)
+- Unity 6000.0.66f2 with the Android modules, for the Quest app
+- `ffmpeg` (`brew install ffmpeg`), for motion replays and the vitals camera check
+- Git LFS: run `git lfs install && git lfs pull` after cloning
+
+## Ports
+
+| Port | Service |
+| --- | --- |
+| 3000 | SpacetimeDB (local) |
+| 5173 | Dashboard dev server |
+| 8787 | Pre-op service and Scalpal coach |
+| 8788 | Gateway |
+| 8790 | Body registration (pose) |
+| 8791 | Vitals (Presage) |
+| 8792 | Vision |
+
+<Note>
+The landing site's `next dev` also defaults to 3000. Run it with `npm run dev -- -p 3100` if SpacetimeDB is up.
+</Note>
+
+## Start the stack
+
+<Steps>
+  <Step title="Database">
+    ```sh
+    spacetime start
+    cd services/realtime && npm install && npm run publish:local
+    ```
+    Or skip this and use the hosted database on Maincloud.
+  </Step>
+  <Step title="Gateway">
+    ```sh
+    cd services/api && npm install && cp .env.example .env
+    npm run dev
+    ```
+    The first run prints a `spacetime call ... add_service_identity` command. Run it once to register the gateway.
+  </Step>
+  <Step title="Pre-op and Scalpal">
+    ```sh
+    cd services/preop && cp .env.example .env
+    npm install && npm run scalpal:setup && npm run dev
+    ```
+    Open `http://localhost:8787/scalpal` to talk to the coach in a browser.
+  </Step>
+  <Step title="Vitals">
+    ```sh
+    cd services/vitals && npm install
+    npm start
+    ```
+    Demo mode by default, which uses no Presage quota. See [patient vitals](/components/vitals) for live mode.
+  </Step>
+  <Step title="Body registration (mixed reality only)">
+    ```sh
+    cd services/registration
+    uv sync --frozen
+    uv run --frozen scalpal-registration fetch-model
+    uv run --frozen scalpal-registration serve
+    ```
+  </Step>
+  <Step title="Dashboard">
+    ```sh
+    cd apps/companion && npm install && cp .env.example .env.local
+    npm run dev
+    ```
+    Create a session, then open **Synthetic headset** and press **Run demo script** to fill every panel without a Quest.
+  </Step>
+</Steps>
+
+## Connect the headset
+
+With the Quest plugged in over USB, `scripts/quest/configure_session.py` sets up the `adb reverse` routes so the headset can reach the Mac's services. Open `apps/quest` in Unity, then open `Assets/Scalpal/Quest/Scenes/NativeSession.unity`. See [Quest app](/components/quest).
+
+## Check everything
+
+From the repo root:
+
+```sh
+python3 scripts/quest/verify_session.py --suite all
+```
+
+Use `services`, `unity`, `voice`, `registration` or `motion` to check one part. The gate labels the physical playthrough as unverified, because no script can wear the headset for you.

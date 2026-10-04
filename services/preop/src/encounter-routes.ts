@@ -5,7 +5,7 @@ import { attendingFirstMessage, attendingPrompt, patientFirstMessage, patientPro
 import { NO_REALTIME, type RealtimeSink } from "./realtime-bridge.js";
 import type { Action, SurgicalCase } from "./types.js";
 
-// Pre-op encounter API: patient interview (patient agent), case presentation (Jarvis as attending),
+// Pre-op encounter API: patient interview (patient agent), case presentation (Scalpal as attending),
 // then a deterministic scorecard. Tools are implemented here once for every voice client.
 
 export interface EncounterRouteOptions {
@@ -97,7 +97,7 @@ export function registerEncounterRoutes(app: Hono, options: EncounterRouteOption
     return c.json({ state: s.state(), actions: encounterActions(s.id) });
   });
 
-  // Interview over: hand the learner to Jarvis as attending for the case presentation.
+  // Interview over: hand the learner to Scalpal as attending for the case presentation.
   app.post("/encounters/:id/attending", (c) => {
     const s = get(c);
     if (!s) return missing(c);

@@ -15,7 +15,7 @@ import { bodyAction, type BodyAction } from "../src/open-body.js";
 //   npm run jarvis:live-eval -- --out live.json  # raw turns and events
 //
 // Measures: text latency per turn (user_message sent to first agent_response), tool-call correctness,
-// a deterministic grounding check on what Jarvis says, and reply word counts. The agent also streams
+// a deterministic grounding check on what Scalpal says, and reply word counts. The agent also streams
 // audio, which this harness ignores; spoken latency is not measured here.
 
 const PREOP = (process.env.PREOP_URL ?? "http://localhost:8787").replace(/\/$/, "");
@@ -322,7 +322,7 @@ async function coachScenario(log: (s: string) => void): Promise<ScenarioOutput> 
   const sim = (kind: string) => http("POST", `/coach/sessions/${sid}/simulate`, { kind });
   const snapshot = async () => (await http("GET", `/coach/sessions/${sid}`)) as { snapshot: any; context: string; contextKey: string };
 
-  // Simulated headset: apply every highlight Jarvis requests, as CoachRelay does.
+  // Simulated headset: apply every highlight Scalpal requests, as CoachRelay does.
   let headsetOn = true;
   const headset = (async () => {
     while (headsetOn) {
@@ -401,7 +401,7 @@ async function coachScenario(log: (s: string) => void): Promise<ScenarioOutput> 
       check("gives the correction", /lift|tent|forceps|grasp|pick (it )?up/i.test(t.reply), ""),
       check("no tool before the warning", t.tools.length === 0, toolNames(t.tools).join(",")),
     ]);
-    // The instant clip played; Jarvis is told, then the learner asks.
+    // The instant clip played; Scalpal is told, then the learner asks.
     const s = (await snapshot()).snapshot;
     convo.context(`[JARVIS SAID v${s.version} step ${s.stepNumber}/${s.stepCount} "${s.step.title}"] "${mistake.reflexText}"`);
     await sleep(300);
@@ -624,11 +624,11 @@ async function main() {
   for (let run = 1; run <= RUNS; run++) {
     if (RUNS > 1) console.log(`\n=== run ${run}/${RUNS}`);
     if (want("coach")) {
-      console.log("coach (Jarvis, Theo's open appendectomy)");
+      console.log("coach (Scalpal, Theo's open appendectomy)");
       all.push(await coachScenario(console.log));
     }
     if (want("patient") || want("attending")) {
-      console.log("patient interview, then attending (Theo's mom, then Jarvis)");
+      console.log("patient interview, then attending (Theo's mom, then Scalpal)");
       const outs = await encounterScenarios(console.log, want("patient"), want("attending"));
       all.push(...outs);
     }

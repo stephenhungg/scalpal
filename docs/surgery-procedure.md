@@ -11,7 +11,7 @@ The body is not a scripted step sequence. The learner may do anything to it with
 1. **Body simulation (case-agnostic).** Every tool is a small set of verbs: cut, grasp/retract, clamp, tie, cauterize/seal, suction, mark, place. Every tissue has properties: layer and order (skin, fat, fascia with fiber direction, muscle that splits, peritoneum, bowel, cecum, appendix, mesoappendix, vessels), cuttable/splittable, perfused (bleeds when cut, stops when clamped/tied/sealed), hollow (cutting bowel leaks and contaminates), critical (iliac vessels, ureter). Tool × tissue rules produce the outcome: cutting a perfused vessel bleeds at a rate until it is clamped; cutting the appendix base without a tie leaks; splitting muscle along fibers is clean, cutting across it bleeds more. The learner can cut in the wrong place, open the wrong layer, nick bowel, or skip a step, and sees the real consequence. No case code decides what a tool does.
 2. **Event log and body state.** Every action emits a structured event (time, tool, verb, tissue, layer, location in the registered torso frame, speed/force proxy, outcome), and the body keeps queryable state (layers opened, incision line and length, structures clamped/tied/divided, organs delivered, active bleeds and blood lost, contamination, specimen removed).
 3. **Case = goals + guardrails + guidance (data, not code).** A case declares milestones as predicates over body state (appendix removed; stump tied within 5 mm of the cecum; mesoappendix vessels secured; no active bleed; wound closed), safety guardrails as predicates over events (bowel or cecum injured, iliac vessel cut, cutting before clamping, blade below the peritoneum without tenting), an expected order as a soft reference rather than a gate, and decision prompts (true base). Adding a case means authoring data, not new step code.
-4. **Coach (Jarvis voice) and grader.** Deterministic detectors evaluate milestones and guardrails from the event log in real time; Jarvis receives those structured facts and gives guidance ("you're cutting across the muscle fibers; split them instead") and Socratic prompts, never inventing events or executing scene code. The grader scores at the end from the same log: milestones reached, guardrail violations, blood loss, order deviations, decisions, economy, hints. The LLM writes the recap feedback only from those facts.
+4. **Coach (Scalpal voice) and grader.** Deterministic detectors evaluate milestones and guardrails from the event log in real time; Scalpal receives those structured facts and gives guidance ("you're cutting across the muscle fibers; split them instead") and Socratic prompts, never inventing events or executing scene code. The grader scores at the end from the same log: milestones reached, guardrail violations, blood loss, order deviations, decisions, economy, hints. The LLM writes the recap feedback only from those facts.
 
 Consequence of this design: the 10-row table below is the *expected* open appendectomy path that drives milestones, coaching lines and the fast path. It does not gate what the learner may do. A learner who goes off-path is coached and graded, not blocked; only physically impossible actions (cutting a layer you have not exposed) are prevented by the simulation itself.
 
@@ -109,6 +109,15 @@ Open wall coupling (October 4): `OpenSurgerySession` binds its open-wall `Native
 
 Limits: fracture follows the wall's 20 mm cells, so two grips on one tetrahedron (both on the x = 0 cell boundary at the wound centre, or a close pair) cannot be parted and earn no split. In a 12-placement sweep 9 split to about 38 mm; three (x = 0 with grips 10 or 16 mm apart, one 10 mm pair at x = -15 mm) did not. A finer or incision-aligned muscle mesh from the tissue owner is needed before headset use. Blade contact scans up to 6 samples × 5 layers per held blade near the wall; Quest frame time is unmeasured. The semantic wound view still draws from body state beside the generated wall.
 
+Incisions and visible blood (October 4): presentation of facts the sim already owns; nothing new is scored or sent.
+
+- **Incisions off the field.** `OpenBodyInteraction.BladeOutsideField` fires every frame a held, triggered scalpel or Metzenbaum is outside the field. `PatientIncisions` casts from the tool's grip to its tip against the mannequin's `PatientCollision` hull; where the blade has entered the skin it records the entry point, the tip's depth under the surface and the coarse body region in a bounded set of 64 persistent segments in registered torso metres (about one per 4 mm of travel, a puncture on first touch). The ring is fed to `Scalpal/PatientSkin` as two global vector arrays. The fragment shader draws a dark parted cut (opening grows with depth and stroke length, 0.3 to 2.2 mm), a reddened margin, a bead of blood along the cut, and rivulets that run downhill along gravity in torso space. A segment array was chosen over painting a UV mask: the collision hull has no UVs, the 1,578-triangle mannequin's UVs are not laid out for painting, and torso-space segments survive refits, give gravity directly and clear by zeroing a count. The loop is skipped entirely with no incisions; each segment costs a sphere reject when far. Cuts in an injured region stay wet until the interaction reports the region controlled, then dry dark; cuts outside any region have no accepted control fact and do not expire automatically. Inside the actual finite incision aperture the skin is cut away and the open wall and `OpenWoundView` keep the incision, so no segment is recorded there.
+- **Blood flow.** `SurgeryBlood` owns one world-space `ParticleSystem` (300 drops, octahedral mesh, opaque `#8a0303` glossy tissue material, emission only from script). Sources are read every frame: perfused tissues the body reports `bleeding`, at their last cut, with `measuredFlowMlPerSecond` (or the tissue's authored rate before a vessel snapshot); and regions `OpenBodyInteraction.IsRegionInjured` reports, at their most recent incision, with the fresh coach condition's `rawBleedMlPerMin` (falling back to a mirror of `patient-condition.ts` REGIONS offline). Drops per second are `rateMlPerMin / 60 / 0.05 ml`, at most 120 per source (larger drops above that). At 60 ml/min or more a source is arterial and spurts in the first 30% of each beat at the condition's `vitals.hr` (72 bpm authored baseline without a fresh sample, no pulse once flatlined); below it a vein wells up. Control (clamp, tie or seal in the body; a hemostatic tool in the region) removes the source the same frame. Drops collide with static world colliders (patient hull, table, floor) with bounce 0.05, dampen 0.9 and lifetime loss 1, and each landing leaves a splat in a bounded 64-stain mesh that preserves older stains; nearby landings grow a splat instead.
+- **Pool.** `OpenBodyBleeding`'s cavity pool now follows the reducer's `poolMl` (eased over 0.35 s across the 1 Hz snapshots): it spreads to its 4 cm cap and then deepens toward the opening (`PoolLevelMeters`). Pool suction lowers `poolMl` and the visible pool with it.
+- **AR and retry.** In AR (passthrough) there is no virtual body: incisions are not recorded or drawn and no drops or splats are shown; the existing in-field wound visuals and pool remain. A genuinely new attempt re-composes both views empty; rebinding the same Body identity preserves them. Registration loss hides/pauses rather than clearing; inspection pauses retain the registered cuts, stains and cavity pool.
+
+`OpenBodyBloodValidation` (inside `OpenSurgeryBuild.Verify`, 391 checks) uses the actual native scene, mannequin hull and session composition with synthetic tracked poses: a 40 mm chest stroke records 11 segments on the skin at the blade's 3 mm depth and feeds them to the shader; an in-field stroke still opens the wall's skin and adds no off-field segment; the cut appendicular artery (135 ml/min measured) emits 224 drops in 5 s against 224 expected and none after a proximal clamp; the pool tracks `poolMl` and suction lowers both (14.6 to 7.3 ml); neck, chest and arm emit 500, 249 and 33 drops in 5 s and a hemostat in the neck stops its flow and dries its cut; caps hold at 300 drops, 64 splats and 64 segments; AR draws nothing; retry clears everything. Shading, spurt arcs, particle-collision splats (Play Mode only) and Quest frame time are not verified on a headset. The interaction's coarse neck region needs the tip about 4 cm under this mannequin's neck skin before it reports an injury, so a shallow neck cut shows an incision but no neck bleed until it goes deeper.
+
 Pending: a muscle mesh that splits wherever retractors are placed (above), headset tuning of the authored split onset/extent, reviewed base axes and actual registered ASIS/umbilicus inputs, headset AR/VR completion/performance/audio/haptic verification, and live provider/reflex playback. The handoff owner must update `NativeCaseSession.EventHandled` to report all open-body milestones/guardrails and distinguish incomplete finish from goal completion; its old one-event/one-step aggregate and warning narration remain separate from the correct local/service grade. Hash/sequence/resync and richer hand-path telemetry in [surgery state](surgery-state.md) are the subsequent approved work, not established by this checkpoint.
 
 The shell packaging gate currently has a stale exact-count assertion (10 offline cases versus11 with the retained advanced variant). Its owner must update that fixture; the separate surgery packaging method does not claim the shell gate passed.
@@ -118,3 +127,51 @@ The standalone native coach HTTP exchange also passed168 assertions, including o
 Android packaging succeeded at `91467b1`:79,779,574-byte ARM64 IL2CPP development APK, locally `artifacts/open-surgery.apk`, not installed. It contains the three scenes enabled at that source snapshot; later merged recap changes are outside this artifact. The open verification gate passed again during packaging.
 
 Final synchronized checks: preop274 passing / two skipped, typecheck, and the open Unity gate85 body /118 interaction-fluid assertions plus coach and scene bindings.
+
+## Persistent Injuries and Operative Appearance — October 4
+
+The [visual audit](surgery-visual-audit.md) records the actual ten-stage graphics-backed Editor sequence and [research criteria](research/open-appendectomy-visuals.md). Wounds and stains persist through elapsed time, accepted bleeding control, inspection and registration recovery. A puncture beside the incision is no longer swallowed by the former rectangular skin exclusion. Fixed mark budgets retain old wounds instead of overwriting them; additional disconnected marks beyond64 remain a limitation.
+
+The shared AR/VR composition now uses incision-local ordered tissue surfaces, a local measured membrane tent, a render-only cavity lining, source-envelope cecum appearance, accepted ligatures/divided source views and an explicit assisted closure seam. These views read existing facts and emit no progress. The actual wall/contact/topology remains active; semantic wound surfaces replace its rectangular draw. Source anatomy/contact is not modified by ligature, specimen or closure presentation. A specimen is an assisted separated display rather than a new grabbable physical body. The cecum/source layout and rigid mobile group still obscure the base from one learner angle; the mannequin remains low polygon. Neither the appearance nor the physics is clinically calibrated.
+
+## Synthetic Demo Visual Exports — October 4
+
+`Scalpal.Surgery.Editor.OpenStepVisualsValidation.ExportDemo` optionally exports
+1920×1080 views while running the actual synthetic tracked-pose step fixture.
+Set `SCALPAL_DEMO_RENDERS` to the output directory and run the Unity 6000.0.66f2
+Editor with `-batchmode -quit -projectPath apps/quest -executeMethod
+Scalpal.Surgery.Editor.OpenStepVisualsValidation.ExportDemo -logFile <log>`.
+The existing `Run` validation views, pixel thresholds and scene anchors remain
+unchanged. The export uses the same overhead camera for incision and closure,
+with the 60 mm incision spanning approximately 40% of frame width. Organ stages
+5–8 widen the camera to keep the delivered structures in view; scene text is
+hidden only for the export and assisted-display provenance moves to the screen
+caption. Runtime
+`OpenWoundView` gloss is .20 skin, .35 fat/fascia, .46 muscle, .84 membrane.
+
+For this synthetic export only, a depth visibility overlay draws the original
+closure seam vertices and widths above the visible mannequin skin. The coarse
+visible surface and collision hull do not exactly agree, so camera/gloss alone
+left sutures occluded. This is disclosed on the closure image; it is not a new
+closure mechanic or a relocation of stitches, tools, wound anchors or organs.
+The tissue and mannequin remain illustrative, not photorealistic or calibrated.
+
+Then run `services/motion/.venv/bin/python scripts/anatomy/export_demo_reel.py
+<output-directory> --video` to label the surgery views and produce a sequential
+Skin → Muscle → Organs → operative-region atlas reveal. The atlas is a crop of
+`assets/anatomy/briefing-preview.png`, with a source hash in
+`demo-visual-provenance.json`; it does not infer hidden anatomy. The reveal is
+three seconds, 1920×1080 H.264/yuv420p with faststart. Each view states synthetic
+Editor/atlas provenance; none is physical-headset evidence. Launch is unchanged
+and should occupy only one second in the reel.
+
+The main exports are `demo-step-0-mark.png` through `demo-step-9-closed.png`,
+plus before/retry views; intermediate existing exports also receive synthetic
+labels. `demo-atlas-reveal-1-skin.png`, `-2-muscle.png`, `-3-organs.png`,
+`-4-operative-region.png` and `demo-atlas-reveal.mp4` are ready for editing.
+Assets are exported outside Git into the reel assets directory.
+
+Verification: the final optional graphics export passed 147 existing assertions;
+`python3 scripts/quest/verify_session.py --suite player` passed on main `403b917`
+plus the presentation edits (`SCALPAL_PLAYER_VERIFY_OK`, no failed checks).
+The gate explicitly reports physical playthrough unverified.

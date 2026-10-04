@@ -8,7 +8,7 @@ Assigned scope: October 3, 2026. The user requested this implementation work ord
 
 Build a browser companion where an authorized viewer can watch the simulated surgery session, see its current exercise/organ/step and coach context, follow recording/processing status, and access the completed robot replay. SpacetimeDB is the core shared-state backend. Private file storage holds recordings and derived artifacts. A separate media connection carries live video.
 
-Matthew is already working on **Jarvis, the voice agent with organ and exercise-state context**. Nathan does not build another agent or take over its reasoning/content. Nathan supplies the state, service authorization where needed, command routing, and viewer interface that connect Matthew's agent to the rest of the system.
+Matthew is already working on **Scalpal, the voice agent with organ and exercise-state context**. Nathan does not build another agent or take over its reasoning/content. Nathan supplies the state, service authorization where needed, command routing, and viewer interface that connect Matthew's agent to the rest of the system.
 
 Nathan's GitHub identity has not been established in the conversation; do not assume it from the old `nakim12` assignment.
 
@@ -21,7 +21,7 @@ Nathan's GitHub identity has not been established in the conversation; do not as
 | `services/api/` | Thin provider/storage/worker gateway and supporting media setup where needed |
 | `packages/contracts/` | Propose session/command/artifact/job/media contracts with other owners; coordinate shared changes |
 
-Stephen owns Quest capture, registration, rendering, and integration of the Unity state adapter. Matthew owns Jarvis and its supported actions/explanations. Silas owns hand inference, robot retargeting, and the replay output. Nathan coordinates with them rather than modifying their algorithms or shared Unity scenes independently.
+Stephen owns Quest capture, registration, rendering, and integration of the Unity state adapter. Matthew owns Scalpal and its supported actions/explanations. Silas owns hand inference, robot retargeting, and the replay output. Nathan coordinates with them rather than modifying their algorithms or shared Unity scenes independently.
 
 ## Build 1: Shared State and Companion Shell
 
@@ -38,7 +38,7 @@ Define only the records needed by the actual flow:
 
 Use private records and identity-aware views; authorize mutations by role/session. Spectators can view their authorized session but cannot change the exercise or mark jobs complete. Stephen's runtime publishes observed exercise state; Matthew's agent requests allowed actions; Unity validates and acknowledges them. Do not announce a successful highlight merely because a request entered the database.
 
-The companion UI initially shows connection/source status, exercise and step, selected organ, relevant Jarvis text/status when Matthew exposes it, recording/job progress, and a results area. It is an observer interface, not a second surgery simulator or a second voice agent.
+The companion UI initially shows connection/source status, exercise and step, selected organ, relevant Scalpal text/status when Matthew exposes it, recording/job progress, and a results area. It is an observer interface, not a second surgery simulator or a second voice agent.
 
 Provide generated C# bindings and a minimal connection contract for Stephen. The Unity SDK requires connection advancement through its manager or `FrameTick`; verify actual Quest Android/IL2CPP behavior and endpoint reachability before assuming integration works. [SpacetimeDB C# SDK](https://spacetimedb.com/docs/clients/c-sharp/).
 
@@ -78,7 +78,7 @@ Expose a small worker contract: input artifact/attempt/configuration identity, c
 
 Run inference outside SpacetimeDB. Reducers cannot perform network/filesystem I/O; the thin gateway handles worker/provider/storage integration while the database owns the shared state. Procedures are another documented external-I/O mechanism if the chosen module needs them; do not add both routes without a requirement. [Reducers](https://spacetimedb.com/docs/functions/reducers/), [procedures](https://spacetimedb.com/docs/functions/procedures/).
 
-Coordinate Jarvis integration with Matthew's current code rather than replacing it. Agree its exercise context payload, stable organ IDs, allowlisted action requests, outcome acknowledgements, and provider authorization needs. Show only the guidance/status he actually emits. Do not duplicate his model prompts, medical content, voice session, or scoring rules in the companion.
+Coordinate Scalpal integration with Matthew's current code rather than replacing it. Agree its exercise context payload, stable organ IDs, allowlisted action requests, outcome acknowledgements, and provider authorization needs. Show only the guidance/status he actually emits. Do not duplicate his model prompts, medical content, voice session, or scoring rules in the companion.
 
 Silas supplies a replay manifest/output format that the companion can actually display. Agree whether it is joint animation data, a rendered video, or another supported artifact before implementing the viewer. Finished motion processing is distinct from learning completion; invalid clips show a useful failure without erasing feedback.
 
@@ -91,7 +91,7 @@ Silas supplies a replay manifest/output format that the companion can actually d
 | Live website | A second browser/device watches a changing composited Quest view with actual overlays; source stop/restart and denied capture are handled; record measured video delay and tested network/browser |
 | Storage | An authorized nonpersonal test artifact uploads, is verified available, and downloads; failure/retry does not create conflicting references; access is session-scoped |
 | Motion integration | An actual Silas output becomes replay-ready in the web UI; failed processing remains visible; duplicate requests and obsolete completion do not corrupt the current result |
-| Jarvis integration | Matthew's current context/action contract works through the shared state; a real applied/rejected action is reflected accurately; no second agent is introduced |
+| Scalpal integration | Matthew's current context/action contract works through the shared state; a real applied/rejected action is reflected accurately; no second agent is introduced |
 | Rehearsal | Selection → practice → feedback → processing → replay works with live viewing and reconnect/failure handling; no payments or wallet flow |
 
 Test the media path early alongside the small state proof. It is an independent technical risk; a successful subscription does not establish live video. Coordinate real participant recordings only after the relevant capture permissions and integration arrangement are resolved.
@@ -115,7 +115,7 @@ Implemented on branch `nathan/companion-realtime`. Everything below was tested l
 | Live website | Built, locally verified | WebRTC publisher/viewer with SpacetimeDB signaling. Separate browser contexts reached video connected at 1280×720 and about 30 fps; source stop and denial states shown. Real mirror window, TURN across networks, and delay are unmeasured |
 | Storage | Built | Signed-URL grants (local disk or S3/R2), size/SHA-256 verification, tamper rejection, retry |
 | Motion integration | Built against a synthetic worker | Worker HTTP API with leases. Duplicate and stale-run protection tested. Silas's real output not yet connected |
-| Jarvis integration | Contract and credential path built | Command allowlist, applied/rejected acknowledgements, transcript and status, ElevenLabs voice grants. Matthew's agent not yet connected |
+| Scalpal integration | Contract and credential path built | Command allowlist, applied/rejected acknowledgements, transcript and status, ElevenLabs voice grants. Matthew's agent not yet connected |
 | Rehearsal | Synthetic only | The synthetic headset page runs selection → practice → review → processing → replay |
 
 Contracts proposed for agreement: [realtime-v1](../packages/contracts/realtime-v1.md), [worker API](../packages/contracts/worker-api.md), [trajectory schema](../packages/contracts/robot-trajectory.v1.schema.json).
@@ -138,4 +138,4 @@ Still needed:
 | Artifact storage | Cloudflare R2 bucket `scalpal-artifacts` | Private; CORS allows both website origins and localhost dev ports |
 | Video relay | Cloudflare Realtime TURN | Short-lived credentials minted per viewer by the gateway |
 
-Verified against the live URLs with headless Chromium, both peers forced onto the TURN relay: session creation, invite join, live video via the relay, the synthetic headset script, a headset-applied action, browser upload to R2 with gateway verification, synthetic processing, a synced replay, source stop, the phone layout, and ending the session. The real Quest mirror, Matthew's Jarvis and Silas's worker are not yet connected.
+Verified against the live URLs with headless Chromium, both peers forced onto the TURN relay: session creation, invite join, live video via the relay, the synthetic headset script, a headset-applied action, browser upload to R2 with gateway verification, synthetic processing, a synced replay, source stop, the phone layout, and ending the session. The real Quest mirror, Matthew's Scalpal and Silas's worker are not yet connected.

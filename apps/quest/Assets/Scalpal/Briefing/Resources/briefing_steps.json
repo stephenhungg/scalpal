@@ -1,0 +1,119 @@
+{
+  "version": 1,
+  "source": "Beats and part ids: briefing_parts.json steps. Lines: services/preop/src/briefing.ts (coach brief.<stepId>), verbatim. Peeled = layer <= peelThroughLayer plus peel ids; the small bowel is peeled so the appendix is visible.",
+  "steps": [
+    {
+      "id": "mark_incision",
+      "title": "Landmarks and incision site",
+      "peelThroughLayer": -1,
+      "peel": [],
+      "focus": [
+        "umbilicus",
+        "skeletal__hip_bone_r"
+      ],
+      "line": "First, find the hip bone and the belly button. A third of the way along that line is McBurney's point. Mark five to eight centimeters along the skin lines."
+    },
+    {
+      "id": "incise_skin",
+      "title": "Skin incision",
+      "peelThroughLayer": -1,
+      "peel": [],
+      "focus": [
+        "skin",
+        "subcutaneous_fat"
+      ],
+      "line": "One smooth stroke along your mark, through skin and fat only."
+    },
+    {
+      "id": "open_fascia",
+      "title": "Open the aponeurosis",
+      "peelThroughLayer": 1,
+      "peel": [],
+      "focus": [
+        "external_oblique_aponeurosis_r"
+      ],
+      "line": "Under the fat is the external oblique aponeurosis. Open it along its fibers, never across them."
+    },
+    {
+      "id": "split_muscle",
+      "title": "Split the muscles",
+      "peelThroughLayer": 2,
+      "peel": [],
+      "focus": [
+        "muscular__internal_abdominal_oblique_muscle_r",
+        "muscular__transversus_abdominis_muscle_r"
+      ],
+      "line": "The internal oblique and transversus come next. Split them with two retractors. Pull, don't cut, so the muscle keeps its nerves."
+    },
+    {
+      "id": "open_peritoneum",
+      "title": "Open the peritoneum",
+      "peelThroughLayer": 5,
+      "peel": [],
+      "focus": [
+        "peritoneum"
+      ],
+      "line": "Lift the peritoneum with forceps so the bowel falls away, then nick it."
+    },
+    {
+      "id": "deliver_appendix",
+      "title": "Deliver the appendix",
+      "peelThroughLayer": 7,
+      "peel": [
+        "visceral__jejunum"
+      ],
+      "focus": [
+        "cecum",
+        "appendix"
+      ],
+      "line": "Find the cecum, follow its taenia to the appendix, and lift it gently out into the wound."
+    },
+    {
+      "id": "divide_mesoappendix",
+      "title": "Divide the mesoappendix",
+      "peelThroughLayer": 7,
+      "peel": [
+        "visceral__jejunum"
+      ],
+      "focus": [
+        "mesoappendix",
+        "appendicular_artery"
+      ],
+      "line": "The appendicular artery runs in the mesoappendix. Clamp twice, cut between, and tie both sides. No bleeding before you move on."
+    },
+    {
+      "id": "ligate_base",
+      "title": "Ligate and divide the base",
+      "peelThroughLayer": 7,
+      "peel": [
+        "visceral__jejunum"
+      ],
+      "focus": [
+        "appendix",
+        "cecum"
+      ],
+      "line": "Find the true base where the taeniae meet. Crush it, tie within five millimeters of the cecum, and cut above your tie."
+    },
+    {
+      "id": "inspect_clean",
+      "title": "Check the field",
+      "peelThroughLayer": 7,
+      "peel": [
+        "visceral__jejunum"
+      ],
+      "focus": [
+        "mesoappendix",
+        "appendix"
+      ],
+      "line": "Suction the field dry and check the stump and the tied vessels."
+    },
+    {
+      "id": "close",
+      "title": "Close",
+      "peelThroughLayer": -1,
+      "peel": [],
+      "focus": [],
+      "line": "Then close in layers."
+    }
+  ]
+}

@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using Scalpal.EncounterOffice;
@@ -24,7 +25,8 @@ namespace Scalpal.Handoff
         string phase = "office", rendered = "", failure = "";
         float entered, nextRefresh, nextCoachRetry, nextHealth, nextImport, lossStarted = -1;
         int realigns;
-        bool shellPaused, loading, healthBusy, focused = true, suspended, fitConfirmed, coachTried, menuDown;
+        bool shellPaused, loading, healthBusy, focused = true, suspended, fitConfirmed, coachTried, menuDown, briefingDone;
+        Scalpal.Briefing.BriefingDirector briefing;
         const string DefaultPoseEndpoint = "http://localhost:8790";
         HandoffTicket Ticket => HandoffRun.Current;
         string ReturnLabel
@@ -64,8 +66,22 @@ namespace Scalpal.Handoff
         {
             phase = value; entered = Time.unscaledTime; rendered = "";
             if (value != "practice") lossStarted = -1; // The 15/45 s fit-loss ladder is per practice interval.
+            if (briefing && value != "briefing") briefing.gameObject.SetActive(false); // Paused/realigning: resumes on re-entry.
             if (surgery) surgery.SetHandoffVoiceAllowed(ExpectedRole(value) == "coach");
             if (ExpectedRole(value) == "none") DisconnectAll();
+        }
+        // Fit check, briefing and Time-Out happen before anyone scrubs in: the instrument table and every tool stay out of
+        // view (draw only; colliders and rest poses are untouched) until practice begins.
+        public bool PreparingTheatre => surgery && (phase == "register" || phase == "briefing" || phase == "timeout" || phase == "transition");
+        bool toolsHidden;
+        void ShowSurgeryTools(bool show)
+        {
+            if (!surgery || !surgery.workbench || toolsHidden == !show) return;
+            toolsHidden = !show;
+            var roots = new List<GameObject>();
+            foreach (var tool in surgery.workbench.tools ?? Array.Empty<Scalpal.Instruments.InstrumentBehaviour>()) if (tool) roots.Add(tool.gameObject);
+            foreach (var root in surgery.gameObject.scene.GetRootGameObjects()) if (root.name == "Workbench") roots.Add(root);
+            foreach (var root in roots) foreach (var renderer in root.GetComponentsInChildren<Renderer>(true)) renderer.forceRenderingOff = !show;
         }
         static void DisconnectAll()
         {
@@ -75,6 +91,26 @@ namespace Scalpal.Handoff
         {
             var flow = FindFirstObjectByType<HandoffFlow>();
             return flow && flow.ImportOffice(session);
+        }
+        // Skip to surgery (explore, office pause, or a patient with no authored interview): straight to the Theatre card.
+        public static bool OpenSkipped(NativeEncounterSession session)
+        {
+            var flow = FindFirstObjectByType<HandoffFlow>();
+            return flow && flow.ImportSkipped(session);
+        }
+        bool ImportSkipped(NativeEncounterSession session)
+        {
+            if (!session || !EncounterContract.IsSkipped(session.Score)) { failure = "Skip unavailable"; return false; }
+            try
+            {
+                var context = session.Score;
+                var ticket = HandoffRun.BeginSkipped(context, session.baseUrl);
+                HandoffRun.BindOfficeSource(ticket, new EncounterSurgeryHandoff { patientId = context.patientId, encounterId = "", procedureId = context.procedureId,
+                    procedureTitle = context.procedureTitle, serviceUrl = session.baseUrl, sharedSessionId = session.SharedSessionId, attemptId = session.SharedAttemptId,
+                    assessment = new EncounterAssessment(), scorecard = context });
+                office = session; ResetRunState(); failure = ""; SetPhase("theatre"); return true;
+            }
+            catch (ArgumentException exception) { HandoffRun.Clear(); failure = exception.Message; return false; }
         }
         bool ImportOffice(NativeEncounterSession session)
         {
@@ -104,6 +140,7 @@ namespace Scalpal.Handoff
                 shellPaused = false; rendered = "";
                 if (surgery && Ticket != null) ResumeGate();
             }
+            ShowSurgeryTools(!PreparingTheatre);
             if (loading || !focused || ShellTransition.Busy) return;
             var left = UnityEngine.XR.InputDevices.GetDeviceAtXRNode(UnityEngine.XR.XRNode.LeftHand);
             left.TryGetFeatureValue(UnityEngine.XR.CommonUsages.menuButton, out bool menu);
@@ -132,12 +169,16 @@ namespace Scalpal.Handoff
             if (phase == "setup") { SetupCard(); return; }
             if (phase == "office") return;
             if (Ticket == null) return;
-            if (phase == "score")
+            if (phase == "score" && Ticket.scorecard.kind == "interview")
+                // One compact card after the interview: score, grade, key feedback, missed rounds, and one button.
+                Show("Interview score · " + Ticket.scorecard.total + "/" + Ticket.scorecard.max + " · " + Ticket.scorecard.grade, EncounterContract.CompactScore(Ticket.scorecard),
+                    new[] { "To theatre" }, _ => SetPhase(!Ticket.escalated ? "theatre" : !Ticket.challengeSeen ? "challenge" : !Ticket.consequenceSeen ? "consequence" : "theatre"));
+            else if (phase == "score")
                 Show("Clinical reasoning · " + Ticket.scorecard.total + "/" + Ticket.scorecard.max + " · " + Ticket.scorecard.grade,
                     Ticket.scorecard.spoken + "\n\n" + RiskText(Ticket.scorecard), new[] { "To theatre", "Theatre setup (operator)" }, i => { if (i == 1) SetPhase("setup"); else SetPhase(!Ticket.escalated ? "theatre" : !Ticket.challengeSeen ? "challenge" : !Ticket.consequenceSeen ? "consequence" : "theatre"); });
             else if (phase == "challenge")
-                Show("Jarvis · One challenge", "You proposed: " + (office?.State?.assessment?.procedure ?? Ticket.scorecard.diagnosisGiven) +
-                    "\nThe findings support " + Ticket.scorecard.diagnosisExpected + ".\nWhat finding would change your plan? Reflect, then acknowledge the correct procedure. Your original reasoning score is kept.",
+                Show("One challenge", "You proposed: " + (office?.State?.assessment?.procedure ?? (string.IsNullOrEmpty(Ticket.learnerProcedure) ? Ticket.scorecard.diagnosisGiven : Ticket.learnerProcedure)) +
+                    "\nThe findings support " + (string.IsNullOrEmpty(Ticket.scorecard.diagnosisExpected) ? EncounterContract.Best(Ticket.scorecard, "diagnosis") : Ticket.scorecard.diagnosisExpected) + ".\nWhat finding would change your plan? Reflect, then acknowledge the correct procedure. Your original reasoning score is kept.",
                     new[] { "I would choose " + Ticket.procedureTitle }, _ => { Ticket.challengeSeen = true; SetPhase("consequence"); });
             else if (phase == "consequence")
             {
@@ -147,6 +188,7 @@ namespace Scalpal.Handoff
             }
             else if (phase == "theatre") Theatre();
             else if (phase == "register") Registration();
+            else if (phase == "briefing") Briefing();
             else if (phase == "timeout") TimeOut();
             else if (phase == "practice") Practice();
             else if (phase == "paused") Show("Paused", "Press to continue. In AR, alignment must be checked again before scoring resumes.", new[] { "Resume", "Virtual OR (new attempt)", Ticket.presentationMode == "mixed_reality" ? "End AR" : ReturnLabel }, i =>
@@ -156,19 +198,18 @@ namespace Scalpal.Handoff
                 else { fitConfirmed = false; SetPhase("register"); }
             }, new[] { true, Ticket.presentationMode != "virtual", true });
             else if (phase == "stopped") Show("Volunteer stopped · Practice paused", "The volunteer can get up. Continue in the virtual OR with a new attempt; your office score is kept.", new[] { "Virtual OR (new attempt)", ReturnLabel }, i => { if (i == 0) SwitchToVirtual(); else BackToExplore(); });
-            else if (phase == "recap") Show("Practice complete", surgery.Message + "\nClinical reasoning: " + Ticket.scorecard.total + "/100 · " + Ticket.scorecard.grade +
-                "\n" + Scalpal.Capture.HandCaptureRecorder.StatusLine(), new[] { "Retry surgery", ReturnLabel }, i => { if (i == 1) BackToExplore(); else { surgery.Retry(); fitConfirmed = false; SetPhase("register"); } });
+            else if (phase == "recap") Show("Practice complete", surgery.Message + "\n" + EncounterContract.ReasoningLine(Ticket.scorecard), new[] { "Retry surgery", ReturnLabel }, i => { if (i == 1) BackToExplore(); else { surgery.Retry(); fitConfirmed = false; SetPhase("register"); } });
         }
         void Theatre()
         {
             if (!HandoffRun.Supported(Ticket.procedureId))
             {
-                Show("Surgery coming soon", "Surgery content for " + Ticket.procedureTitle + " is not built yet.\nYour office score: " + Ticket.scorecard.total + "/100 · " + Ticket.scorecard.grade,
+                Show("Surgery coming soon", "Surgery content for " + Ticket.procedureTitle + " is not built yet.\n" + EncounterContract.ReasoningLine(Ticket.scorecard),
                     new[] { ReturnLabel }, _ => BackToExplore()); return;
             }
             var preflight = HandoffRun.Preflight;
             var summary = Ticket.scorecard.patientName + "\n" + Ticket.procedureTitle + " · " + Ticket.scorecard.urgency + "\n" +
-                (preflight.ArAvailable ? "Volunteer ready. AR recommended." : "AR unavailable: " + preflight.UnavailableReason + ". Virtual OR recommended.") +
+                (preflight.ArAvailable ? "Permissions and services ready. AR recommended." : "AR unavailable: " + preflight.UnavailableReason + ". Virtual OR recommended.") +
                 "\nVirtual organs are generic teaching anatomy." + (failure.Length > 0 ? "\n" + failure : "");
             Show("To theatre", summary, new[] { "Volunteer patient (AR)", "Virtual OR (VR)", "Theatre setup (operator)" }, i =>
             { if (i == 2) SetPhase("setup"); else ChooseMode(i == 0 ? "mixed_reality" : "virtual"); }, new[] { preflight.ArAvailable, true, true });
@@ -188,7 +229,7 @@ namespace Scalpal.Handoff
             loading = true; SetPhase("transition");
             if (office) office.StopVoice();
             card.Hide();
-            if (!ShellView.Font) ShellView.Configure(card.font, card.glass, card.buttonMaterial, card.textMaterial, card.buttonMaterial);
+            if (!ShellView.Configured) ShellView.Configure(Scalpal.Brand.ScalpalBrand.Active);
             // Use the shell's single transition owner so its pause/back controls cannot race OR loading.
             yield return ShellTransition.Ensure().Load("NativeSession", "Pre-op · " + ticket.scorecard.patientName + "\n" + ticket.procedureTitle, revealSeconds: ticket.presentationMode == "mixed_reality" ? 1f : .5f);
             if (!ReferenceEquals(ticket, Ticket)) { loading = false; yield break; }
@@ -203,10 +244,12 @@ namespace Scalpal.Handoff
             { Show("Shared attempt interrupted", surgery.Message, new[] { "Start matching attempt", ReturnLabel }, i => { if (i == 0) surgery.Retry(); else BackToExplore(); }); return; }
             if (!surgery.HandoffVerified)
             {
-                Show("Checking the handoff", surgery.Message, new[] { "Retry connection", ReturnLabel }, i => { if (i == 0) surgery.Retry(); else BackToExplore(); }); return;
+                // Loading the case and confirming the office result is the normal first second in the OR, not a failure.
+                if (surgery.Busy) { Show("Preparing the operating room", "Loading " + Ticket.procedureTitle + ".", new[] { ReturnLabel }, _ => BackToExplore()); return; }
+                Show("Case unavailable", surgery.Message, new[] { "Try again", ReturnLabel }, i => { if (i == 0) surgery.Retry(); else BackToExplore(); }); return;
             }
             // Re-entering registration mid-practice must return to the paused card, never to Time-Out.
-            if (Ticket.presentationMode == "virtual") { fitConfirmed = true; SetPhase(Ticket.practiceStarted ? "paused" : "timeout"); return; }
+            if (Ticket.presentationMode == "virtual") { fitConfirmed = true; SetPhase(AfterFit(Ticket.practiceStarted, briefingDone)); return; }
             var registration = surgery.bodyRegistration;
             if (!registration) { Show("Body detection unavailable", "Continue in the virtual OR.", new[] { "Virtual OR" }, _ => SwitchToVirtual()); return; }
 #if UNITY_ANDROID && !UNITY_EDITOR
@@ -214,14 +257,14 @@ namespace Scalpal.Handoff
             HandoffRun.Preflight.sceneGranted = Permission.HasUserAuthorizedPermission("com.oculus.permission.USE_SCENE");
 #endif
             if (!HandoffRun.Preflight.cameraGranted || !HandoffRun.Preflight.sceneGranted)
-            { Show("Camera access is off", "Continue in the virtual OR. Camera and spatial permissions can be restored in operator setup.", new[] { "Virtual OR", ReturnLabel }, i => { if (i == 0) SwitchToVirtual(); else BackToExplore(); }); return; }
+            { Show("Camera access is off", "Continue in the virtual OR. Camera and spatial permissions can be restored in Quest settings.", new[] { "Virtual OR", ReturnLabel }, i => { if (i == 0) SwitchToVirtual(); else BackToExplore(); }); return; }
             registration.BeginPreflightedDetection();
             float elapsed = Time.unscaledTime - entered;
             bool valid = registration.Accepted && registration.CandidateValid;
             if (valid)
             {
                 Show("Fit: Good · Check alignment", "Do the organs sit inside the torso? Lean gently left and right to check stability.\nGeneric teaching anatomy, not this person's organs.",
-                    new[] { "Looks right", "Realign", "Virtual OR" }, i => { if (i == 0) { fitConfirmed = true; SetPhase(Ticket.practiceStarted ? "paused" : "timeout"); } else if (i == 1) Realign(); else SwitchToVirtual(); }); return;
+                    new[] { "Looks right", "Realign", "Virtual OR" }, i => { if (i == 0) { fitConfirmed = true; SetPhase(AfterFit(Ticket.practiceStarted, briefingDone)); } else if (i == 1) Realign(); else SwitchToVirtual(); }); return;
             }
             string dots = ""; string[] names = { "Left shoulder", "Right shoulder", "Left hip", "Right hip" };
             for (int i = 0; i < 4; i++) dots += (registration.VisibleLandmarks[i] ? "[seen] " : "[waiting] ") + names[i] + "  ";
@@ -235,14 +278,33 @@ namespace Scalpal.Handoff
                 "\n2 Measuring torso surface: " + (registration.SurfaceMeasured ? "Ready" : "Waiting") + "\n3 Holding still: " + registration.StableObservations + "/3\nFit: Check alignment\n" + hint,
                 new[] { "Keep trying", "Virtual OR", "End AR" }, i => { if (i == 0) entered = Time.unscaledTime; else if (i == 1) SwitchToVirtual(); else EndAR(); });
         }
+        /// <summary>After a confirmed fit: a started attempt resumes paused; otherwise the briefing once per OR entry, then the Time-Out.</summary>
+        public static string AfterFit(bool practiceStarted, bool briefingDone) => practiceStarted ? "paused" : briefingDone ? "timeout" : "briefing";
+        // Pre-surgery briefing (skippable). It never needs the network; finishing or skipping both lead to the Time-Out.
+        void Briefing()
+        {
+            if (Ticket.practiceStarted) { SetPhase("paused"); return; }
+            if (briefingDone) { SetPhase("timeout"); return; }
+            card.Hide(); rendered = "";
+            if (!briefing) briefing = Scalpal.Briefing.BriefingDirector.Begin(card.viewer ? card.viewer.transform : Camera.main ? Camera.main.transform : null);
+            else if (!briefing.Finished && !briefing.gameObject.activeSelf) briefing.gameObject.SetActive(true);
+            if (!briefing.Finished) return;
+            briefingDone = true; EndBriefing(); SetPhase("timeout");
+        }
+        void EndBriefing()
+        {
+            if (briefing) { if (Application.isPlaying) Destroy(briefing.gameObject); else DestroyImmediate(briefing.gameObject); }
+            briefing = null;
+        }
         void Realign() { realigns++; fitConfirmed = false; surgery.bodyRegistration.ResetFit(); SetPhase("register"); }
         void SwitchToVirtual()
         {
             if (Ticket?.presentationMode == "virtual" || !surgery) return;
+            bool started = Ticket.practiceStarted;
             // The OR core refuses mode changes mid-practice; an explicit new attempt comes first (office score kept).
             if (Ticket.practiceStarted) { surgery.Retry(); if (Ticket.practiceStarted) return; }
             if (!surgery.TryChangePresentation(false)) return;
-            Ticket.modeChosenBy = "fallback"; fitConfirmed = true; coachTried = false; nextCoachRetry = 0; SetPhase("timeout");
+            Ticket.modeChosenBy = "fallback"; fitConfirmed = true; coachTried = false; nextCoachRetry = 0; SetPhase(started || briefingDone ? "timeout" : "briefing");
         }
         public void EndAR()
         {
@@ -255,40 +317,30 @@ namespace Scalpal.Handoff
             if (Ticket.practiceStarted) { SetPhase("paused"); return; }
             if (!surgery || !surgery.HandoffVerified || surgery.AttemptNeedsRetry) { SetPhase("register"); return; }
             if (!surgery.RegistrationReady || !fitConfirmed) { fitConfirmed = false; SetPhase("register"); return; }
+            // The OR opens its own shared-session connection on entry; joining is not a connection error.
+            if (!surgery.realtime.Paired && surgery.realtime.Joining)
+            { Show("Preparing the operating room", "Joining the shared session.", new[] { ReturnLabel }, _ => BackToExplore()); return; }
             if (!surgery.realtime.Paired)
             { Show("Shared headset session unavailable", surgery.realtime.Status + "\nPair the headset with the companion before beginning this attempt.", new[] { "Retry shared connection", ReturnLabel }, i => { if (i == 0) surgery.realtime.Reconnect(); else BackToExplore(); }); return; }
             surgery.SetHandoffVoiceAllowed(true);
             if (surgery.CoachPrepared && Time.unscaledTime >= nextCoachRetry) { nextCoachRetry = Time.unscaledTime + 10; surgery.ReconnectTimeOutVoice(); }
             if (!surgery.CoachPrepared && Time.unscaledTime >= nextCoachRetry)
             { nextCoachRetry = Time.unscaledTime + 10; coachTried |= surgery.PrepareTimeOut(); }
-            string voice = surgery.voice.Status == "error" ? "Voice unavailable. Continue with captions." : surgery.CoachPrepared ? "Jarvis: Scrubbed in with you. Confirm the patient, procedure and site." : "Connecting Jarvis. Captions and authored local scoring are available if the coach is offline.";
-            string body = "Patient: " + Ticket.scorecard.patientName + "\nProcedure: " + Ticket.procedureTitle + "\nSite: " + Ticket.scorecard.site + "\nUrgency: " + Ticket.verifiedCase.urgency + "\n" + RiskText(Ticket.scorecard) +
-                "\n" + voice + "\nMistakes are expected; this is practice.\n" + Scalpal.Capture.HandCaptureRecorder.PlannedNotice(Ticket, HandoffRun.Preflight);
-            var risks = ReviewRisks(Ticket.scorecard);
-            if (Ticket.patientConfirmed && Ticket.procedureConfirmed && Ticket.siteConfirmed && !Ticket.risksConfirmed && risks.Length > 0)
+            // No Time-Out panel: it gated the demo without adding anything. The checklist is confirmed from the
+            // interview (risks the learner actually asked about count as planned for) and practice starts as soon as
+            // the coach is ready (or captions-only when it cannot connect).
+            if (!Ticket.AllConfirmed)
             {
-                int index = Mathf.Clamp(Ticket.riskReviewIndex, 0, risks.Length - 1); var risk = risks[index];
-                Show("TIME-OUT · Risk " + (index + 1) + " of " + risks.Length, "Patient-specific concern: " + risk.label + " (" + StatusText(risk.status) + ")\n" + risk.detail +
-                    "\nPlan for it only if your surgical plan addresses this risk.\n" + body, new[] { "Plan for: " + risk.label, "Not addressed", "Virtual OR", ReturnLabel }, i =>
-                    {
-                        if (i == 2) { SwitchToVirtual(); return; } if (i == 3) { BackToExplore(); return; }
-                        ReviewRisk(index, i == 0);
-                    }, new[] { true, true, Ticket.presentationMode != "virtual", true });
+                Ticket.patientConfirmed = Ticket.procedureConfirmed = Ticket.siteConfirmed = true;
+                Ticket.antibioticsReviewed = Ticket.imagingReviewed = Ticket.risksConfirmed = true;
+                foreach (var risk in ReviewRisks(Ticket.scorecard))
+                    if (risk.status == "found" && !Ticket.confirmedRiskTypes.Contains(risk.type)) Ticket.confirmedRiskTypes.Add(risk.type);
             }
-            else if (Ticket.AllConfirmed)
-                Show("TIME-OUT · Ready", body + "\n" + failure, new[] { "Begin practice", "Change to virtual OR", ReturnLabel }, i => { if (i == 0) StartCoroutine(ConfirmTimeOut()); else if (i == 1) SwitchToVirtual(); else BackToExplore(); }, new[] { !surgery.Busy && (surgery.CoachPrepared || coachTried && surgery.CaptionFallbackAllowed), Ticket.presentationMode != "virtual", true });
-            else
-            {
-                string label = !Ticket.patientConfirmed ? "Confirm patient" : !Ticket.procedureConfirmed ? "Confirm procedure" : !Ticket.siteConfirmed ? "Confirm site" : !Ticket.risksConfirmed ? "Acknowledge found and missed risks" : !Ticket.antibioticsReviewed ? "Review antibiotic prophylaxis (simulation)" : "Review imaging (simulation)";
-                Show("TIME-OUT", body, new[] { label, "Virtual OR", ReturnLabel }, i =>
-                {
-                    if (i == 1) { SwitchToVirtual(); return; } if (i == 2) { BackToExplore(); return; }
-                    if (!Ticket.patientConfirmed) Ticket.patientConfirmed = true; else if (!Ticket.procedureConfirmed) Ticket.procedureConfirmed = true;
-                    else if (!Ticket.siteConfirmed) Ticket.siteConfirmed = true; else if (!Ticket.risksConfirmed) Ticket.risksConfirmed = true;
-                    else if (!Ticket.antibioticsReviewed) Ticket.antibioticsReviewed = true; else Ticket.imagingReviewed = true;
-                }, new[] { true, Ticket.presentationMode != "virtual", true });
-            }
+            card.Hide();
+            bool ready = !surgery.Busy && (surgery.CoachPrepared || coachTried && surgery.CaptionFallbackAllowed);
+            if (ready && !loading && isActiveAndEnabled && Time.unscaledTime >= nextAutoStart) { nextAutoStart = Time.unscaledTime + 2; StartCoroutine(ConfirmTimeOut()); }
         }
+        float nextAutoStart;
         void ReviewRisk(int index, bool confirmed)
         {
             var risks = ReviewRisks(Ticket.scorecard);
@@ -348,17 +400,27 @@ namespace Scalpal.Handoff
         void SetupCard()
         {
             var p = HandoffRun.Preflight;
-            Show("Theatre setup · Operator", "Volunteer present and consented: " + p.volunteerConsented + "\nCamera permission: " + p.cameraGranted + " · Spatial permission: " + p.sceneGranted +
-                "\nBody detection: " + (p.poseServiceOk ? "Online" : "Offline") + " · Coach: " + (p.coachServiceOk ? "Online" : "Offline") + "\nAR is available only when every check is green. Participant images are used for local detection, not saved." +
-                "\nLearner agreed to hand recording for robot replay: " + p.learnerCaptureConsented + " (in AR the volunteer is in frame; their consent must cover the clip).",
-                new[] { p.volunteerConsented ? "Withdraw volunteer consent" : "Volunteer present and agreed", "Grant camera and spatial permission", "Back to theatre", p.learnerCaptureConsented ? "Withdraw hand-recording consent" : "Learner agreed to hand recording" }, i =>
-                { if (i == 3) p.learnerCaptureConsented = !p.learnerCaptureConsented; else if (i == 0) p.volunteerConsented = !p.volunteerConsented; else if (i == 1) RequestPermissions(); else if (Ticket == null) { SetPhase("office"); card.Hide(); } else SetPhase(Ticket.escalated && !Ticket.consequenceSeen ? "score" : "theatre"); });
-        }
-        static void RequestPermissions()
-        {
-#if UNITY_ANDROID && !UNITY_EDITOR
-            Permission.RequestUserPermissions(new[] { "horizonos.permission.HEADSET_CAMERA", "com.oculus.permission.USE_SCENE" });
-#endif
+            var labels = new List<string> { "Back to theatre",
+                p.learnerCaptureConsented ? "Withdraw motion-recording consent" : "Learner agreed to motion recording" };
+            // Controller motion only (no camera): it records the learner's controllers, never the AR participant.
+            string recording = "\nMotion recording is optional and is not required to use AR." +
+                (p.learnerCaptureConsented ? "\nMotion recording on: the marking step's controller motion trains the simulated robot." : "");
+            Show("Theatre setup · Operator", "Camera permission: " + p.cameraGranted + " · Spatial permission: " + p.sceneGranted +
+                "\nBody detection: " + (p.poseServiceOk ? "Online" : "Offline") + " · Coach: " + (p.coachServiceOk ? "Online" : "Offline") +
+                "\nAR is available when permissions and services are ready. Detection images are not saved." + recording,
+                labels.ToArray(), i =>
+                {
+                    if (i == 1)
+                    {
+                        p.learnerCaptureConsented = !p.learnerCaptureConsented;
+                        if (!p.learnerCaptureConsented) p.volunteerConsented = false;
+                    }
+                    else if (i == 0)
+                    {
+                        if (Ticket == null) { SetPhase("office"); card.Hide(); }
+                        else SetPhase(Ticket.escalated && !Ticket.consequenceSeen ? "score" : "theatre");
+                    }
+                });
         }
         IEnumerator CheckPreflight()
         {
@@ -407,6 +469,7 @@ namespace Scalpal.Handoff
         void ResetRunState()
         {
             failure = ""; lossStarted = -1; coachTried = false; nextCoachRetry = 0; realigns = 0; fitConfirmed = false; nextImport = 0;
+            briefingDone = false; EndBriefing();
         }
         // Return from a headset/shell interruption. Practice only resumes through the paused card.
         void ResumeGate()

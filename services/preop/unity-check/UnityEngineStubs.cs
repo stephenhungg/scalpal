@@ -9,6 +9,9 @@ namespace UnityEngine
     {
         public string name { get; set; }
         public static T Instantiate<T>(T original) where T : Object => original;
+        public static T FindFirstObjectByType<T>() where T : Object => null;
+        public static T[] FindObjectsByType<T>(FindObjectsSortMode sortMode) where T : Object => new T[0];
+        public static implicit operator bool(Object exists) => !ReferenceEquals(exists, null);
         public static void Destroy(Object obj) { }
     }
 
@@ -29,6 +32,8 @@ namespace UnityEngine
         public Transform transform => null;
         public bool activeInHierarchy => true;
         public void SetActive(bool value) { }
+        public SceneManagement.Scene scene => default;
+        public static GameObject Find(string name) => null;
         public T AddComponent<T>() where T : Component => default;
     }
 
@@ -38,6 +43,8 @@ namespace UnityEngine
     {
         public Vector3 position => default;
         public Vector3 InverseTransformPoint(Vector3 position) => position;
+        public Vector3 TransformPoint(Vector3 position) => position;
+        public Quaternion rotation { get; set; }
         public void Rotate(Vector3 axis, float angle, Space relativeTo) { }
         public Vector3 localPosition { get; set; }
         public Transform parent => null;
@@ -89,6 +96,7 @@ namespace UnityEngine
     public static class Time
     {
         public static float deltaTime => 0f;
+        public static double realtimeSinceStartupAsDouble => 0.0;
     }
 
     public struct Bounds
@@ -128,6 +136,7 @@ namespace UnityEngine
     public class MonoBehaviour : Behaviour
     {
         public Coroutine StartCoroutine(IEnumerator routine) => new Coroutine();
+        public void StopAllCoroutines() { }
     }
 
     [AttributeUsage(AttributeTargets.Field)]
@@ -153,6 +162,7 @@ namespace UnityEngine
     {
         public static T FromJson<T>(string json) => default;
         public static string ToJson(object obj) => "";
+        public static string ToJson(object obj, bool prettyPrint) => "";
     }
 
     public static class Debug
@@ -168,6 +178,8 @@ namespace UnityEngine
         public static float Max(float a, float b) => Math.Max(a, b);
         public static float Sign(float f) => f >= 0f ? 1f : -1f;
         public static float Min(float a, float b) => Math.Min(a, b);
+        public static float Clamp(float v, float min, float max) => Math.Max(min, Math.Min(max, v));
+        public static int Clamp(int v, int min, int max) => Math.Max(min, Math.Min(max, v));
     }
 
     public struct Vector3
@@ -183,9 +195,17 @@ namespace UnityEngine
         public WaitForSeconds(float seconds) { }
     }
 
-    public class AsyncOperation : YieldInstruction { }
+    public class AsyncOperation : YieldInstruction
+    {
+        public event Action<AsyncOperation> completed { add { } remove { } }
+    }
 
     public class YieldInstruction { }
+
+    public sealed class WaitForSecondsRealtime : YieldInstruction
+    {
+        public WaitForSecondsRealtime(float time) { }
+    }
 }
 
 namespace UnityEngine.Networking
@@ -220,7 +240,10 @@ namespace UnityEngine.Networking
         public int timeout { get; set; }
         public Result result => Result.Success;
         public long responseCode => 200;
+        public string error => null;
         public void SetRequestHeader(string name, string value) { }
+        public string GetResponseHeader(string name) => null;
+        public void Abort() { }
         public UnityWebRequestAsyncOperation SendWebRequest() => new UnityWebRequestAsyncOperation();
         public void Dispose() { }
     }
@@ -236,7 +259,7 @@ namespace UnityEditor
 
     public static class Selection
     {
-        public static UnityEngine.GameObject activeGameObject => null;
+        public static UnityEngine.GameObject activeGameObject { get; set; }
     }
 }
 

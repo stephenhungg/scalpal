@@ -2,7 +2,7 @@
 
 Updated October 3, 2026. "Current direction" means a choice stated or accepted during product exploration. It does not mean implemented, clinically reviewed, or fully approved as an engineering specification.
 
-**Latest instruction:** Solana and monetary completion rewards remain removed. Nathan is assigned the companion website + SpacetimeDB/routing lane; Matthew continues his Jarvis work. See [current direction](current-direction.md) and [Nathan's work order](nathan-plan.md), which supersede older proposals and the prior blanket wait for this lane.
+**Latest instruction:** Solana and monetary completion rewards remain removed. Nathan is assigned the companion website + SpacetimeDB/routing lane; Matthew continues his Scalpal work. See [current direction](current-direction.md) and [Nathan's work order](nathan-plan.md), which supersede older proposals and the prior blanket wait for this lane.
 
 ## Current Direction
 
@@ -14,7 +14,7 @@ Updated October 3, 2026. "Current direction" means a choice stated or accepted d
 | Thesis | Human learning plus useful robot demonstrations, with later robot learning | Preserve both goals rather than forcing an education-versus-robotics choice |
 | Presentation modes | Full VR for the explore hub and diagnosis office; the operating room offers AR (passthrough) or full VR as a user choice | Latest user direction (Oct 3); one shared core across both OR modes |
 | Participant | Virtual patient in the office; in the OR, a real reclining participant (AR) or a virtual patient (VR) | Anatomy is generic teaching anatomy in both |
-| Selection | Explore page of FinchNode demo patients, then a voice-driven diagnosis encounter decides the surgery | Supersedes conversational exercise selection with Jarvis |
+| Selection | Explore page of FinchNode demo patients, then a voice-driven diagnosis encounter decides the surgery | Supersedes conversational exercise selection with Scalpal |
 | Selection visuals | Case cards with synthetic chart context on a large explore page | Supersedes the rotating 3D anatomy preview during selection |
 | Body registration | AR mode: MediaPipe body landmarks plus measured surface depth register the anatomy to the real participant | Main path for AR; physical fit on the headset unverified |
 | Tools | Simulated tools and authored exercise rules | No actual operation on the participant |

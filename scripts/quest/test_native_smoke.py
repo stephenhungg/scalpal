@@ -2,6 +2,11 @@
 """Regression checks for PID-scoped unified smoke assessment (no device needed)."""
 
 import unittest
+import io
+import subprocess
+from contextlib import redirect_stdout, redirect_stderr
+from unittest.mock import patch
+import native_smoke
 
 from native_smoke import assess_logs, device_time
 
@@ -23,6 +28,34 @@ class SmokeAssessmentTests(unittest.TestCase):
         result, messages = assess_logs(logs, now, since, expected_scene)
         self.assertEqual(code, result, messages)
         return "\n".join(messages)
+
+    def test_cli_launches_the_manifest_launcher_entry_without_stopping_a_run(self):
+        # The device advertises MAIN/LAUNCHER on this component. The fixture refuses
+        # a bare component/deep-link entry; drive the production CLI, not a helper
+        # that merely returns its own expected argument list.
+        clocks = iter(("100", "110"))
+        calls = []
+        def device(command, **kwargs):
+            calls.append(command)
+            args = command[2:]
+            code, output = 0, ""
+            if args == ["get-state"]: output = "device"
+            elif args == ["shell", "date", "+%s"]: output = next(clocks)
+            elif args[:3] == ["shell", "am", "start"]:
+                flags = dict(zip(args[3::2], args[4::2]))
+                if flags.get("-a") != "android.intent.action.MAIN" or flags.get("-c") != "android.intent.category.LAUNCHER" or flags.get("-n") != native_smoke.ACTIVITY:
+                    code, output = 1, "Error: not the advertised launcher entry"
+            elif args == ["shell", "pidof", native_smoke.PACKAGE]: output = "42"
+            elif args[:2] == ["logcat", "-d"]: output = flow()
+            else: raise AssertionError("unexpected device mutation/query: " + repr(args))
+            return subprocess.CompletedProcess(command, code, output, "")
+        with patch("sys.argv", ["native_smoke.py", "--seconds", "1", "--expect-scene", "Launch"]), \
+             patch("native_smoke.shutil.which", return_value="fixture-adb"), \
+             patch("native_smoke.subprocess.run", side_effect=device), \
+             patch("native_smoke.time.monotonic", side_effect=[100, 100.1, 100.2, 101.1]), \
+             patch("native_smoke.time.sleep"), redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+            self.assertEqual(0, native_smoke.main())
+        self.assertFalse(any("force-stop" in command or "install" in command for command in calls))
 
     def test_ready_full_flow_non_or_scenes_without_native_marker(self):
         for scene in ("Launch", "ScalpalShell", "DiagnosisOffice", "RunEnding"):

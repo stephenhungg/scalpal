@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Collections;
 using System.Collections.Generic;
 using Scalpal.Anatomy;
@@ -76,23 +77,43 @@ namespace Scalpal.Surgery
             if (!isActiveAndEnabled || !Relevant(alert)) return;
             if (InterruptsAgent(alert))
             {
-                StopPlayback(); queued.Clear();
+                // Urgent: eject whatever is sounding (clip or agent) and play now; the waiting queue plays after it.
+                StopPlayback();
                 if (voice && voice.CoachSessionId == relay.SessionId) voice.InterruptPlayback();
                 Show(alert);
                 playback = StartCoroutine(Play(alert, generation));
                 return;
             }
             if (alert.tier == "advisory") { if (!warningPlaying) Show(alert); return; }
-            if (queued.Count < 8) queued.Enqueue(alert);
+            received[alert] = Time.unscaledTime;
+            Enqueue(queued, alert);
+        }
+
+        // A waiting line goes stale when the body or step moves on (Relevant) or it has waited too long to still be
+        // about what the learner is doing now. Stale lines leave the queue as soon as they go stale, not when reached.
+        public const float StaleSeconds = 10;
+        readonly Dictionary<CoachAlertDto, float> received = new Dictionary<CoachAlertDto, float>();
+        public static bool Fresh(float receivedAt, float now) => now - receivedAt <= StaleSeconds;
+        void PurgeStale()
+        {
+            if (queued.Count == 0) { received.Clear(); return; }
+            float now = Time.unscaledTime;
+            var keep = queued.Where(alert => Relevant(alert) && (!received.TryGetValue(alert, out float at) || Fresh(at, now))).ToList();
+            if (keep.Count == queued.Count) return;
+            queued.Clear(); foreach (var alert in keep) queued.Enqueue(alert);
+            foreach (var gone in received.Keys.Where(alert => !keep.Contains(alert)).ToList()) received.Remove(gone);
         }
 
         void Update()
         {
             if (playback != null && safetyPlaying && voice && relay && voice.CoachSessionId == relay.SessionId) voice.InterruptPlayback();
             if (caption && Time.unscaledTime >= captionUntil) caption.text = "";
+            PurgeStale();
             if (playback != null || !relay || !relay.IsSynchronized) return;
             // A conversational turn finishes before a caution; urgent clips interrupt above.
             if (voice && voice.CoachSessionId == relay.SessionId && voice.Mode == "speaking") return;
+            // Leave a quiet gap after each caution so Jarvis is not talking constantly; safety warnings ignore it.
+            if (Time.unscaledTime < cautionReadyAt) return;
             while (queued.Count > 0)
             {
                 var alert = queued.Dequeue();
@@ -147,6 +168,10 @@ namespace Scalpal.Surgery
                         if (activeClip)
                         {
                             speaker.clip = activeClip; speaker.Play();
+                            // One voice at a time: the agent's reply waits until this clip ends.
+                            if (voice && relay && voice.CoachSessionId == relay.SessionId) { voice.HoldOutput = true; heldAgent = true; heldStep = exercise ? exercise.Current?.id ?? "" : ""; }
+                            // The agent did not say this clip itself: tell it, so it does not repeat the warning.
+                            if (voice && relay && voice.CoachSessionId == relay.SessionId) { voice.RememberSaid(alert.say); voice.SendContext("[JARVIS SAID] \"" + alert.say + "\""); }
                             while (speaker.isPlaying && epoch == generation && Relevant(alert)) yield return null;
                             break;
                         }
@@ -200,8 +225,22 @@ namespace Scalpal.Surgery
             return string.Join("\n", lines);
         }
 
+        // Cautions are pacing, not alarms: keep only the newest per kind, so a burst of the same callout plays once.
+        public static void Enqueue(Queue<CoachAlertDto> queue, CoachAlertDto alert)
+        {
+            var keep = queue.Where(waiting => waiting.kind != alert.kind).ToList();
+            queue.Clear(); foreach (var waiting in keep) queue.Enqueue(waiting);
+            if (queue.Count < 4) queue.Enqueue(alert);
+        }
+        public const float CautionGapSeconds = 12;
+        float cautionReadyAt;
+        bool heldAgent; string heldStep = "";
         void FinishPlayback()
         {
+            // The agent's reply waited behind this clip; if the step moved on meanwhile it is about the past, so drop it.
+            if (heldAgent && voice && exercise && (exercise.Current?.id ?? "") != heldStep) voice.InterruptPlayback();
+            if (heldAgent && voice) voice.HoldOutput = false; heldAgent = false;
+            if (playback != null && !safetyPlaying) cautionReadyAt = Time.unscaledTime + CautionGapSeconds;
             if (speaker) { speaker.Stop(); speaker.clip = null; }
             if (activeClip) Release(activeClip);
             activeClip = null; warningPlaying = safetyPlaying = false; playback = null;
@@ -210,7 +249,7 @@ namespace Scalpal.Surgery
         void Failed(string reason) => ResetDelivery();
         void ResetDelivery()
         {
-            generation++; StopPlayback(); StopPulse(); queued.Clear(); LastCaption = "";
+            generation++; StopPlayback(); StopPulse(); queued.Clear(); received.Clear(); LastCaption = ""; cautionReadyAt = 0;
             if (caption) caption.text = "";
         }
         void Unsubscribe()

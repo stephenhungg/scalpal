@@ -28,6 +28,9 @@ namespace Scalpal.Realtime
         public string Status { get; private set; } = "Unavailable: configure a headset invite";
         public ExerciseState ObservedState { get; private set; }
         public bool AttemptPending => attemptInFlight;
+        // Connecting, or connected and still waiting for the membership subscription and invite result
+        // (bounded like the connect timeout, so a stalled join still surfaces as unavailable).
+        public bool Joining => !Paired && Time.realtimeSinceStartup - connectStarted < 15 && (connecting || Connected && (!subscribed || !joinResolved));
         // Same client identity used by the authenticated gateway; never serialize or log it.
         public string GetClientAccessToken() => Paired ? ReadToken() : "";
         public event Action<string> AttemptFailed;
@@ -54,6 +57,10 @@ namespace Scalpal.Realtime
         string resultPendingAttempt;
         readonly HashSet<string> dispatchedIds = new HashSet<string>();
         readonly Queue<string> dispatchOrder = new Queue<string>();
+        // Commands this headset requested itself (Jarvis acting through the shared command table): id -> refusal
+        // reason once the reducer rejected it, "" once it committed; absent while the request is in flight.
+        readonly Dictionary<string, string> ownRequests = new Dictionary<string, string>();
+        Action<Reducer.RequestCommand> requestSender; // Editor validation stands in for the connection here.
 
         sealed class Snapshot
         {
@@ -160,6 +167,12 @@ namespace Scalpal.Realtime
                 // Redispatching the same command could repeat an already-applied scene effect.
                 if (ctx.Event.Status is SpacetimeDB.Status.Committed) dispatchedCommand = null;
                 else SetStatus("Command acknowledgement rejected");
+            };
+            conn.Reducers.OnRequestCommand += (ctx, commandId, session, action, target, argBool, argNumber, expected) =>
+            {
+                if (conn != connection || !(conn.Identity is Identity identity) || !identity.Equals(ctx.Event.CallerIdentity)) return;
+                RequestFinished(commandId, ctx.Event.Status is SpacetimeDB.Status.Committed ? null
+                    : ctx.Event.Status is SpacetimeDB.Status.Failed(var reason) ? reason : "Command request rejected");
             };
             conn.Reducers.OnAppendExerciseEvent += (ctx, session, attempt, kind, step, structure, message, deviceTime) =>
             {
@@ -391,6 +404,47 @@ namespace Scalpal.Realtime
                 return true;
             }
             catch (Exception) { resultPendingAttempt = null; SetStatus("Learning result could not be sent"); return false; }
+        }
+
+        public bool CanRequestCommands => Paired && !attemptInFlight && ObservedState != null && (Connected || requestSender != null);
+
+        // Writes an action into the shared command table as this headset's identity; the row then arrives through the
+        // subscription like any other actor's command. False means nothing was sent (apply locally instead).
+        public bool RequestCommand(string commandId, string action, string targetId, double? argNumber)
+        {
+            if (!CanRequestCommands || string.IsNullOrEmpty(commandId) || ownRequests.ContainsKey(commandId)) return false;
+            var request = new Reducer.RequestCommand(commandId, SessionId, action, targetId, null, argNumber, ObservedState.StepVersion);
+            try
+            {
+                if (requestSender != null) requestSender(request);
+                else connection.Reducers.RequestCommand(request.CommandId, request.SessionId, request.Action, request.TargetId, request.ArgBool, request.ArgNumber, request.ExpectedStepVersion);
+            }
+            catch (Exception) { SetStatus("Command request could not be sent"); return false; }
+            ownRequests[commandId] = null;
+            if (ownRequests.Count > 32) ownRequests.Clear();
+            return true;
+        }
+
+        void RequestFinished(string commandId, string refusal)
+        {
+            if (!ownRequests.ContainsKey(commandId)) return;
+            ownRequests[commandId] = refusal ?? "";
+            // The caller falls back to applying locally; keep the paired status line rather than a sticky error.
+            if (refusal != null) Debug.Log("SCALPAL_SESSION Command request refused; applied locally");
+        }
+
+        // "sent" (no reducer outcome yet), "refused" (the reducer rejected the request; reason says why), or the shared
+        // row's status (pending, applied, rejected, unavailable, failed) once the request committed.
+        public string OwnCommandStatus(string commandId, out string reason)
+        {
+            reason = null;
+            if (!ownRequests.TryGetValue(commandId, out var outcome)) return "unknown";
+            if (outcome == null) return "sent";
+            if (outcome != "") { reason = outcome; return "refused"; }
+            var row = Connected ? connection.Db.SessionCommands.CommandId.Find(commandId) : null;
+            if (row == null) return "pending";
+            reason = row.Reason;
+            return row.Status;
         }
 
         void PumpCommands()

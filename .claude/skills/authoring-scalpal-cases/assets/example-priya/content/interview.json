@@ -1,0 +1,457 @@
+{
+  "version": 1,
+  "patientId": "patient-demo-multi-source",
+  "procedureId": "open_appendectomy",
+  "openingLine": "Hi, sorry, I'm trying not to move much. My stomach has been killing me since yesterday.",
+  "rounds": [
+    {
+      "id": "history_onset",
+      "stage": "history",
+      "prompt": "She is lying very still and says her stomach has hurt since yesterday. What do you do next?",
+      "weight": 8,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Ask whether anyone in her family has had bowel cancer",
+          "grade": "wrong",
+          "feedback": "Family cancer history does not help sort out a one-day acute pain, so the timeline comes first.",
+          "patientCue": "Nothing like this in my family that I know of. Why, is that what you're thinking?"
+        },
+        {
+          "key": "B",
+          "text": "Ask when the pain started and whether it has moved since then",
+          "grade": "correct",
+          "feedback": "Gradual onset with migration from the umbilicus to the right lower quadrant is the classic appendicitis pattern.",
+          "patientCue": "It started yesterday morning, around nine, slowly. It began around my belly button, kind of dull, and by the afternoon it moved down to the lower right and got sharper.",
+          "covers": [
+            "history:onset",
+            "history:migration",
+            "history:location"
+          ]
+        },
+        {
+          "key": "C",
+          "text": "Ask her to rate the pain from zero to ten",
+          "grade": "partial",
+          "feedback": "Severity is worth knowing, but onset and migration tell you far more about the cause.",
+          "patientCue": "Maybe a seven out of ten. The car ride was awful, every bump hurt.",
+          "covers": [
+            "history:severity"
+          ]
+        },
+        {
+          "key": "D",
+          "text": "Ask what usually sets off her migraines",
+          "grade": "wrong",
+          "feedback": "Her migraines are a background problem and she says this pain is nothing like them.",
+          "patientCue": "Honestly, busy weeks at work. But this is nothing like my migraines."
+        }
+      ]
+    },
+    {
+      "id": "history_associated",
+      "stage": "history",
+      "prompt": "The pain began at the belly button and moved to the lower right. What do you do next?",
+      "weight": 8,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Ask whether she has thrown up",
+          "grade": "partial",
+          "feedback": "Nausea matters, but asking about appetite, fever, bowels and urine together builds the whole picture.",
+          "patientCue": "I've been nauseous since the pain started, but I haven't thrown up.",
+          "covers": [
+            "history:nausea_vomiting"
+          ]
+        },
+        {
+          "key": "B",
+          "text": "Ask whether she has been under stress at work",
+          "grade": "wrong",
+          "feedback": "Stress does not explain migrating, localized pain and delays the key symptom review.",
+          "patientCue": "Honestly, quarter-end is next week, so yes. But this is a real pain, low on the right."
+        },
+        {
+          "key": "C",
+          "text": "Ask about nausea, appetite, fever, and any bowel or urinary changes",
+          "grade": "correct",
+          "feedback": "Anorexia, nausea after the pain and fever support appendicitis, while normal bowels and no dysuria argue against gastroenteritis and urinary causes.",
+          "patientCue": "I've been nauseous but haven't thrown up, and I haven't wanted to eat since yesterday. I felt hot with chills last night but didn't check. My bowels were normal yesterday morning, no blood. No burning when I pee, maybe going a little more often, I'm not sure.",
+          "covers": [
+            "history:nausea_vomiting",
+            "history:appetite",
+            "history:fever",
+            "history:bowel",
+            "history:urinary"
+          ]
+        },
+        {
+          "key": "D",
+          "text": "Ask what she ate at the office this week",
+          "grade": "wrong",
+          "feedback": "Chasing food poisoning without diarrhea or vomiting skips the symptoms that point to the diagnosis.",
+          "patientCue": "Honestly, at first I wondered if it was something I ate at the office. Now I don't know."
+        }
+      ]
+    },
+    {
+      "id": "history_pregnancy",
+      "stage": "history",
+      "prompt": "She is a 40-year-old woman with right lower abdominal pain. What do you do next?",
+      "weight": 10,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Ask about her last period and whether she could be pregnant",
+          "grade": "correct",
+          "feedback": "Pregnancy must be addressed in any woman of reproductive age with lower abdominal pain because ectopic pregnancy cannot be missed.",
+          "patientCue": "My last period was about two weeks ago, normal. I don't think I'm pregnant, but I'm not on birth control right now, so I'd want to know.",
+          "covers": [
+            "history:menstrual_pregnancy"
+          ]
+        },
+        {
+          "key": "B",
+          "text": "Ask only whether she uses birth control",
+          "grade": "partial",
+          "feedback": "Contraception status helps, but you also need the last period to judge pregnancy risk.",
+          "patientCue": "Not right now, no. Is that important?",
+          "covers": [
+            "history:menstrual_pregnancy"
+          ]
+        },
+        {
+          "key": "C",
+          "text": "Skip it, since she is married and says this feels like a stomach problem",
+          "grade": "wrong",
+          "feedback": "Assumptions do not exclude pregnancy, and she is not on contraception.",
+          "patientCue": "Honestly, I don't think I'm pregnant, but I'm not on birth control, so I'd actually like to know."
+        },
+        {
+          "key": "D",
+          "text": "Ask about her running routine",
+          "grade": "wrong",
+          "feedback": "Exercise habits add nothing to this acute workup.",
+          "patientCue": "I run a slow 5K on Saturdays. Why do you ask?"
+        }
+      ]
+    },
+    {
+      "id": "history_background",
+      "stage": "history",
+      "prompt": "Her records come from two health systems that disagree. What do you do next?",
+      "weight": 10,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Ask about her job and hobbies",
+          "grade": "wrong",
+          "feedback": "Social chat can wait while medications, allergies and fasting status are still unknown.",
+          "patientCue": "I'm a senior accountant. I run on Saturdays and bake banana bread on Sundays."
+        },
+        {
+          "key": "B",
+          "text": "Ask whether anyone at home has been sick",
+          "grade": "wrong",
+          "feedback": "Recent illness is low yield here and misses the chart risks you need before surgery.",
+          "patientCue": "No, I haven't been sick lately."
+        },
+        {
+          "key": "C",
+          "text": "Ask what medicines she takes and whether she has any allergies",
+          "grade": "partial",
+          "feedback": "Medicines and the latex allergy are right, but you still need her past history, including her iron deficiency, and when she last ate.",
+          "patientCue": "A small thyroid pill every morning, iron most days, sumatriptan when a migraine starts, and ibuprofen last night for this. And latex: gloves give me an itchy red rash the next day. Honestly, my regular doctor's office might still say no allergies.",
+          "covers": [
+            "history:medications",
+            "history:allergies"
+          ]
+        },
+        {
+          "key": "D",
+          "text": "Ask about her medical and surgical history, medicines, allergies, and when she last ate or drank",
+          "grade": "correct",
+          "feedback": "This uncovers her latex allergy, her iron deficiency anemia, her medicines and her fasting time, which all shape the operation.",
+          "patientCue": "I have an underactive thyroid, migraines, and low iron from last year; I take levothyroxine, sumatriptan when needed, and iron most days, and ibuprofen last night. No surgeries. I'm allergic to latex, gloves give me an itchy rash the next day, and my regular doctor might still say no allergies. Soup at seven last night, only water since, last sip about two hours ago.",
+          "covers": [
+            "history:past_medical",
+            "history:past_surgical",
+            "history:medications",
+            "history:allergies",
+            "history:last_meal"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "exam_vitals_abdomen",
+      "stage": "exam",
+      "prompt": "Time to examine her. What do you do next?",
+      "weight": 7,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Listen to her lungs",
+          "grade": "wrong",
+          "feedback": "Clear lungs do little to explain localized abdominal pain.",
+          "patientCue": "Okay. Deep breaths are fine.",
+          "finding": {
+            "label": "Chest",
+            "text": "Lungs clear to auscultation.",
+            "abnormal": false
+          }
+        },
+        {
+          "key": "B",
+          "text": "Check her vital signs, then palpate the abdomen gently, starting away from the pain",
+          "grade": "correct",
+          "feedback": "Fever and tachycardia set urgency, and focal right lower quadrant tenderness with guarding is the key sign.",
+          "patientCue": "Ow! Yes, right there, that's the spot. Sorry.",
+          "covers": [
+            "exam:vitals",
+            "exam:abdomen_palpation",
+            "exam:guarding_rigidity"
+          ],
+          "finding": {
+            "label": "Vitals and abdomen",
+            "text": "Temperature 37.9 C, heart rate 98, blood pressure 124/78, respiratory rate 16, oxygen saturation 99% on room air. Tender in the right lower quadrant with voluntary guarding. Left side soft and nontender.",
+            "abnormal": true
+          }
+        },
+        {
+          "key": "C",
+          "text": "Palpate the abdomen without checking vitals",
+          "grade": "partial",
+          "feedback": "Palpation finds the tenderness, but skipping vitals misses her fever and heart rate.",
+          "patientCue": "Ow! Yes, right there, that's the spot.",
+          "covers": [
+            "exam:abdomen_palpation"
+          ],
+          "finding": {
+            "label": "Abdomen",
+            "text": "Tender in the right lower quadrant with voluntary guarding. Left side soft and nontender.",
+            "abnormal": true
+          }
+        },
+        {
+          "key": "D",
+          "text": "Tap over her back at the angle of the ribs",
+          "grade": "wrong",
+          "feedback": "Checking for kidney tenderness is reasonable later, but vitals and the abdomen come first.",
+          "patientCue": "No, my back is fine.",
+          "finding": {
+            "label": "Costovertebral angle",
+            "text": "No costovertebral angle tenderness.",
+            "abnormal": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "exam_peritoneal",
+      "stage": "exam",
+      "prompt": "She is tender in the right lower quadrant. What do you do next?",
+      "weight": 7,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Check for rebound tenderness, Rovsing sign and psoas sign",
+          "grade": "correct",
+          "feedback": "Rebound, Rovsing and psoas signs show peritoneal irritation from the appendix.",
+          "patientCue": "Ow, letting go was worse than pushing! And pushing on the left made my right side hurt. Lifting my leg pulls a bit, sorry.",
+          "covers": [
+            "exam:rebound",
+            "exam:rovsing",
+            "exam:psoas",
+            "exam:mcburney_point"
+          ],
+          "finding": {
+            "label": "Peritoneal signs",
+            "text": "Rebound tenderness in the right lower quadrant. Positive Rovsing sign. Mildly positive right psoas sign. Maximal tenderness at McBurney's point.",
+            "abnormal": true
+          }
+        },
+        {
+          "key": "B",
+          "text": "Do a pelvic exam with a chaperone",
+          "grade": "partial",
+          "feedback": "A pelvic exam helps exclude PID and adnexal causes, but peritoneal signs are the more direct next step.",
+          "patientCue": "Okay, that's uncomfortable but not the bad pain.",
+          "covers": [
+            "exam:pelvic"
+          ],
+          "finding": {
+            "label": "Pelvic",
+            "text": "No cervical motion tenderness, no adnexal mass or tenderness, no discharge.",
+            "abnormal": false
+          }
+        },
+        {
+          "key": "C",
+          "text": "Press up under her right ribs for Murphy sign",
+          "grade": "wrong",
+          "feedback": "Murphy sign tests the gallbladder, which does not fit right lower quadrant pain.",
+          "patientCue": "No, that's okay up there.",
+          "finding": {
+            "label": "Right upper quadrant",
+            "text": "Negative Murphy sign, no right upper quadrant tenderness.",
+            "abnormal": false
+          }
+        },
+        {
+          "key": "D",
+          "text": "Rotate her bent right leg inward for the obturator sign alone",
+          "grade": "wrong",
+          "feedback": "A single low-yield sign tells you less than rebound, Rovsing and psoas together.",
+          "patientCue": "That's fine, it doesn't really hurt.",
+          "finding": {
+            "label": "Obturator",
+            "text": "Negative obturator sign.",
+            "abnormal": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "tests_workup",
+      "stage": "tests",
+      "prompt": "Her exam suggests peritoneal irritation. What do you do next?",
+      "weight": 15,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Send her straight to CT of the abdomen and pelvis",
+          "grade": "partial",
+          "feedback": "CT is the right confirmatory scan, but pregnancy must be excluded first and her blood count, kidney function and blood type are still unknown.",
+          "patientCue": "Okay, a scan. But could I be pregnant? I'm not on birth control, so I'd want to know that first.",
+          "covers": [
+            "test:ct_abdomen_pelvis"
+          ],
+          "finding": {
+            "label": "CT abdomen and pelvis",
+            "text": "Dilated 11 mm appendix with periappendiceal fat stranding. No abscess, no free air.",
+            "abnormal": true
+          }
+        },
+        {
+          "key": "B",
+          "text": "Order a lipase",
+          "grade": "wrong",
+          "feedback": "Pancreatitis does not fit focal right lower quadrant pain, and a lipase alone misses pregnancy and the blood count.",
+          "patientCue": "Okay. Is that a blood test?",
+          "finding": {
+            "label": "Lipase",
+            "text": "Lipase 32 (normal).",
+            "abnormal": false
+          }
+        },
+        {
+          "key": "C",
+          "text": "Order a pregnancy test, CBC, CRP, basic metabolic panel, urinalysis and type and screen, then CT once pregnancy is excluded",
+          "grade": "correct",
+          "feedback": "This excludes pregnancy before imaging, fills the missing kidney function, rechecks her anemia, prepares blood, and confirms the diagnosis on CT.",
+          "patientCue": "Yes, please, I'd like the pregnancy test. Blood draws are fine, I'm used to them from the iron.",
+          "covers": [
+            "test:pregnancy_test",
+            "test:cbc",
+            "test:crp",
+            "test:bmp",
+            "test:urinalysis",
+            "test:type_and_screen",
+            "test:ct_abdomen_pelvis"
+          ],
+          "finding": {
+            "label": "Labs and CT",
+            "text": "Serum beta-hCG negative. White count 13.1 with 82% neutrophils. Hemoglobin 11.6 (low, consistent with her known iron deficiency). Platelets 280. CRP 48 mg/L (elevated). Sodium 138, potassium 4.1, creatinine 0.8, glucose 96. Normal kidney function. Urinalysis: No blood, no leukocyte esterase, no nitrites. Normal. Type O positive, antibody screen negative. CT: Dilated 11 mm appendix with periappendiceal fat stranding. No abscess, no free air.",
+            "abnormal": true
+          }
+        },
+        {
+          "key": "D",
+          "text": "Order a pelvic ultrasound and stop there",
+          "grade": "wrong",
+          "feedback": "The ultrasound shows normal ovaries but does not see the appendix, and it skips the pregnancy test and bloods.",
+          "patientCue": "Okay. Will it hurt?",
+          "finding": {
+            "label": "Pelvic ultrasound",
+            "text": "Appendix not clearly visualized. No free fluid. Ovaries normal with normal flow.",
+            "abnormal": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "diagnosis",
+      "stage": "diagnosis",
+      "prompt": "Beta-hCG is negative and CT shows an 11 mm appendix with fat stranding. What is the diagnosis?",
+      "weight": 20,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Ectopic pregnancy",
+          "grade": "wrong",
+          "feedback": "A negative serum beta-hCG excludes ectopic pregnancy.",
+          "patientCue": "Pregnancy? I thought you said that test was fine. What does that mean?"
+        },
+        {
+          "key": "B",
+          "text": "Perforated appendicitis with abscess",
+          "grade": "partial",
+          "feedback": "The appendix is the source, but CT shows no abscess and no free air, so this is uncomplicated.",
+          "patientCue": "Perforated? What does that mean? Is that serious?"
+        },
+        {
+          "key": "C",
+          "text": "Ovarian torsion",
+          "grade": "wrong",
+          "feedback": "Gradual migrating pain and normal ovaries with normal flow argue against torsion.",
+          "patientCue": "My ovary? What does torsion mean?"
+        },
+        {
+          "key": "D",
+          "text": "Acute appendicitis",
+          "grade": "correct",
+          "feedback": "Migrating pain, fever, peritoneal signs, leukocytosis, raised CRP and a dilated appendix on CT make acute uncomplicated appendicitis.",
+          "patientCue": "My appendix? Is that serious?"
+        }
+      ]
+    },
+    {
+      "id": "plan",
+      "stage": "plan",
+      "prompt": "She has acute appendicitis and is stable. What do you do next?",
+      "weight": 15,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Book an urgent open appendectomy today, start IV antibiotics, keep her nothing by mouth, and set up a latex-free room",
+          "grade": "correct",
+          "feedback": "Urgent open appendectomy with antibiotics now treats the case, and a latex-free room respects her reconciled allergy.",
+          "patientCue": "Okay. Okay. How long will it take? And when can I get back to work?"
+        },
+        {
+          "key": "B",
+          "text": "Schedule an open appendectomy as an elective case after quarter-end",
+          "grade": "partial",
+          "feedback": "Right operation, but acute appendicitis needs urgent surgery, not a delay of weeks.",
+          "patientCue": "Honestly, waiting would help with work, but it really hurts. Is it safe to wait?"
+        },
+        {
+          "key": "C",
+          "text": "Send her home on oral antibiotics and pain medicine",
+          "grade": "wrong",
+          "feedback": "The case plan is operative, and discharging her with peritoneal signs is unsafe.",
+          "patientCue": "Home? I can barely move. Are you sure?"
+        },
+        {
+          "key": "D",
+          "text": "Refer her to gynecology for an ovarian problem",
+          "grade": "wrong",
+          "feedback": "Her ovaries are normal and the CT shows an inflamed appendix, so gynecology is the wrong team.",
+          "patientCue": "Gynecology? I thought you said the scan showed something on the right side. Sorry, I'm confused."
+        }
+      ]
+    }
+  ],
+  "closingLine": "Okay. Okay. How long will it take, and when can I get back to work? Quarter-end is next week. And someone needs to pick up Meera, can my husband Arjun come in?"
+}

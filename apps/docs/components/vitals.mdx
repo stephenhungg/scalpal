@@ -1,0 +1,75 @@
+---
+title: "Patient vitals (Presage)"
+description: "Real pulse and breathing from a phone camera, as the baseline for the OR monitor."
+---
+
+Owner: Silas.
+
+`services/vitals` reads the real pulse and breathing of the volunteer lying on the table, using Presage SmartSpectra on a fixed camera. It's an iPhone on a stand, connected to the Mac as a Continuity Camera. Processing happens on the Mac, and Scalpal stores no footage.
+
+## Why it's there
+
+The volunteer's real vitals don't react to virtual surgery, so we never show them as live surgical vitals. Instead:
+
+1. **Baseline (real).** At Time-Out, Presage measures the volunteer. That becomes this patient's starting pulse and breathing rate.
+2. **Change (simulated).** A small physiology model maps the surgery state to vitals changes, using ATLS hemorrhage classes against an estimated blood volume of 70 mL per kg.
+3. **Display.** The OR monitor shows the combined value with a label, like `HR 110 · simulated from baseline 85 (measured)`.
+
+| Blood loss (% of blood volume) | Pulse | Breathing | Blood pressure |
+| --- | --- | --- | --- |
+| under 15% | baseline to +10 | baseline | normal |
+| 15 to 30% | about 100 to 120 | 20 to 30 | pulse pressure narrows |
+| 30 to 40% | about 120 to 140 | 30 to 40 | falling |
+| over 40% | over 140 | over 35 | crashing |
+
+An active bleed pushes toward the next class, stopping it lets values recover over 10 to 30 seconds, and a critical injury adds an acute spike. The model is a pure function, so Unity, Scalpal and the recap can all reproduce the same numbers. It's authored teaching content, not a validated clinical simulation.
+
+## Quota guard
+
+The Presage key has a fixed budget of live minutes, so the service protects it:
+
+- **Demo by default.** `npm start` runs labeled demo mode with synthetic vitals and no quota. Live mode needs `npm run live`.
+- **Sessions stop themselves** after `PRESAGE_LIVE_MINUTES` (default 5).
+- **No face, no spend.** If no face is in view for `PRESAGE_NO_FACE_SECONDS` (default 15), the session ends.
+- **Clean failures.** If the camera can't open, the session ends with the reason and the server keeps running.
+- **A ledger.** Live time is logged to `.presage-usage.json`, and live mode is refused once `PRESAGE_BUDGET_MINUTES` (default 50) is used up.
+
+## Setup
+
+```sh
+cd services/vitals
+npm install
+npm run cameras        # lists cameras with their PRESAGE_CAMERA_ID
+npm run preview        # one frame from the camera to check framing, no quota
+npm start              # demo mode on :8791
+npm run live           # real measurement, uses quota
+npm test
+```
+
+`.env` (never committed):
+
+| Variable | Meaning |
+| --- | --- |
+| `PRESAGE_API_KEY` | Your Presage key |
+| `PRESAGE_CAMERA_ID` | The phone's camera ID, from `npm run cameras` |
+| `PORT` | 8791 (8790 is the body pose service) |
+
+<Note>
+The process running the service needs camera permission in **System Settings → Privacy & Security → Camera**. Without it, the camera won't open, but the session fails cleanly and logs no time.
+</Note>
+
+## Camera setup for someone lying flat
+
+- Mount the phone at the head end, 0.5 to 1 m away, angled down.
+- Frame the face and upper chest. Presage reads pulse from facial skin and breathing from chest movement. It doesn't need the abdomen, so the surgeon's hands stay out of its view.
+- Turn the phone so the volunteer's chin points to the bottom of the image.
+- Use even light on the face, and keep everyone else out of frame.
+- The volunteer stays still and doesn't talk.
+
+Start live mode about a minute before Time-Out so readings have settled when you capture the baseline. The first pulse reading takes about 30 seconds.
+
+## What's been measured
+
+On October 4, a 1.5 minute live run on an iPhone got a stable pulse of 85.3 bpm at 98% confidence and breathing of 17.6 per minute at 79% confidence, and the baseline captured as HR 85, RR 18 (measured). Breathing dropped in and out when the chest was cut off at the bottom of the frame. Nothing in Unity reads vitals yet. The dashboard panel does.
+
+See the [API reference](/api/vitals).

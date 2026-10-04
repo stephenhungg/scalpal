@@ -42,6 +42,8 @@ namespace Scalpal.Surgery.Editor
             VerifyClampRelease(bundle, procedure);
             VerifyTelemetryRate(bundle, procedure);
             VerifyFluid(procedure);
+            VerifyRegionAtlas();
+            VerifyTrackerEvents(bundle, procedure);
             int fixtureChecks = checks;
             // Actual native-scene atlas: mobilize, deliver, then measure the base on the moved anatomy.
             int delivery = OpenBodyDeliveryValidation.Run();
@@ -437,6 +439,70 @@ namespace Scalpal.Surgery.Editor
                 f.tools[0].SetHeld(false); f.input.ClearPlacements(); f.input.Simulate(.02f);
                 Require(f.binding.Body.Get("terminal_ileum", "clampCount") == 0 && f.submitted.Last().action.verb == "release",
                     "putting a placed clamp away releases it in the body");
+            }
+        }
+        // The coarse region map must agree with the imported surface atlas, in the registered torso frame
+        // (umbilicus origin, +X left, +Y anterior, +Z cranial), or a neck cut is reported as the chest.
+        static void VerifyRegionAtlas()
+        {
+            var model = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Scalpal/Anatomy/Models/surface.fbx");
+            Require(model, "imported surface atlas exists");
+            var expected = new Dictionary<string, string> {
+                ["hairs_of_head"] = "head", ["frontal_region_l"] = "head", ["occipital_region_r"] = "head",
+                ["lateral_region_of_neck_l"] = "neck", ["lateral_region_of_neck_r"] = "neck", ["posterior_region_of_neck_l"] = "neck",
+                ["presternal_region_l"] = "chest", ["pectoral_region_r"] = "chest", ["mammary_region_l"] = "chest", ["infraclavicular_fossa_r"] = "chest",
+                ["deltoid_region_l"] = "left_arm", ["anterior_region_of_arm_r"] = "right_arm", ["anterior_region_of_forearm_l"] = "left_arm", ["dorsum_of_hand_r"] = "right_arm",
+                ["anterior_region_of_thigh_l"] = "left_leg", ["anterior_region_of_knee_r"] = "right_leg", ["dorsum_of_foot_l"] = "left_leg",
+                ["umbilical_region_r"] = "", ["inguinal_region_r"] = "", ["lateral_region_of_abdomen_r"] = "", ["epigastric_region_l"] = "" };
+            var filters = model.GetComponentsInChildren<MeshFilter>(true).ToDictionary(f => f.name);
+            foreach (var pair in expected)
+            {
+                Require(filters.TryGetValue("atlas_surface__" + pair.Key, out var filter), "atlas part exists: " + pair.Key);
+                Vector3 source = filter.transform.TransformPoint(filter.sharedMesh.bounds.center);
+                var torso = new Vector3(source.x, BodyRegistrationMath.SourceFront - source.z, source.y - BodyRegistrationMath.SourceUmbilicus.y);
+                string region = OpenBodyInteraction.BodyRegion(torso);
+                Require(region == pair.Value, pair.Key + " at torso " + torso.ToString("F3") + " maps to '" + pair.Value + "', not '" + region + "'");
+            }
+            Require(OpenBodyInteraction.BodyRegion(new Vector3(0, .12f, .3f)) == "" && OpenBodyInteraction.BodyRegion(new Vector3(0, -.3f, .3f)) == ""
+                && OpenBodyInteraction.BodyRegion(new Vector3(float.NaN, 0, .3f)) == "", "a blade above the skin, under the back or untracked is not on the body");
+        }
+        // Jarvis's state tracker: a cut outside the field is one injury per region until a hemostatic tool controls it,
+        // and a tip contact is one event per touch, never one per frame.
+        static void VerifyTrackerEvents(ScalpalBundle bundle, Procedure procedure)
+        {
+            using (var f = new Fixture(bundle, procedure, "scalpel", "hemostat"))
+            {
+                var injuries = new List<string>(); var contacts = new List<string>();
+                f.input.RegionInjured += (region, tool, controlled) => injuries.Add(region + ":" + tool.instrumentId + ":" + controlled);
+                f.input.Contacted += (tool, tissue) => contacts.Add(tool.instrumentId + ":" + tissue);
+                void At(int index, Vector3 torso, int frames = 3)
+                {
+                    f.tools[index].transform.position += f.root.transform.TransformPoint(torso) - f.tools[index].actionPoint.position;
+                    Physics.SyncTransforms(); for (int i = 0; i < frames; i++) f.Step();
+                }
+                At(1, new Vector3(.3f, .4f, .1f), 1);
+                At(0, new Vector3(0, -.06f, .46f));
+                Require(string.Join(",", injuries) == "neck:scalpel:False", "a blade in the neck reports one neck injury: " + string.Join(",", injuries));
+                At(0, new Vector3(.03f, -.07f, .47f), 10);
+                Require(injuries.Count == 1, "dragging the blade within the injured neck is not a new injury every frame");
+                At(0, new Vector3(0, .1f, .3f));
+                Require(injuries.Count == 1, "a blade above the chest skin cuts nothing");
+                At(0, new Vector3(.05f, -.05f, .3f));
+                At(0, new Vector3(.1f, -.05f, .05f));
+                Require(string.Join(",", injuries) == "neck:scalpel:False,chest:scalpel:False", "the chest is its own injury; the abdomen beside the field is not a region: " + string.Join(",", injuries));
+                At(1, new Vector3(.21f, -.12f, .2f));
+                Require(injuries.Count == 2, "a clamp on an uninjured arm controls nothing");
+                At(1, new Vector3(0, -.06f, .46f), 6);
+                Require(injuries.Count == 3 && injuries[2] == "neck:hemostat:True", "a hemostat in the injured neck controls it once: " + string.Join(",", injuries));
+                At(1, new Vector3(.3f, .4f, .1f), 1);
+                At(0, new Vector3(0, -.06f, .46f));
+                Require(injuries.Count == 4 && injuries[3] == "neck:scalpel:False", "cutting the controlled neck again is a new injury");
+                Require(contacts.Count == 0, "region cuts outside the field are not tissue contacts");
+                f.Move(0, new Vector3(-.03f, 0, 0)); for (int i = 0; i < 8; i++) f.Step();
+                Require(string.Join(",", contacts) == "scalpel:skin" && injuries.Count == 4, "a tip resting on the skin is one contact and no injury: " + string.Join(",", contacts));
+                At(0, new Vector3(.3f, .4f, .1f));
+                f.Move(0, new Vector3(-.03f, 0, 0)); for (int i = 0; i < 3; i++) f.Step();
+                Require(string.Join(",", contacts) == "scalpel:skin,scalpel:skin", "lifting off and touching again is a second contact");
             }
         }
         static void VerifyTelemetryRate(ScalpalBundle bundle, Procedure procedure)

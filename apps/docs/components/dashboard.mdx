@@ -1,0 +1,39 @@
+---
+title: "Dashboard"
+description: "Watch a session live from a browser."
+---
+
+Owner: Nathan. Styling by Silas.
+
+The dashboard is how judges and teammates follow a run without a headset. It shows logs only, live through SpacetimeDB; the headset view itself stays on the operator's laptop. It's an observer: it doesn't run a second voice agent or simulate surgery.
+
+- **Live logs.** Everything the state tracker and the Scalpal coach see: tool and contact events, cuts and bleeds, alerts, simulated vitals samples, checklist progress and the outcome, with filters and the latest vitals pinned.
+- **Session panels.** Exercise mode and step, registration, recording, the Scalpal transcript, app actions, the learning result and an event timeline.
+- **Volunteer vitals.** Live pulse and breathing from Presage, waveforms, the Time-Out baseline and a free camera framing check. See [patient vitals](/components/vitals).
+- **Robot replay.** A joint chart with invalid spans shaded, next to the source clip. It's labeled as a replay of recorded motion, not a learned policy.
+- **Access.** Invite codes per role (viewer, coach, headset, operator), presence, and revoking codes.
+- **Synthetic headset** at `/s/<id>/simulate` imitates the Quest app for testing. Everything it produces is labeled synthetic.
+
+Built with Vite, React, TypeScript and the SpacetimeDB TypeScript SDK 2.10.2. Hosted at [dashboard.scalpal.tech](https://dashboard.scalpal.tech).
+
+## Run it
+
+```sh
+cd apps/companion
+npm install
+printf 'VITE_SPACETIMEDB_URI=wss://maincloud.spacetimedb.com\nVITE_SPACETIMEDB_DB=scalpal\n' > .env.local
+npm run dev
+```
+
+To fill every panel: create a session, open **Synthetic headset** and press **Run demo script**.
+
+## Configuration
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `VITE_SPACETIMEDB_URI` | `ws://127.0.0.1:3000` | `wss://maincloud.spacetimedb.com` in production |
+| `VITE_SPACETIMEDB_DB` | `scalpal` | Database name |
+| `VITE_API_URL` | `http://127.0.0.1:8788` | Gateway, for replay URLs |
+| `VITE_VITALS_URL` | `http://127.0.0.1:8791` | Vitals service |
+
+Screen sharing needs a secure context (HTTPS or localhost) and a desktop browser.

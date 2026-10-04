@@ -22,13 +22,20 @@ namespace Scalpal.Surgery
         GameObject pool;
         Material material;
         float snapshotClock;
+        // Pause simulation/interaction independently of drawing existing blood during inspection.
+        // A lost patient registration still hides the field; it never deletes accumulated fluid.
+        public Func<bool> PresentationVisible;
         readonly Dictionary<InstrumentBehaviour,float> suctionTimes = new Dictionary<InstrumentBehaviour,float>();
         public double PoolMl { get; private set; }
+        // The visible pool follows the reducer's poolMl (BodyState), eased so its 1 Hz fluid snapshots do not jump.
+        public double ShownPoolMl { get; private set; }
+        // Depth of blood in the wound cavity: the pool spreads to its 4 cm cap, then fills toward the opening.
+        public float PoolLevelMeters { get; private set; }
         public void Initialize(OpenBodyInteraction adapter, AnatomyExerciseBinding binding, Transform woundFrame)
         {
             if (input) input.Submitted -= Applied;
             input = adapter; exercise = binding; wound = woundFrame;
-            sources.Clear(); suctionTimes.Clear(); snapshotClock = 0; PoolMl = 0;
+            sources.Clear(); suctionTimes.Clear(); snapshotClock = 0; PoolMl = ShownPoolMl = 0; PoolLevelMeters = 0;
             foreach (var tissue in binding.Body.Tissues) if (tissue.perfused) sources.Add(new Source { id = tissue.id });
             input.Submitted += Applied;
             if (!pool)
@@ -72,7 +79,7 @@ namespace Scalpal.Surgery
         public void Simulate(float seconds)
         {
             if (!input || !input.Ready || !float.IsFinite(seconds) || seconds <= 0 || seconds > .1f)
-            { if(pool)pool.SetActive(false); suctionTimes.Clear(); return; }
+            { if(pool)pool.SetActive(PresentationVisible!=null&&PresentationVisible()&&ShownPoolMl>.001); suctionTimes.Clear(); return; }
             var rig = GetComponent<NativeCaseSession>()?.workbench;
             foreach(var tool in rig ? rig.tools : Array.Empty<InstrumentBehaviour>())
             {
@@ -97,10 +104,16 @@ namespace Scalpal.Surgery
                 if (publish) Publish(source);
             }
             if (!pool) return;
-            pool.SetActive(PoolMl > .001);
-            float radius = Mathf.Min(.04f,Mathf.Sqrt((float)(3 * PoolMl * 1e-6/(2*Math.PI*.003))));
-            pool.transform.localPosition = new Vector3(0,0,.025f);
-            pool.transform.localScale = new Vector3(radius*2,radius*2,.003f);
+            double target = Math.Max(0, exercise.Body.Get("", "poolMl"));
+            ShownPoolMl += (target - ShownPoolMl) * (1 - Math.Exp(-seconds / .35));
+            if (Math.Abs(target - ShownPoolMl) < .001) ShownPoolMl = target;
+            pool.SetActive(ShownPoolMl > .001 && (PresentationVisible == null || PresentationVisible()));
+            // Flattened ellipsoid of the shown volume: V = 2/3 pi r^2 h, at least 3 mm deep, at most the 25 mm cavity.
+            float radius = Mathf.Min(.04f,Mathf.Sqrt((float)(3 * ShownPoolMl * 1e-6/(2*Math.PI*.003))));
+            float level = radius > 0 ? Mathf.Clamp((float)(3 * ShownPoolMl * 1e-6/(2*Math.PI*radius*radius)), .003f, .025f) : 0;
+            PoolLevelMeters = ShownPoolMl > .001 ? level : 0;
+            pool.transform.localPosition = new Vector3(0,0,.025f-(level-.003f)*.5f);
+            pool.transform.localScale = new Vector3(radius*2,radius*2,Mathf.Max(level,.003f));
         }
         bool Publish(Source source)
         {

@@ -37,9 +37,11 @@ namespace Scalpal.Handoff.Editor
             var scenarios = new (string name, Action run)[] {
                 ("F1 headset resume keeps the paused card and the started attempt", ResumeKeepsPracticePaused),
                 ("F3 another office patient clears the previous ticket", OfficePatientChangeClearsTicket),
-                ("F4 volunteer consent ends with the run", ConsentEndsWithRun),
+                ("F4 participant recording permission ends with the run", ConsentEndsWithRun),
+                ("F17 setup separates AR availability and optional recording", SetupSeparatesArAndRecording),
                 ("F5 Time-Out sends only individually confirmed risks", RiskReviewSendsOnlyConfirmed),
                 ("F6/F8 Time-Out clears stale errors and releases its loading latch", TimeOutClearsErrorAndLatch),
+                ("F14 AR Time-Out captures the measured vitals baseline; VR keeps the chart", TimeOutBaselineOnlyInAr),
                 ("F6/F7 a new office run starts without old errors or coach/fit-loss state", NewRunResetsState),
                 ("F7 the fit-loss ladder restarts after leaving practice", FitLossLadderIsPerPractice),
                 ("F9 legacy office route starts in the virtual OR", LegacyOfficeRouteStartsVirtual),
@@ -48,6 +50,8 @@ namespace Scalpal.Handoff.Editor
                 ("F12 waiting card has a way back and does not import every frame", WaitingCardReturnsAndThrottles),
                 ("F13 voice gate follows the actual phase transitions", VoiceGateFollowsPhases),
                 ("F13 unified scene order is checked against the product order", SceneOrderIsIndependent),
+                ("F15 OR entry shows no connection error while the case loads or the session joins", EntryShowsNoConnectionErrorWhileLoading),
+                ("F18 the instrument table and tools stay out of view until practice begins", ToolsHiddenUntilPractice),
             };
             try
             {
@@ -117,28 +121,71 @@ namespace Scalpal.Handoff.Editor
             Assert(ticket.practiceStarted && ticket.attemptId == attempt && ticket.AllConfirmed, "attempt, practice progress and Time-Out survive the resume");
         }
 
+        // The learner reaches the OR with every required service up. Loading the case (about a second over adb) and the OR's
+        // own SpacetimeDB join are normal; the card must not offer "Retry connection" as if something failed.
+        static void EntryShowsNoConnectionErrorWhileLoading()
+        {
+            var flow = Flow(out var card); var native = Native(flow.gameObject); Ticket("virtual");
+            Set(flow, "surgery", native); Set(flow, "phase", "register");
+            bool NoError() => Actions(card).All(label => label.IndexOf("retry", StringComparison.OrdinalIgnoreCase) < 0 && label.IndexOf("connection", StringComparison.OrdinalIgnoreCase) < 0);
+            Set(native, "busy", true);
+            Call(flow, "Registration");
+            Assert(Heading(card) == "Preparing the operating room" && NoError(), "case loading shows a quiet preparing card without a connection retry (was " + Heading(card) + ")");
+            Set(native, "busy", false);
+            Call(flow, "Registration");
+            Assert(Heading(card) == "Case unavailable" && Actions(card)[0] == "Try again", "an actual load failure offers one plain retry");
+            ReadyForTimeOut(flow, native); Property(native.realtime, "Paired", false); Set(native.realtime, "connecting", true); Set(native.realtime, "connectStarted", Time.realtimeSinceStartup);
+            Call(flow, "TimeOut");
+            Assert(Heading(card) == "Preparing the operating room" && NoError(), "joining the shared session shows the preparing card, not a connection error (was " + Heading(card) + ")");
+            Set(native.realtime, "connecting", false);
+            Call(flow, "TimeOut");
+            Assert(Heading(card) == "Shared headset session unavailable", "a session that is really unreachable still says so");
+        }
+
         // The learner returns to the office picker and starts patient B; patient A's Theatre card must not survive.
         static void OfficePatientChangeClearsTicket()
         {
             var flow = Flow(out var card);
             var ticket = Ticket("virtual"); HandoffRun.Preflight.volunteerConsented = true;
-            var office = Office(flow.gameObject, new EncounterState { encounterId = "enc-patientbfixture", patientId = "patient-b-fixture", phase = "interview" }, null);
+            var office = Office(flow.gameObject, new EncounterState { encounterId = "int-patientbfixture", patientId = "patient-b-fixture", phase = "interview" }, null);
             Set(flow, "office", office); Set(flow, "phase", "theatre");
             Tick(flow);
             Assert(HandoffRun.Current == null && Phase(flow) == "office", "a different office encounter drops the previous patient's ticket");
-            Assert(!HandoffRun.Preflight.volunteerConsented, "a new office run asks the volunteer to consent again");
+            Assert(!HandoffRun.Preflight.volunteerConsented, "a new office run clears participant recording permission");
             Assert(!card.Visible || !Heading(card).StartsWith("To theatre", StringComparison.Ordinal), "patient A's Theatre card is not shown for patient B");
             Assert(ticket.encounterId != office.State.encounterId, "fixture compares two encounters");
         }
 
-        // Back to explore (Shell scene with neither office nor OR) ends the run for this volunteer.
+        static void SetupSeparatesArAndRecording()
+        {
+            var flow = Flow(out var card);
+            var p = HandoffRun.Preflight;
+            p.cameraGranted = p.sceneGranted = p.poseServiceOk = p.coachServiceOk = true;
+            p.learnerCaptureConsented = p.volunteerConsented = false;
+            var ticket = Ticket("mixed_reality"); ticket.consequenceSeen = true;
+            Call(flow, "SetupCard");
+            Assert(p.ArAvailable && Actions(card).Length == 2 && Actions(card)[0] == "Back to theatre", "AR-ready setup has no volunteer confirmation or permission-request control");
+            Assert(!p.learnerCaptureConsented, "AR availability never turns on motion recording");
+            Select(card, 1); Call(flow, "SetupCard");
+            // Controller motion never captures the participant, so there is no participant permission to ask for.
+            Assert(p.learnerCaptureConsented && !p.volunteerConsented && p.ArAvailable && Actions(card).Length == 2
+                && Actions(card)[1] == "Withdraw motion-recording consent",
+                "actual recording callback enables only learner motion recording");
+            Select(card, 1); Call(flow, "SetupCard");
+            Assert(!p.learnerCaptureConsented && !p.volunteerConsented && p.ArAvailable && Actions(card).Length == 2,
+                "turning recording off clears both permissions while AR stays available");
+            Select(card, 0);
+            Assert(Phase(flow) == "theatre", "reindexed Back to theatre callback returns to the mode choice");
+        }
+
+        // Back to explore ends the run and clears optional participant recording permission.
         static void ConsentEndsWithRun()
         {
             var flow = Flow(out _);
             Ticket("virtual"); HandoffRun.Preflight.volunteerConsented = true; HandoffRun.Preflight.cameraGranted = true;
             Set(flow, "failure", "old failure"); Set(flow, "coachTried", true); Set(flow, "lossStarted", 3f); Set(flow, "realigns", 2);
             Call(flow, "BindScene");
-            Assert(HandoffRun.Current == null && !HandoffRun.Preflight.volunteerConsented, "returning to explore clears the ticket and volunteer consent");
+            Assert(HandoffRun.Current == null && !HandoffRun.Preflight.volunteerConsented, "returning to explore clears the ticket and participant recording permission");
             Assert(HandoffRun.Preflight.cameraGranted, "measured permission state is not discarded with consent");
             Assert(Get<string>(flow, "failure") == "" && !Get<bool>(flow, "coachTried") && Get<float>(flow, "lossStarted") < 0 && Get<int>(flow, "realigns") == 0,
                 "per-run error, coach-retry and fit-loss state do not leak into the next run");
@@ -152,17 +199,11 @@ namespace Scalpal.Handoff.Editor
             ticket.scorecard.carryoverItems = new[] {
                 new EncounterCarryoverItem { flagId = "f1", type = "bleeding", label = "On apixaban", status = "found", detail = "Anticoagulant" },
                 new EncounterCarryoverItem { flagId = "f2", type = "allergy", label = "Penicillin allergy", status = "missed", detail = "Prophylaxis choice" } };
-            ticket.patientConfirmed = ticket.procedureConfirmed = ticket.siteConfirmed = true;
             ReadyForTimeOut(flow, native);
             Call(flow, "TimeOut");
-            Assert(Heading(card) == "TIME-OUT · Risk 1 of 2" && Actions(card)[0] == "Plan for: On apixaban" && Actions(card)[1] == "Not addressed",
-                "each office risk gets its own confirm-or-skip decision (heading was " + Heading(card) + ")");
-            Select(card, 0); Call(flow, "TimeOut");
-            Assert(Heading(card) == "TIME-OUT · Risk 2 of 2" && !ticket.risksConfirmed, "second risk is reviewed separately");
-            Select(card, 1); Call(flow, "TimeOut");
-            Assert(ticket.risksConfirmed, "risk review completes after the last decision");
-            for (int i = 0; i < 2; i++) { Select(card, 0); Call(flow, "TimeOut"); }
-            Assert(ticket.AllConfirmed && Heading(card) == "TIME-OUT · Ready", "remaining rows complete the Time-Out");
+            // No Time-Out panel: the checklist completes itself, and only risks the learner asked about in the office count.
+            Assert(ticket.AllConfirmed && !card.Visible, "Time-Out completes without a panel");
+            Assert(ticket.confirmedRiskTypes.SequenceEqual(new[] { "bleeding" }), "only the risk the learner found in the office is planned for");
             var routine = (IEnumerator)Call(flow, "ConfirmTimeOut");
             Assert(routine.MoveNext() && routine.Current is IEnumerator, "Time-Out posts the review");
             string body = Field<string>(routine.Current, "body");
@@ -175,19 +216,58 @@ namespace Scalpal.Handoff.Editor
         {
             var flow = Flow(out _); var native = Native(flow.gameObject);
             var ticket = Ticket("virtual"); Confirm(ticket);
-            Set(flow, "surgery", native); Set(flow, "phase", "timeout"); Set(flow, "failure", "Complete Jarvis feedback before entering the OR.");
+            Set(flow, "surgery", native); Set(flow, "phase", "timeout"); Set(flow, "failure", "Finish the interview before entering the OR.");
             var routine = (IEnumerator)Call(flow, "ConfirmTimeOut");
             Assert(routine.MoveNext() && Get<string>(flow, "failure") == "", "a new Begin practice clears the previous error");
             HandoffRun.Clear();
             Assert(!routine.MoveNext() && !Get<bool>(flow, "loading"), "a response for a cleared ticket releases the loading latch");
         }
 
+        // AR: the coach freezes the volunteer's Presage baseline at the Time-Out (POST with an empty body).
+        // VR has no volunteer, so the charted vitals stay and nothing is posted.
+        static void TimeOutBaselineOnlyInAr()
+        {
+            var flow = Flow(out _); var native = Native(flow.gameObject);
+            Set(native, "coachSessionId", "coach-fixture");
+            Assert(native.TimeOutBaseline() == null, "VR Time-Out posts no baseline");
+            native.presentation.passthrough = true;
+            var request = native.TimeOutBaseline();
+            Assert(request != null && Field<string>(request, "method") == "POST" && Field<string>(request, "path") == "/coach/sessions/coach-fixture/vitals/baseline"
+                && Field<string>(request, "body") == "{}", "AR Time-Out posts an empty body to the session's vitals baseline");
+            Set(native, "coachSessionId", "");
+            Assert(native.TimeOutBaseline() == null, "a captions-only Time-Out without a coach session posts nothing");
+        }
+
+        static void ToolsHiddenUntilPractice()
+        {
+            var flow = Flow(out _); var native = Native(flow.gameObject);
+            native.workbench = native.gameObject.AddComponent<NativeWorkbench>();
+            var tool = GameObject.CreatePrimitive(PrimitiveType.Cube).AddComponent<Scalpal.Instruments.InstrumentBehaviour>();
+            var table = GameObject.CreatePrimitive(PrimitiveType.Cube); table.name = "Workbench";
+            try
+            {
+                native.workbench.tools = new[] { tool };
+                Set(flow, "surgery", native);
+                bool Hidden(GameObject item) => item.GetComponentsInChildren<Renderer>(true).All(renderer => renderer.forceRenderingOff);
+                foreach (var phase in new[] { "register", "briefing", "timeout" })
+                {
+                    Set(flow, "phase", phase); Call(flow, "ShowSurgeryTools", !flow.PreparingTheatre);
+                    Assert(Hidden(tool.gameObject) && Hidden(table), "the instrument table and tools are not drawn during " + phase);
+                }
+                Assert(tool.GetComponent<Collider>().enabled && tool.gameObject.activeSelf, "hiding the tools keeps their colliders and active state");
+                Set(flow, "phase", "practice"); Call(flow, "ShowSurgeryTools", !flow.PreparingTheatre);
+                Assert(!Hidden(tool.gameObject) && tool.GetComponentsInChildren<Renderer>().All(renderer => !renderer.forceRenderingOff) && table.GetComponent<Renderer>().forceRenderingOff == false,
+                    "the tools and table appear when practice begins");
+            }
+            finally { UnityEngine.Object.DestroyImmediate(tool.gameObject); UnityEngine.Object.DestroyImmediate(table); }
+        }
+
         static void NewRunResetsState()
         {
             var flow = Flow(out _);
-            var office = Office(flow.gameObject, new EncounterState { encounterId = "enc-officefixture1", patientId = "patient-office-fixture", phase = "scored",
+            var office = Office(flow.gameObject, new EncounterState { encounterId = "int-officefixture1", patientId = "patient-office-fixture", phase = "scored",
                 assessment = new EncounterAssessment { procedure = "colectomy" } }, Score("patient-office-fixture"));
-            Set(flow, "failure", "Complete Jarvis feedback before entering the OR."); Set(flow, "coachTried", true); Set(flow, "realigns", 2);
+            Set(flow, "failure", "Finish the interview before entering the OR."); Set(flow, "coachTried", true); Set(flow, "realigns", 2);
             Assert((bool)Call(flow, "ImportOffice", office) && HandoffRun.Current != null, "positive control: scored office imports a ticket");
             Assert(Get<string>(flow, "failure") == "" && !Get<bool>(flow, "coachTried") && Get<int>(flow, "realigns") == 0,
                 "the new run does not inherit an old error or coach-retry state");
@@ -207,7 +287,7 @@ namespace Scalpal.Handoff.Editor
             var go = Fixture("LegacyOfficeRouteFixture");
             var native = go.AddComponent<NativeCaseSession>();
             native.presentation = go.AddComponent<NativePresentation>(); native.presentation.passthrough = true;
-            var state = new EncounterState { encounterId = "enc-legacyroute1", patientId = "patient-legacy-fixture", phase = "scored",
+            var state = new EncounterState { encounterId = "int-legacyroute1", patientId = "patient-legacy-fixture", phase = "scored",
                 assessment = new EncounterAssessment { procedure = "colectomy" } };
             Assert(EncounterOfficeRoute.PrepareSurgery(state, Score(state.patientId), "lap_appendectomy", "http://localhost:8787", out var reason, "legacy-session", "legacy-attempt"),
                 "positive control: legacy producer prepared: " + reason);
@@ -233,7 +313,7 @@ namespace Scalpal.Handoff.Editor
             var flow = Flow(out var card);
             var ticket = Ticket("virtual"); ticket.escalated = ticket.challengeSeen = ticket.consequenceSeen = true;
             Set(flow, "phase", "score"); Tick(flow);
-            Assert(Heading(card).StartsWith("Clinical reasoning", StringComparison.Ordinal), "scorecard renders");
+            Assert(Heading(card).StartsWith("Interview score · 70/100", StringComparison.Ordinal) && Get<string>(card, "copy").Contains("Missed · What is the plan? Right answer: Laparoscopic appendectomy") && Actions(card).SequenceEqual(new[] { "To theatre" }), "compact interview scorecard: score, missed rounds with the right answer, one To theatre button");
             Select(card, 0);
             Assert(Phase(flow) == "theatre", "To theatre after a completed challenge goes straight to Theatre (was " + Phase(flow) + ")");
             ticket.consequenceSeen = false; Set(flow, "phase", "score"); Tick(flow); Select(card, 0);
@@ -245,9 +325,9 @@ namespace Scalpal.Handoff.Editor
         static void WaitingCardReturnsAndThrottles()
         {
             var flow = Flow(out var card);
-            var office = Office(flow.gameObject, new EncounterState { encounterId = "enc-waitingfixture", patientId = "patient-office-fixture", phase = "scored",
+            var office = Office(flow.gameObject, new EncounterState { encounterId = "int-waitingfixture", patientId = "patient-office-fixture", phase = "scored",
                 assessment = new EncounterAssessment { procedure = "colectomy" } }, Score("patient-office-fixture"));
-            Set(office, "working", true); // Jarvis feedback still pending: import must refuse.
+            Set(office, "blocking", 1); // an interview request is still pending: import must refuse.
             Set(flow, "office", office); Set(flow, "phase", "office");
             Tick(flow);
             var actions = Actions(card);
@@ -339,12 +419,16 @@ namespace Scalpal.Handoff.Editor
             Set(office, "sharedSessionId", "office-session"); Set(office, "sharedAttemptId", "office-attempt");
             return office;
         }
-        static EncounterScore Score(string patient) => new EncounterScore { patientId = patient, patientName = "Fixture", procedureId = "lap_appendectomy",
-            procedureTitle = "Laparoscopic appendectomy", total = 70, max = 100, grade = "C", spoken = "Fixture score.", site = "Abdomen", urgency = "urgent",
+        static EncounterScore Score(string patient) => new EncounterScore { kind = "interview", patientId = patient, patientName = "Fixture", procedureId = "lap_appendectomy",
+            procedureTitle = "Laparoscopic appendectomy", total = 70, max = 100, grade = "Solid", spoken = "", site = "Abdomen", urgency = "urgent",
+            sections = new[] { new EncounterScoreSection { id = "plan", label = "Plan", score = 0, max = 15 } },
+            rounds = new[] { new InterviewRoundResult { stage = "plan", prompt = "What is the plan?", max = 15,
+                picked = new InterviewPickedChoice { key = "B", text = "Observe overnight", grade = "wrong" }, best = new InterviewPickedChoice { key = "A", text = "Laparoscopic appendectomy" } } },
+            feedback = new[] { "The surgery this patient needs is a laparoscopic appendectomy." },
             carryoverItems = Array.Empty<EncounterCarryoverItem>() };
         static HandoffTicket Ticket(string mode)
         {
-            var state = new EncounterState { encounterId = "enc-lifecyclefixture", patientId = "patient-lifecycle-fixture", phase = "scored" };
+            var state = new EncounterState { encounterId = "int-lifecyclefixture", patientId = "patient-lifecycle-fixture", phase = "scored" };
             var ticket = HandoffRun.Begin(state, Score(state.patientId), "http://localhost:8787");
             ticket.presentationMode = mode; ticket.attemptId = "lifecycle-attempt"; ticket.sharedSessionId = "lifecycle-session";
             ticket.verifiedCase = new SurgicalCase { patientId = ticket.patientId, caseId = "lifecycle-case", urgency = "urgent" };

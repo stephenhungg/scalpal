@@ -59,6 +59,10 @@ Allowlist and required argument:
 | `requestHint` | none |
 | `pausePractice` | none |
 | `resumePractice` | none |
+| `handInstrument` | `targetId` (stand instrument id); optional `argNumber`: 0 = left hand, 1 = right hand, absent = either |
+| `highlightInstrument` | `targetId` (stand instrument id) |
+
+Instrument actions are the scrub nurse's: coach, operator **and viewer** may request them (a browser scrub nurse joins as a viewer); every other action stays coach/operator only. The module accepts only open-case stand instruments: `skin_marker`, `scalpel`, `toothed_forceps`, `retractor`, `babcock`, `hemostat`, `right_angle_clamp`, `metzenbaum_scissors`, `suture_tie`, `suction_irrigator`, `laparoscope_30`. The command row's `requestedRole` says who asked (`coach` = Jarvis, `viewer`/`operator` = nurse or attending).
 
 Flow:
 
@@ -75,6 +79,10 @@ Local pause on the headset never waits for this round trip.
 `postCoachMessage(speaker: learner | coach | system, text)` and `setCoachStatus(offline | connecting | listening | thinking | speaking | error, detail?)`. The companion shows exactly what Jarvis posts. Matthew decides what is posted; no second agent runs in the companion.
 
 Voice credentials: `requestServiceGrant(grantId, sessionId, 'voice')` → the gateway fills `payload` with `{"provider":"elevenlabs","agentId","signedUrl","conversationToken?"}` in a row visible only to the requester (`my_service_grants`). The ElevenLabs API key stays on the gateway.
+
+## Robot learner verdicts
+
+`postRobotResult(sessionId, stepId, success, pathErrorMm?, policySuccessRate?, demosHuman, demosSynthetic, videoUrl?)` (coach or operator) appends a `robot_result` row stamped with the current attempt; members read them through `session_robot_results`. `policySuccessRate` is a 0..1 fraction. The last 500 rows per session are kept.
 
 ## Artifacts and the grant pattern
 

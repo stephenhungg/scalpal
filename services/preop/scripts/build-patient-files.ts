@@ -1,5 +1,5 @@
 // Builds the committed pre-op office content for each patient: patient.md (the voice patient's persona),
-// patient_status.md (clinical context Jarvis reads in the OR) and interview.json (the fixed choice-based
+// patient_status.md (clinical context Scalpal reads in the OR) and interview.json (the fixed choice-based
 // interview). Inputs: the FinchNode demo record, the authored case plan (buildCase), the authored encounter
 // (catalog/encounters.ts) and Stephen's dossier (docs/patients/<subjectId>.md). Claude drafts the files; the
 // script validates them and writes content/patients/<subjectId>/. The committed files are the source of
@@ -118,7 +118,7 @@ Length: 400 to 700 words. Output only the markdown, no code fence.${feedback}`;
 async function buildStatusMd(inputs: string): Promise<string> {
   const system = `${SHARED}
 
-Write patient_status.md: clinical context for Jarvis, the attending surgeon coach, to use later in the operating room. Third person, concise, clinical. Markdown sections: identity and demographics; presentation; key history, exam and test findings (use the encounter's authored results); working diagnosis; procedure (use the case plan's procedureTitle and procedureId) and urgency; chart risk flags and exactly how each changes the operation (tie to the considerations and steps); data gaps and chart discrepancies; what a learner should have elicited in the interview (the critical items first). Length: 250 to 450 words. Output only the markdown, no code fence.`;
+Write patient_status.md: clinical context for Scalpal, the attending surgeon coach, to use later in the operating room. Third person, concise, clinical. Markdown sections: identity and demographics; presentation; key history, exam and test findings (use the encounter's authored results); working diagnosis; procedure (use the case plan's procedureTitle and procedureId) and urgency; chart risk flags and exactly how each changes the operation (tie to the considerations and steps); data gaps and chart discrepancies; what a learner should have elicited in the interview (the critical items first). Length: 250 to 450 words. Output only the markdown, no code fence.`;
   return stripFence(await ask(system, inputs));
 }
 

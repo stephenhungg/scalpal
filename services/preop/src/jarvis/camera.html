@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Jarvis Camera</title>
+<title>Scalpal Camera</title>
 <style>
   :root { --bg: #0b0e12; --panel: #131820; --line: #222a35; --text: #e6ebf2; --muted: #8a96a8; --accent: #5cc8ff; --ok: #4ade80; --warn: #fbbf24; --danger: #f87171; }
   * { box-sizing: border-box; }
@@ -34,11 +34,11 @@
 </head>
 <body>
 <header>
-  <h1>Jarvis Camera</h1>
+  <h1>Scalpal Camera</h1>
   <select id="camera" aria-label="Camera"><option value="">Default camera</option></select>
   <button id="go" class="primary">Start camera</button>
   <label class="muted"><input type="checkbox" id="mirror"> mirror view</label>
-  <label class="muted" title="Off: the page only watches. On: it sends tracking, focus and touch events into the live coach session and acks Jarvis's highlights. Leave off while a real headset is running."><input type="checkbox" id="headset"> act as the headset</label>
+  <label class="muted" title="Off: the page only watches. On: it sends tracking, focus and touch events into the live coach session and acks Scalpal's highlights. Leave off while a real headset is running."><input type="checkbox" id="headset"> act as the headset</label>
   <span id="sess" class="pill">no coach session</span>
   <span id="track" class="pill">no body</span>
   <span id="fps" class="pill">0 fps</span>
@@ -49,7 +49,7 @@
   <div>
     <section>
       <h2>Current step</h2>
-      <div id="step" class="big">Start a surgery on the Jarvis page, then start the camera.</div>
+      <div id="step" class="big">Start a surgery on the Scalpal page, then start the camera.</div>
       <div class="kv">
         <div>Targets</div><div id="targets"></div>
         <div>Finger on</div><div id="focus">nothing</div>
@@ -58,10 +58,10 @@
       <label class="muted"><input type="checkbox" id="follow" checked> use the step's instrument automatically</label><br>
       <label class="muted"><input type="checkbox" id="byobject"> pick the instrument from the real object I'm holding (boxes)</label>
       <div class="row"><button id="identify">Identify what I'm pointing at</button><button id="confirm">Confirm step</button></div>
-      <p class="muted">Point with your index finger over the patient's abdomen. Pinch (thumb to index) to use the instrument there. Jarvis hears your actions only while "act as the headset" is on.</p>
+      <p class="muted">Point with your index finger over the patient's abdomen. Pinch (thumb to index) to use the instrument there. Scalpal hears your actions only while "act as the headset" is on.</p>
     </section>
     <section style="margin-top:16px">
-      <h2>What Jarvis just saw</h2>
+      <h2>What Scalpal just saw</h2>
       <div id="feed"></div>
     </section>
   </div>

@@ -564,6 +564,11 @@ table.data tr:last-child td {
   border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
   align-self: flex-start;
 }
+.bubble.patient {
+  background: var(--panel-2);
+  border: 1px dashed var(--line);
+  align-self: flex-start;
+}
 .bubble.learner {
   background: var(--panel-2);
   border: 1px solid var(--line);
@@ -906,4 +911,257 @@ textarea {
 }
 .home-sessions {
   margin-top: 40px;
+}
+
+/* ---------- Vitals ---------- */
+
+.vitals-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.vitals-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  min-width: 0;
+}
+.vitals-value {
+  font-size: 34px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.vitals-trace {
+  display: block;
+  width: 100%;
+  height: 38px;
+  margin-top: 6px;
+}
+
+/* ---------- Live logs (operating room) ---------- */
+
+.simlog-vitals {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--info-bg);
+  color: var(--info);
+  font-size: 14px;
+}
+.simlog-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.simlog-chip {
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--text-3);
+  background: transparent;
+}
+.simlog-chip.on {
+  color: var(--text);
+  background: var(--panel-2);
+  border-color: var(--line-strong);
+}
+.timeline.simlog {
+  max-height: 420px;
+}
+.simlog-kind {
+  color: var(--text-3);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.simlog li.bad .simlog-text {
+  color: var(--bad);
+}
+.simlog li.warn .simlog-text {
+  color: var(--warn);
+}
+.simlog li.simlog-alert {
+  background: var(--bad-bg);
+}
+.simlog li.simlog-alert.warn {
+  background: var(--warn-bg);
+}
+.simlog li.simlog-vitals .mono {
+  color: var(--info);
+}
+.vitals-preview {
+  display: block;
+  width: 100%;
+  border: 1px solid var(--line);
+}
+
+/* ---------- Live OR console ---------- */
+
+.or-grid {
+  display: grid;
+  grid-template-columns: minmax(300px, 1fr) minmax(0, 1.15fr) minmax(320px, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 1200px) {
+  .or-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+@media (max-width: 760px) {
+  .or-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.or-step {
+  font-family: var(--serif);
+  font-size: 24px;
+  line-height: 1.2;
+}
+
+.or-vitals {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--line);
+  border: 1px solid var(--line);
+}
+.or-stat {
+  background: var(--panel);
+  padding: 8px 10px;
+  min-width: 0;
+}
+.or-stat-value {
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.or-checklist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+  font-size: 13px;
+}
+.or-checklist li {
+  display: flex;
+  gap: 8px;
+  color: var(--text-3);
+}
+.or-checklist li.done {
+  color: var(--text-2);
+}
+.or-checklist li.current {
+  color: var(--text);
+}
+.or-check {
+  width: 12px;
+  color: var(--accent);
+}
+
+.or-transcript,
+.or-activity,
+.or-tray {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.or-transcript {
+  max-height: 640px;
+  overflow-y: auto;
+}
+.or-line {
+  display: grid;
+  gap: 2px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+}
+.or-who {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-3);
+}
+.or-line.coach .or-who {
+  color: var(--info);
+}
+.or-line.learner .or-who {
+  color: var(--accent);
+}
+.or-line.patient .or-who {
+  color: var(--warn);
+}
+.or-line.system {
+  color: var(--text-2);
+}
+
+.or-hands {
+  display: flex;
+  gap: 4px;
+}
+.or-hands .chip {
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+.or-hands .chip.on {
+  color: var(--accent-ink);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.or-tray li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--line);
+}
+.or-hand {
+  justify-content: flex-start;
+}
+.or-tray-status {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.or-activity {
+  max-height: 420px;
+  overflow-y: auto;
+}
+.or-activity li {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+.or-activity-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.or-spark {
+  width: 100%;
+  height: 40px;
+  display: block;
 }

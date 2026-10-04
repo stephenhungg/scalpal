@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using Scalpal.Anatomy;
@@ -191,17 +192,27 @@ namespace Scalpal.Quest
                 ((HasHandoff || OfficeHandoff != null) && candidate.procedureId != SelectedProcedureId) ||
                 candidate.procedure == null || candidate.brief == null || !candidate.brief.synthetic ||
                 (candidate.status != "ready" && candidate.status != "needs_review"))
-            { candidate = null; Message = "Case service unavailable or case/assets mismatch. Left menu: retry connection"; yield break; }
+            { candidate = null; Message = "The case could not be loaded from the coach service."; yield break; }
+            if (HasHandoff && HandoffRun.Current.skipped)
+            {
+                // Skip to surgery: no interview to recheck. The live case is the source; its chart flags are the risks.
+                var ticket = HandoffRun.Current;
+                if (candidate.patientId != ticket.patientId || candidate.procedureId != ticket.procedureId || candidate.procedure?.id != ticket.procedureId)
+                { candidate = null; Message = "The case changed after you skipped to surgery. Return to explore."; yield break; }
+                HandoffVerified = true; ticket.verifiedCase = candidate; ticket.scorecard.carryoverItems = EncounterContract.ChartRisks(candidate.brief);
+                reviewed = true; Phase = "Confirmed"; preview.gameObject.SetActive(false);
+                Message = "Complete the theatre Time-Out before practice"; yield break;
+            }
             if (HasHandoff)
             {
                 busy = true;
                 string stateJson = null, scoreJson = null;
-                var path = "/encounters/" + Uri.EscapeDataString(HandoffRun.Current.encounterId);
+                var path = EncounterContract.OfficePath(HandoffRun.Current.encounterId);
                 yield return Request("GET", path, null, value => stateJson = value);
                 yield return Request("GET", path + "/score", null, value => scoreJson = value);
                 if (epoch != generation) yield break;
                 EncounterReply stateReply = null, scoreReply = null;
-                try { if (stateJson != null) stateReply = JsonUtility.FromJson<EncounterReply>(stateJson); if (scoreJson != null) scoreReply = JsonUtility.FromJson<EncounterReply>(scoreJson); } catch (ArgumentException) { }
+                try { stateReply = EncounterContract.ReadOffice(stateJson, HandoffRun.Current.encounterId); scoreReply = EncounterContract.ReadOffice(scoreJson, HandoffRun.Current.encounterId); } catch (ArgumentException) { }
                 busy = false;
                 if (!EncounterSurgeryBinding.Validate(HandoffRun.Current.sourceOffice, candidate, stateReply, scoreReply, out var refusal)
                     || !HandoffRun.Verify(HandoffRun.Current, stateReply?.state, scoreReply?.scorecard, candidate, out refusal))
@@ -217,6 +228,7 @@ namespace Scalpal.Quest
         void Update()
         {
             if (!workbench) return;
+            PumpSharedTools(Time.realtimeSinceStartup);
             if (sharedAttemptReady && realtime.Paired && !SharedMatches)
             {
                 generation++; ResetHandoffRecovery();
@@ -228,6 +240,7 @@ namespace Scalpal.Quest
                 Message = "Shared session/attempt changed; Left menu: start a new matching attempt";
             }
             UpdateHandoffCoachRecovery();
+            StampRobotStep();
             bool fitValid = RegistrationReady && Practicing && SharedMatches && !recoveringLocalCoach && (!localCoachReady || coach.IsSynchronized);
             patientFrame.gameObject.SetActive(fitValid);
             anatomy.SetRegistrationValid(fitValid);
@@ -248,10 +261,13 @@ namespace Scalpal.Quest
                 {
                     if (!input.IdentifyFocused(out var reason)) Message = reason;
                 }
-                if (y && !previousY) ToggleVoice();
+                // Push to talk: Jarvis hears the learner only while Y is held (the mic streams silence otherwise),
+                // so table talk does not trigger replies. The first press also connects the voice.
+                PushToTalk(y);
+                if (y && !previousY && !voice.Connected && voice.Status != "connecting") ToggleVoice();
                 previousB = b; previousX = x; previousY = y;
             }
-            else previousB = previousX = previousY = false;
+            else { previousB = previousX = previousY = false; PushToTalk(false); }
             string focus = input.FocusedPartId ?? "";
             if (focus != selected) { selected = focus; coach.Focus(focus); }
             if (Time.unscaledTime >= nextUi)
@@ -296,6 +312,8 @@ namespace Scalpal.Quest
             var ticket = HandoffRun.Current;
             reason = "Waiting for the committed scored office encounter in the paired session.";
             if (ticket?.sourceOffice == null || !realtime || !realtime.Paired || realtime.SessionId != ticket.sourceOffice.sharedSessionId) return false;
+            // A skipped run has no encounter row; the office's paired session is its provenance.
+            if (ticket.skipped) { reason = ""; return true; }
             if (!realtime.TryGetEncounterBinding(ticket.encounterId, out var session, out var attempt, out var patient, out var phase)
                 || !HandoffRun.SourceBindingMatches(ticket, session, attempt, patient, phase)) return false;
             reason = ""; return true;
@@ -372,7 +390,7 @@ namespace Scalpal.Quest
                 string caseJson = null, encounterJson = null, scoreJson = null;
                 yield return Request("GET", "/patients/" + Uri.EscapeDataString(SelectedPatientId ?? "") + "/case", null, value => caseJson = value);
                 if (epoch != generation) yield break;
-                string encounterPath = "/encounters/" + Uri.EscapeDataString(OfficeHandoff.encounterId ?? "");
+                string encounterPath = EncounterContract.OfficePath(OfficeHandoff.encounterId);
                 yield return Request("GET", encounterPath, null, value => encounterJson = value);
                 if (epoch != generation) yield break;
                 yield return Request("GET", encounterPath + "/score", null, value => scoreJson = value);
@@ -381,8 +399,8 @@ namespace Scalpal.Quest
                 try
                 {
                     if (caseJson != null) liveCase = JsonUtility.FromJson<SurgicalCase>(caseJson);
-                    if (encounterJson != null) liveEncounter = JsonUtility.FromJson<EncounterReply>(encounterJson);
-                    if (scoreJson != null) liveScore = JsonUtility.FromJson<EncounterReply>(scoreJson);
+                    liveEncounter = EncounterContract.ReadOffice(encounterJson, OfficeHandoff.encounterId);
+                    liveScore = EncounterContract.ReadOffice(scoreJson, OfficeHandoff.encounterId);
                 }
                 catch (ArgumentException) { }
                 if (!EncounterSurgeryBinding.Validate(OfficeHandoff, liveCase, liveEncounter, liveScore, out var bindingReason))
@@ -394,7 +412,7 @@ namespace Scalpal.Quest
             if (!SharedMatches || !RegistrationReady)
             { busy = false; Message = "Shared attempt or body fit changed while verifying; confirm and retry"; yield break; }
             long responseCode = 0;
-            yield return Request("POST", "/coach/sessions", JsonUtility.ToJson(CoachRequest()), value => json = value, code => responseCode = code);
+            yield return Request("POST", "/coach/sessions", CoachRequestJson(), value => json = value, code => responseCode = code);
             if (epoch != generation) yield break;
             if (!SharedMatches || !RegistrationReady) { busy = false; Message = "Shared attempt or body fit changed while loading; confirm and retry"; yield break; }
             Created created = null;
@@ -405,7 +423,11 @@ namespace Scalpal.Quest
                 created.snapshot.patientId != SelectedPatientId || created.snapshot.procedureId != SelectedProcedureId || created.snapshot.mode != PresentationMode)
             { busy = false; Message = "Coach case differs from the reviewed case; restart selection"; yield break; }
             coachSessionId = created.sessionId;
-            voicePrompt = created.systemPrompt; voiceGreeting = HasHandoff ? "Scrubbed in with you. Time-out: confirm patient, procedure and site." : created.firstMessage; voiceContext = created.context;
+            // There is no Time-Out panel to confirm against: the coach's own opening states the time-out and starts the
+            // first step ("Let's begin: ..."), so Jarvis never waits for a confirmation that cannot come.
+            voicePrompt = created.systemPrompt; voiceContext = created.context;
+            voiceGreeting = !string.IsNullOrWhiteSpace(created.firstMessage) ? created.firstMessage
+                : HasHandoff ? "Scrubbed in with you. Time-out done. Let's begin with the first step." : "";
             if (HasHandoff)
             {
                 busy = false; Message = "Jarvis ready. Confirm the Time-Out rows.";
@@ -414,6 +436,11 @@ namespace Scalpal.Quest
             BeginReviewedPractice();
         }
 
+        [Serializable] public class SkippedCreateRequest { public string patientId, mode, runId; }
+        // POST /coach/sessions body. A skipped run sends no encounterId at all: there is no interview to carry over.
+        public string CoachRequestJson() => HandoffRun.Current?.skipped == true
+            ? JsonUtility.ToJson(new SkippedCreateRequest { patientId = SelectedPatientId, mode = PresentationMode, runId = HandoffRun.Current.runId })
+            : JsonUtility.ToJson(CoachRequest());
         public CreateRequest CoachRequest() => new CreateRequest { patientId = SelectedPatientId, mode = PresentationMode, encounterId = HandoffRun.Current?.encounterId ?? OfficeHandoff?.encounterId, runId = HandoffRun.Current?.runId };
         public bool PrepareTimeOut()
         {
@@ -425,8 +452,13 @@ namespace Scalpal.Quest
             if (!HasHandoff || !HandoffVerified || busy || HandoffRun.Current.practiceStarted || !SharedMatches || !RegistrationReady || !HandoffRun.Current.AllConfirmed || (!CoachPrepared && !(captionsOnly && CaptionFallbackAllowed))) return false;
             HandoffRun.Current.timeOutConfirmed = true;
             exercise.requireCoachSynchronization = CoachPrepared;
-            return BeginReviewedPractice();
+            if (!BeginReviewedPractice()) return false;
+            var baseline = TimeOutBaseline(); if (baseline != null) StartCoroutine(baseline);
+            return true;
         }
+        // AR Time-Out: the coach captures the volunteer's measured (Presage) baseline; VR keeps the charted vitals.
+        public IEnumerator TimeOutBaseline() => PresentationMode != "mixed_reality" || !CoachPrepared ? null
+            : Request("POST", "/coach/sessions/" + Uri.EscapeDataString(coachSessionId) + "/vitals/baseline", "{}", _ => { });
         bool BeginReviewedPractice()
         {
             exercise.explicitCoachSessionId = coachSessionId;
@@ -490,9 +522,7 @@ namespace Scalpal.Quest
             if (!SharedMatches || candidate == null) return false;
             try
             {
-                // Subscribe the capture owner before Begin opens the segment.
-                var capture = Scalpal.Capture.HandCaptureRecorder.Ensure();
-                capture.realtimeUri = realtime.uri; capture.realtimeDatabase = realtime.database;
+                ResetRobotDemo();
                 if (HasHandoff)
                     RecapSessionIntegration.Ensure().Begin(HandoffRun.Current, candidate, boundSharedSession, boundSharedAttempt,
                         coachSessionId, coachBaseUrl, realtime.GetClientAccessToken());
@@ -533,13 +563,15 @@ namespace Scalpal.Quest
         void EventHandled(CaseEvent action, CaseResult result)
         {
             RecordLocalCoachEvent(action, result.stepId);
+            RobotDemoProgress(result);
             // Body ticks and fluid snapshots must not overwrite the learner's message or flood the shared event log.
             if (action.type == CaseEventType.Surgery && BodyState.IsTelemetry(action.evidence) && result.mistake == null && !result.advanced && !result.completed)
             { Publish(); return; }
             if (result.mistake != null)
             {
+                // The coach's alert feed voices mistakes (instant clips, paced cautions); prompting the agent on every
+                // mistake as well made Jarvis talk constantly.
                 mistakes++; Message = result.mistake.feedback;
-                voice.SendUserMessage("Simulator feedback: " + Message);
             }
             else if (result.advanced) { completedSteps++; Message = "Step completed"; }
             else Message = "Action recorded; complete the remaining targets";
@@ -574,7 +606,11 @@ namespace Scalpal.Quest
 
         void SharedCommand(Command command)
         {
-            if (!SharedMatches) { realtime.ResolveCommand(command, "rejected", "The native case is not bound to this shared attempt"); return; }
+            if (!SharedMatches)
+            {
+                realtime.ResolveCommand(command, "rejected", "The native case is not bound to this shared attempt");
+                FinishSharedTool(command.CommandId, "failed: the native case is not bound to this shared attempt", true); return;
+            }
             bool applied = false; string reason = "Action unavailable in this native phase";
             var activeAnatomy = Phase == "Selecting" || Phase == "Confirmed" ? preview : anatomy;
             switch (command.Action)
@@ -599,12 +635,14 @@ namespace Scalpal.Quest
                     if (Phase == "Practicing") { practicePaused = true; anatomy.SetRegistrationValid(false); coach.Tracking(false); applied = true; } break;
                 case "resumePractice":
                     if (Phase == "Practicing" && RegistrationReady) { practicePaused = false; applied = true; } break;
+                case "handInstrument": case "highlightInstrument": SharedInstrumentCommand(command); return;
                 case "requestHint":
                     realtime.ResolveCommand(command, "unavailable", "Coach hints are available through native Jarvis; async hint confirmation is not implemented"); return;
             }
             Publish(); realtime.ResolveCommand(command, applied ? "applied" : "rejected", applied ? null : reason);
         }
 
+        public void PushToTalk(bool held) { if (voice) voice.MicrophoneMuted = !held; }
         void ToggleVoice()
         {
             if (voice.Connected || voice.Status == "connecting") { voiceRequested = false; voice.Disconnect(); }
@@ -619,11 +657,18 @@ namespace Scalpal.Quest
         {
             if (handoffVoiceAllowed && CoachPrepared && !voice.Connected && voice.Status != "connecting") ConnectVoice();
         }
-        void ConnectVoice() { if (HasHandoff && !handoffVoiceAllowed) return; voiceContextForce = true; voice.ConfigureConversation(voicePrompt, voiceGreeting, voiceContext); voice.Connect(coachSessionId); }
-        void VoiceTool(QuestJarvisVoice.ToolRequest request)
+        string greetedSession = "";
+        void ConnectVoice()
         {
-            voice.ResolveClientTool(request, "This action is unavailable in the native exercise", true);
+            if (HasHandoff && !handoffVoiceAllowed) return; voiceContextForce = true; voice.MicrophoneMuted = true;
+            // Greet once per coach session. A reconnect (focus loss, pause, Time-Out retry) is a fresh provider
+            // conversation, so it gets what was already said instead of the greeting again.
+            bool greeted = greetedSession == coachSessionId; greetedSession = coachSessionId;
+            voice.ConfigureConversation(voicePrompt, greeted ? "" : voiceGreeting, greeted ? ReconnectContext(voiceContext, voice.RecentLines) : voiceContext);
+            voice.Connect(coachSessionId);
         }
+        public static string ReconnectContext(string context, IReadOnlyList<string> said) => said == null || said.Count == 0 ? context
+            : context + "\n[EARLIER THIS SESSION YOU SAID] " + string.Join(" | ", said) + "\nYou already said these. Do not greet again or repeat them; continue from the current step.";
         void VoiceTranscript(string source, string text)
         {
             // Transcripts stay in memory, never in logs or shared exercise event storage.
@@ -698,7 +743,7 @@ namespace Scalpal.Quest
             if (PresentationMode == mode) return true; // Idempotent: preserve fit, coach and Time-Out.
             if (busy || ending || (Phase != "Selecting" && Phase != "Confirmed" && Phase != "Recap"))
             { reason = "Finish or explicitly retry the current practice before changing mode."; return false; }
-            // This is capability/consent gating, not the old office-specific VR policy.
+            // This is capability gating, not the old office-specific VR policy.
             if (mode == "mixed_reality" && (HasHandoff || OfficeHandoff != null) && !HandoffRun.Preflight.ArAvailable)
             { reason = HandoffRun.Preflight.UnavailableReason; return false; }
             if (mode == "mixed_reality" && !bodyRegistration)
@@ -706,7 +751,7 @@ namespace Scalpal.Quest
 
             generation++; ResetHandoffRecovery();
             handoffVoiceAllowed = false; voice.Disconnect(); coachSessionId = "";
-            voicePrompt = voiceGreeting = voiceContext = ""; voiceContextForce = true;
+            voicePrompt = voiceGreeting = voiceContext = ""; voiceContextForce = true; greetedSession = ""; voice.ForgetSaid();
             CaptionFallbackAllowed = false;
             coach.Tracking(false); coach.UseSession("");
             exercise.explicitCoachSessionId = ""; exercise.requireCoachSynchronization = true;
@@ -770,7 +815,7 @@ namespace Scalpal.Quest
                     + "\nOffice: " + OfficeHandoff.scorecard.total + "/100 · " + OfficeHandoff.scorecard.grade
                     + "\nLearner proposed: " + OfficeHandoff.assessment.procedure + "\n" + body;
             string registration = presentation && presentation.passthrough ? "\n" + (bodyRegistration ? bodyRegistration.Status : "Body registration missing") : "\nVirtual mannequin fit";
-            status.text = $"SCALPAL | {Phase} | {PresentationMode}\n{body}\n{Message}{registration}\nXR: {(workbench.IsReady ? "ready" : "paused")} | Shared: {realtime.Status}\nCoach: {(exercise.CoachMatches ? "synchronized" : coach.SyncFailureReason)} | Voice: {voice.Status}" + (HasHandoff ? "\nMode: chosen at the theatre handoff" : OfficeHandoff == null ? "\nRight stick: AR/VR in selection" : "\nRight stick: AR/VR in selection; AR needs green operator preflight");
+            status.text = $"Scalpal | {Phase} | {PresentationMode}\n{body}\n{Message}{registration}\nXR: {(workbench.IsReady ? "ready" : "paused")} | Shared: {realtime.Status}\nCoach: {(exercise.CoachMatches ? "synchronized" : coach.SyncFailureReason)} | Voice: {voice.Status}" + (HasHandoff ? "\nMode: chosen at the theatre handoff" : OfficeHandoff == null ? "\nRight stick: AR/VR in selection" : "\nRight stick: AR/VR in selection; AR needs green operator preflight");
         }
         IEnumerator Request(string method, string path, string body, Action<string> receive, Action<long> statusCode = null)
         {

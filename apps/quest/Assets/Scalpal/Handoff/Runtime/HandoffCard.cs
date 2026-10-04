@@ -1,40 +1,40 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using Scalpal.Brand;
+using TMPro;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.XR;
-using InputDevice = UnityEngine.XR.InputDevice;
-using CommonUsages = UnityEngine.XR.CommonUsages;
 
 namespace Scalpal.Handoff
 {
-    /// <summary>World-locked, paginated handoff surface. Rendering and input only; no case authority.</summary>
+    /// <summary>World-locked, paginated handoff surface in the Scalpal brand. Rendering and input only; no case authority.</summary>
     public sealed class HandoffCard : MonoBehaviour
     {
-        public Font font;
-        public Material glass, buttonMaterial, textMaterial;
         public Camera viewer;
         public float distance = 1.2f;
         public bool Visible => content && content.activeSelf;
         public int PageCount => pages.Count;
         public int Page => page;
+        // Ems in metres at the 1.2 m card distance: body 0.034 (37 mm/m), labels 0.040 (43 mm/m), title 0.050.
         const float Width = 1.18f, TextWidth = 1.04f, LineHeight = .046f;
-        const int BodyLines = 6, FontSize = 80;
-        const float BodySize = .0052f, LabelSize = .0068f;
-        static readonly Color Ink = new Color(.94f, .95f, .91f);
+        const int BodyLines = 6;
+        public const float BodySize = .034f, LabelSize = .040f, TitleSize = .050f;
+        static Color Ink => ScalpalBrand.Ink;
         readonly List<string> pages = new List<string>();
         readonly List<Target> targets = new List<Target>();
         readonly List<UnityEngine.Object> owned = new List<UnityEngine.Object>();
         readonly List<Mesh> meshes = new List<Mesh>();
         GameObject content;
-        Material textInk, surfaceMaterial, actionMaterial;
-        LineRenderer pointer;
+        ScalpalBrand brand;
+        readonly ScalpalPointerHand[] pointers = { new ScalpalPointerHand(0, "HandoffRayLeft"), new ScalpalPointerHand(1, "HandoffRayRight") };
+        public ScalpalPointerHand Pointer(int hand) => pointers[hand];
         Action<int> selected;
         string heading, copy;
         string[] actions = Array.Empty<string>();
         bool[] available;
-        bool triggerHeld, armed, positioned, focused = true, paused;
+        bool positioned, focused = true, paused;
         int page, hovered = -1;
         sealed class Target
         {
@@ -42,6 +42,7 @@ namespace Scalpal.Handoff
             public Renderer renderer;
             public int action;
             public bool enabled;
+            public HandoffCardTarget hit;
         }
 
         public void Show(string title, string body, string[] labels, Action<int> onSelect, bool[] enabled = null)
@@ -52,7 +53,7 @@ namespace Scalpal.Handoff
             heading = title ?? ""; copy = body ?? "";
             actions = labels == null ? Array.Empty<string>() : (string[])labels.Clone();
             available = enabled == null ? null : (bool[])enabled.Clone();
-            EnsureMaterials();
+            EnsureBrand();
             if (!positioned) Recenter();
             page = 0; pages.Clear();
             var lines = Wrap(copy, BodySize, TextWidth);
@@ -65,34 +66,23 @@ namespace Scalpal.Handoff
         public void Hide()
         {
             if (content) content.SetActive(false);
-            if (pointer) pointer.enabled = false;
-            positioned = false; armed = false; selected = null;
+            foreach (var pointer in pointers) pointer.Clear();
+            // A card the learner dragged into place stays there for the next card.
+            if (!dragged) positioned = false;
+            selected = null; dragHand = -1;
         }
 
         public void Recenter()
         {
             if (!viewer) viewer = Camera.main;
             if (!viewer) return;
-            Vector3 forward = Vector3.ProjectOnPlane(viewer.transform.forward, Vector3.up).normalized;
-            if (forward.sqrMagnitude < .01f) forward = Vector3.forward;
-            transform.SetPositionAndRotation(viewer.transform.position + forward * distance - Vector3.up * .06f, Quaternion.LookRotation(forward));
+            // Level with the horizon: yaw-only facing the viewer, never the head's pitch or roll.
+            if (!ScalpalPlacement.Place(transform, viewer.transform, distance, .06f))
+                transform.SetPositionAndRotation(viewer.transform.position + Vector3.forward * distance - Vector3.up * .06f, Quaternion.identity);
             positioned = true;
         }
 
-        void EnsureMaterials()
-        {
-            if (!font) throw new InvalidOperationException("HandoffCard requires the shared Inter font reference.");
-            if (textInk) return;
-            if (!glass || !buttonMaterial || !textMaterial)
-                throw new InvalidOperationException("HandoffCard requires the shared EncounterOffice glass, button and text materials.");
-            textInk = new Material(textMaterial); textInk.renderQueue = 3020;
-            surfaceMaterial = new Material(glass); surfaceMaterial.renderQueue = 3000;
-            actionMaterial = new Material(buttonMaterial); actionMaterial.renderQueue = 3010;
-            owned.Add(textInk); owned.Add(surfaceMaterial); owned.Add(actionMaterial);
-            Font.textureRebuilt += RefreshFont;
-        }
-
-        void RefreshFont(Font changed) { if (changed == font && textInk) textInk.mainTexture = font.material.mainTexture; }
+        void EnsureBrand() { if (!brand) brand = ScalpalBrand.Active; }
 
         void Render()
         {
@@ -108,62 +98,65 @@ namespace Scalpal.Handoff
                 actionHeights[i] = Mathf.Max(.102f, Wrap(actions[i] ?? "", LabelSize, TextWidth-.045f).Count*.055f+.025f);
                 buttonsHeight += actionHeights[i]+.018f;
             }
-            float height = .54f + buttonsHeight + (pages.Count > 1 ? .10f : 0);
-            var backdrop = Surface("Glass", new Rect(-Width / 2, -height / 2, Width, height), 0, surfaceMaterial, new Color(.075f,.12f,.135f,.97f));
+            float height = .505f + buttonsHeight + (pages.Count > 1 ? .10f : 0);
+            var backdrop = Surface("Glass", new Rect(-Width / 2, -height / 2, Width, height), 0, brand.glass, new Color(.018f,.018f,.022f,.93f));
             // Consume the office rig's physics ray so a handoff click cannot activate a control behind this card.
             var blocker = backdrop.gameObject.AddComponent<BoxCollider>();
             blocker.size = new Vector3(Width,height,.025f);
             float top = height / 2;
-            Text("PhaseStepper", "EXPLORE  /  OFFICE  /  OR  /  REPLAY  /  RECAP", new Vector3(-TextWidth/2, top-.045f, -.008f), .0035f, new Color(.76f,.80f,.77f));
-            Text("Title", string.Join("\n", Wrap(heading, LabelSize, TextWidth)), new Vector3(-TextWidth/2, top-.105f, -.012f), LabelSize, Ink);
+            Text("Title", string.Join("\n", Wrap(heading, TitleSize, TextWidth, ScalpalTextRole.Title)), new Vector3(-TextWidth/2, top-.05f, -.012f), TitleSize, Ink, ScalpalTextRole.Title);
             var lines = pages[page].Split('\n');
             for (int i=0; i<lines.Length; i++)
             {
-                float bodyY=top-.218f-i*LineHeight;
+                float bodyY=top-.183f-i*LineHeight;
                 bool found=lines[i].StartsWith("found",StringComparison.OrdinalIgnoreCase);
                 bool missed=lines[i].StartsWith("missed",StringComparison.OrdinalIgnoreCase);
                 if(found || missed)
-                    Surface("RiskChip",new Rect(-TextWidth/2-.008f,bodyY-.046f,TextWidth+.016f,.043f),-.008f,actionMaterial,
-                        found ? new Color(.19f,.34f,.29f,.98f) : new Color(.36f,.27f,.18f,.98f));
-                Text("Body",lines[i],new Vector3(-TextWidth/2,bodyY,-.014f),BodySize,Ink);
+                    Surface("RiskChip",new Rect(-TextWidth/2-.008f,bodyY-.046f,TextWidth+.016f,.043f),-.008f,brand.button,
+                        found ? new Color(.10f,.10f,.105f,.96f) : new Color(.20f,.075f,.03f,.96f), missed);
+                Text("Body",lines[i],new Vector3(-TextWidth/2,bodyY-.004f,-.014f),BodySize,found||missed ? Ink : ScalpalBrand.Ink70);
             }
             float y = -height/2 + buttonsHeight + .012f;
             if (pages.Count > 1)
             {
-                AddTarget("Previous", new Rect(-TextWidth/2,y+.005f,.31f,.075f), -1, page > 0, .0048f);
-                Text("Page", $"{page+1} / {pages.Count}", new Vector3(0,y+.041f,-.018f), .0048f, Ink, TextAnchor.MiddleCenter);
-                AddTarget("Next", new Rect(TextWidth/2-.31f,y+.005f,.31f,.075f), -2, page+1 < pages.Count, .0048f);
+                AddTarget("Previous", new Rect(-TextWidth/2,y+.005f,.31f,.075f), -1, page > 0, LabelSize);
+                Text("Page", $"{page+1} / {pages.Count}", new Vector3(0,y+.0425f,-.018f), BodySize, ScalpalBrand.Ink70, ScalpalTextRole.Body, TextAnchor.MiddleCenter);
+                AddTarget("Next", new Rect(TextWidth/2-.31f,y+.005f,.31f,.075f), -2, page+1 < pages.Count, LabelSize);
             }
             for (int i=0; i<actions.Length; i++)
             {
                 y -= actionHeights[i]+.018f;
                 AddTarget(actions[i], new Rect(-TextWidth/2, y+.013f, TextWidth,actionHeights[i]), i, available == null || i >= available.Length || available[i], LabelSize);
             }
-            RefreshFont(font);
         }
 
         void AddTarget(string label, Rect bounds, int action, bool enabled, float size)
         {
-            var surface = Surface("Action_"+action,bounds,-.008f,actionMaterial,enabled ? new Color(.24f,.36f,.33f,.96f) : new Color(.17f,.20f,.21f,.92f));
-            targets.Add(new Target { bounds=bounds, renderer=surface, action=action, enabled=enabled });
-            Text("ActionLabel",string.Join("\n",Wrap(label ?? "",size,bounds.width-.045f)),new Vector3(bounds.center.x,bounds.center.y,-.018f),size,enabled ? Ink : new Color(.66f,.70f,.70f),TextAnchor.MiddleCenter);
+            var surface = Surface("Action_"+action,bounds,-.008f,brand.button,enabled ? ScalpalBrand.ButtonTint : ScalpalBrand.ButtonDisabledTint);
+            // A real collider per action: the shared aim-pose pointer presses it like every other Scalpal button.
+            var collider = surface.gameObject.AddComponent<BoxCollider>();
+            collider.center = new Vector3(bounds.center.x, bounds.center.y, -.012f); collider.size = new Vector3(bounds.width, bounds.height, .01f);
+            var hit = surface.gameObject.AddComponent<HandoffCardTarget>(); hit.card = this; hit.index = targets.Count;
+            targets.Add(new Target { bounds=bounds, renderer=surface, action=action, enabled=enabled, hit=hit });
+            Text("ActionLabel",string.Join("\n",Wrap(label ?? "",size,bounds.width-.045f,ScalpalTextRole.Label)),new Vector3(bounds.center.x,bounds.center.y,-.018f),size,enabled ? Ink : ScalpalBrand.InkDisabled,ScalpalTextRole.Label,TextAnchor.MiddleCenter);
         }
 
-        TextMesh Text(string name,string value,Vector3 position,float size,Color color,TextAnchor anchor=TextAnchor.UpperLeft)
+        TextMeshPro Text(string name,string value,Vector3 position,float size,Color color,ScalpalTextRole role=ScalpalTextRole.Body,TextAnchor anchor=TextAnchor.UpperLeft)
         {
-            var text = new GameObject(name).AddComponent<TextMesh>();
-            text.transform.SetParent(content.transform,false); text.transform.localPosition=position;
-            text.font=font; text.fontSize=FontSize; text.characterSize=size; text.lineSpacing=LineHeight/(FontSize*size*.1f);
-            text.anchor=anchor; text.alignment=anchor==TextAnchor.MiddleCenter ? TextAlignment.Center : TextAlignment.Left;
-            text.color=color; text.richText=false; text.text=value;
-            font.RequestCharactersInTexture(value,FontSize,FontStyle.Normal);
-            text.GetComponent<Renderer>().sharedMaterial=textInk;
+            int lines=Mathf.Max(1,(value??"").Split('\n').Length);
+            var font=brand.Font(role);
+            float pitch=size*ScalpalBrandLayout.ExtentPerEm(font);
+            var text=brand.Text(content.transform,name,value,role,position,size,TextWidth+.02f,Mathf.Max(LineHeight,pitch)*lines*1.15f+.01f,anchor);
+            // Fixed line pitch so wrapped rows and risk chips stay aligned with the authored grid.
+            text.lineSpacing=role==ScalpalTextRole.Title?0:(LineHeight-pitch)/size*100;
+            text.color=color; text.GetComponent<ScalpalTextFit>().Fit();
             return text;
         }
 
-        List<string> Wrap(string value,float size,float width)
+        List<string> Wrap(string value,float size,float width,ScalpalTextRole role=ScalpalTextRole.Body)
         {
-            font.RequestCharactersInTexture(value,FontSize,FontStyle.Normal);
+            EnsureBrand();
+            var font=brand.Font(role);
             var lines=new List<string>();
             foreach (string paragraph in value.Replace("\r","").Split('\n'))
             {
@@ -171,11 +164,11 @@ namespace Scalpal.Handoff
                 foreach (string word in paragraph.Split(' '))
                 {
                     string part=(line.Length>0 ? " " : "")+word;
-                    float partWidth=Measure(part,size);
+                    float partWidth=Measure(font,part,size,role);
                     if (line.Length>0 && measured+partWidth>width) { lines.Add(line.ToString()); line.Clear(); measured=0; part=word; }
                     foreach (char c in part)
                     {
-                        float advance=Measure(c.ToString(),size);
+                        float advance=Measure(font,c.ToString(),size,role);
                         if (line.Length>0 && measured+advance>width) { lines.Add(line.ToString()); line.Clear(); measured=0; }
                         line.Append(c); measured+=advance;
                     }
@@ -184,13 +177,21 @@ namespace Scalpal.Handoff
             }
             return lines;
         }
-        float Measure(string value,float size)
+        // Advance widths from the static SDF font asset (with its fallback), in metres at this em size.
+        static float Measure(TMP_FontAsset font,string value,float size,ScalpalTextRole role)
         {
-            float width=0; foreach (char c in value) if (font.GetCharacterInfo(c,out var glyph,FontSize,FontStyle.Normal)) width+=glyph.advance*size*.1f;
+            float width=0, tracking=role==ScalpalTextRole.Title||role==ScalpalTextRole.Wordmark?ScalpalBrand.DisplayTracking*.01f*size:0;
+            foreach (char c in value) width+=Advance(font,c)*size+tracking;
             return width;
         }
+        static float Advance(TMP_FontAsset font,char c)
+        {
+            if (font.characterLookupTable.TryGetValue(c,out var character)) return character.glyph.metrics.horizontalAdvance/font.faceInfo.pointSize*font.faceInfo.scale*character.scale;
+            if (font.fallbackFontAssetTable!=null) foreach (var fallback in font.fallbackFontAssetTable) if (fallback && fallback.characterLookupTable.ContainsKey(c)) return Advance(fallback,c);
+            return c==' '?.3f:.6f;
+        }
 
-        Renderer Surface(string name,Rect rect,float z,Material material,Color tint)
+        Renderer Surface(string name,Rect rect,float z,Material material,Color tint,bool accent=false)
         {
             const int segments=8;
             float radius=Mathf.Min(.025f,Mathf.Min(rect.width,rect.height)*.5f);
@@ -210,62 +211,81 @@ namespace Scalpal.Handoff
             var mesh=new Mesh { name="HandoffRoundedSurface" }; mesh.SetVertices(vertices); mesh.SetUVs(0,uv); mesh.SetTriangles(indices,0); mesh.RecalculateBounds();
             var obj=new GameObject(name,typeof(MeshFilter),typeof(MeshRenderer)); obj.transform.SetParent(content.transform,false);
             obj.GetComponent<MeshFilter>().sharedMesh=mesh; meshes.Add(mesh);
-            var renderer=obj.GetComponent<Renderer>(); renderer.sharedMaterial=material; Tint(renderer,tint); return renderer;
+            var renderer=obj.GetComponent<Renderer>(); renderer.sharedMaterial=material; Tint(renderer,tint,accent);
+            renderer.shadowCastingMode=UnityEngine.Rendering.ShadowCastingMode.Off; renderer.receiveShadows=false; return renderer;
         }
-        static void Tint(Renderer renderer,Color color) { var block=new MaterialPropertyBlock(); block.SetColor("_Color",color); renderer.SetPropertyBlock(block); }
+        static void Tint(Renderer renderer,Color color,bool accent=false) => ScalpalBrand.Tint(renderer,new MaterialPropertyBlock(),color,accent);
 
         void Update()
         {
-            if (!Visible || !focused || paused) return;
+            if (!Visible || !focused || paused) { foreach (var pointer in pointers) pointer.Clear(); return; }
             if (!viewer) viewer=Camera.main;
             if (!viewer) return;
             if (!positioned) Recenter();
-            var device=InputDevices.GetDeviceAtXRNode(XRNode.RightHand);
-            device.TryGetFeatureValue(CommonUsages.triggerButton,out bool pressed);
-            bool tracked=device.isValid && device.TryGetFeatureValue(CommonUsages.isTracked,out bool isTracked) && isTracked;
-            if (tracked && device.TryGetFeatureValue(CommonUsages.devicePosition,out Vector3 position) && device.TryGetFeatureValue(CommonUsages.deviceRotation,out Quaternion rotation))
-            {
-                var origin=viewer.transform.parent;
-                var ray=new Ray(origin ? origin.TransformPoint(position) : position,origin ? origin.TransformDirection(rotation*Vector3.forward) : rotation*Vector3.forward);
-                if (!pressed) armed=true;
-                Point(ray,armed && pressed && !triggerHeld,device,true);
-            }
-            else { armed=false; if(pointer)pointer.enabled=false; }
-            triggerHeld=pressed;
+            StepPointers();
+            for (int hand = 0; hand < pointers.Length; hand++)
+                DragWith(hand, pointers[hand].LastRay, pointers[hand].LastSample.Valid ? GripSource(hand) : 0);
 #if UNITY_EDITOR
-            if (Mouse.current!=null) Point(viewer.ScreenPointToRay(Mouse.current.position.ReadValue()),Mouse.current.leftButton.wasPressedThisFrame,default,false);
+            if (Mouse.current!=null && Mouse.current.leftButton.wasPressedThisFrame && Physics.Raycast(viewer.ScreenPointToRay(Mouse.current.position.ReadValue()),out var hit,8))
+                hit.collider.GetComponent<HandoffCardTarget>()?.Press();
 #endif
         }
-        void Point(Ray ray,bool press,InputDevice device,bool showRay)
+        /// <summary>Either controller's aim-pose ray (or a pinching hand) focuses and presses this card's actions.</summary>
+        public void StepPointers()
         {
-            var local=new Ray(transform.InverseTransformPoint(ray.origin),transform.InverseTransformDirection(ray.direction));
-            int hit=-1; Vector3 point=ray.origin+ray.direction*3;
-            if (new Plane(Vector3.forward,Vector3.zero).Raycast(local,out float travel))
+            if (!Visible) return;
+            var space=viewer ? viewer.transform.parent : null;
+            int focus=-1;
+            foreach (var pointer in pointers)
             {
-                Vector3 p=local.GetPoint(travel); point=transform.TransformPoint(p);
-                for(int i=0;i<targets.Count;i++) if(targets[i].enabled && targets[i].bounds.Contains(new Vector2(p.x,p.y))) { hit=i; break; }
+                pointer.Step(space,space!=null,transform,collider=>{ var target=collider.GetComponent<HandoffCardTarget>(); return target && target.card==this ? target : null; });
+                if (pointer.Hovered is HandoffCardTarget target && focus<0) focus=target.index;
             }
-            if (showRay)
+            if (focus!=hovered) { hovered=focus; for(int i=0;i<targets.Count;i++) Tint(targets[i].renderer,!targets[i].enabled ? ScalpalBrand.ButtonDisabledTint : i==focus ? ScalpalBrand.ButtonHoverTint : ScalpalBrand.ButtonTint,targets[i].enabled && i==focus); }
+        }
+        // Grip while pointing at the card grabs it; it follows that controller's ray at the grab distance until release.
+        public static Func<int, float> GripSource { get; set; } = hand =>
+        {
+            InputDevices.GetDeviceAtXRNode(hand == 0 ? XRNode.LeftHand : XRNode.RightHand).TryGetFeatureValue(UnityEngine.XR.CommonUsages.grip, out float value);
+            return value;
+        };
+        public bool Dragging => dragHand >= 0;
+        int dragHand = -1; float dragDistance; Vector3 dragOffset; bool dragged;
+        readonly bool[] gripDown = new bool[2];
+        public void DragWith(int hand, Ray ray, float grip)
+        {
+            if (hand < 0 || hand >= gripDown.Length || !Visible || !viewer) return;
+            bool down = grip > .7f, wasDown = gripDown[hand]; gripDown[hand] = grip > .35f && (down || wasDown);
+            if (dragHand == hand)
             {
-                if (!pointer)
-                {
-                    pointer=new GameObject("HandoffRay").AddComponent<LineRenderer>(); pointer.transform.SetParent(transform,false);
-                    pointer.useWorldSpace=true; pointer.positionCount=2; pointer.startWidth=.002f; pointer.endWidth=.001f; pointer.sharedMaterial=actionMaterial;
-                }
-                pointer.enabled=true; pointer.SetPosition(0,ray.origin); pointer.SetPosition(1,point);
+                if (!gripDown[hand]) { dragHand = -1; return; }
+                Vector3 position = ray.origin + ray.direction * dragDistance + dragOffset, facing = position - viewer.transform.position; facing.y = 0;
+                transform.SetPositionAndRotation(position, facing.sqrMagnitude > 1e-6f ? Quaternion.LookRotation(facing) : transform.rotation);
+                Physics.SyncTransforms(); // button colliders move with the card for the next press
+                return;
             }
-            if(hit!=hovered)
-            {
-                for(int i=0;i<targets.Count;i++) Tint(targets[i].renderer,!targets[i].enabled ? new Color(.17f,.20f,.21f,.92f) : i==hit ? new Color(.43f,.48f,.58f,.98f) : new Color(.24f,.36f,.33f,.96f));
-                hovered=hit; if(hit>=0 && device.isValid)device.SendHapticImpulse(0,.15f,.025f);
-            }
-            if(!press || hit<0)return;
-            int action=targets[hit].action;
-            if(device.isValid)device.SendHapticImpulse(0,.3f,.045f);
+            if (dragHand >= 0 || !down || wasDown || !OnCard(ray, out float distanceAlong)) return;
+            dragHand = hand; dragDistance = distanceAlong; dragOffset = transform.position - (ray.origin + ray.direction * distanceAlong);
+            dragged = positioned = true;
+        }
+        bool OnCard(Ray ray, out float distanceAlong)
+        {
+            distanceAlong = 0;
+            if (!content || !new Plane(transform.forward, transform.position).Raycast(ray, out distanceAlong)) return false;
+            var point = ray.GetPoint(distanceAlong);
+            foreach (var renderer in content.GetComponentsInChildren<Renderer>())
+            { var bounds = renderer.bounds; bounds.Expand(.02f); if (bounds.Contains(point)) return true; }
+            return false;
+        }
+        internal bool CanPress(int index) => Visible && index>=0 && index<targets.Count && targets[index].enabled;
+        internal void PressTarget(int index)
+        {
+            if (!CanPress(index)) return;
+            int action=targets[index].action;
             if(action<0) { page+=action==-1 ? -1 : 1; Render(); } else selected?.Invoke(action);
         }
-        void OnApplicationFocus(bool value) { focused=value; armed=false; if(pointer)pointer.enabled=false; }
-        void OnApplicationPause(bool value) { paused=value; armed=false; if(pointer)pointer.enabled=false; }
+        void OnApplicationFocus(bool value) { focused=value; foreach (var pointer in pointers) pointer.Clear(); }
+        void OnApplicationPause(bool value) { paused=value; foreach (var pointer in pointers) pointer.Clear(); }
         static bool Same<T>(T[] a,T[] b)
         {
             if(a==null || b==null)return a==b;
@@ -274,6 +294,6 @@ namespace Scalpal.Handoff
             return true;
         }
         static void Dispose(UnityEngine.Object value) { if(Application.isPlaying)Destroy(value);else DestroyImmediate(value); }
-        void OnDestroy() { Font.textureRebuilt-=RefreshFont; foreach(var value in owned)if(value)Dispose(value); foreach(var mesh in meshes)if(mesh)Dispose(mesh); }
+        void OnDestroy() { foreach (var pointer in pointers) pointer.Destroy(); foreach(var value in owned)if(value)Dispose(value); foreach(var mesh in meshes)if(mesh)Dispose(mesh); }
     }
 }

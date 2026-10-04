@@ -1,0 +1,39 @@
+---
+title: "Quest app"
+description: "The Unity project that runs on Meta Quest 3S."
+---
+
+Owner: Stephen (runtime, capture, registration, Unity config). Matthew owns the anatomy experience, voice client and exercise assets.
+
+## Open the project
+
+<Steps>
+  <Step title="Pull large files">
+    ```sh
+    git lfs install && git lfs pull
+    ```
+  </Step>
+  <Step title="Open in Unity">
+    In Unity Hub, add `apps/quest` as a project and open it with **Unity 6000.0.66f2**.
+  </Step>
+  <Step title="Pick a scene">
+    | Scene | What it is |
+    | --- | --- |
+    | `Assets/Scalpal/Quest/Scenes/NativeSession.unity` | The integrated appendectomy session (the build scene) |
+    | `Assets/Scalpal/EncounterOffice/Scenes/DiagnosisOffice.unity` | The diagnosis office |
+    | `Assets/Scalpal/Quest/Scenes/NativeWorkbench.unity` | An isolated tool test |
+    | `Assets/Scalpal/Instruments/Samples/InstrumentSandbox.unity` | The original instrument sandbox |
+  </Step>
+</Steps>
+
+## Instruments
+
+The instrument kit has fourteen catalog tools plus a scalpel, with Blender sources, optimized runtime models and Unity pickup prefabs. Use **Scalpal → Instruments → Build Prefabs and Sandbox** to regenerate them. Put your own customizations in prefab variants, because the builder replaces its generated outputs.
+
+## Talking to the Mac
+
+On the headset, `localhost` means the headset. Local Mac services reach it over USB with `adb reverse`, which `scripts/quest/configure_session.py` sets up. Hosted services, like SpacetimeDB on Maincloud, are reached directly.
+
+## Source control
+
+Commit scenes, prefabs, models, scripts, materials, packages and project settings. Keep `Library/`, `Temp/`, `Obj/`, `Logs/`, `UserSettings/` and build outputs out of Git, along with credentials, participant footage and device logs.

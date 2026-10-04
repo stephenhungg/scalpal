@@ -163,7 +163,7 @@ export const exerciseEvent = table(
   }
 );
 
-/** What Jarvis (and the learner) actually said, as emitted by the coach. */
+/** What Scalpal (and the learner) actually said, as emitted by the coach. */
 export const coachMessage = table(
   { name: 'coach_message' },
   {
@@ -195,7 +195,7 @@ export const coachStatus = table(
 
 /**
  * A requested app action. The coach/operator inserts it as 'pending'; the
- * headset validates and resolves it. Jarvis should only announce success after
+ * headset validates and resolves it. Scalpal should only announce success after
  * the status becomes 'applied'.
  */
 export const command = table(
@@ -404,7 +404,7 @@ export const sweepTimer = table(
 );
 
 // ---------------------------------------------------------------------------
-// Pre-op encounter (Matthew's Jarvis lane): patient interview, case
+// Pre-op encounter (Matthew's Scalpal lane): patient interview, case
 // presentation to the attending, and the deterministic scorecard.
 // ---------------------------------------------------------------------------
 
@@ -449,6 +449,134 @@ export const encounterEvent = table(
   }
 );
 
+// ---------------------------------------------------------------------------
+// Operating-room logs (companion dashboard)
+// ---------------------------------------------------------------------------
+
+/**
+ * One line of the operating-room log, posted by the coach: what the state
+ * tracker saw, Scalpal alerts, vitals samples, checklist changes and the case
+ * outcome. Capped per session (oldest rows are dropped first).
+ */
+export const simLog = table(
+  { name: 'sim_log' },
+  {
+    id: t.u64().primaryKey().autoInc(),
+    sessionId: t.string().index('btree'),
+    /** The coach's own session id (services/preop), not the SpacetimeDB session. */
+    coachSessionId: t.string(),
+    /** 'event' | 'alert' | 'vitals' | 'checklist' | 'outcome' */
+    kind: t.string(),
+    /** One human-readable line, at most 2000 chars. */
+    text: t.string(),
+    /** Structured payload as JSON, at most 8000 chars; '' when absent. */
+    dataJson: t.string(),
+    at: t.timestamp(),
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Robot learner verdicts
+// ---------------------------------------------------------------------------
+
+/**
+ * One robot-learner verdict per attempt step: did the policy trained on the
+ * surgeon's demos reproduce the motion, how far off was the path, and how many
+ * human vs synthetic demos it learned from. Written by the coach or gateway.
+ */
+export const robotResult = table(
+  { name: 'robot_result' },
+  {
+    id: t.u64().primaryKey().autoInc(),
+    sessionId: t.string().index('btree'),
+    attemptId: t.string(),
+    stepId: t.string(),
+    success: t.bool(),
+    pathErrorMm: t.option(t.f64()),
+    /** 0..1 success rate of the policy over its evaluation rollouts. */
+    policySuccessRate: t.option(t.f64()),
+    demosHuman: t.u32(),
+    demosSynthetic: t.u32(),
+    videoUrl: t.option(t.string()),
+    at: t.timestamp(),
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Simulated patient condition (server-side physiology)
+// ---------------------------------------------------------------------------
+
+/**
+ * The authoritative simulated patient for a session. The coach starts it with
+ * the chart (or measured) baseline and feeds facts (body blood loss, active
+ * bleeds, injuries outside the field); the scheduled `patientTick` advances
+ * blood loss and vitals once a second with src/physiology.ts. Teaching model,
+ * every value is simulated. Milliliters: raw = as reported/accrued, simulated
+ * = raw x scale (demo acceleration).
+ */
+export const patientCondition = table(
+  { name: 'patient_condition' },
+  {
+    sessionId: t.string().primaryKey(),
+    /** The coach's own session id (services/preop) that owns this condition. */
+    coachSessionId: t.string(),
+    baselineHr: t.f64(),
+    baselineRr: t.f64(),
+    baselineSys: t.f64(),
+    baselineDia: t.f64(),
+    /** -1 when not charted. */
+    baselineSpo2: t.f64(),
+    /** 'chart' | 'measured' | 'demo' | 'authored' */
+    baselineSource: t.string(),
+    weightKg: t.f64(),
+    mlPerKg: t.f64(),
+    /** Estimated blood volume, weightKg x mlPerKg. */
+    ebvMl: t.f64(),
+    scale: t.f64(),
+    hr: t.i32(),
+    rr: t.i32(),
+    sys: t.i32(),
+    dia: t.i32(),
+    /** -1 when not charted. */
+    spo2: t.i32(),
+    /** Simulated loss incl. the active-bleed look-ahead, percent of EBV. */
+    bloodLossPct: t.f64(),
+    hemorrhageClass: t.u32(),
+    label: t.string(),
+    /** Raw blood lost from the surgical field (body reducer facts + server accrual). */
+    bodyLostMl: t.f64(),
+    /** Raw blood lost from injured regions outside the field (server accrual). */
+    regionLostMl: t.f64(),
+    /** Simulated blood lost: (body + region) x scale. */
+    bloodLostMl: t.f64(),
+    /** Sum of active bleed rates in the field, raw ml/min. */
+    bodyBleedMlPerMin: t.f64(),
+    /** JSON [{name, rateMlPerMin}] of active bleeds in the field (raw). */
+    activeBleedsJson: t.string(),
+    /** JSON [{region, label, bleeding, rawBleedMlPerMin, at}] (at: ms since epoch). */
+    regionInjuriesJson: t.string(),
+    /** 'in_progress' | 'completed' | 'ended' | 'died' */
+    outcomeResult: t.string(),
+    outcomeCause: t.string(),
+    outcomeAt: t.option(t.timestamp()),
+    /** Bumps on every change. */
+    version: t.u64(),
+    startedAt: t.timestamp(),
+    /** Accrual clock: blood loss is integrated up to this time. */
+    advancedAt: t.timestamp(),
+    updatedAt: t.timestamp(),
+  }
+);
+
+/** 1 Hz schedule for `patientTick`; present only while a condition is in progress. */
+export const patientTickTimer = table(
+  { name: 'patient_tick_timer' },
+  {
+    scheduledId: t.u64().primaryKey().autoInc(),
+    scheduledAt: t.scheduleAt(),
+  }
+);
+
 const spacetimedb = schema({
   serviceIdentity,
   connection,
@@ -471,6 +599,10 @@ const spacetimedb = schema({
   sweepTimer,
   encounter,
   encounterEvent,
+  simLog,
+  robotResult,
+  patientCondition,
+  patientTickTimer,
 });
 
 export default spacetimedb;

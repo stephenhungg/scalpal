@@ -10,7 +10,6 @@ using UnityEditor.XR.Management.Metadata;
 using UnityEditor.XR.OpenXR.Features;
 using UnityEngine;
 using UnityEngine.Rendering;
-using UnityEngine.XR;
 using UnityEngine.XR.Management;
 using UnityEngine.XR.OpenXR;
 using UnityEngine.XR.OpenXR.Features.Interactions;
@@ -67,17 +66,12 @@ namespace Scalpal.Quest.Editor
             foreach (var input in runtime.inputs)
             {
                 input.enabled = false;
-                var marker = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-                marker.name = "ControllerGripMarker";
-                marker.transform.SetParent(input.transform, false); marker.transform.localScale = Vector3.one * 0.035f;
-                UnityEngine.Object.DestroyImmediate(marker.GetComponent<Collider>());
-                var material = AssetDatabase.LoadAssetAtPath<Material>("Assets/Scalpal/Instruments/Materials/" +
-                    (input.controller == XRNode.LeftHand ? "scalpal_accent_blue.mat" : "scalpal_accent_gold.mat"));
-                marker.GetComponent<Renderer>().sharedMaterial = material;
+                NativeControllerHands.Install(input);
             }
             var floor = GameObject.CreatePrimitive(PrimitiveType.Cube);
             floor.name = "ToolCatchFloor";
-            floor.transform.SetPositionAndRotation(new Vector3(0, -0.08f, 0), Quaternion.identity);
+            // Top face at y = 0, the room floor and tracked floor height, so dropped tools rest on the visible floor.
+            floor.transform.SetPositionAndRotation(new Vector3(0, -0.05f, 0), Quaternion.identity);
             floor.transform.localScale = new Vector3(10, 0.1f, 10);
             floor.GetComponent<Renderer>().enabled = false;
             var text = new GameObject("HardwareTestInstructions").AddComponent<TextMesh>();
@@ -86,7 +80,7 @@ namespace Scalpal.Quest.Editor
             text.characterSize = 0.015f; text.fontSize = 48;
             text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             text.GetComponent<Renderer>().sharedMaterial = text.font.material;
-            text.text = "SCALPAL | NATIVE TOOL TEST\nGrip: pick up / release   Trigger: use tool\nA: reset tools and practice patch";
+            text.text = "Scalpal | Native tool test\nGrip: pick up / release   Trigger: use tool\nA: reset tools and practice patch";
             runtime.status = text;
             RenderSettings.ambientMode = AmbientMode.Flat; RenderSettings.ambientLight = new Color(0.6f, 0.65f, 0.7f);
             EditorSceneManager.SaveScene(scene, ScenePath);

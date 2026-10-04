@@ -1,0 +1,173 @@
+import { useEffect, useState } from 'react';
+import { VITALS_URL } from '../config';
+import { Panel, Pill, useAction } from './ui';
+
+// Volunteer vitals from services/vitals (Presage). Values only show when Presage marks them
+// stable; demo mode is labelled. The OR monitor in the headset uses the captured baseline.
+
+// trace points are [timestamp us, value]
+type TracePoint = [number, number] | number;
+// heldMs: the last stable value, kept briefly after the reading dipped below Presage's threshold
+type Reading = { bpm: number; confidence: number; heldMs?: number } | null;
+type Snapshot = {
+  mode: 'demo' | 'live';
+  label: string;
+  status: { ok: boolean; reason: string; code: number | null };
+  pulse: Reading;
+  breathing: Reading;
+  traces: { pulse: TracePoint[]; breathing: TracePoint[] };
+  updatedAt: number | null;
+  cameraBusy?: boolean; // a live session holds the camera
+};
+type Baseline = { hr: number; rr: number; source: 'measured' | 'demo' | 'authored'; note?: string };
+
+function useVitals() {
+  const [snap, setSnap] = useState<Snapshot | null>(null);
+  const [connected, setConnected] = useState(false);
+  useEffect(() => {
+    const es = new EventSource(`${VITALS_URL}/vitals/stream`);
+    es.onopen = () => setConnected(true);
+    es.onerror = () => setConnected(false);
+    es.onmessage = e => {
+      try {
+        setSnap(JSON.parse(e.data));
+        setConnected(true);
+      } catch {
+        // ignore a malformed frame
+      }
+    };
+    return () => es.close();
+  }, []);
+  return { snap, connected };
+}
+
+function Trace({ points, color }: { points: TracePoint[]; color: string }) {
+  const values = points.map(p => (Array.isArray(p) ? p[1] : p)).filter(Number.isFinite);
+  if (values.length < 2) return <div className="vitals-trace empty-trace" />;
+  const min = Math.min(...values);
+  const span = Math.max(...values) - min || 1;
+  const pts = values.map((v, i) => `${(i / (values.length - 1)) * 100},${36 - ((v - min) / span) * 32}`).join(' ');
+  return (
+    <svg className="vitals-trace" viewBox="0 0 100 38" preserveAspectRatio="none" aria-hidden>
+      <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+    </svg>
+  );
+}
+
+// One frame from the configured camera (ffmpeg on the vitals machine, no Presage quota), for
+// checking the framing before going live.
+function CameraCheck() {
+  const [src, setSrc] = useState<string | null>(null);
+  const check = useAction();
+  return (
+    <div className="stack">
+      <div className="row">
+        <span className="muted small">Check the face and upper chest are in frame before going live. Uses no quota.</span>
+        <div className="spacer" />
+        <button
+          className="btn sm"
+          disabled={check.busy}
+          onClick={() =>
+            check.run(async () => {
+              const r = await fetch(`${VITALS_URL}/preview.jpg`);
+              if (!r.ok) throw new Error((await r.json().catch(() => null))?.error ?? `HTTP ${r.status}`);
+              if (src) URL.revokeObjectURL(src);
+              setSrc(URL.createObjectURL(await r.blob()));
+            })
+          }
+        >
+          {check.busy ? 'Checking…' : 'Check camera'}
+        </button>
+      </div>
+      {check.error && <div className="notice warn">{check.error}</div>}
+      {src && <img className="vitals-preview" src={src} alt="Camera framing check" />}
+    </div>
+  );
+}
+
+function Metric({ name, unit, reading, trace, color }: { name: string; unit: string; reading: Reading; trace: TracePoint[]; color: string }) {
+  return (
+    <div className="vitals-metric">
+      <div className="muted small">{name}</div>
+      <div className="vitals-value" style={{ color: reading ? color : undefined, opacity: reading?.heldMs != null ? 0.55 : 1 }}>
+        {reading ? Math.round(reading.bpm) : '--'}
+        <span className="muted small"> {unit}</span>
+      </div>
+      <div className="muted small">
+        {!reading ? 'measuring' : reading.heldMs != null ? `held · ${Math.round(reading.heldMs / 1000)} s ago` : `${Math.round(reading.confidence)}% confidence`}
+      </div>
+      <Trace points={trace} color={color} />
+    </div>
+  );
+}
+
+export default function Vitals() {
+  const { snap, connected } = useVitals();
+  const [baseline, setBaseline] = useState<Baseline | null>(null);
+  const capture = useAction();
+
+  useEffect(() => {
+    fetch(`${VITALS_URL}/baseline`)
+      .then(r => r.json())
+      .then(setBaseline)
+      .catch(() => {});
+  }, [connected]);
+
+  const live = snap?.mode === 'live';
+  return (
+    <Panel
+      title="Volunteer vitals"
+      actions={
+        connected && snap ? (
+          <Pill tone={live ? 'ok' : 'warn'} live={live}>
+            {live ? 'Live · Presage' : 'Demo'}
+          </Pill>
+        ) : (
+          <Pill tone="muted">Offline</Pill>
+        )
+      }
+    >
+      {!connected || !snap ? (
+        <div className="notice info">
+          Vitals service not reachable at {VITALS_URL}. Start it with npm start in services/vitals.
+        </div>
+      ) : (
+        <div className="stack">
+          <div className="vitals-grid">
+            <Metric name="Pulse" unit="bpm" reading={snap.pulse} trace={snap.traces.pulse} color="var(--bad)" />
+            <Metric name="Breathing" unit="/min" reading={snap.breathing} trace={snap.traces.breathing} color="var(--info)" />
+          </div>
+          {!snap.status.ok && <div className="notice warn">{snap.status.reason}</div>}
+          <div className="row">
+            <span className="muted small">
+              Baseline{' '}
+              {baseline ? (
+                <>
+                  HR {baseline.hr} · RR {baseline.rr} <span className="muted">({baseline.source})</span>
+                </>
+              ) : (
+                'not captured'
+              )}
+            </span>
+            <div className="spacer" />
+            <button
+              className="btn sm"
+              disabled={capture.busy}
+              onClick={() =>
+                capture.run(async () => {
+                  const r = await fetch(`${VITALS_URL}/baseline/capture`, { method: 'POST' });
+                  setBaseline(await r.json());
+                })
+              }
+            >
+              Capture baseline
+            </button>
+          </div>
+          {capture.error && <div className="notice bad">{capture.error}</div>}
+          {!snap.cameraBusy && <CameraCheck />}
+          <div className="muted small">{snap.label}</div>
+        </div>
+      )}
+    </Panel>
+  );
+}

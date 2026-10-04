@@ -126,7 +126,10 @@ def main():
         print("Device clock could not be read; fresh smoke evidence cannot be assessed.")
         return 2
     if not args.no_launch:
-        launch = run("shell", "am", "start", "-n", ACTIVITY)
+        # Use the entry advertised by the Android manifest, matching a library launch.
+        # A bare component request did not establish a process in the Q7 device check.
+        launch = run("shell", "am", "start", "-a", "android.intent.action.MAIN",
+                     "-c", "android.intent.category.LAUNCHER", "-n", ACTIVITY)
         if launch.returncode or "Error:" in launch.stdout + launch.stderr:
             print("App launch failed; inspect adb locally for details.", file=sys.stderr)
             return 1

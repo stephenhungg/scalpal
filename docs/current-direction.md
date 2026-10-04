@@ -1,17 +1,15 @@
 # Current Direction
 
+**October 4 AR setup update:** Stephen removed the extra volunteer-consent confirmation for AR mode selection. AR availability depends on camera/spatial permissions and pose/coach readiness; accepted body registration still gates practice. Recording remains optional with separate learner and participant-in-frame permissions. The AR flow does not open permission dialogs; missing OS grants are restored in Quest settings. No checkbox is automatically accepted.
+
+
 ## Latest Experience Flow
 
-The user replaced the selection and presentation flow on October 3, 2026, then made the operating room a choice between AR on a real person and full VR (same day, latest). This section takes precedence over the conversational selection, rotating-preview and two-mode material below and in older documents.
+**Final vision (October 4, 2026, Matthew): [operation flow](operation-flow.md).** It takes precedence over everything below and in older documents.
 
-**Launch → press Enter → patient explore page → choose a case → diagnosis office → decide the surgery → operating room in AR (real reclining person) or VR (virtual patient) → robot replay.**
+**Launch → explore patients → 1:1 patient interview with choice rounds (no Scalpal) → interview scorecard → operating room in AR (real reclining person, Presage baseline vitals) or VR (layered virtual patient): Scalpal Time-Out, surgery breakdown and flythrough → free-form surgery with a step checklist, simulated vitals from blood loss, and possible patient death → recap → robot hand replay from VR controller motion.**
 
-1. **Launch.** The Quest app opens on a start screen. Pressing Enter (or the equivalent controller confirm) opens the explore page.
-2. **Explore page.** A large browsable view of synthetic patients built from FinchNode demo data (`services/preop` `GET /patients`, `GET /patients/:id/brief`). Each patient is a case card with chart context. Choosing one opens that patient's encounter.
-3. **Diagnosis office.** A full-VR doctor's office where the learner has a voice back-and-forth with the patient (voice agent grounded in the FinchNode chart plus authored presentation), examines and orders tests, then presents to the attending (Jarvis), who scores the diagnosis.
-4. **Choose the surgery.** The assessment fixes which procedure the patient needs. That decision, not a separate selection conversation, determines the surgical case.
-5. **Surgery simulation, AR or VR.** The learner chooses the mode at the handoff. **AR:** passthrough; a real participant reclines on a table, MediaPipe detects their body and the generic teaching anatomy is registered onto it (landmarks plus depth); invalid registration hides the anatomy and pauses scoring. **VR:** the virtual operating room with a virtual patient. Both use one shared tool/anatomy/exercise/coach core: tracked virtual tools expose the anatomy and perform the authored steps, with Jarvis coaching. The explore hub and the diagnosis office are full VR.
-6. **Robot replay (required ending).** Raw passthrough video recorded during the surgery segment is processed into hand motion and replayed on the simulated robot hand. Every run ends with this step.
+The office spec is [office interview](office-interview.md). Live state and coach context are in [surgery state](surgery-state.md). The dashboard is localhost and shows logs only, with no live POV on the web. Robot input is VR controller motion only; there is no hand camera or passthrough video.
 
 Every FinchNode demo patient needs an authored diagnosis encounter: FinchNode lists 12 scenarios, 10 of them with a patient (`connect-cancelled` and `connect-failed` have none); 8 have an authored case plan and 3 have an authored encounter, so 7 encounters are missing. Surgical simulations must exist for each procedure a diagnosis can lead to. See the [demo flow](demo-flow.md) for acceptance details, [experience UX](experience-ux.md) for the recommended interaction design, [office to OR handoff](office-to-or-handoff.md) for the AR/VR handoff spec, [surgery procedure](surgery-procedure.md) for the OR procedure build spec, [surgery state](surgery-state.md) for live state tracking and coach context, and the [integration map](system-integration.md#explore--office--or-route) for the current gaps.
 
@@ -25,7 +23,7 @@ The user selected appendectomy/abdomen for the material/physics expansion. The f
 
 ## Latest Body Registration Correction
 
-The user requires automatic detection and calibration of a real reclining participant. The active revision replaces the previous three-controller-point plane with opt-in MediaPipe image landmarks plus acquisition-time MRUK85 native environment raycasting. After three stable observations the generic organ overlay aligns automatically. B confirms the case. Lost landmarks/depth pause the patient overlay and scoring; valid stable observations automatically reacquire. This remains generic teaching anatomy, not participant-specific organs. Exact depth/image sensor synchronization and physical fit are unverified; see [body registration](body-registration.md).
+The user requires automatic detection and calibration of a real reclining participant. The active revision replaces the previous three-controller-point plane with MediaPipe image landmarks plus acquisition-time MRUK85 native environment raycasting. Integrated AR entry automatically starts detection after silent capability checks. After three stable observations the generic organ overlay aligns automatically; the handoff asks the learner whether it looks right. Lost landmarks/depth pause the patient overlay and scoring; valid stable observations automatically reacquire. This remains generic teaching anatomy, not participant-specific organs. Exact depth/image sensor synchronization and physical fit are unverified; see [body registration](body-registration.md).
 
 
 Updated October 3, 2026 after the user removed the monetary/onchain component. This page takes precedence over older architecture, flow, research, and team-plan documents where they disagree.
@@ -36,13 +34,13 @@ Solana, wallets, onchain challenge programs, Devnet payouts, and money for compl
 
 ## Remaining Thesis
 
-AI guides people through mixed-reality learning and practice. Recorded passthrough video can supply estimated hand movements that are mapped onto a simulated robot hand for replay. The longer-term hypothesis is that useful demonstrations could support robot learning. Replay does not itself demonstrate a learned autonomous policy.
+AI guides people through mixed-reality learning and practice. Recorded controller motion and inputs supply demonstrations that are mapped onto a simulated robot hand for replay. The longer-term hypothesis is that useful demonstrations could support robot learning. Replay does not itself demonstrate a learned autonomous policy.
 
-The working experience is the [latest experience flow](#latest-experience-flow) above. The earlier sequence (discuss an exercise with Jarvis → rotating anatomy preview → fit anatomy to a real reclining participant → practice → replay) is superseded.
+The working experience is the [latest experience flow](#latest-experience-flow) above. The earlier sequence (discuss an exercise with Scalpal → rotating anatomy preview → fit anatomy to a real reclining participant → practice → replay) is superseded.
 
 ## Latest Body Overlay Direction
 
-The user explicitly requests MediaPipe detection of a person lying on a table and generic virtual anatomy attached to the body landmarks. The current implementation uses an opt-in ephemeral local pose service, calibrated Quest camera rays, an automatically measured anterior torso surface and stable acquisition; it does not infer metric body depth from MediaPipe z. Native presentation now defaults to AR, with a 42-part organ overview and the shared nine-target scored exercise. Physical detection/alignment remains the acceptance checkpoint. See [body registration](body-registration.md).
+The user explicitly requests MediaPipe detection of a person lying on a table and generic virtual anatomy attached to the body landmarks. The current implementation uses an ephemeral local pose service, calibrated Quest camera rays, an approximate anterior torso plane from live depth and stable acquisition; it does not infer metric body depth from MediaPipe z. The handoff chooses AR or VR; the standalone OR defaults to AR. Current native validation reports an 81-part overview and the shared scored targets. See the [AR audit](ar-surgery-audit.md) for source and physical acceptance limits. Physical detection/alignment remains the acceptance checkpoint. See [body registration](body-registration.md).
 
 ## Two Presentation Modes
 
@@ -54,11 +52,11 @@ A static CC0 room/patient preview is prepared in `apps/quest/Assets/Scalpal/Envi
 
 ## Work Status
 
-The user previously asked to wait for Nathan's plan, then requested storage/realtime planning and explicitly assigned the updated implementation lane: **Nathan owns the companion website plus SpacetimeDB and routing; Matthew continues to own Jarvis**. See [Nathan's implementation plan](nathan-plan.md) and [data/storage design](data-and-realtime.md). The earlier blanket wait does not block this assigned lane. The active team implementations are consolidated on main; the [integration map](system-integration.md) identifies their source snapshots and missing connections. The work-order documents describe their assigned target, not a complete deployment. The exact shared exercise, robot model, and other unresolved decisions remain open. No GitHub identity mapping for Nathan is assumed.
+The user previously asked to wait for Nathan's plan, then requested storage/realtime planning and explicitly assigned the updated implementation lane: **Nathan owns the companion website plus SpacetimeDB and routing; Matthew continues to own Scalpal**. See [Nathan's implementation plan](nathan-plan.md) and [data/storage design](data-and-realtime.md). The earlier blanket wait does not block this assigned lane. The active team implementations are consolidated on main; the [integration map](system-integration.md) identifies their source snapshots and missing connections. The work-order documents describe their assigned target, not a complete deployment. The exact shared exercise, robot model, and other unresolved decisions remain open. No GitHub identity mapping for Nathan is assumed.
 
 The companion website is a live observer view, not another voice agent. It combines shared session/coach/processing state with a separately transported composited headset video feed. The existing Mac mirror is a proposed video source to validate, not the final companion website or a verified network stream.
 
-The repo contains an openable Unity project at `apps/quest`, committed scenes/assets/packages/settings and the [instrument kit](../assets/instruments/README.md). The [hardware test](native-workbench.md) records deployment/tracking evidence and the user-confirmed tool-motion correction. Main now assembles Matthew's case/coach/anatomy, Nathan's shared-state adapter and a native transport for Matthew's existing Jarvis agent. Local service exchanges and synthetic Unity checks are verified; the full physical session and native voice remain unverified. Earlier camera/bottle results concern a separate experiment. Silas's merged processor supports right or left Shadow hands and kinematic MuJoCo replay. Video capture and real-person anatomy fit remain unresolved; the gateway worker/trajectory adapter is now implemented, with physical clip validation still required; see the [integration map](system-integration.md).
+The repo contains an openable Unity project at `apps/quest`, committed scenes/assets/packages/settings and the [instrument kit](../assets/instruments/README.md). The [hardware test](native-workbench.md) records deployment/tracking evidence and the user-confirmed tool-motion correction. Main now assembles Matthew's case/coach/anatomy, Nathan's shared-state adapter and a native transport for Matthew's existing Scalpal agent. Local service exchanges and synthetic Unity checks are verified; the full physical session and native voice remain unverified. Earlier camera/bottle results concern a separate experiment. Silas's merged processor supports right or left Shadow hands and kinematic MuJoCo replay. Video capture and real-person anatomy fit remain unresolved; the gateway worker/trajectory adapter is now implemented, with physical clip validation still required; see the [integration map](system-integration.md).
 
 ## Reusable Anatomy Direction
 

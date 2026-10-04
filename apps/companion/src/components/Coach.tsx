@@ -15,20 +15,20 @@ export default function Coach({ data }: { data: SessionData }) {
 
   return (
     <Panel
-      title="Jarvis"
+      title="Scalpal"
       flush
       actions={coachStatus ? <StatusPill status={coachStatus.status} label={`Coach ${coachStatus.status}`} /> : null}
     >
       {coachStatus?.detail && <div className="panel-body small muted">{coachStatus.detail}</div>}
       {shown.length === 0 ? (
-        <Empty>Nothing said yet in this attempt. The transcript appears as Jarvis talks with the learner.</Empty>
+        <Empty>Nothing said yet in this attempt. The transcript appears as Scalpal talks with the learner.</Empty>
       ) : (
         <div className="transcript" ref={ref} aria-live="polite">
           {shown.map(m => (
             <div key={String(m.messageId)} className={`bubble ${m.speaker}`}>
               {m.speaker !== 'system' && (
                 <span className="who">
-                  {m.speaker === 'coach' ? 'Jarvis' : 'Learner'} · {clock(m.at)}
+                  {m.speaker === 'coach' ? 'Scalpal' : m.speaker === 'patient' ? 'Patient' : m.speaker === 'system' ? 'System' : 'Learner'} · {clock(m.at)}
                 </span>
               )}
               {m.text}

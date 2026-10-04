@@ -118,6 +118,33 @@ namespace Scalpal.Quest.Editor
 
             Assert(session.exercise.CanScore && session.Practicing && session.voice.Connected,
                 "positive control: local case can score with a matched shared identity");
+            // Jarvis must not repeat himself: his own lines (and clips the simulator played in his voice) are remembered,
+            // and a reconnect carries them instead of a second greeting.
+            session.voice.ForgetSaid();
+            session.voice.RememberSaid("Scrubbed in with you."); session.voice.RememberSaid("Scrubbed in with you."); session.voice.RememberSaid("Stop. Bleeding from the appendicular artery.");
+            for (int i = 0; i < 12; i++) session.voice.RememberSaid("line " + i);
+            Assert(session.voice.RecentLines.Count == 8 && session.voice.RecentLines[7] == "line 11", "Jarvis keeps his most recent lines, without consecutive duplicates");
+            string resumed = NativeCaseSession.ReconnectContext("STATE", session.voice.RecentLines);
+            Assert(resumed.StartsWith("STATE") && resumed.Contains("line 11") && resumed.Contains("Do not greet again"), "a reconnect tells Jarvis what he already said");
+            Assert(NativeCaseSession.ReconnectContext("STATE", new string[0]) == "STATE", "a first connect carries only the state");
+            session.voice.ForgetSaid();
+            // One voice at a time: while a clip plays the agent's buffered reply is held, then plays in order.
+            var buffer = (System.Collections.Generic.Queue<float>)typeof(Scalpal.Voice.QuestJarvisVoice).GetField("outputSamples", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(session.voice);
+            var read = typeof(Scalpal.Voice.QuestJarvisVoice).GetMethod("ReadAudio", BindingFlags.Instance | BindingFlags.NonPublic);
+            buffer.Clear(); for (int i = 0; i < 8; i++) buffer.Enqueue(.5f);
+            var frame = new float[4];
+            session.voice.HoldOutput = true; read.Invoke(session.voice, new object[] { frame });
+            Assert(frame.All(sample => sample == 0) && buffer.Count == 8, "a held agent reply stays silent and keeps its place while a clip plays");
+            session.voice.HoldOutput = false; read.Invoke(session.voice, new object[] { frame });
+            Assert(frame.All(sample => sample == .5f) && buffer.Count == 4, "the agent reply plays after the clip, in order");
+            buffer.Clear();
+            // Push to talk: Jarvis must hear silence unless the learner holds Y, so table talk never triggers replies.
+            session.PushToTalk(false);
+            Assert(session.voice.MicrophoneMuted && Scalpal.Voice.QuestJarvisVoice.EncodeMicrophonePcm(new[] { .5f, -.5f }, 1, session.voice.MicrophoneMuted).All(b => b == 0),
+                "Jarvis receives only silence while push-to-talk is released");
+            session.PushToTalk(true);
+            Assert(!session.voice.MicrophoneMuted, "holding push-to-talk opens the microphone to Jarvis");
+            session.PushToTalk(false);
             Assert(session.exercise.Submit(CaseEvent.PlacePort("umbilical"), out var accepted, out reason) && accepted.advanced,
                 "positive control: real authored umbilical placement advances");
             Assert(session.exercise.Current != null && session.exercise.Current.id == "working_ports",

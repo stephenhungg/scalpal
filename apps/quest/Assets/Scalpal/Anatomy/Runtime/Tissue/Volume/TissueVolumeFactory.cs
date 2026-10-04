@@ -27,7 +27,7 @@ namespace Scalpal.Anatomy.Tissue
                 new[]{-.115287f,-.113287f,-.110287f,-.106287f,-.101287f,-.100287f},materials,new[]{0,1,1,1,2},true);
         }
         // Explicit open-body teaching layers, in the registered wound frame (+Z inward).
-        // Parameters are authored approximations; the calibrated legacy coupon is unchanged.
+        // Parameters are authored approximations; the legacy coupon is unchanged.
         public static TissueVolume OpenAbdominalWall()
         {
             var materials=new[] {
@@ -44,21 +44,35 @@ namespace Scalpal.Anatomy.Tissue
                 if(materials[i].id!=layer.id)throw new InvalidOperationException("Open wall material/descriptor mismatch");
                 depths[i]=layer.startDepthMeters;depths[i+1]=layer.endDepthMeters;layers[i]=i;
             }
-            return Grid(new Bounds(new Vector3(0,0,depths[depths.Length-1]*.5f),new Vector3(.16f,.10f,depths[depths.Length-1])),8,5,
-                depths,materials,layers,true);
+            // Incision-aligned conforming refinement: 7.5 mm along the 60 mm wound,
+            // 6 mm across its centre. Outer attachments stay coarse. All layers share
+            // the same faces (no hanging nodes), including fascia and peritoneum.
+            var xs=new[]{-.08f,-.05f,-.03f,-.0225f,-.015f,-.0075f,0,.0075f,.015f,.0225f,.03f,.05f,.08f};
+            var ys=new[]{-.05f,-.012f,-.006f,0,.006f,.012f,.05f};
+            var wall=Grid(xs,ys,depths,materials,layers,true,TissueVolume.MaxRefinedCutFaces);
+            wall.UseBurstJacobianSolver=true;return wall;
         }
         static TissueVolume Grid(Bounds bounds,int nx,int ny,float[] depths,VolumeMaterial[] materials,int[] layer,bool pinPerimeter)
         {
             if(nx<1||ny<1||nx>32||ny>32||depths==null||depths.Length<2||depths.Length>16||layer.Length!=depths.Length-1||bounds.size.x<=0||bounds.size.y<=0)
                 throw new ArgumentException("Invalid bounded tissue grid");
-            int nz=depths.Length-1;
+            var xs=new float[nx+1];var ys=new float[ny+1];
+            for(int x=0;x<=nx;x++)xs[x]=bounds.min.x+bounds.size.x*x/nx;
+            for(int y=0;y<=ny;y++)ys[y]=bounds.min.y+bounds.size.y*y/ny;
+            return Grid(xs,ys,depths,materials,layer,pinPerimeter);
+        }
+        static TissueVolume Grid(float[] xs,float[] ys,float[] depths,VolumeMaterial[] materials,int[] layer,bool pinPerimeter,int cutFaceBudget=TissueVolume.MaxCutFaces)
+        {
+            int nx=xs.Length-1,ny=ys.Length-1,nz=depths.Length-1;
+            for(int x=0;x<nx;x++)if(!TissueCage.Finite(new Vector3(xs[x],xs[x+1],0))||xs[x+1]<=xs[x])throw new ArgumentException("Grid X must increase");
+            for(int y=0;y<ny;y++)if(!TissueCage.Finite(new Vector3(ys[y],ys[y+1],0))||ys[y+1]<=ys[y])throw new ArgumentException("Grid Y must increase");
             for(int z=0;z<nz;z++)if(depths[z+1]<=depths[z])throw new ArgumentException("Layer depths must increase");
             int count=(nx+1)*(ny+1)*(nz+1);if(count>TissueVolume.MaxNodes)throw new ArgumentException("Grid exceeds tissue node budget");
             var nodes=new Vector3[count];var pins=new bool[count];
             int Index(int x,int y,int z)=>(z*(ny+1)+y)*(nx+1)+x;
             for(int z=0;z<=nz;z++)for(int y=0;y<=ny;y++)for(int x=0;x<=nx;x++)
             {
-                int i=Index(x,y,z);nodes[i]=new Vector3(bounds.min.x+bounds.size.x*x/nx,bounds.min.y+bounds.size.y*y/ny,depths[z]);
+                int i=Index(x,y,z);nodes[i]=new Vector3(xs[x],ys[y],depths[z]);
                 pins[i]=pinPerimeter&&(x==0||x==nx||y==0||y==ny);
             }
             var cells=new List<TissueVolume.Cell>();
@@ -69,7 +83,7 @@ namespace Scalpal.Anatomy.Tissue
                 var box=new int[8];for(int v=0;v<8;v++)box[v]=Index(x+(v&1),y+((v>>1)&1),z+((v>>2)&1));
                 for(int t=0;t<6;t++)cells.Add(new TissueVolume.Cell {a=box[tets[t,0]],b=box[tets[t,1]],c=box[tets[t,2]],d=box[tets[t,3]],material=layer[z]});
             }
-            return new TissueVolume(nodes,cells.ToArray(),materials,pins);
+            return new TissueVolume(nodes,cells.ToArray(),materials,pins,cutFaceBudget);
         }
     }
 }

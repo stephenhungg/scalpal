@@ -5,10 +5,12 @@ description = "Offline passthrough clip -> hand landmarks -> robot hand retarget
 requires-python = ">=3.10,<3.13"
 dependencies = [
     "dex-retargeting>=0.5.0",
+    "matplotlib>=3.10.9",
     "mediapipe>=0.10.14,<0.11",
     "mujoco>=3.14.0",
     "numpy>=2.2.6",
     "opencv-python>=5.0.0.93",
+    "pillow>=12.3.0",
     "torch>=2.14.1",
 ]
 

@@ -32,7 +32,7 @@ Selecting an examination is an authored simulated action, not a measurement of r
 
 ## 4. Present and Decide the Surgery
 
-The learner presents to the attending (Jarvis). The learner states the diagnosis, differential, procedure and urgency (`record_assessment`). The deterministic attending scorecard (`/encounters/:id/score`) shows what was gathered, missed and decided.
+The learner presents to the attending (Scalpal). The learner states the diagnosis, differential, procedure and urgency (`record_assessment`). The deterministic attending scorecard (`/encounters/:id/score`) shows what was gathered, missed and decided.
 
 Recommended handoff: see [experience UX](experience-ux.md#4-diagnosis--surgery-handoff) (commit, one challenge, consequence card, then the correct surgery). Earlier proposal, still open until confirmed: the authored case plan, not the learner's free choice, determines the surgery that runs next. If the learner chose the wrong procedure, the scorecard says so and the OR loads the procedure the patient actually needs. Role changes (patient → attending → surgery coach) disconnect the previous conversation and invalidate pending responses.
 
@@ -40,7 +40,7 @@ Recommended handoff: see [experience UX](experience-ux.md#4-diagnosis--surgery-h
 
 The learner chooses the mode. **VR:** fade into the virtual operating room with a virtual patient on the table. **AR:** the headset fades from the office into passthrough; the participant is lying on the table; MediaPipe detects their body and the generic teaching anatomy for this case is registered onto it (landmarks plus measured surface depth). The operator confirms the fit before practice. The overlay is scaled to that patient (`bodyScale`), with the case's anatomy, instruments, ports and steps from `GET /patients/:id/case`. Chart risks found in the office (anticoagulation, allergies, incomplete chart) carry into the pre-op check and pinned step considerations.
 
-Jarvis guides the current authored step. Tracked virtual tools and supported UI actions pass through one local dispatcher; one deliberate action produces one accepted transition. Wrong-tool/contact feedback follows the authored rubric. Controller tracking loss releases tools. Voice/network failure preserves local pause and the attempt; recovery resynchronizes confirmed state.
+Scalpal guides the current authored step. Tracked virtual tools and supported UI actions pass through one local dispatcher; one deliberate action produces one accepted transition. Wrong-tool/contact feedback follows the authored rubric. Controller tracking loss releases tools. Voice/network failure preserves local pause and the attempt; recovery resynchronizes confirmed state.
 
 Recording of raw passthrough video starts explicitly for a defined surgery segment, with capture, calibration and clock metadata plus a separate virtual scene timeline. Raw camera images contain the learner's real hands and the participant but no virtual tools or organs. Rendered or composited footage is never substituted as motion input. Lost registration hides the anatomy and pauses scoring and effects until it reacquires.
 

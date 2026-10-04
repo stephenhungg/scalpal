@@ -7,7 +7,7 @@ using UnityEngine;
 
 namespace Scalpal.Handoff.Editor
 {
-    /// <summary>Uses the actual runtime card and licensed office assets; screenshots are mono editor evidence only.</summary>
+    /// <summary>Uses the actual runtime card and brand assets; screenshots are mono editor evidence only.</summary>
     public static class HandoffCardPreview
     {
         const string Office = "Assets/Scalpal/EncounterOffice";
@@ -28,15 +28,8 @@ namespace Scalpal.Handoff.Editor
             finally { UnityEngine.Object.DestroyImmediate(go); }
         }
 
-        public static void Bind(HandoffCard card)
-        {
-            card.font = AssetDatabase.LoadAssetAtPath<Font>(Office + "/Fonts/Inter-Regular.ttf");
-            card.glass = AssetDatabase.LoadAssetAtPath<Material>(Office + "/Materials/office_glass_card.mat");
-            card.buttonMaterial = AssetDatabase.LoadAssetAtPath<Material>(Office + "/Materials/office_glass_button.mat");
-            card.textMaterial = AssetDatabase.LoadAssetAtPath<Material>(Office + "/Materials/office_world_text_Inter-Regular.mat");
-            if (!card.font || !card.glass || !card.buttonMaterial || !card.textMaterial)
-                throw new InvalidOperationException("Handoff preview requires the existing EncounterOffice Inter and glass assets.");
-        }
+        // Fonts and materials come from the shared brand resource (Resources/ScalpalBrand); nothing to bind.
+        public static void Bind(HandoffCard card) { if (!Scalpal.Brand.ScalpalBrand.Active) throw new InvalidOperationException("Brand resource missing."); }
 
         [MenuItem("Scalpal/Handoff/Capture Theatre and Time-Out")]
         public static void CapturePreviews()
@@ -57,13 +50,13 @@ namespace Scalpal.Handoff.Editor
                 camera.stereoTargetEye = StereoTargetEyeMask.None; camera.fieldOfView = 58;
                 var card = new GameObject("PreviewHandoffCard").AddComponent<HandoffCard>(); Bind(card); card.viewer = camera;
                 Directory.CreateDirectory(output);
-                card.Show("To theatre", "Priya Ramaswamy, 40\nLaparoscopic appendectomy · Urgent\nVolunteer patient: virtual organs on a real person.\nVirtual OR: a virtual patient in the operating room.\nThe operator has checked the volunteer and services.",
+                card.Show("To theatre", "Priya Ramaswamy, 40\nLaparoscopic appendectomy · Urgent\nVolunteer patient: virtual organs on a real person.\nVirtual OR: a virtual patient in the operating room.\nCamera/spatial permissions and tracking services are ready.",
                     new[] { "Volunteer patient (AR) · Recommended", "Virtual OR (VR)" }, null);
                 Capture(camera, Path.Combine(output, "theatre.png"));
                 card.Show("Time-Out", "Priya Ramaswamy, 40 · Urgent\nLaparoscopic appendectomy · Abdomen\nFOUND: Penicillin allergy\nMISSED: Anticoagulation history\nJarvis is your coach. Confirm patient and procedure.\nMistakes are expected; this is practice.",
                     new[] { "Confirm and begin practice", "Change theatre" }, null);
                 Capture(camera, Path.Combine(output, "time-out.png"));
-                card.Show("To theatre", "Priya Ramaswamy, 40\nLaparoscopic appendectomy · Urgent\nVolunteer patient unavailable: no volunteer checked in.\nContinue in the virtual operating room.",
+                card.Show("To theatre", "Priya Ramaswamy, 40\nLaparoscopic appendectomy · Urgent\nAR unavailable: body detection offline.\nContinue in the virtual operating room.",
                     new[] { "Volunteer patient (AR) · Unavailable", "Virtual OR (VR) · Recommended" }, null, new[] { false, true });
                 Capture(camera, Path.Combine(output, "theatre-ar-unavailable.png"));
                 Debug.Log("SCALPAL_HANDOFF_PREVIEW_OK monoEditorOnly=true output=" + output);
@@ -85,8 +78,7 @@ namespace Scalpal.Handoff.Editor
             try
             {
                 camera.targetTexture = render;
-                // Two draws let the dynamic Inter atlas settle after all strings are requested.
-                camera.Render(); camera.Render();
+                camera.Render();
                 RenderTexture.active = render;
                 texture.ReadPixels(new Rect(0, 0, 1920, 1440), 0, 0); texture.Apply();
                 File.WriteAllBytes(path, texture.EncodeToPNG());

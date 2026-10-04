@@ -34,6 +34,108 @@ uv run scalpal-motion run clip.mp4 --hand Right --smooth 0.3
 
 `run` writes `hand_track.json`, `motion.json`, and `replay.mp4` (H.264, plays in browsers when ffmpeg is installed) (source clip with landmarks next to the robot). Inputs are assumed unmirrored, like Quest passthrough. Pass `--mirrored` for selfie footage, since MediaPipe's handedness label assumes a mirrored image. Smoothing is off by default. With `--smooth`, the low-pass filter resets after every tracking gap. `out/` and `models/` are gitignored. Keep participant clips outside the repo.
 
+## Quest Controllers Drive the Robot Hand (current demo path)
+
+Surgery in the headset is done with Quest controllers, so controller motion is the robot input. There is no hand camera and no passthrough video in this path. The Quest's `ControllerMotionCapture` (`apps/quest/Assets/Scalpal/Robotics`) streams `scalpal.controller_motion.v1` frames over UDP: each controller's tracked pose (relative to the registered `PatientRoot` when set), grip, trigger, and held instrument.
+
+The mapping onto the floating Shadow hand of the instrument-transfer task (`learning/env.py`, physics on):
+- **Position:** controller position moves the grip point. The first tracked pose anchors to the hand's home.
+- **Yaw:** the controller's heading turns the hand.
+- **Fingers:** per finger, exactly like the VR gloves (table below).
+
+```sh
+uv run scalpal-motion teleop --consented          # window: robot hand follows the controller; each attempt saved to out/teleop
+uv run scalpal-motion send-controller             # stand-in headset: a scripted reach-and-place over UDP
+uv run scalpal-motion learn sweep --teleop out/teleop --n 1,5,10   # train and evaluate on the teleop demos
+```
+
+### Finger mapping (matches the gloved hands in the Quest build)
+
+Stephen's gloves (`apps/quest/Assets/Scalpal/Quest/Runtime/ControllerHandPose.cs`) and the robot hand read the same controller inputs the same way, so what the gloved hand does in VR is what the Shadow hand does in sim:
+
+| Controller input | Glove in VR | Shadow hand actuators |
+| --- | --- | --- |
+| Trigger | index curls | `FFJ4`, `FFJ3`, `FFJ0` blend open to grasp by trigger |
+| Grip | middle, ring, pinky curl | `MF*`, `RF*`, `LF*` blend open to grasp by grip |
+| Either | thumb follows the harder of the two | `TH*` blend by max(grip, trigger) |
+| Instrument held (`heldInstrument` non-empty) | fist closes on the handle | every finger at the full grasp, regardless of grip/trigger |
+
+"Open" is the pre-shape and "grasp" is the closed shape validated in physics (`learning-results/human_profiles.json`). The glove's 0.2 rest curl is cosmetic and is not copied, so an idle controller leaves the robot hand open. Code: `finger_curls` and `curl_vector` in `scalpal_motion/teleop.py`; test: `tests/test_teleop.py::test_finger_mapping_matches_the_quest_gloves`.
+
+Successful attempts become training demos with a real wrist path and grip timing. Lost tracking holds the last command instead of inventing motion. Recording requires `--consented`. The Shadow hand model is not committed: fetch it once (see `scalpal_motion/learning/README.md`).
+
+Verified on an M2 MacBook (branch `matthew/preop-finchnode`, carried to main):
+- **Network path:** a scripted controller reach-and-place sent over UDP placed the handle and saved the attempt.
+- **Without the network:** 5 of 5 scripted seeds placed the handle.
+- **Training data:** two such episodes, converted to demos, generated training data at 55% physics yield.
+- **Not yet run:** a real headset session. The capture compiles in the .NET check but has not run on a Quest.
+
+### Surgery-step labels from the coach
+
+```sh
+uv run scalpal-motion teleop --consented --coach http://127.0.0.1:8787                 # follow the newest coach session
+uv run scalpal-motion teleop --consented --coach http://127.0.0.1:8787 --session coach-<id>
+uv run scalpal-motion teleop --consented --coach http://127.0.0.1:8787 --patient patient-demo-sparse
+```
+
+A background thread asks the coach (`GET /coach/current`, then `GET /coach/sessions/:sid`) about every 250 ms. Every 20 Hz control frame of an attempt is stamped with the newest answer: `sessionId`, `procedureId`, `stepId`, `stepTitle`, `stepNumber`, `held` instruments, case `outcome`, plus `age_s` and `stale` (older than 2 s). Frames are stamped `null` while the coach is down or has no session; teleop never waits on it. Attempts also log the measured wrist pose (`wrist`), the 22 finger joint angles (`joints`) and frame time (`t`). The window shows the current step.
+
+When an attempt is saved and `--coach` is set, a `scalpal.robot_attempt.v1` summary is POSTed to `/coach/sessions/:sid/robot-attempts` in the background (step, steps during the attempt, held tools, success, frames, duration, max lift). Failures are printed and ignored; `--no-report` turns it off. The route is proposed and not in `services/preop` yet, so today the coach answers 404 and only the local file is written.
+
+### Export to a LeRobot-style dataset
+
+```sh
+uv run scalpal-motion export-lerobot out/teleop --out out/lerobot/scalpal_robot_hand              # JSON Lines data files
+uv run --with pyarrow scalpal-motion export-lerobot out/teleop --out out/lerobot/scalpal_robot_hand # Parquet, as LeRobot reads it
+```
+
+No LeRobot install. It writes the LeRobotDataset v2.1 folder layout:
+
+```
+meta/info.json               fps 20, features, counts, data_path template
+meta/tasks.jsonl             one task per surgery step title ("instrument transfer" for unlabeled frames)
+meta/episodes.jsonl          episode_index, tasks, length, success
+meta/episodes_stats.jsonl    per-episode min/max/mean/std/count
+meta/scalpal_episodes.jsonl  source attempt, coach session, step ids, held tools, case outcome, labeled fraction
+data/chunk-000/episode_000000.parquet  (or .jsonl without pyarrow)
+```
+
+Per frame: `observation.state` float32[26] = measured wrist x, y, z, yaw + 22 finger joints; `action` float32[22] = commanded grip point x, y, z, yaw + 18 finger actuator targets; `timestamp` (sim time, frame/20), `teleop_time_s` (wall clock), `next.done`, `next.success`, `frame_index`, `episode_index`, `index`, `task_index` (the step title at that frame). `--success-only` keeps attempts that placed the handle. Attempts recorded before state logging (no `wrist`) are skipped, not filled in. Not checked against an installed `lerobot` loader; videos are absent (`total_videos` 0) because there is no camera.
+
+**What is human data here and what is not.** The committed learning result (`learning-results/`, 96.7% policy vs 20% replay) used finger shapes extracted from one public MediaPipe sample clip; `learning-results/human_profiles.json` is that frozen extraction and is the only camera-derived file on main. Teleop uses its open and closed shapes as the two ends of the finger blend. The MediaPipe hand-camera stream (`services/hands`, `live`, `import-episode`) stayed on the branch and is not part of the demo.
+
+## Robot Learns `mark_incision` From the Headset (sim)
+
+The headset's own tracking is the egocentric record: both controllers' 6-DoF pose, grip, trigger, held instrument and the head pose, relative to `PatientRoot`, posted to the coach for one step. `robot-serve` retargets that to a simulated arm + hand, behavior-clones a policy, and grades the robot's rollouts with the same `mark_incision` predicates that grade the learner.
+
+```sh
+git -C models/menagerie sparse-checkout set shadow_hand franka_emika_panda   # once (see FETCH_HINT in mark/scene.py)
+uv run scalpal-motion robot-serve --coach http://127.0.0.1:8787   # baseline in ~15 s, then one result per new demo
+uv run scalpal-motion robot-send-demo --coach http://127.0.0.1:8787   # stand-in headset: a SYNTHETIC stroke via the demo route
+uv run scalpal-motion robot-curve                                  # -> learning-results/robot_mark_curve.json (~2 min)
+```
+
+- **Embodiment** (`mark/scene.py`): Menagerie Franka Panda (`panda_nohand.xml`) with the Menagerie Shadow hand attached at the flange, holding a skin marker in the fist (glove mapping: an instrument in hand closes every finger on the grasp shape). Skin patch `y = -0.89 x²` in the patient frame (+X patient left, +Y anterior, +Z cranial, umbilicus at the origin; right ASIS at (-0.13, -0.015, -0.14) as in `OpenSurgerySession.AuthoredRightAsis`). Kinematic: 5-DoF damped-least-squares IK puts the marker tip on the commanded point with the marker along the inward skin normal; no contact dynamics. The marker draws while the trigger is closed and the tip is within 2 mm of the skin. The patient frame is mapped into the right-handed sim with a proper rotation, so the scene is a mirror image of Unity's left-handed one; every graded quantity (distances, lengths, angles) is mirror-invariant.
+- **Grader** (`mark/grader.py`): a port of `OpenSurgeryStroke` + `FlushStroke("mark")` (error = midpoint to McBurney's point in the wound plane, length along the reference axis, folded angle) and the catalog predicates (error <= 20 mm, 50 to 80 mm, <= 25 deg). `services/preop/test/fixtures/robot-mark-strokes.json` is shared: pytest checks the port's numbers and verdicts, vitest feeds the same numbers through `BodyState` and the catalog milestone.
+- **Demos** (`mark/demos.py`): headset frames -> marker-tip path. Frames are relative to `PatientRoot`; they are shifted into the umbilicus-origin frame by `PATIENT_ROOT_TO_UMBILICUS` = (0, 1.3269, 0.2093) m, where `AuthoredPatientTorsoFrame` sits in `NativeSession.unity` (a demo body may send `frameOrigin` to override it). The capture has no marker-tip offset, so one constant vertical offset puts the trigger-held samples on the skin; the trigger-held run is the stroke. Landmarks are the authored ones (the frames carry none). Synthetic demos are scripted human-like strokes (aim offset ~7 mm, angle ~9 deg, length 46 to 80 mm, tremor); 85% pass the grader and only passing demos (synthetic or headset) are trained on. `robot-send-demo` frames are stamped `stand-in` and stay labelled synthetic.
+- **Policy** (`mark/learn.py`): the transfer task's chunked MLP and L1 BC (`learning/policy.py`, now sized from the data), 14-dim state (tip, landmarks, drawn extent, on-skin, last step), 10 x (tip step, trigger) chunks, DART-style noisy generation around each demo (400 episodes). Policies are cached per exact dataset.
+- **Evaluation**: K = 30 closed-loop rollouts on the full arm + hand sim at held-out landmarks (right ASIS +/-3 cm), patient poses (+/-5 cm, +/-15 deg) and starts.
+
+Measured (M-series Mac, CPU, October 4, 2026; synthetic demos only, 0 headset demos):
+
+| Demos (synthetic) | Success, 60 rollouts (95% CI) | Median path error |
+| --- | --- | --- |
+| 1 | 38.3% (27.1 to 51.0) | 18.8 mm |
+| 2 | 71.7% (59.2 to 81.5) | 9.8 mm |
+| 3 | 71.7% (59.2 to 81.5) | 11.4 mm |
+| 5 | 88.3% (77.8 to 94.2) | 6.2 mm |
+| 10 | 95.0% (86.3 to 98.3) | 5.0 mm |
+| 20 | 100% (94.0 to 100) | 3.7 mm |
+
+Path error = median in-plane distance of the drawn line from the accepted 6 cm McBurney line (not a grader fact). The worker's default dataset (10 synthetic) scored 29/30 (96.7%) with a 4.1 mm median path error; a cycle takes ~15 to 18 s with retraining (train ~9 s, 30 rollouts <1 s, render ~5 s) and ~7 s when the dataset is unchanged. Each replay is H.264 High / yuv420p / faststart, 1280x720, 30 fps, at most 15 s.
+
+**Say:** "In simulation, a policy behavior-cloned from marker strokes draws the McBurney incision line with a simulated Panda arm and Shadow hand, and passes the same milestone predicates that grade the learner in 95% of held-out patients at 10 demos." **Don't say:** that it learned from people (no headset demo has been recorded yet; every number above is synthetic), that a robot marked a patient, or anything about autonomous surgery. Not verified: a real Quest posting `robot-demo`, Unity's playback of the MP4, and the marker-tip offset of real captures.
+
 ## Nathan's Gateway (integration path)
 
 Nathan's gateway (`nathan/companion-realtime`, `packages/contracts/worker-api.md`) is pull-based. This worker implements it:
@@ -114,3 +216,31 @@ These are proposals for the capture and replay boundaries in [integration contra
 - Monocular estimates: metric depth, wrist position, and wrist orientation are not reconstructed. Finger poses inherit MediaPipe's 3D errors, which are clearly visible on foreshortened, palm-facing hands.
 - One hand per job (`--hand Right|Left`, right by default). Both Shadow hands are vendored, and the left was checked on a mirrored copy of the sample clip (finger bend r 0.87 to 0.98).
 - No physics, object contact, or task outcome. This is joint-target playback, not a learned policy.
+
+### Demo presentation exports
+
+`RobotWorker.baseline()` renders `out/robot/replays/baseline-<policy-key>.mp4`;
+`process()` retains `<demo-id>.mp4` for the coach upload and Quest recap consumer.
+The 1280×720 streamable H.264 replay now establishes the full arm, reveals the
+source stroke, holds a fixed contact camera, and finishes with two seconds of
+actual shared milestone facts. Source/robot radii are 0.8/1.0 mm, with a dashed
+source at its original patient-frame coordinates. Beauty rendering hides sites,
+uses a matte draped field and updates MuJoCo lights after each kinematic pose.
+Policy, IK, skin surface, landmark coordinates and grading predicates are unchanged.
+
+The baseline caption explicitly says **held-out synthetic stroke, 0 headset
+demonstrations**. Worker captures carry `headset`, `stand-in` or `synthetic`
+provenance into the renderer; unknown provenance stays unverified. Training still
+admits passing demonstrations only. A PASS overlay requires rollout success;
+position error is `markErrorMm`, not `pathErrorMm`.
+
+Render the existing saved curve without retraining:
+
+```sh
+uv run python -m scalpal_motion.mark.plot learning-results/robot_mark_curve.json /path/to/learning-curve-mark-incision.png
+```
+
+The 1920×1080 chart preserves saved aggregate values and shows the range across
+two training seeds. The same 30 evaluation scenarios are reused by those seeds;
+60 rollouts are not 60 distinct patients. Its synthetic-only caption is guarded
+against mixed/headset datasets. Exported videos/PNGs remain outside Git.

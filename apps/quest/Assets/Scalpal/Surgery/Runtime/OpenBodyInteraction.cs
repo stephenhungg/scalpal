@@ -19,14 +19,14 @@ namespace Scalpal.Surgery
         {
             public InstrumentBehaviour tool;
             public Transform bladeStart, bladeEnd;
-            public string instance, tissueId = "", clampedTissueId = "";
+            public string instance, tissueId = "", clampedTissueId = "", touched = "";
             public SurgeryTissueTarget target;
             public SurgeryInstrumentLatch latch;
             public OrganMobilization mobile;
             public readonly OpenSurgeryStroke stroke = new OpenSurgeryStroke();
             public readonly List<Vector3> marker = new List<Vector3>();
             public Vector3 previous, contact, rawSurface, handleOffset, speedOrigin;
-            public bool active, previousValid, committed, grasping, ownsHandle;
+            public bool active, previousValid, committed, grasping, ownsHandle, poseRejected;
             public float strokeSent, dwell, sinceSent, speed, speedClock;
             public BodyAction lastTentMeasurement;
             // Physical wall material grip (0 = none). A latched retractor keeps holding its tissue
@@ -37,6 +37,8 @@ namespace Scalpal.Surgery
             // Wall fracture counts when this blade engaged the wall: a stroke scores only the layer it opened.
             public bool wallEngaged;
             public readonly long[] wallCutBaseline = new long[OpenWallLayers.Count];
+            // Tissue a held tool is resting on without the trigger (no effect), for the first-use affordance.
+            public string idleTouched = "";
         }
         // Authored teaching thresholds for coupling paired retraction to the volume, not measured mechanics.
         const float SplitOnsetMm = .5f, SplitHalfLengthMeters = .03f, SplitDepthMarginMeters = .0005f, BladeContactMeters = .003f;
@@ -45,6 +47,8 @@ namespace Scalpal.Surgery
         readonly Dictionary<string, BodyAction> pendingTentReleases = new Dictionary<string, BodyAction>();
         readonly List<OrganMobilization> mobility = new List<OrganMobilization>();
         readonly long[] cutFractures = new long[OpenWallLayers.Count];
+        // Regions outside the surgical field reported as injured and not yet controlled.
+        readonly HashSet<string> injuredRegions = new HashSet<string>();
         NativeVolumeSimulation wall;
         // Exposure facts change only when the body appends a record; per-frame reads use this copy.
         BodyState cachedBody;
@@ -64,12 +68,28 @@ namespace Scalpal.Surgery
         Vector3 referenceStart = new Vector3(-.03f, 0, 0), referenceEnd = new Vector3(.03f, 0, 0), markedStart, markedEnd;
         public event Action<BodyRecord, InstrumentBehaviour> Submitted;
         public event Action<IReadOnlyList<Vector3>> MarkerChanged;
+        // The skin marker's stroke in progress (wound-local tip samples; empty when the stroke ends). Presentation only.
+        public event Action<InstrumentBehaviour, IReadOnlyList<Vector3>> MarkerDrawing;
+        // State tracker (never scored): a tool tip first touching a tissue, and region injury/control outside the field.
+        public event Action<InstrumentBehaviour, string> Contacted;
+        public event Action<string, InstrumentBehaviour, bool> RegionInjured;
+        // A held, tracked tool touching tissue with the trigger released: nothing is applied, so tell the learner
+        // which input acts (tool, verb, tissue). Edge-triggered per touch; never scored or sent to the coach.
+        public event Action<InstrumentBehaviour, string, string> TouchedWithoutTrigger;
+        // A held, triggered blade outside the surgical field, every sampled frame (presentation only, never scored):
+        // the incision view draws where it meets the visible skin.
+        public event Action<InstrumentBehaviour> BladeOutsideField;
+        // Regions cut outside the field and not yet controlled: the same facts RegionInjured reports to the coach.
+        public bool IsRegionInjured(string region) => injuredRegions.Contains(region);
         public string LastRejection { get; private set; } = "";
         public double ActiveSeconds => activeSeconds;
         public double TimeMs => activeSeconds * 1000;
         public bool Ready => isActiveAndEnabled && exercise && exercise.CanScore && exercise.Body != null && torso && wound && gate != null && gate();
         public IReadOnlyList<SurgeryTissueTarget> Targets => targets;
         public IReadOnlyList<OrganMobilization> Mobility => mobility;
+        // The registered incision reference line the mark is measured against, in wound-local metres.
+        public Vector3 ReferenceStart => referenceStart;
+        public Vector3 ReferenceEnd => referenceEnd;
 
         // The open-wall volume supplies layer contact, grips, lift/split measurements and cut evidence.
         // Without one, wall layers keep authored contact planes but can never be tented or split.
@@ -158,6 +178,7 @@ namespace Scalpal.Surgery
             ClearTransient(); foreach (var state in states) { if (state.latch) state.latch.Clear(); ReleaseRetained(state); state.clampedTissueId = ""; }
             foreach (var group in mobility) group.RestoreRest(); // A retry starts from the authored anatomy.
             pendingTentReleases.Clear(); // A previous attempt's measurements cannot enter its replacement.
+            injuredRegions.Clear();
             attemptBody = exercise ? exercise.Body : null;
             attemptPrefix = Guid.NewGuid().ToString("N"); sequence = 0; activeSeconds = 0; tickClock = 0;
             LastRejection = ""; wasReady = false; hasMarkedLine = false; frameKnown = false;
@@ -185,8 +206,12 @@ namespace Scalpal.Surgery
             wasReady = true; activeSeconds += seconds; tickClock += seconds;
             // Release invalid grasps before processing any blade, regardless of tool array order.
             foreach (var state in states)
-                if (state.grasping && (!ValidTool(state) || !OpenSurgeryStroke.Finite(state.tool.actionPoint.position)
-                    || (state.previousValid && Vector3.Distance(state.tool.actionPoint.position, state.previous) > .05f))) Release(state);
+            {
+                state.poseRejected = state.grasping && state.previousValid && state.tool && state.tool.actionPoint
+                    && Vector3.Distance(state.tool.actionPoint.position, state.previous) > .05f;
+                if (state.grasping && (!ValidTool(state) || !OpenSurgeryStroke.Finite(state.tool.actionPoint.position) || state.poseRejected))
+                    Release(state);
+            }
             DrainTentReleases();
             // A placed clamp that was picked up again or put away no longer occludes anything.
             foreach (var state in states)
@@ -198,7 +223,9 @@ namespace Scalpal.Surgery
             // stroke history with zero speed; the registered active-time clock still advances.
             if (!frameChanged)
             {
-                foreach (var state in states) SampleTool(state, seconds);
+                // A rejected tracking jump cannot immediately re-grasp at its new location.
+                // The next stable sample may establish a fresh contact.
+                foreach (var state in states) if (!state.poseRejected) SampleTool(state, seconds);
                 // Released groups ease back unless delivered; held groups moved with their tool above.
                 // A fit correction is not organ motion, so a correction frame never settles a group.
                 foreach (var group in mobility) group.Settle(seconds, wound);
@@ -242,8 +269,9 @@ namespace Scalpal.Surgery
             if (!ValidTool(state))
             {
                 if (state.active && state.tool && state.tool.TrackingValid) FlushStroke(state);
-                Release(state); return;
+                Release(state); IdleContact(state); return;
             }
+            state.idleTouched = "";
             Vector3 point = state.tool.actionPoint.position;
             if (!OpenSurgeryStroke.Finite(point)) { Release(state); return; }
             state.speed = state.previousValid ? Vector3.Distance(point, state.previous) / seconds : 0;
@@ -253,7 +281,9 @@ namespace Scalpal.Surgery
             if (!state.grasping)
             {
                 if (!FindContact(state, verb, point, out var definition, out var target, out var contact))
-                { FlushStroke(state); ClearContact(state); state.wallEngaged = false; return; }
+                { FlushStroke(state); ClearContact(state); state.wallEngaged = false; state.touched = ""; OutsideField(state, verb, point); return; }
+                // Edge-triggered: one contact per touch of a tissue, not one per frame.
+                if (state.touched != definition.id) { state.touched = definition.id; Contacted?.Invoke(state.tool, definition.id); }
                 // Fracture counts before this blade's first wall contact; LateUpdate cuts follow this Update.
                 if (verb == "cut" && wall && !target && OpenWallLayers.TryGet(definition.id, out _) && !state.wallEngaged)
                 { Array.Copy(cutFractures, state.wallCutBaseline, cutFractures.Length); state.wallEngaged = true; }
@@ -283,7 +313,8 @@ namespace Scalpal.Surgery
                 {
                     // One committed action per stroke (per layer): FlushStroke runs when contact ends,
                     // so guardrails see the finished stroke once instead of every millimetre.
-                    if (verb == "mark" && (state.marker.Count == 0 || Vector3.Distance(state.marker[state.marker.Count - 1], local) > .001f)) state.marker.Add(local);
+                    if (verb == "mark" && (state.marker.Count == 0 || Vector3.Distance(state.marker[state.marker.Count - 1], local) > .001f))
+                    { state.marker.Add(local); MarkerDrawing?.Invoke(state.tool, state.marker); }
                 }
                 return;
             }
@@ -317,6 +348,20 @@ namespace Scalpal.Surgery
                     Latch(state); state.clampedTissueId = state.tissueId;
                 }
             }
+        }
+
+        // Same geometric contact as an activated tool, but only reported: tool effects stay trigger-driven.
+        void IdleContact(ToolState state)
+        {
+            var tool = state.tool;
+            string touched = "";
+            if (tool && tool.isActiveAndEnabled && tool.Held && tool.TrackingValid && tool.actionPoint && OpenSurgeryStroke.Finite(tool.actionPoint.position))
+            {
+                string verb = BodyState.ToolVerbs[tool.instrumentId][0];
+                if (FindContact(state, verb, tool.actionPoint.position, out var definition, out _, out _)) touched = definition.id;
+                if (touched != "" && touched != state.idleTouched) TouchedWithoutTrigger?.Invoke(tool, verb, touched);
+            }
+            state.idleTouched = touched;
         }
 
         void FlushStroke(ToolState state)
@@ -376,7 +421,7 @@ namespace Scalpal.Surgery
                 if (state.target)
                 {
                     var group = mobility.Find(candidate => !candidate.Held && candidate.Contains(state.target.transform));
-                    if (group != null && group.BeginHold(state.contact)) state.mobile = group;
+                    if (group != null && group.BeginHold(state.contact, state.tool.actionPoint.rotation)) state.mobile = group;
                 }
                 if (state.target) state.rawSurface = state.target.transform.InverseTransformPoint(state.contact);
                 // A wall layer is held by an actual material patch at its current exposed surface.
@@ -398,7 +443,7 @@ namespace Scalpal.Surgery
             }
             Vector3 measuredPoint = point;
             // The mobilized group follows the tool first; the cage then deforms about its new pose.
-            if (state.mobile != null) state.mobile.Follow(point, seconds);
+            if (state.mobile != null) state.mobile.Follow(point, state.tool.actionPoint.rotation, seconds);
             if (state.target)
             {
                 var deformable = state.target.Deformable;
@@ -617,7 +662,9 @@ namespace Scalpal.Surgery
             if (state.mobile != null) { state.mobile.EndHold(); state.mobile = null; }
             ReleaseGrip(state);
             state.tissueId = ""; state.target = null; state.grasping = state.ownsHandle = state.committed = false;
-            state.stroke.Reset(); state.marker.Clear(); state.strokeSent = state.dwell = state.sinceSent = 0;
+            state.stroke.Reset();
+            if (state.marker.Count > 0) { state.marker.Clear(); MarkerDrawing?.Invoke(state.tool, state.marker); }
+            state.strokeSent = state.dwell = state.sinceSent = 0;
         }
         void DrainTentReleases()
         {
@@ -710,7 +757,33 @@ namespace Scalpal.Surgery
             if (state.retainedToken != 0 && wall) wall.ReleaseLayerHandle(state.retainedToken);
             state.retainedToken = 0; state.retainedTissueId = "";
         }
-        void Release(ToolState state) { ClearContact(state); state.active = state.previousValid = state.wallEngaged = false; }
+        void Release(ToolState state) { ClearContact(state); state.active = state.previousValid = state.wallEngaged = false; state.touched = ""; }
+        // Outside the surgical field the body is coarse regions (docs/operation-flow.md). A blade inside one reports it
+        // once; a clamp, tie or seal inside an injured region reports it controlled. The coach owns the consequences.
+        void OutsideField(ToolState state, string verb, Vector3 point)
+        {
+            string region = BodyRegion(torso.InverseTransformPoint(point));
+            if (verb == "cut") BladeOutsideField?.Invoke(state.tool);
+            if (region == "") return;
+            if (verb == "cut") { if (injuredRegions.Add(region)) RegionInjured?.Invoke(region, state.tool, false); }
+            else if ((verb == "clamp" || verb == "tie" || verb == "seal") && injuredRegions.Remove(region)) RegionInjured?.Invoke(region, state.tool, true);
+        }
+        // Registered torso frame: umbilicus origin, +X patient left, +Y anterior, +Z cranial, source metres. Bounds come
+        // from the imported surface atlas (lying supine, arms at the sides). The abdomen and pelvis between chest and
+        // legs hold the surgical field and are not a region; points above the skin or below the back are not on the body.
+        public static string BodyRegion(Vector3 p)
+        {
+            if (!OpenSurgeryStroke.Finite(p) || p.y < -.26f || p.z > .73f || p.z < -1.02f) return "";
+            float x = Mathf.Abs(p.x); string side = p.x >= 0 ? "left_" : "right_";
+            string region; float skin;
+            if (p.z >= .512f) { if (x > .12f) return ""; region = "head"; skin = 0; }
+            else if (p.z < .45f && p.z >= -.33f && x <= .35f && (x >= .183f || (x >= .158f && p.z >= .082f))) { region = side + "arm"; skin = p.z < -.17f ? -.01f : -.07f; }
+            else if (p.z >= .405f && x < .158f) { region = "neck"; skin = -.03f; }
+            else if (p.z >= .162f && x < .158f) { region = "chest"; skin = .02f; }
+            else if (p.z < -.198f && x <= .2f) { region = side + "leg"; skin = p.z < -.9f ? .035f : -.03f; }
+            else return "";
+            return p.y <= skin ? region : "";
+        }
         void ClearTransient() { foreach (var state in states) Release(state); }
         void OnDisable() { ClearPlacements(); wasReady = false; frameKnown = false; }
     }

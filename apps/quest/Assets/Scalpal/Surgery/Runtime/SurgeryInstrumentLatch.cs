@@ -35,14 +35,18 @@ namespace Scalpal.Surgery
                 return;
             }
             released = true;
-            if (body && !changedBody) { oldKinematic = body.isKinematic; body.isKinematic = true; changedBody = true; }
+            if (body && !changedBody) { oldKinematic = body.isKinematic; body.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative; body.isKinematic = true; changedBody = true; }
             if (CanRetain != null && !CanRetain()) return;
             tool.transform.SetPositionAndRotation(anchor.TransformPoint(localPosition), anchor.rotation * localRotation);
         }
         public void Clear()
         {
             // A newly held tool's rigidbody belongs to its grab controller again.
-            if (body && changedBody && (!tool || !tool.Held)) body.isKinematic = oldKinematic;
+            if (body && changedBody && (!tool || !tool.Held))
+            {
+                body.isKinematic = oldKinematic;
+                if (!oldKinematic) body.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+            }
             armed = released = changedBody = false; anchor = null;
         }
         void OnDisable() => Clear();

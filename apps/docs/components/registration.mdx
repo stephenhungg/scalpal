@@ -1,0 +1,26 @@
+---
+title: "Body registration"
+description: "Local body pose, so teaching anatomy can sit on a real person."
+---
+
+Owner: Stephen.
+
+In mixed reality, the headset needs to know where the volunteer's torso is. `services/registration` takes a Quest camera JPEG and returns body landmarks with Google's MediaPipe Pose Landmarker Lite (float16, v1), on the CPU.
+
+Unity owns everything else: camera opt-in, calibration, projecting onto the table, fitting the torso, confidence checks and hiding anatomy when the fit isn't valid. Shoulders and hips drive the fit, which is accepted after three stable observations.
+
+## Run it
+
+```sh
+cd services/registration
+uv sync --frozen
+uv run --frozen scalpal-registration fetch-model
+uv run --frozen pytest -q
+uv run --frozen scalpal-registration serve      # 127.0.0.1:8790
+```
+
+The model download is explicit and checked against a pinned SHA-256. The server only binds to loopback; the headset reaches it over USB with `adb reverse tcp:8790 tcp:8790`.
+
+## Privacy
+
+It stores no frames, landmarks, participant identifiers or request logs. Images exist only in memory while a request is processed. If no person or more than one person is detected, the result is empty and invalid.

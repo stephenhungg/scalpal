@@ -177,7 +177,7 @@ She reads from her folded list. She knows the names; she is less sure of every r
 
 ---
 
-## 2. CLINICIAN KEY (never given to the patient agent; for Jarvis and authors)
+## 2. CLINICIAN KEY (never given to the patient agent; for Scalpal and authors)
 
 ### 2.1 Case summary
 
@@ -229,7 +229,7 @@ About 40 hours ago she developed constant RUQ pain radiating to the right scapul
 - She is ASA 3 or higher (AF, HF, CKD3, DM), with a Charlson index of about 6 or more (age 70–79 = 3, CHF 1, diabetes 1–2, renal disease 1–2 depending on version).
 - **The TG18 flowchart therefore points to antibiotics and supportive care first, with early or urgent gallbladder drainage (percutaneous cholecystostomy) if she does not respond, and delayed cholecystectomy.**
 - The apixaban washout window (48–72 h) is another reason to medically optimize first. Percutaneous drainage also carries bleeding risk on apixaban.
-- A strong learner names this tension. Scalpal's authored plan is urgent laparoscopic cholecystectomy once anticoagulation is safely held and she is optimized, which is a defensible choice in a high-volume center. Jarvis should reward naming both paths.
+- A strong learner names this tension. Scalpal's authored plan is urgent laparoscopic cholecystectomy once anticoagulation is safely held and she is optimized, which is a defensible choice in a high-volume center. Scalpal should reward naming both paths.
 
 **AKI on CKD3 (Cr 1.9 from 1.7; eGFR 27; K 5.1; HCO3 21), renal and metformin_renal flags.**
 - Hold **metformin** (eGFR <30 is a contraindication, and there is lactic acidosis risk).

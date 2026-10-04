@@ -34,10 +34,10 @@ Surgical robot datasets record the surgeon: tool paths, video, kinematics. They 
 | 30–40% | ~120–140 | 30–40 | falling |
 | > 40% | > 140 | > 35 | crashing |
 
-   Active bleeding pushes toward the next class; hemostasis lets values recover with 10–30 s smoothing; a critical injury adds an acute spike. The model is a pure function of logged body state and time, so the recap and Jarvis can reproduce it exactly.
+   Active bleeding pushes toward the next class; hemostasis lets values recover with 10–30 s smoothing; a critical injury adds an acute spike. The model is a pure function of logged body state and time, so the recap and Scalpal can reproduce it exactly.
 3. **Display.** The OR monitor shows the combined values and a pulse trace drawn at the simulated rate, labeled for example "HR 118 · simulated from baseline 72 (measured)". The AR overlay's breathing motion still follows the volunteer's **real** breathing waveform; only the monitor numbers carry the simulated delta.
 
-Why: the monitor agrees with the simulation (an uncontrolled bleed makes the patient tachycardic; control brings recovery), every run starts from a real person's physiology, Jarvis coaches from model facts ("HR 118 and rising, blood loss 600 mL, find the bleeder"), and the grader can score response time to hemodynamic deterioration. The physiology model is authored teaching content, not validated clinical simulation.
+Why: the monitor agrees with the simulation (an uncontrolled bleed makes the patient tachycardic; control brings recovery), every run starts from a real person's physiology, Scalpal coaches from model facts ("HR 118 and rising, blood loss 600 mL, find the bleeder"), and the grader can score response time to hemodynamic deterioration. The physiology model is authored teaching content, not validated clinical simulation.
 
 ## How Presage works (short)
 

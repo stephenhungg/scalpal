@@ -1,0 +1,133 @@
+{
+ "schema": "scalpal.robot_mark_curve.v1",
+ "step": "mark_incision",
+ "data": "synthetic demos only (0 headset demos)",
+ "rolloutsPerSeed": 30,
+ "seeds": 2,
+ "trainSteps": 3000,
+ "episodesPerTrainingSet": 400,
+ "syntheticRawGraderPassRate": 0.848,
+ "evaluation": "held-out seed 10000: right ASIS +/-3 cm, patient pose +/-5 cm and +/-15 deg, start +/-1.5 cm; graded with the mark_incision predicates",
+ "rows": [
+  {
+   "demos": 1,
+   "humanDemos": 0,
+   "syntheticDemos": 1,
+   "successRate": 0.383,
+   "ci95": [
+    0.271,
+    0.51
+   ],
+   "rollouts": 60,
+   "perSeed": [
+    0.133,
+    0.633
+   ],
+   "medianPathErrorMm": 18.77,
+   "failedPredicates": {
+    "markLengthMm": 1,
+    "markErrorMm": 37
+   }
+  },
+  {
+   "demos": 2,
+   "humanDemos": 0,
+   "syntheticDemos": 2,
+   "successRate": 0.717,
+   "ci95": [
+    0.592,
+    0.815
+   ],
+   "rollouts": 60,
+   "perSeed": [
+    0.533,
+    0.9
+   ],
+   "medianPathErrorMm": 9.82,
+   "failedPredicates": {
+    "markLengthMm": 6,
+    "markErrorMm": 11
+   }
+  },
+  {
+   "demos": 3,
+   "humanDemos": 0,
+   "syntheticDemos": 3,
+   "successRate": 0.717,
+   "ci95": [
+    0.592,
+    0.815
+   ],
+   "rollouts": 60,
+   "perSeed": [
+    0.7,
+    0.733
+   ],
+   "medianPathErrorMm": 11.41,
+   "failedPredicates": {
+    "markAngleDegrees": 5,
+    "markLengthMm": 2,
+    "markErrorMm": 16
+   }
+  },
+  {
+   "demos": 5,
+   "humanDemos": 0,
+   "syntheticDemos": 5,
+   "successRate": 0.883,
+   "ci95": [
+    0.778,
+    0.942
+   ],
+   "rollouts": 60,
+   "perSeed": [
+    0.933,
+    0.833
+   ],
+   "medianPathErrorMm": 6.22,
+   "failedPredicates": {
+    "markAngleDegrees": 2,
+    "markLengthMm": 2,
+    "markErrorMm": 3
+   }
+  },
+  {
+   "demos": 10,
+   "humanDemos": 0,
+   "syntheticDemos": 10,
+   "successRate": 0.95,
+   "ci95": [
+    0.863,
+    0.983
+   ],
+   "rollouts": 60,
+   "perSeed": [
+    0.967,
+    0.933
+   ],
+   "medianPathErrorMm": 4.99,
+   "failedPredicates": {
+    "markLengthMm": 1,
+    "markErrorMm": 2
+   }
+  },
+  {
+   "demos": 20,
+   "humanDemos": 0,
+   "syntheticDemos": 20,
+   "successRate": 1.0,
+   "ci95": [
+    0.94,
+    1.0
+   ],
+   "rollouts": 60,
+   "perSeed": [
+    1.0,
+    1.0
+   ],
+   "medianPathErrorMm": 3.72,
+   "failedPredicates": {}
+  }
+ ],
+ "wallS": 110.7
+}

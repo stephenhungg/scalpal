@@ -1,0 +1,33 @@
+---
+title: "Vision"
+description: "Open-vocabulary detection on real camera frames."
+---
+
+Owner: Matthew.
+
+`services/vision` takes a real camera image and a list of text labels and returns named bounding boxes, so Scalpal can talk about what's actually visible. It runs OWLv2 (Apache-2.0) on Apple Silicon with PyTorch MPS.
+
+<Note>
+In the VR scene, Unity already knows every organ and tool exactly, so boxes there come from the scene graph. This service is only for real camera frames, like physical props and hands.
+</Note>
+
+## Run it
+
+```sh
+cd services/vision
+uv sync
+uv run scalpal-vision serve        # http://127.0.0.1:8792
+uv run scalpal-vision detect photo.jpg --labels scissors hand "gloved hand"
+uv run pytest
+```
+
+The first run downloads about 620 MB of weights. Startup takes 5 to 12 seconds.
+
+## Limits
+
+- About 0.75 s per frame on an M2, so roughly one frame a second. Fine for a coach, not for tracking.
+- Similar instruments get confused. Use `candidateIds` and treat the label as a hint.
+- Boxes are 2D image coordinates with no depth.
+- Measured on stock photos and synthetic renders only. No Quest passthrough frames have been tested.
+
+See the [API reference](/api/vision).

@@ -1,0 +1,30 @@
+---
+title: "Status and limits"
+description: "What's been measured, and what hasn't."
+---
+
+We try to keep this honest. "Measured" means someone ran it and saw the result. Everything else is built but unverified.
+
+## Measured
+
+- **Quest:** native camera access, Unity deployment, controller tracking and held tools on a physical Quest 3S. Tool motion lag was reported and fixed.
+- **FinchNode:** a patient consented on FinchNode's hosted page and their case read end to end.
+- **Presage:** a live iPhone run got a stable pulse (85 bpm, 98% confidence) and breathing (17.6 per minute), and captured a measured baseline.
+- **Motion:** a 20 s sample webcam clip tracked 621 of 621 frames and went through the real gateway and SpacetimeDB to a viewer download.
+- **Dashboard:** live video between two browser contexts at 1280×720 and about 30 fps, on one machine.
+
+## Not yet verified
+
+- A full physical playthrough on the headset, start to finish.
+- Fitting anatomy to a real person in mixed reality.
+- Motion reconstruction from a real Quest passthrough clip.
+- Vision on real Quest frames or real surgical instruments.
+- Vitals inside the headset. Today they show in the dashboard; Unity doesn't read them yet.
+- Dashboard video across networks through TURN.
+
+## Always true
+
+- Replay is recorded motion played back on a simulated hand, not a learned robot policy.
+- The anatomy is generic teaching anatomy, not the volunteer's organs.
+- Presage readings are wellness information, not a diagnosis.
+- Synthetic and demo data is labeled wherever it appears.

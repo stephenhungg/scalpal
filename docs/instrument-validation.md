@@ -17,13 +17,13 @@ Verified October 3, 2026 using Blender 4.5.7 LTS and Unity 6000.0.66f2. This rec
 
 ## Latest Teammate Context
 
-Fetched remote commits at integration checkpoints. Reviewed Matthew's Unity/Blender handoff, generated IDs, `CoachRelay`, live-test notes and the anatomy source/control additions. Latest inspected anatomy branch is `7d5896587a09d459649dbcd66231ad6f893b96f6`; Jarvis branch is `f9574cbc13c5e7c0121180f61e89e3c0f9124b87`. At the original validation checkpoint the instrument catalog matched the initial branch. A later publication check fetched `a629fdf`, verified its added `scalpel` makes the complete fifteen-ID catalog match our prefabs, and inspected its alternative `InstrumentTip` activation adapter; do not subscribe both scoring paths. The kit does not merge these feature branches or change their scoring/voice code.
+Fetched remote commits at integration checkpoints. Reviewed Matthew's Unity/Blender handoff, generated IDs, `CoachRelay`, live-test notes and the anatomy source/control additions. Latest inspected anatomy branch is `7d5896587a09d459649dbcd66231ad6f893b96f6`; Scalpal branch is `f9574cbc13c5e7c0121180f61e89e3c0f9124b87`. At the original validation checkpoint the instrument catalog matched the initial branch. A later publication check fetched `a629fdf`, verified its added `scalpel` makes the complete fifteen-ID catalog match our prefabs, and inspected its alternative `InstrumentTip` activation adapter; do not subscribe both scoring paths. The kit does not merge these feature branches or change their scoring/voice code.
 
 The distal contact callback supplies instrument/anatomy IDs but defaults to blocked until the registration owner supplies a validity function. Subscribe through a current-attempt dispatcher; do not treat a virtual effect as an automatically accepted surgery step. The coach relay still needs reliable attempt/event identity and canonical state reconciliation; the laptop's simulated highlight acknowledgment must be disabled during actual headset integration.
 
 ## Limits and Next Test
 
-No physical Quest controller session, native stereo tool rendering, headset frame-time measurement, real participant fitting, real-tool CV evaluation or live Jarvis-to-tool session was performed. The native application still needs its real XR rig and build configuration. The sandbox tracking origin does not initialize XR.
+No physical Quest controller session, native stereo tool rendering, headset frame-time measurement, real participant fitting, real-tool CV evaluation or live Scalpal-to-tool session was performed. The native application still needs its real XR rig and build configuration. The sandbox tracking origin does not initialize XR.
 
 The tool effects are authored demonstrations. Cutting separates a narrow prebuilt practice seam; it does not slice arbitrary deformable organs. Sealing, fasteners, fluid removal, collection and closure are explicit simulation states, not physical tissue solvers. The virtual laparoscope's visual output and rendering cost require graphics/headset testing.
 

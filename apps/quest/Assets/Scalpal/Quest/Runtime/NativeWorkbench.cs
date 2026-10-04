@@ -19,6 +19,9 @@ namespace Scalpal.Quest
         public Vector3 initialHeadFloorPosition = new Vector3(0, 0, -0.5f);
         public bool externalSessionControls;
         public NativePresentation presentation;
+        // Full-VR locomotion: left stick walks along the gaze, right stick snap-turns. Off in passthrough,
+        // where moving the origin would slide the anatomy off the registered patient.
+        public float moveSpeed = 1.2f, snapDegrees = 30, roamRadius = 3f, riseSpeed = .6f, maximumRise = .6f;
         public bool IsReady { get; private set; }
         public event Action ToolsReset;
         public event Action RetryRequested;
@@ -29,7 +32,6 @@ namespace Scalpal.Quest
         Vector3[] targetPositions;
         Quaternion[] targetRotations;
         Transform[] targetParents;
-        Renderer[] gripMarkers;
         bool aligned, headTracked, paused, resetPressed, retryPressed;
         float nextStatus;
         int effects, frames;
@@ -63,9 +65,6 @@ namespace Scalpal.Quest
                 targetRotations[i] = targets[i].transform.rotation;
                 targetParents[i] = targets[i].transform.parent;
             }
-            gripMarkers = new Renderer[inputs.Length];
-            for (int i = 0; i < inputs.Length; i++)
-                gripMarkers[i] = inputs[i].transform.Find("ControllerGripMarker")?.GetComponent<Renderer>();
             Gate(false);
             sampleStart = Time.unscaledTime;
             Debug.Log("SCALPAL_NATIVE_BOOT version=" + Application.version + " view=" + (presentation && presentation.passthrough ? "passthrough" : "full_vr") + " tools=" + tools.Length);
@@ -103,6 +102,7 @@ namespace Scalpal.Quest
             bool valid = running && floor && aligned && headTracked && focused && !paused
                 && (!presentation || presentation.Ready);
             Gate(valid);
+            if (valid && !(presentation && presentation.passthrough)) Locomote(Time.deltaTime);
             bool reset = XRInput.Button(XRNode.RightHand, XRInputButton.Primary);
             bool retry = XRInput.Button(XRNode.LeftHand, XRInputButton.Menu);
             HandleSessionButtons(reset, retry);
@@ -112,8 +112,41 @@ namespace Scalpal.Quest
                 float seconds = Mathf.Max(0.001f, Time.unscaledTime - sampleStart);
                 string state = $"xr={running} head={headTracked} floor={floor} focus={focused && !paused} aligned={aligned} left={Hand(0)} right={Hand(1)} effects={effects} updateHz={frames / seconds:F1}";
                 Debug.Log("SCALPAL_NATIVE_STATUS " + state);
-                if (status && !externalSessionControls) status.text = "SCALPAL | NATIVE TOOL TEST\nGrip: pick up / release   Trigger: use tool\nA: reset tools and practice patch\n" + (valid ? "Tracking ready" : "Paused: waiting for valid XR tracking") + "   Effects: " + effects;
+                if (status && !externalSessionControls) status.text = "Scalpal | Native tool test\nGrip: pick up / release   Trigger: use tool\nA: reset tools and practice patch\n" + (valid ? "Tracking ready" : "Paused: waiting for valid XR tracking") + "   Effects: " + effects;
                 frames = 0; sampleStart = Time.unscaledTime; nextStatus = Time.unscaledTime + 2;
+            }
+        }
+
+        bool turnArmed = true;
+        public void Locomote(float deltaTime)
+        {
+            var move = XRInput.Stick(XRNode.LeftHand);
+            if (move.sqrMagnitude > .04f)
+            {
+                var forward = Vector3.ProjectOnPlane(headCamera.transform.forward, Vector3.up).normalized;
+                var right = Vector3.Cross(Vector3.up, forward);
+                var next = trackingOrigin.position + (forward * move.y + right * move.x) * (moveSpeed * deltaTime);
+                // Keep the head inside the room around the start pose (never walk through the walls).
+                var head = headCamera.transform.position - trackingOrigin.position + next;
+                var offset = Vector3.ProjectOnPlane(head - initialHeadFloorPosition, Vector3.up);
+                if (offset.magnitude > roamRadius) next -= offset - offset.normalized * roamRadius;
+                trackingOrigin.position = next;
+            }
+            // Right stick up/down raises or lowers the viewpoint (e.g. to look down into the wound), within ±maximumRise
+            // of the aligned floor height.
+            float rise = XRInput.Stick(XRNode.RightHand).y;
+            if (Mathf.Abs(rise) > .2f)
+            {
+                var position = trackingOrigin.position;
+                position.y = Mathf.Clamp(position.y + rise * riseSpeed * deltaTime, initialHeadFloorPosition.y - maximumRise, initialHeadFloorPosition.y + maximumRise);
+                trackingOrigin.position = position;
+            }
+            float turn = XRInput.Stick(XRNode.RightHand).x;
+            if (Mathf.Abs(turn) < .3f) turnArmed = true;
+            else if (turnArmed && Mathf.Abs(turn) > .7f)
+            {
+                turnArmed = false;
+                trackingOrigin.RotateAround(headCamera.transform.position, Vector3.up, Mathf.Sign(turn) * snapDegrees);
             }
         }
 
@@ -135,13 +168,6 @@ namespace Scalpal.Quest
             if (!headCamera) return;
             headTracked = XRInput.TryPose(XRNode.Head, out var pose);
             if (headTracked) headCamera.transform.SetLocalPositionAndRotation(pose.position, pose.rotation);
-        }
-
-        void LateUpdate()
-        {
-            if (gripMarkers == null) return;
-            for (int i = 0; i < gripMarkers.Length; i++)
-                if (gripMarkers[i]) gripMarkers[i].enabled = inputs[i].enabled && inputs[i].GetComponent<InstrumentInteractor>().TrackingValid;
         }
 
         void Gate(bool valid)
@@ -187,6 +213,20 @@ namespace Scalpal.Quest
                 item.CaptureRestPose(); item.ActionApplied += Applied;
             }
             tools = all.ToArray(); toolPositions = positions.ToArray(); toolRotations = rotations.ToArray(); toolParents = parents.ToArray();
+        }
+
+        // A case layout moves a registered tool to a new resting place; equipment reset (A) returns it there.
+        public void SetRestPose(InstrumentBehaviour tool, Vector3 position, Quaternion rotation)
+        {
+            int index = Array.IndexOf(tools ?? Array.Empty<InstrumentBehaviour>(), tool);
+            if (index < 0 || toolPositions == null || index >= toolPositions.Length) return;
+            tool.transform.SetPositionAndRotation(position, rotation);
+            toolPositions[index] = position; toolRotations[index] = rotation;
+            tool.RecaptureRestPose();
+            var body = tool.GetComponent<Rigidbody>();
+            if (!body) return;
+            body.position = position; body.rotation = rotation;
+            if (!body.isKinematic) { body.linearVelocity = Vector3.zero; body.angularVelocity = Vector3.zero; }
         }
 
         public void ResetWorkbench()

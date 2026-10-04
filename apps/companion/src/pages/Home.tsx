@@ -56,7 +56,7 @@ export default function Home() {
   return (
     <main className="page home">
       <section className="home-hero">
-        <h1>Watch a session live.</h1>
+        <h1>Session logs, live.</h1>
         <p>Join with an invite code, or start a new session.</p>
         <p className="home-note">Robot replay is retargeted motion, not a learned robot policy.</p>
       </section>

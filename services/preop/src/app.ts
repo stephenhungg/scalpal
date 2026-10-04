@@ -10,6 +10,7 @@ import { registerCoachRoutes } from "./coach-routes.js";
 import { registerEncounterRoutes } from "./encounter-routes.js";
 import { registerInterviewRoutes } from "./interview-routes.js";
 import { patientStatusFor } from "./interview-content.js";
+import { chartBaseline } from "./chart-vitals.js";
 import type { AnswerClassifier, SpeechToText } from "./answer-classifier.js";
 import { ENCOUNTERS_BY_PLAN } from "./catalog/encounters.js";
 import type { RealtimeBridge } from "./realtime-bridge.js";
@@ -32,6 +33,7 @@ export interface AppOptions {
   answerClassifier?: AnswerClassifier | null;
   speechToText?: SpeechToText | null;
   interviewContentRoot?: string;
+  vitalsUrl?: string; // services/vitals (Presage) for the AR Time-Out baseline
   reflex?: ReflexAudio;
   toolAckWaitMs?: number;
   realtime?: RealtimeBridge | null;
@@ -41,6 +43,7 @@ export interface AppOptions {
   // Extra browser origins allowed besides localhost/127.0.0.1 (any port) and same-origin pages
   // (PREOP_CORS_ORIGINS in index.ts). Native clients send no Origin header and are unaffected.
   corsOrigins?: readonly string[];
+  robotDataDir?: string; // robot demos and replays (tests use a temp dir)
 }
 
 const LOCAL_ORIGIN = /^https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/;
@@ -433,7 +436,7 @@ export function createApp(options: AppOptions = {}) {
     });
   });
 
-  // ElevenLabs server tools: always HTTP 200 with a `say` line so Jarvis can speak failures too.
+  // ElevenLabs server tools: always HTTP 200 with a `say` line so Scalpal can speak failures too.
   app.post("/tools/list_patients", async (c) => {
     const patients = (await listPatients()).filter((p) => p.patientId);
     return c.json({
@@ -506,7 +509,7 @@ export function createApp(options: AppOptions = {}) {
     planSubjectFor: async (kase) => (await scenarios()).find((s) => s.id === kase.scenarioId)?.subject ?? kase.patientId,
   });
 
-  // The pre-op office (current flow): committed patient content, choice-based interview, no Jarvis.
+  // The pre-op office (current flow): committed patient content, choice-based interview, no Scalpal.
   const interviews = registerInterviewRoutes(app, {
     now,
     realtime: options.realtime ?? undefined,
@@ -533,6 +536,15 @@ export function createApp(options: AppOptions = {}) {
     encounters,
     encounterFor: (id) => encounters.get(id) ?? interviews.get(id),
     patientStatus: (id) => patientStatusFor(id, options.interviewContentRoot),
+    vitalsUrl: options.vitalsUrl,
+    robotDataDir: options.robotDataDir,
+    // VR baseline (and AR until Presage is captured): the patient's latest charted vitals and weight.
+    baselineFor: async (kase) => {
+      const record = await client.getRecord(kase.patientId).catch(() => null);
+      if (!record) return null;
+      const chart = chartBaseline((record.data as { vitals?: never[] } | undefined)?.vitals ?? [], kase.patient.age);
+      return { baseline: chart.baseline, weightKg: chart.weightKg, spo2: chart.spo2, mlPerKg: chart.mlPerKg };
+    },
     vision: options.vision ?? null,
     watchMs: options.watchMs,
     detector: options.detector ?? null,

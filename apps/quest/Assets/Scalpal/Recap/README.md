@@ -2,7 +2,9 @@
 
 The canonical `ScalpalPlayerBuild` and shell build include `Launch → DiagnosisOffice → NativeSession → RunEnding`. Open `Scenes/RunEnding.unity` for component work. The panel reuses the office glass materials, world-text shader and licensed Inter font; Unity's built-in Video module is enabled.
 
-A scene without a bound result shows **No result for this run**. It never silently imports sample scores. Explicit sample-demo selection enables the synthetic preview. A missing recording can still show the separately labeled bundled Shadow-hand replay fallback while retaining the real failed/queued state.
+The screen shows only the essentials: **Diagnosis** (score, or Skipped / Unavailable), **Surgery** (score or Unavailable, "· assisted" when the run was demo-assisted), the **robot replay** video with one result line ("Robot · Mark McBurney incision · Success · 6 mm"), one provenance line only when the robot learned from synthetic demos ("Learned from 40 demos (synthetic)"), and the two buttons *Choose another patient* / *Retry surgery*. While the robot trains: one line, "Robot learning…"; on a timeout (150 s), an `unavailable` reply, a malformed reply or a player error: "Robot replay unavailable". A scene without a bound result shows **No result for this run** and never imports sample scores.
+
+The robot result is `GET {coach}/coach/sessions/:coachSessionId/robot-result`, polled every 3 s. The video streams from the coach origin plus the coach-relative `videoUrl` (`/robot/replays/<file>.mp4` only). The demo it learned from is the learner's own controller motion for `mark_incision` (`Robotics/Runtime/ControllerMotionCapture.cs`, posted by `NativeCaseSession.RobotDemo.cs`; see `docs/robot-hand.md`).
 
 ## Native integration
 
@@ -23,25 +25,17 @@ See the [integration contract](../../../../../docs/system-integration.md#run-end
 - Source is learner/rehearsal/sample/unknown. The gateway requires a matching `scalpal.capture-provenance.v1` manifest registered as an available `capture_manifest` in the motion job's `extraArtifactIds`. Unknown provenance cannot become a ready learner replay.
 - `HandoffRun.Begin` freezes the operator demo flag at the **scored-office-to-theatre handoff**; OR `Begin` copies it into detailed result flags and `EndSurgery` records `demoAssisted`. Legacy standalone runs freeze at OR start. There is no recap toggle that retroactively changes a grade. Native premark assistance reads the frozen flag, while manual `assisted_premark` records also label the grade assisted. Earlier patient-selection/office-chip flag ownership and the `preExpose`/`timeLapseNonKeySteps` consumers remain unimplemented.
 
-The capture owner is `Scalpal.Capture.HandCaptureRecorder` (`Assets/Scalpal/Capture`): `Begin` raises `SegmentStarted`, `EndSurgery` raises `SegmentEnded`, and `AbandonSegment` discards an attempt that ends without completion. While the clip uploads the replay is `queued` with no job and the runtime-only `captureNotice` explains it; `AttachMotionJob` then supplies the job, or `ReportCaptureFailure` fails only the replay with its reason. See [system integration](../../../../../docs/system-integration.md#native-hand-capture-producer). Missing capture is shown honestly; a fallback video is not proof of capture integration.
-
-Replay polling backs off from three to ten seconds and stops at terminal status. Players bind by artifact identity, so new signatures do not restart the video. Error/expiry refresh preserves playback position and play/pause state. Error markers require known timestamps, matching surgery/replay `eventClock` and explicit verified clock alignment. The pausing `active_interaction` clock cannot be matched to a wall-clock clip with an assumed offset. A demo uses at most 20 seconds around the earliest aligned guardrail, otherwise an incision/ligation milestone; without aligned key facts it starts at zero. This is a contiguous highlight window, not a montage. Fixed-wrist kinematic replay does not establish metric wrist recovery or a learned robot policy.
-
-## Reflection and observer
-
-Trigger selects world-space controls; Editor mouse selects them. The headset POSTs the canonical run ID to `/coach/runs/:runId/recap`, fetches the returned `reactionAudioRoute`, and plays the server-rendered reaction through the existing `QuestJarvisVoice.PlayLocalSpeech` API. The server owns the spoken text and ignores client prompt overrides. This is one spoken question with on-screen reflection, not a conversational session or recorded self-assessment. An entirely offline run has no server mapping; that and provider failure retain the question on screen. Legacy standalone practice has `/coach/sessions/:sid/recap` compatibility. No voice implementation file is modified.
-
-The panel advances through reaction, self-assessment and two independent scorecards. Feedback selects no more than two strengths and two improvements from logged facts. The companion `/recap` and `/s/:id/recap` import the same durable RunResult and resolve replay grants under the viewer's identity; automatic result publication remains unconnected. Sample scores require explicit `/recap?demo=sample` selection.
+The passthrough hand-clip recorder (`Scalpal.Capture.HandCaptureRecorder`) is retired: nothing subscribes to `SegmentStarted`/`SegmentEnded`, so `EndSurgery` records the RunResult `replay` as failed ("Capture adapter is not connected"). The `replay`/`AttachMotionJob` contract fields remain for the companion and gateway; the headset recap no longer shows them.
 
 ## Verification
 
 Run Unity 6000.0.66f2 batch-mode validations with `-executeMethod`:
 
-- `Scalpal.Recap.Editor.RecapValidation.Run` — scene/contract/state/fact checks.
-- `Scalpal.Recap.Editor.RecapReviewValidation.Run` — reviewed serialization, playback identity, sample and demo regressions.
+- `Scalpal.Recap.Editor.RecapValidation.Run` — contract/state/fact checks, then `RecapScreenValidation`: every visible text on the real scene in each robot state (pending, ready synthetic/headset/mixed, unavailable, malformed, timeout, player error, no result) must be exactly the allowed list.
+- `Scalpal.Recap.Editor.RecapReviewValidation.Run` — reviewed serialization and demo-flag regressions.
 - `Scalpal.Recap.Editor.BodyGradeAdapterValidation.Run` — real packaged open-body engine grade, incomplete finish, exact points/decisions, accepted versus unknown timestamps, clock mismatch, assistance and unmeasured metrics.
 - `Scalpal.Recap.Editor.RecapIntegrationValidation.Run` — real preop scorecard → canonical handoff/flag snapshot and two retry attempts → packaged case through `AnatomyExerciseBinding` → completion, retry/reset and build inclusion.
 
-`RecapPlaybackValidation.Run` is a graphics-enabled Play Mode check; invoke without `-quit` because it exits itself. `RecapBuild.CapturePreviews` renders to `SCALPAL_RECAP_PREVIEW` (default `/tmp/scalpal-recap-preview`). These are desktop component checks, not physical headset evidence.
+`RecapBuild.CapturePreviews` renders to `SCALPAL_RECAP_PREVIEW` (default `/tmp/scalpal-recap-preview`). These are desktop component checks, not physical headset evidence.
 
 Also run the affected API unit/integration tests, preop route tests, and companion `npm test` plus `npm ci && npm run build`; its standard test script now includes recap contracts using a fixture generated by the actual preop scorer. Report only checks that actually ran. Real capture/manifest/job production, hints/path-economy measurements, pre-office demo-start ownership, pre-exposure/time-lapse consumers, automatic publication and physical full-session/provider verification remain open boundaries.

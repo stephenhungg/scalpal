@@ -7,6 +7,7 @@ import Recap from './pages/Recap';
 import Join from './pages/Join';
 import SessionPage from './pages/Session';
 import HeadsetSimulator from './pages/HeadsetSimulator';
+import LiveOR from './pages/LiveOR';
 
 export default function App() {
   const path = usePath();
@@ -17,6 +18,7 @@ export default function App() {
   if (path === '/recap') page = <Recap />;
   else if ((params = match('/s/:id/recap', path))) page = <Recap sessionId={params.id} />;
   else if ((params = match('/join/:code', path))) page = <Join code={params.code} />;
+  else if ((params = match('/s/:id/or', path))) page = <LiveOR sessionId={params.id} />;
   else if ((params = match('/s/:id/simulate', path))) page = <HeadsetSimulator sessionId={params.id} />;
   else if ((params = match('/s/:id', path))) page = <SessionPage sessionId={params.id} />;
   else page = <Home />;

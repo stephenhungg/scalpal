@@ -50,6 +50,11 @@ namespace Scalpal.Quest
         double nextTiming;
         float peakFrameMs;
         public VolumetricTissue Wall {get;private set;}
+        // A measured-fact wound presenter may replace the draw of the physics coupon.
+        // This never disables its solver, collision/contact surface or topology evidence.
+        public Func<bool> PhysicsSurfaceVisible;
+        public float LastSolverMilliseconds {get;private set;}
+        public float LastSurfaceMilliseconds {get;private set;}
         // Triangle points are Wall-local material metres: source atlas for the legacy coupon, wound-local for the open wall.
         public event Action<Vector3,Vector3,Vector3> BladeSwept;
         public void Initialize(Transform sourceFrame,NativeWorkbench rig,Func<bool> canInteract,bool openBodyLayers=false)
@@ -110,6 +115,8 @@ namespace Scalpal.Quest
             if(!TryContactLayer(layerId,worldPoint,worldRadius,out _)||nextGripToken==int.MaxValue)return false;
             int id=++nextGripToken;
             float scale=Wall.transform.localToWorldMatrix.MultiplyVector(Vector3.right).magnitude;
+            // One authored material support footprint; exposure is determined by topology,
+            // rather than shrinking the membrane grip to compensate for a welded interface.
             if(!Wall.Volume.BeginMaterialHandle(id,layerId,Wall.transform.InverseTransformPoint(worldPoint),worldRadius/scale)||
                 !Wall.Volume.TryMaterialHandlePosition(id,out Vector3 local))return false;
             layerGrips.Add(id,new LayerGrip{layer=layerId,baseline=local,stepAtAcquisition=Wall.Volume.AcceptedStepSequence});token=id;return true;
@@ -206,7 +213,17 @@ namespace Scalpal.Quest
         bool FractureLayer(string layerId,string verb,Vector3 a,Vector3 b,Vector3 c,Vector3 stroke,float scale,out LayerFracture fracture)
         {
             fracture=default;
-            int count=Wall.Volume.FractureMaterialSweep(layerId,a,b,c,.0005f/scale);
+            int count;
+            if(verb=="split")
+            {
+                if(!OpenWallLayers.TryGet(layerId,out var layer)||layer.index+1>=OpenWallLayers.Count)return false;
+                var underlying=OpenWallLayers.Get(layer.index+1);
+                // Authored finite wound support margin in material metres, not measured
+                // tissue adhesion. Release the underlying interface only with a real split;
+                // the returned face count remains the split tissue's mechanical fact.
+                count=Wall.Volume.SplitMaterialSweep(layerId,underlying.id,a,b,c,.0005f/scale,.035f);
+            }
+            else count=Wall.Volume.FractureMaterialSweep(layerId,a,b,c,.0005f/scale);
             if(count==0)return false;
             OpenWallLayers.TryFiberAngle(layerId,stroke,out float angle);
             fracture=new LayerFracture{layerId=layerId,verb=verb,newlyBrokenFaces=count,topologyRevision=Wall.Volume.TopologyRevision,fiberAngleDegrees=angle};
@@ -235,9 +252,12 @@ namespace Scalpal.Quest
         {
             double begin=Time.realtimeSinceStartupAsDouble;
             if(!Wall)return;
+            LastSolverMilliseconds=LastSurfaceMilliseconds=0;
             bool valid=isActiveAndEnabled&&ready!=null&&ready()&&seconds>0&&!float.IsNaN(seconds)&&!float.IsInfinity(seconds);
             if(valid&&openLayers)valid=ValidLayerFrame(out _);
             Wall.SetVisible(valid);
+            var surfaceRenderer=Wall.GetComponent<MeshRenderer>();
+            if(surfaceRenderer)surfaceRenderer.forceRenderingOff=PhysicsSurfaceVisible!=null&&!PhysicsSurfaceVisible();
             if(!valid){ClearTransient();return;}
             Matrix4x4 current=Wall.transform.localToWorldMatrix;
             if(frameValid&&current!=lastFrame)ClearTransient(); // A registration/origin change cannot become a knife sweep.
@@ -261,20 +281,25 @@ namespace Scalpal.Quest
             if(!openLayers&&!grasper)FindHandle();
             clock=Mathf.Min(clock+Mathf.Clamp(seconds,0,.05f),.05f);
             int steps=0;
+            double solverBegin=Time.realtimeSinceStartupAsDouble;
             while(clock>=1f/90&&steps++<4)
             {
                 Wall.Volume.Step(1f/90,grasper?Wall.transform.InverseTransformPoint(grasper.actionPoint.position)+handleOffset:Vector3.zero,Vector3.zero);
                 clock-=1f/90;
             }
+            LastSolverMilliseconds=(float)((Time.realtimeSinceStartupAsDouble-solverBegin)*1000);
             // Numerical rejection retains the material handle and retries next tick.
             // Detach only on explicit loss/release or a topology cut invalidating its fan.
             if(grasper&&Wall.Volume.Handle<0)ReleaseHandle();
             surfaceClock+=Mathf.Clamp(seconds,0,.05f);
-            if(surfaceClock>=1f/30){Wall.CommitSurface();surfaceClock%=1f/30;}
+            LastSurfaceMilliseconds=0;
+            if(surfaceClock>=1f/30)
+            {double surfaceBegin=Time.realtimeSinceStartupAsDouble;Wall.CommitSurface();surfaceClock%=1f/30;
+                LastSurfaceMilliseconds=(float)((Time.realtimeSinceStartupAsDouble-surfaceBegin)*1000);}
             peakFrameMs=Mathf.Max(peakFrameMs,(float)((Time.realtimeSinceStartupAsDouble-begin)*1000));
             if(Application.isPlaying&&Time.realtimeSinceStartupAsDouble>=nextTiming)
             {
-                Debug.Log($"SCALPAL_NATIVE_VOLUME_TIMING cells={Wall.Volume.Cells.Length} nodes={Wall.Volume.NodeCount} cuts={Wall.Volume.CutFaceCount} graspNodes={Wall.Volume.HandleNodeCount} stepRetries={Wall.Volume.LastStepRetries} stepBacktracks={Wall.Volume.LastStepBacktracks} stepAccepted={Wall.Volume.LastStepAccepted} peakCpuMs={peakFrameMs:F2}");
+                Debug.Log($"SCALPAL_NATIVE_VOLUME_TIMING cells={Wall.Volume.Cells.Length} nodes={Wall.Volume.NodeCount} cuts={Wall.Volume.CutFaceCount} graspNodes={Wall.Volume.HandleNodeCount} stepRetries={Wall.Volume.LastStepRetries} stepBacktracks={Wall.Volume.LastStepBacktracks} stepAccepted={Wall.Volume.LastStepAccepted} peakCpuMs={peakFrameMs:F2} solverCpuMs={LastSolverMilliseconds:F2} surfaceCpuMs={LastSurfaceMilliseconds:F2} burst={Wall.Volume.LastStepUsedBurst}");
                 nextTiming=Time.realtimeSinceStartupAsDouble+5;peakFrameMs=0;
             }
         }

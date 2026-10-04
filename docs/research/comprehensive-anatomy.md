@@ -6,7 +6,7 @@ Researched October 3, 2026. This document separates the inspected repository fro
 
 Build a reusable anatomy platform that supports progressively broader authored exercises. “Every organ and vessel” is a useful long-term ambition, but cannot serve as a single acceptance criterion: named anatomy, visible geometry, correct anatomical relationships, simulated behavior, learner assessment and participant registration require separate evidence. A structure can be searchable before it supports a scored interaction. An unsupported operation should remain unavailable rather than inheriting a misleading generic behavior.
 
-The immediate milestone remains the physical Quest appendectomy rehearsal. Expand anatomy after its selection, practice, feedback and recap work on the headset. Preserve one authored case authority and Matthew's single Jarvis agent; an expanded atlas does not require another progression engine or coach.
+The immediate milestone remains the physical Quest appendectomy rehearsal. Expand anatomy after its selection, practice, feedback and recap work on the headset. Preserve one authored case authority and Matthew's single Scalpal agent; an expanded atlas does not require another progression engine or coach.
 
 ## What Is Actually Present
 
@@ -55,7 +55,7 @@ A future anatomy record should include the existing ID and aliases, optional ver
 
 Start with the small regional subset required by the next case. Proposed typed edges include `part_of`, `contained_in`, `adjacent_to`, `connected_to`, and appropriately reviewed vessel/nerve relations. These are application-schema proposals; they are not a claim that every predicate or edge can be copied directly from FMA. Keep structural relations separate from functional or simulated-flow relations. A mesh tree, shared system label, nearest neighbor or touching collider is not sufficient evidence for a connection.
 
-Each edge needs source/release, subject and object mappings, reviewer, status, and variant scope. Preserve missing/unknown relationships rather than filling them with generated text. Require sensible laterality and node existence; check acyclicity for the chosen strict containment hierarchy, not for every relation. A learner-facing explanation can cite verified graph facts, while Jarvis continues to request bounded actions through the existing tool interface.
+Each edge needs source/release, subject and object mappings, reviewer, status, and variant scope. Preserve missing/unknown relationships rather than filling them with generated text. Require sensible laterality and node existence; check acyclicity for the chosen strict containment hierarchy, not for every relation. A learner-facing explanation can cite verified graph facts, while Scalpal continues to request bounded actions through the existing tool interface.
 
 ### Interaction Profiles
 

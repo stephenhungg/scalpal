@@ -18,7 +18,8 @@ export default function Join({ code }: { code: string }) {
     join.run(async () => {
       if (!live.conn) throw new Error('Not connected to the session database yet.');
       const sid = await joinWithCode(live.conn, code, name.trim());
-      navigate(`/s/${sid}`, true);
+      // /join/CODE?or opens the Live OR console instead of the full session page.
+      navigate(new URLSearchParams(location.search).has('or') ? `/s/${sid}/or` : `/s/${sid}`, true);
     });
 
   return (

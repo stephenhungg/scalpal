@@ -58,15 +58,19 @@ export interface RoundView {
   choices: { key: ChoiceKey; text: string }[];
 }
 
+// Optional fields are omitted when absent (never null): Unity's JsonUtility turns null into an empty object.
 export interface PickOutcome {
-  pick: InterviewPick;
+  pick: { roundId: string; key: ChoiceKey; via: "tap" | "voice"; heard: string }; // no grade: scores show only at the end
   choice: { key: ChoiceKey; text: string };
   // What the patient voice is told: the clinician's move, and what to convey in reply.
   patient: { clinicianMove: string; direction: string; closing: string };
-  finding: InterviewChoice["finding"] | null;
-  next: RoundView | null;
-  scorecard: InterviewScorecard | null;
+  done: boolean;
+  finding?: NonNullable<InterviewChoice["finding"]>;
+  next?: RoundView;
+  scorecard?: InterviewScorecard;
 }
+
+const withArticle = (noun: string) => `${/^[aeiou]/.test(noun) ? "an" : "a"} ${noun}`;
 
 const STAGE_LABEL: Record<InterviewRound["stage"], string> = { history: "History", exam: "Examination", tests: "Workup", diagnosis: "Diagnosis", plan: "Plan" };
 
@@ -116,13 +120,15 @@ export class InterviewSession {
       this.phase = "scored";
       for (const l of this.listeners) l({ kind: "phase", payload: this.phase });
     }
+    const next = this.current();
     return {
-      pick,
+      pick: { roundId: pick.roundId, key, via, heard },
       choice: { key, text: choice.text },
       patient: { clinicianMove: choice.text, direction: choice.patientCue, closing: done ? (this.interview.closingLine ?? "") : "" },
-      finding: choice.finding ?? null,
-      next: this.current(),
-      scorecard: done ? this.score() : null,
+      done,
+      ...(choice.finding ? { finding: choice.finding } : {}),
+      ...(next ? { next } : {}),
+      ...(done ? { scorecard: this.score() } : {}),
     };
   }
 
@@ -165,7 +171,7 @@ export class InterviewSession {
     const feedback = [
       ...rounds.filter((r) => r.picked.grade === "wrong").map((r) => `Missed: ${r.prompt} The best move was "${r.best.text}". ${r.best.feedback}`),
       ...rounds.filter((r) => r.picked.grade === "partial").map((r) => `Close: "${r.picked.text}". ${r.picked.feedback} Best: "${r.best.text}".`),
-      ...(plan === "correct" ? [] : [`The surgery this patient needs is a ${this.kase.procedure.title.toLowerCase()}, and that is what you will do in the operating room.`]),
+      ...(plan === "correct" ? [] : [`The surgery this patient needs is ${withArticle(this.kase.procedure.title.toLowerCase())}, and that is what you will do in the operating room.`]),
       ...rounds.filter((r) => r.picked.grade === "correct").map((r) => `Good: ${r.picked.feedback}`),
     ];
     return {
@@ -189,14 +195,14 @@ export class InterviewSession {
     };
   }
 
-  // What Jarvis learns about the office, for the operating room prompt.
+  // What Scalpal learns about the office, for the operating room prompt.
   carryover(): string {
     if (this.phase !== "scored") return "";
     const card = this.score();
     const missed = card.rounds.filter((r) => r.picked.grade !== "correct");
     const risks = (status: CarryoverItem["status"]) => card.carryoverItems.filter((i) => i.status === status).map((i) => i.label);
     return [
-      `Pre-op interview score ${card.total}/100 (${card.grade}). Diagnosis pick: ${card.diagnosisResult}. Plan pick ${card.procedureChosenCorrectly ? "correct" : `wrong; the case needs a ${this.kase.procedure.title.toLowerCase()}`}.`,
+      `Pre-op interview score ${card.total}/100 (${card.grade}). Diagnosis pick: ${card.diagnosisResult}. Plan pick ${card.procedureChosenCorrectly ? "correct" : `wrong; the case needs ${withArticle(this.kase.procedure.title.toLowerCase())}`}.`,
       missed.length ? `Interview moves they missed or half-got: ${missed.map((r) => `${r.prompt} (best: ${r.best.text})`).join("; ")}. Bring these up only when they matter during the operation.` : "They made the best move in every interview round.",
       risks("found").length ? `Chart risks they found: ${risks("found").join(", ")}.` : "",
       risks("missed").length ? `Chart risks they did not elicit: ${risks("missed").join(", ")}.` : "",
@@ -211,7 +217,8 @@ export class InterviewSession {
       phase: this.phase,
       patientId: this.kase.patientId,
       patientName: this.patientName,
-      round: this.current(),
+      done: this.phase === "scored",
+      ...(this.current() ? { round: this.current()! } : {}),
       picks: this.picks.map(({ roundId, key, via }) => ({ roundId, key, via })),
       findings: this.findings,
     };

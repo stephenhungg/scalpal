@@ -25,7 +25,7 @@ Requires [uv](https://docs.astral.sh/uv/). Python 3.11 is pinned. The first run 
 ```sh
 cd services/vision
 uv sync
-uv run scalpal-vision serve                      # http://127.0.0.1:8791, loads and warms the model first
+uv run scalpal-vision serve                      # http://127.0.0.1:8792, loads and warms the model first
 uv run scalpal-vision serve --size 960           # native OWLv2 resolution: better on small objects, ~2x slower
 uv run scalpal-vision detect photo.jpg --labels scissors hand "gloved hand"
 uv run pytest
@@ -70,7 +70,7 @@ Response, captured from the running service with the committed test image and `l
 
 `GET /health` returns `{status, model, device, warmupMs}`. `GET /models` returns the active model, the available backends and the default labels with their catalog mapping.
 
-- The service listens on port 8791 on 127.0.0.1.
+- The service listens on port 8792 on 127.0.0.1.
 - CORS allows any `localhost`, `127.0.0.1` or `[::1]` origin.
 - It never writes frames to disk and logs no request bodies.
 - Inference is serialized, one frame at a time.

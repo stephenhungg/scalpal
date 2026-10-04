@@ -11,6 +11,8 @@ namespace Scalpal.Recap
         public string schemaVersion = "scalpal.run_result.v1";
         public string runId = "", sessionId = "", attemptId = "", encounterId = "", patientId = "", procedureId = "";
         public bool isSample, diagnosisAvailable;
+        // The learner skipped the diagnosis office: clinical reasoning reads "Skipped", never zero or missing data.
+        public bool diagnosisSkipped;
         public DiagnosisScorecard diagnosis;
         public SurgeryGrade surgery = new SurgeryGrade();
         public ReplayResult replay = new ReplayResult();

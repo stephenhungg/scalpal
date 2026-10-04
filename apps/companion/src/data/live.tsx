@@ -20,6 +20,9 @@ function useLiveTables() {
   const [coachMessages] = useTable(tables.sessionCoachMessages);
   const [coachStatus] = useTable(tables.sessionCoachStatus);
   const [commands] = useTable(tables.sessionCommands);
+  const [simLogs] = useTable(tables.sessionSimLogs);
+  const [robotResults] = useTable(tables.sessionRobotResults);
+  const [patientConditions] = useTable(tables.sessionPatientCondition);
   const [artifacts] = useTable(tables.sessionArtifacts);
   const [jobs] = useTable(tables.sessionMotionJobs);
   const [replay] = useTable(tables.sessionReplayState);
@@ -39,6 +42,9 @@ function useLiveTables() {
     coachMessages,
     coachStatus,
     commands,
+    simLogs,
+    robotResults,
+    patientConditions,
     artifacts,
     jobs,
     replay,
@@ -116,6 +122,11 @@ export function useSession(sessionId: string) {
       events: pick(live.events).sort(byTime(e => toMs(e.at))),
       coachMessages: pick(live.coachMessages).sort(byTime(m => toMs(m.at))),
       coachStatus: live.coachStatus.find(x => x.sessionId === sessionId) ?? null,
+      // Operating-room log, newest first.
+      simLogs: pick(live.simLogs).sort((a, b) => (a.id < b.id ? 1 : a.id > b.id ? -1 : 0)),
+      robotResults: pick(live.robotResults).sort(byTime(r => toMs(r.at))),
+      // The simulated patient advanced server-side by the module (patient_condition), when the coach started one.
+      patientCondition: live.patientConditions.find(x => x.sessionId === sessionId) ?? null,
       commands: pick(live.commands).sort(byTime(c => toMs(c.requestedAt))),
       artifacts: pick(live.artifacts).sort(byTime(a => toMs(a.createdAt))),
       jobs: pick(live.jobs).sort(byTime(j => toMs(j.createdAt))),

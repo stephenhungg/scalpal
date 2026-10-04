@@ -16,6 +16,8 @@ export const ACTIONS: Record<string, 'none' | 'target' | 'bool' | 'number'> = {
   requestHint: 'none',
   pausePractice: 'none',
   resumePractice: 'none',
+  handInstrument: 'target',
+  highlightInstrument: 'target',
 };
 
 function describe(c: { action: string; targetId?: string; argBool?: boolean; argNumber?: number }) {
@@ -82,7 +84,7 @@ export default function Commands({ data }: { data: SessionData }) {
             </button>
           </form>
           <div className="muted small" style={{ marginTop: 6 }}>
-            Requests go to the headset, which validates and applies or rejects them. Jarvis uses the same path.
+            Requests go to the headset, which validates and applies or rejects them. Scalpal uses the same path.
           </div>
           {send.error && <div className="error-text">{send.error}</div>}
         </div>

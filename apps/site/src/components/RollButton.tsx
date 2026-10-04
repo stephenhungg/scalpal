@@ -2,7 +2,7 @@
 
 import { motion } from "motion/react";
 import Link from "next/link";
-import type { ComponentProps } from "react";
+import { useEffect, useState, type ComponentProps } from "react";
 
 // Label rolls up 34px on hover. Spring fitted to the measured trace on aeterna:
 // 1.5% overshoot peaking at ~345ms, settled by ~600ms.
@@ -18,9 +18,28 @@ type Props = {
   external?: boolean;
   /** "roll" swaps to hoverLabel; "invert" keeps the label and flips the colours. */
   hoverStyle?: "roll" | "invert";
+  /** Render a button that copies this text to the clipboard instead of navigating. */
+  copy?: string;
 } & Omit<ComponentProps<"a">, "href">;
 
-export function RollButton({ label, hoverLabel = label, variant = "primary", href, download, external, hoverStyle = "roll", className = "", ...rest }: Props) {
+export function RollButton({ label, hoverLabel = label, variant = "primary", href, download, external, hoverStyle = "roll", copy, className = "", ...rest }: Props) {
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const t = setTimeout(() => setCopied(false), 1800);
+    return () => clearTimeout(t);
+  }, [copied]);
+  // Keep the original labels' width while "Copied" shows, so the button doesn't shrink.
+  const sizer = copied ? (
+    <span aria-hidden className="invisible flex h-0 flex-col overflow-hidden">
+      <span className="whitespace-nowrap">{label}</span>
+      <span className="whitespace-nowrap">{hoverLabel}</span>
+    </span>
+  ) : null;
+  if (copied) {
+    label = "Copied";
+    hoverLabel = "Copied";
+  }
   const base =
     "group relative inline-flex h-[46px] items-center justify-center overflow-visible px-5 text-[14px] font-semibold leading-[22px] min-[810px]:h-[50px] min-[810px]:px-9";
   const invert =
@@ -42,6 +61,30 @@ export function RollButton({ label, hoverLabel = label, variant = "primary", hre
       )}
     </>
   );
+  if (copy !== undefined) {
+    const onCopy = async () => {
+      try {
+        await navigator.clipboard.writeText(copy);
+      } catch {
+        // Older browsers or no permission: fall back to a hidden textarea.
+        const t = document.createElement("textarea");
+        t.value = copy;
+        t.style.position = "fixed";
+        t.style.opacity = "0";
+        document.body.appendChild(t);
+        t.select();
+        document.execCommand("copy");
+        t.remove();
+      }
+      setCopied(true);
+    };
+    return (
+      <motion.button type="button" onClick={onCopy} className={`${base} ${look} ${className} flex-col`} initial="rest" animate="rest" whileHover="hover" aria-live="polite">
+        {inner}
+        {sizer}
+      </motion.button>
+    );
+  }
   if (download || external) {
     return (
       <motion.a href={href} download={download || undefined} className={`${base} ${look} ${className}`} initial="rest" animate="rest" whileHover="hover" {...(rest as object)}>

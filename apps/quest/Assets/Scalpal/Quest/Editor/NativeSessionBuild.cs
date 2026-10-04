@@ -46,8 +46,11 @@ namespace Scalpal.Quest.Editor
             patient.transform.position += delta;
             room.transform.position += delta;
             var mannequin = patient.GetComponentsInChildren<Renderer>(true).Single();
+            // The atlas fit and torso frame below keep their authored placement from the imported bounds; the
+            // mannequin art is then turned and raised to match them (SeatVirtualPatient).
             var patientBounds = mannequin.bounds;
-            mannequin.sharedMaterials = mannequin.sharedMaterials.Select(_ => PatientGhost()).ToArray();
+            // The VR patient reads as solid skin; it is hidden in AR, where only the anatomy overlay is drawn.
+            mannequin.sharedMaterials = mannequin.sharedMaterials.Select(_ => PatientSkin()).ToArray();
             PrefabUtility.RecordPrefabInstancePropertyModifications(mannequin);
             var unbound = patient.transform.Find("AnatomyRoot_Unbound");
             if (unbound) UnityEngine.Object.DestroyImmediate(unbound.gameObject);
@@ -73,6 +76,7 @@ namespace Scalpal.Quest.Editor
             // Authored approximate skin umbilicus; +X patient left, +Y anterior, +Z cranial.
             frame.SetPositionAndRotation(new Vector3(patientBounds.center.x, patientBounds.max.y + 0.015f,
                 patientBounds.min.z + 1.08f * AnatomyScale), Quaternion.identity);
+            SeatVirtualPatient(mannequin, frame);
             var bundle = LoadBundle();
             var selected = bundle.cases.Single(item => item.caseId == CaseId);
             foreach (var port in selected.procedure.ports)
@@ -113,6 +117,9 @@ namespace Scalpal.Quest.Editor
             exercise.requireCoachSynchronization = true;
             workbench.externalSessionControls = true;
             var session = sessionObject.AddComponent<NativeCaseSession>();
+            sessionObject.AddComponent<NativeScenePointer>();
+            sessionObject.AddComponent<NativeProcedureChecklist>();
+            sessionObject.AddComponent<NativePatientMonitor>().session = session;
             session.workbench = workbench;
             session.exercise = exercise;
             session.anatomy = anatomy;
@@ -151,7 +158,10 @@ namespace Scalpal.Quest.Editor
             session.status = workbench.status;
             workbench.status.transform.position = new Vector3(-0.15f, 1.65f, 0.3f);
             workbench.status.characterSize = 0.012f;
-            workbench.status.text = "SCALPAL | APPENDECTOMY REHEARSAL\nReview the case and confirm selection\nGrip: pick up   Trigger: use   B: review / confirm\nX: identify   Y: voice   A: reset tools   Left menu: retry";
+            workbench.status.text = "Scalpal | Appendectomy rehearsal\nReview the case and confirm selection\nGrip: pick up   Trigger: use   B: review / confirm\nX: identify   Y: voice   A: reset tools   Left menu: retry";
+            // Diagnostic status stays bound for the session (still written each frame) but is never shown in the
+            // learner's OR. The learner sees the checklist, Jarvis's line and the vitals monitor.
+            workbench.status.gameObject.SetActive(false);
 
             // AnatomyPart captures these enabled flags as authored defaults at runtime Awake.
             // The practice controller then hides geometry until its explicit validity gate opens.
@@ -161,6 +171,8 @@ namespace Scalpal.Quest.Editor
             PrefabUtility.RecordPrefabInstancePropertyModifications(preview);
             foreach (var collider in previewObject.GetComponentsInChildren<Collider>(true))
                 PrefabUtility.RecordPrefabInstancePropertyModifications(collider);
+            // Robot demos: controller motion relative to PatientRoot, posted to the coach after mark_incision.
+            Scalpal.Robotics.EditorTools.ControllerMotionSetup.Ensure();
             ApplySessionSettings();
             Directory.CreateDirectory("Assets/Scalpal/Quest/Scenes");
             if (!EditorSceneManager.SaveScene(scene, ScenePath)) throw new InvalidOperationException("Could not save native session scene.");
@@ -168,6 +180,31 @@ namespace Scalpal.Quest.Editor
             AssetDatabase.SaveAssets();
             Validate();
             Debug.Log("SCALPAL_NATIVE_SESSION_PREPARED view=mixed_reality registration=required_live_body_fit physicalPlaythroughUnverified=true");
+        }
+
+        // The imported mannequin lies head toward -Z with its back inside the mattress, but the atlas fit and torso
+        // frame below are +Z cranial with the feet at min Z. Turn the mannequin end for end about its bounds centre
+        // (its footprint is unchanged), then raise it until its skin under the authored McBurney teaching wound is
+        // 2 mm below the wound's skin plane: a learner touching the visible abdomen there touches the scored wall.
+        public const float SkinBelowWoundMeters = .002f;
+        internal static void SeatVirtualPatient(Renderer mannequin, Transform frame)
+        {
+            mannequin.transform.RotateAround(mannequin.bounds.center, Vector3.up, 180f);
+            Vector3 wound = frame.TransformPoint(Scalpal.Surgery.OpenSurgeryStroke.McBurney(Scalpal.Surgery.OpenSurgerySession.AuthoredRightAsis, Vector3.zero));
+            var skin = new GameObject("SkinProbe").AddComponent<MeshCollider>(); // the rendered skin, not the physics copy
+            skin.transform.SetParent(mannequin.transform, false);
+            skin.sharedMesh = mannequin.GetComponent<MeshFilter>().sharedMesh;
+            Physics.SyncTransforms();
+            bool backfaces = Physics.queriesHitBackfaces;
+            Physics.queriesHitBackfaces = true; // A few source triangles on the midline are wound inward.
+            try
+            {
+                if (!skin.Raycast(new Ray(new Vector3(wound.x, mannequin.bounds.max.y + 1f, wound.z), Vector3.down), out var hit, 3f))
+                    throw new InvalidOperationException("No mannequin skin under the authored teaching wound.");
+                mannequin.transform.position += Vector3.up * (wound.y - SkinBelowWoundMeters - hit.point.y);
+            }
+            finally { Physics.queriesHitBackfaces = backfaces; UnityEngine.Object.DestroyImmediate(skin.gameObject); }
+            PrefabUtility.RecordPrefabInstancePropertyModifications(mannequin.transform);
         }
 
         static void ApplySessionSettings()
@@ -201,7 +238,14 @@ namespace Scalpal.Quest.Editor
             return bundle;
         }
 
-        static Material PatientGhost() => Material("AuthoredPatientGhost", new Color(0.65f, 0.5f, 0.4f, 0.13f), true);
+        static Material PatientSkin()
+        {
+            var material = Material("AuthoredPatientSkin", new Color(0.65f, 0.5f, 0.4f, 1f), false);
+            // Opaque skin that opens only over a live teaching wound (see PatientSkin.shader).
+            material.shader = Shader.Find("Scalpal/PatientSkin") ?? throw new InvalidOperationException("Scalpal/PatientSkin shader is missing.");
+            EditorUtility.SetDirty(material);
+            return material;
+        }
         static Material PortMaterial() => Material("AuthoredPortSite", new Color(0.2f, 0.7f, 0.85f), false);
 
         static Material Material(string name, Color color, bool transparent)
@@ -262,6 +306,13 @@ namespace Scalpal.Quest.Editor
             var sessions = roots.SelectMany(root => root.GetComponentsInChildren<NativeCaseSession>(true)).ToArray();
             if (sessions.Length != 1) throw new InvalidOperationException("Exactly one native case session is required.");
             var session = sessions[0];
+            if (!session.GetComponent<NativeScenePointer>())
+                throw new InvalidOperationException("Native session is missing the read-only scene identity pointer.");
+            if (!session.GetComponent<NativeProcedureChecklist>())
+                throw new InvalidOperationException("Native session is missing the read-only procedure checklist.");
+            var monitor = session.GetComponent<NativePatientMonitor>();
+            if (!monitor || monitor.session != session)
+                throw new InvalidOperationException("Native session is missing the matched simulated patient monitor.");
             if (!session.workbench || !session.exercise || !session.anatomy || !session.preview || !session.coach
                 || !session.realtime || !session.voice || !session.patientFrame || !session.status)
                 throw new InvalidOperationException("Native session has a missing required binding.");
@@ -269,6 +320,7 @@ namespace Scalpal.Quest.Editor
                 || session.status != session.workbench.status || session.exercise.presentationMode != "mixed_reality" || !session.exercise.requireCoachSynchronization
                 || !session.workbench.externalSessionControls)
                 throw new InvalidOperationException("Native case/coach/preview bindings are inconsistent.");
+            ValidateLearnerText(roots);
             if (roots.SelectMany(root => root.GetComponentsInChildren<AnatomyExerciseBinding>(true)).Count() != 1
                 || roots.SelectMany(root => root.GetComponentsInChildren<AnatomyController>(true)).Count() != 3
                 || roots.SelectMany(root => root.GetComponentsInChildren<CoachRelay>(true)).Count() != 1)
@@ -316,6 +368,17 @@ namespace Scalpal.Quest.Editor
                 throw new InvalidOperationException("Unexpected whole-body/detail atlas dependency in the native session.");
             Debug.Log("SCALPAL_NATIVE_SESSION_SCENE_VALIDATED tools=15 controllers=2 practiceParts=9 practiceTriangles=93399 overviewParts=81 overviewTriangles=120125 ports=3 initialValidity=false "
                 + "sourceBounds=" + MeshBounds(session.anatomy.gameObject));
+        }
+
+        // The OR scene carries no always-on world text. Learner text is spawned only by the checklist (top-left),
+        // Jarvis's dialogue line, the vitals monitor, the pointing label and the flow cards, each gated by its owner.
+        public static void ValidateLearnerText(GameObject[] roots)
+        {
+            var shown = roots.SelectMany(root => root.GetComponentsInChildren<TextMesh>(false).Cast<Component>()
+                    .Concat(root.GetComponentsInChildren<TMPro.TMP_Text>(false)))
+                .Where(text => text.gameObject.activeInHierarchy && text.GetComponent<Renderer>() && text.GetComponent<Renderer>().enabled).Select(text => text.name).ToArray();
+            if (shown.Length != 0)
+                throw new InvalidOperationException("Learner OR view shows debug/status world text: " + string.Join(", ", shown));
         }
 
         static void ValidatePresentation(NativeCaseSession session)
@@ -397,6 +460,8 @@ namespace Scalpal.Quest.Editor
             NativeBodyAtlasValidation.Run();
             NativeBodyRegistrationValidation.Run();
             NativeOperatingRoomModeValidation.Run();
+            NativeOperatingRoomPhysicsValidation.Run();
+            NativeLocomotionValidation.Run();
             Scalpal.Instruments.Editor.InstrumentRuntimeValidation.Run();
             NativeProcedureInputValidation.Run();
             NativeInteriorContactValidation.Run();
@@ -405,16 +470,26 @@ namespace Scalpal.Quest.Editor
             NativeViscoelasticValidation.Run();
             NativeCouponValidation.Run();
             NativeSkinCalibrationBenchmark.Run();
+            NativeTissueInterfaceValidation.Run();
+            NativeVolumeAccelerationValidation.Run();
             NativeVolumeRuntimeValidation.Run();
             NativeOpenWallValidation.Run();
+            NativeWoundResolutionValidation.Run();
             NativeBleedingValidation.Run();
             NativeVesselRuntimeValidation.Run();
             NativeTissueContactValidation.Run();
+            NativeContactMotionValidation.Run();
+            NativeScenePointerValidation.Run();
+            NativeOpenWoundPointerValidation.Run();
+            NativeProcedureChecklistValidation.Run();
+            NativePatientMonitorValidation.Run();
             NativeAppendectomyValidation.Run();
             NativeSessionBoundaryValidation.Run();
             NativeCoachRelayValidation.Run();
-            Scalpal.Capture.Editor.CaptureValidation.Run();
+            Scalpal.Robotics.EditorTools.RobotDemoValidation.Run();
             Scalpal.Shell.Editor.DialogueBoxValidation.Run();
+            NativeControllerHands.Validate();
+            Scalpal.Briefing.Editor.BriefingValidation.Run();
             // Fixtures must not leave temporary poses, offline gates or substituted bindings in the player.
             Validate();
             Debug.Log("SCALPAL_NATIVE_SESSION_VERIFY_OK");

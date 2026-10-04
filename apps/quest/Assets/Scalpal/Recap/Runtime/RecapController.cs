@@ -1,191 +1,127 @@
 using System;
 using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Networking;
-using UnityEngine.SceneManagement;
-using Scalpal.Voice;
 
 namespace Scalpal.Recap
 {
+    // The run ending: two scores and the simulated robot's replay of the demo step. The robot result comes from
+    // the coach (GET /coach/sessions/:id/robot-result); it is polled while pending and times out quietly.
     public sealed class RecapController : MonoBehaviour
     {
-        public TextAsset previewResult;
-        public QuestJarvisVoice voice;
+        public enum RobotState { Pending, Ready, Unavailable }
+        [Serializable] public sealed class RobotDemos { public int human, synthetic; }
+        [Serializable] public sealed class RobotResult
+        {
+            public string status, stepId, stepTitle, videoUrl;
+            public bool success, synthetic;
+            public float pathErrorMm;
+            public RobotDemos demos;
+        }
+
         public RecapPanel panel;
         public RecapVideo replay;
+        public float robotPollSeconds = 3, robotTimeoutSeconds = 150;
         public RunResult Result { get; private set; }
-        public string Phase { get; private set; } = "replay";
-        public string Notice { get; private set; } = "";
-        public string ReactionQuestion { get; private set; } = "How did that feel?";
-        public string SelfAssessmentQuestion { get; private set; } = "One thing you would do differently?";
-        public bool DemoEnabled => Result?.demo?.enabled == true;
+        public RobotState Robot { get; private set; } = RobotState.Pending;
+        public RobotResult RobotReply { get; private set; }
+        public bool RobotPathErrorKnown { get; private set; }
         RecapRunContext context;
         int generation;
-        bool resolving;
-        readonly HashSet<UnityWebRequest> requests = new HashSet<UnityWebRequest>();
-        [Serializable] sealed class PromptReply { public string runId, reactionQuestion, selfAssessmentQuestion, reactionAudioRoute; public bool voiceConfigured; }
-        [Serializable] public sealed class GatewayReplay
-        {
-            public string schemaVersion, sessionId, attemptId, jobId, status, reason, sourceVideoUrl, replayVideoUrl, replayKind, source, sourceArtifactId, replayArtifactId;
-            public uint jobRun;
-            public long expiresAtUnixMs;
-        }
-        public static bool SafeEndpoint(string url) => Uri.TryCreate(url, UriKind.Absolute, out var u) && (u.Scheme == "https" || (u.Scheme == "http" && u.IsLoopback));
-        void OnEnable() { context = RecapRunContext.Ensure(); context.MotionJobAttached += JobAttached; context.CaptureStateChanged += JobAttached; if (replay) replay.AccessRefreshRequested += RefreshAccess; }
-        // Upload completion can arrive after the learner moved on; never pull them back to replay.
-        void JobAttached() { if (context.result == null) return; if (Result == null || Phase == "replay") Load(context.result); else panel.Refresh(); }
+        UnityWebRequest pending;
+
         void Start()
         {
             context = RecapRunContext.Ensure();
-            if (context.result != null) Load(context.result);
-            else if (context.SamplePreviewRequested && previewResult) Load(RunResultContract.Parse(previewResult.text));
-            else { Result = null; Notice = "No result for this run"; panel.Refresh(); }
-        }
-        public void SelectSamplePreview()
-        {
-            if (!context) context = RecapRunContext.Ensure();
-            if (context.SelectSamplePreview() && previewResult) Load(RunResultContract.Parse(previewResult.text));
-        }
-        void CancelRequests()
-        {
-            generation++; StopAllCoroutines();
-            foreach (var request in requests) { try { request.Abort(); request.Dispose(); } catch (ObjectDisposedException) { } }
-            requests.Clear(); resolving = false;
+            Load(context.result);
         }
         public void Load(RunResult result)
         {
-            CancelRequests(); RunResultContract.Validate(result); Result = result; Phase = "replay"; Notice = "";
+            CancelRequests();
+            if (result != null) RunResultContract.Validate(result);
+            Result = result; Robot = RobotState.Pending; RobotReply = null; RobotPathErrorKnown = false;
+            replay.Stop();
             if (!context) context = RecapRunContext.Ensure();
-            replay.Bind(result); panel.Refresh(); StartCoroutine(Poll(generation));
-        }
-        IEnumerator SpeakReaction(int version)
-        {
-            if (!voice || Result.isSample || !SafeEndpoint(context.voiceServiceUrl))
-            { Notice = "Jarvis voice unavailable; reflect using the question on screen."; panel.Refresh(); yield break; }
-            string route = (Result.runId == context.coachSessionId ? "/coach/sessions/" : "/coach/runs/") + Uri.EscapeDataString(Result.runId) + "/recap";
-            PromptReply data = null;
-            using (var request = new UnityWebRequest(context.voiceServiceUrl.TrimEnd('/') + route, "POST"))
-            {
-                request.downloadHandler = new DownloadHandlerBuffer(); request.timeout = 10; requests.Add(request);
-                yield return request.SendWebRequest(); requests.Remove(request);
-                if (version != generation || Phase != "reaction") yield break;
-                if (request.result == UnityWebRequest.Result.Success)
-                    try { data = JsonUtility.FromJson<PromptReply>(request.downloadHandler.text); } catch (ArgumentException) { }
-            }
-            if (data == null || data.runId != Result.runId || string.IsNullOrWhiteSpace(data.reactionQuestion) || string.IsNullOrWhiteSpace(data.selfAssessmentQuestion))
-            { Notice = "Run-bound Jarvis voice unavailable; use the question on screen."; panel.Refresh(); yield break; }
-            ReactionQuestion = data.reactionQuestion; SelfAssessmentQuestion = data.selfAssessmentQuestion; panel.Refresh();
-            if (!data.voiceConfigured || data.reactionAudioRoute != route + "/reaction.mp3")
-            { Notice = "Jarvis voice unavailable; use the question on screen."; panel.Refresh(); yield break; }
-            using (var request = UnityWebRequestMultimedia.GetAudioClip(context.voiceServiceUrl.TrimEnd('/') + data.reactionAudioRoute, AudioType.MPEG))
-            {
-                request.timeout = 20; requests.Add(request); yield return request.SendWebRequest(); requests.Remove(request);
-                if (version != generation || Phase != "reaction") yield break;
-                AudioClip clip = request.result == UnityWebRequest.Result.Success ? DownloadHandlerAudioClip.GetContent(request) : null;
-                bool played = clip && voice.PlayLocalSpeech(clip);
-                if (clip) Destroy(clip);
-                Notice = played ? "Reflect silently. Your reaction is unscored." : "Jarvis voice unavailable; use the question on screen."; panel.Refresh();
-            }
-        }
-        public static float PollDelay(int failures) => Mathf.Min(10, 3 + failures * 2);
-        IEnumerator Poll(int version)
-        {
-            int polls = 0;
-            while (version == generation && Phase == "replay")
-            {
-                var r = Result;
-                // Resolve an imported ready result once. Never rotate a playing video's URL on a timer.
-                if (r.replay.status == "failed" || (r.replay.status == "ready" && !string.IsNullOrEmpty(r.replay.replayVideoUrl))) yield break;
-                if (string.IsNullOrEmpty(r.replay.jobId) && r.replay.status == "queued" && !string.IsNullOrEmpty(context.captureNotice))
-                { Notice = context.captureNotice; panel.Refresh(); yield break; } // CaptureStateChanged reloads when the upload settles.
-                if (string.IsNullOrEmpty(r.replay.jobId) || string.IsNullOrEmpty(context.clientToken))
-                { Notice = r.isSample ? "" : "No capture job or paired session credential. Labeled sample replay available."; panel.Refresh(); yield break; }
-                yield return Resolve(version, false);
-                if (Result.replay.status == "ready" || Result.replay.status == "failed" || Notice.StartsWith("Replay access denied")) yield break;
-                yield return new WaitForSecondsRealtime(PollDelay(polls++));
-            }
-        }
-        void RefreshAccess() { if (Result != null && !resolving && Phase == "replay") StartCoroutine(Resolve(generation, true)); }
-        IEnumerator Resolve(int version, bool refresh)
-        {
-            if (resolving) yield break;
-            if (!SafeEndpoint(context.gatewayUrl) || string.IsNullOrEmpty(context.clientToken))
-            { Notice = "Replay needs an HTTPS gateway and paired session credential."; if (refresh) replay.RefreshAccess(null); panel.Refresh(); yield break; }
-            resolving = true;
-            var r = Result;
-            var url = context.gatewayUrl.TrimEnd('/') + "/v1/sessions/" + Uri.EscapeDataString(r.sessionId) + "/replay/" + Uri.EscapeDataString(r.replay.jobId);
-            using (var request = UnityWebRequest.Get(url))
-            {
-                request.SetRequestHeader("Authorization", "Bearer " + context.clientToken); request.timeout = 15; requests.Add(request);
-                yield return request.SendWebRequest(); requests.Remove(request);
-                if (version != generation) yield break;
-                bool accepted = false;
-                if (request.responseCode == 401 || request.responseCode == 403) Notice = "Replay access denied. Pair this session again.";
-                else if (request.result != UnityWebRequest.Result.Success) Notice = "Gateway unavailable (" + request.responseCode + "). Last confirmed state retained.";
-                else
-                {
-                    GatewayReplay reply = null;
-                    try { reply = JsonUtility.FromJson<GatewayReplay>(request.downloadHandler.text); } catch (ArgumentException) { }
-                    accepted = ApplyGateway(r, reply);
-                    Notice = accepted ? "" : "Gateway returned an incompatible run or replay state.";
-                }
-                if (refresh) replay.RefreshAccess(accepted ? r : null); else if (accepted) replay.Bind(r);
-                panel.Refresh();
-            }
-            resolving = false;
-        }
-        public static bool ApplyGateway(RunResult result, GatewayReplay reply)
-        {
-            if (reply == null || reply.schemaVersion != "scalpal.replay.v1" || reply.sessionId != result.sessionId || reply.attemptId != result.attemptId || reply.jobId != result.replay.jobId) return false;
-            if (result.replay.jobRun != 0 && result.replay.jobRun != reply.jobRun) return false;
-            if (result.replay.status == "ready" && !string.IsNullOrEmpty(result.replay.replayArtifactId) && reply.status == "ready" && result.replay.replayArtifactId != reply.replayArtifactId) return false;
-            if (reply.status != "queued" && reply.status != "processing" && reply.status != "ready" && reply.status != "failed") return false;
-            if (reply.source != "learner" && reply.source != "rehearsal" && reply.source != "sample" && reply.source != "unknown") return false;
-            if (result.isSample && reply.source == "learner") return false;
-            if (reply.status == "ready" && (reply.source == "unknown" || reply.replayKind != "kinematic" || string.IsNullOrWhiteSpace(reply.replayArtifactId) || !SafeEndpoint(reply.replayVideoUrl))) return false;
-            if (reply.status == "failed" && string.IsNullOrWhiteSpace(reply.reason)) return false;
-            result.replay.status = reply.status; result.replay.failureReason = reply.reason;
-            result.replay.sourceVideoUrl = reply.sourceVideoUrl; result.replay.replayVideoUrl = reply.replayVideoUrl;
-            result.replay.source = reply.source; result.replay.sourceArtifactId = reply.sourceArtifactId; result.replay.replayArtifactId = reply.replayArtifactId;
-            result.replay.jobRun = reply.jobRun; result.replay.expiresAtUnixMs = reply.expiresAtUnixMs;
-            return true;
-        }
-        public void Advance()
-        {
-            if (Result == null) { SelectSamplePreview(); return; }
-            if (Phase == "replay") { replay.Pause(); Phase = "reaction"; StartCoroutine(SpeakReaction(generation)); }
-            else if (Phase == "reaction") { Phase = "self"; if (voice) voice.Disconnect(); }
-            else if (Phase == "self") Phase = "scores";
+            if (result == null || string.IsNullOrEmpty(context.coachSessionId) || !SafeEndpoint(CoachUrl)) Robot = RobotState.Unavailable;
+            else StartCoroutine(PollRobot(generation));
             panel.Refresh();
         }
-        public void SetTalkHeld(bool held) { if (voice) voice.MicrophoneMuted = true; }
-        public void ToggleDemo() { if (Result == null) { SelectSamplePreview(); return; } replay.SetHighlight(!replay.HighlightEnabled); panel.Refresh(); }
+        string CoachUrl => context && !string.IsNullOrEmpty(context.voiceServiceUrl) ? context.voiceServiceUrl.TrimEnd('/') : "http://localhost:8787";
+        public static bool SafeEndpoint(string url) => Uri.TryCreate(url, UriKind.Absolute, out var u) && (u.Scheme == "https" || (u.Scheme == "http" && u.IsLoopback));
+        void CancelRequests()
+        {
+            generation++; StopAllCoroutines();
+            if (pending != null) { try { pending.Abort(); pending.Dispose(); } catch (ObjectDisposedException) { } pending = null; }
+        }
+        IEnumerator PollRobot(int version)
+        {
+            float deadline = Time.realtimeSinceStartup + robotTimeoutSeconds;
+            string url = CoachUrl + "/coach/sessions/" + Uri.EscapeDataString(context.coachSessionId) + "/robot-result";
+            while (version == generation && Robot == RobotState.Pending)
+            {
+                using (var request = UnityWebRequest.Get(url))
+                {
+                    request.timeout = 8; pending = request;
+                    yield return request.SendWebRequest();
+                    pending = null;
+                    if (version != generation) yield break;
+                    // A failed poll (coach restarting, USB reconnect) just retries until the deadline.
+                    if (request.result == UnityWebRequest.Result.Success) ApplyRobot(request.downloadHandler.text);
+                    else Debug.LogWarning("[Scalpal.Recap] robot result poll failed (" + request.responseCode + "): " + request.error);
+                }
+                if (Robot != RobotState.Pending) yield break;
+                if (Time.realtimeSinceStartup >= deadline) { RobotTimedOut(); yield break; }
+                yield return new WaitForSecondsRealtime(robotPollSeconds);
+            }
+        }
+        // Applies one robot-result reply. Anything malformed or unknown is unavailable, never guessed.
+        public void ApplyRobot(string json)
+        {
+            RobotResult reply = null;
+            try { reply = JsonUtility.FromJson<RobotResult>(json); } catch (ArgumentException) { }
+            if (reply?.status == "pending") { Robot = RobotState.Pending; panel.Refresh(); return; }
+            if (reply?.status == "ready" && !string.IsNullOrWhiteSpace(reply.stepId))
+            {
+                RobotReply = reply; Robot = RobotState.Ready;
+                // JsonUtility reads null as 0; only a measured error is shown.
+                RobotPathErrorKnown = !json.Replace(" ", "").Contains("\"pathErrorMm\":null") && json.Contains("\"pathErrorMm\"");
+                if (VideoPathValid(reply.videoUrl)) replay.Play(CoachUrl + reply.videoUrl);
+                else replay.Stop();
+            }
+            else { Robot = RobotState.Unavailable; replay.Stop(); }
+            panel.Refresh();
+        }
+        // Coach-relative replay paths only (/robot/replays/<file>.mp4); never an absolute or traversing URL.
+        public static bool VideoPathValid(string path) => !string.IsNullOrEmpty(path) && path.StartsWith("/robot/replays/", StringComparison.Ordinal)
+            && path.EndsWith(".mp4", StringComparison.Ordinal) && !path.Contains("..") && !path.Contains("://");
+        public void RobotTimedOut()
+        {
+            if (Robot != RobotState.Pending) return;
+            CancelRequests(); Robot = RobotState.Unavailable; replay.Stop(); panel.Refresh();
+        }
+        // Video failed to play: the result line stays only if it is still meaningful without its replay.
+        public void ReplayFailed() { if (Robot == RobotState.Ready) { Robot = RobotState.Unavailable; panel.Refresh(); } }
         public void Navigate(bool retry)
         {
-            if (voice) voice.Disconnect(); replay.Pause();
+            replay.Stop();
             if (context.RequestNavigation(retry))
             {
                 var integration = context.GetComponent<RecapSessionIntegration>();
-                if (integration && !string.IsNullOrEmpty(integration.LastNavigationError)) { Notice = integration.LastNavigationError; panel.Refresh(); }
+                if (integration && !string.IsNullOrEmpty(integration.LastNavigationError)) Debug.LogWarning("[Scalpal.Recap] " + integration.LastNavigationError);
                 return;
             }
             // Standalone scene may navigate only when its owner explicitly includes destination scenes.
             string target = retry ? context.surgeryScene : context.exploreScene;
-            if (Application.CanStreamedLevelBeLoaded(target))
+            if (retry || !Application.CanStreamedLevelBeLoaded(target))
+            { Debug.LogWarning("[Scalpal.Recap] Scene handoff not connected: " + target); return; }
+            context.result = null;
+            var transition = Scalpal.Shell.ShellTransition.Ensure();
+            transition.StartCoroutine(transition.Load(target, "Choose another patient", () =>
             {
-                // No stale procedure score or replay may survive a retry, even without a shell callback.
-                if (retry) { Notice = "Retry needs the shell to create a fresh attempt. No stale result was reused."; panel.Refresh(); return; }
-                context.result = null;
-                var transition = Scalpal.Shell.ShellTransition.Ensure();
-                transition.StartCoroutine(transition.Load(target, "Choose another patient", () =>
-                {
-                    var hub = FindFirstObjectByType<Scalpal.Shell.HubController>();
-                    if (hub) hub.Enter();
-                }));
-            }
-            else { Notice = "Scene handoff not connected: " + target + ". Connect the run-context navigation callback."; panel.Refresh(); }
+                var hub = FindFirstObjectByType<Scalpal.Shell.HubController>();
+                if (hub) hub.Enter();
+            }));
         }
-        void OnDisable() { if (context) { context.MotionJobAttached -= JobAttached; context.CaptureStateChanged -= JobAttached; } if (replay) replay.AccessRefreshRequested -= RefreshAccess; CancelRequests(); if (voice) voice.Disconnect(); if (replay) replay.Pause(); }
+        void OnDisable() { CancelRequests(); if (replay) replay.Stop(); }
     }
 }

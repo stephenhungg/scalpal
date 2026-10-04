@@ -20,6 +20,8 @@ namespace Scalpal.Shell.Editor
     {
         const string Prefix = "ScalpalShellPlayValidation.";
         const string Female = "patient-demo-multi-source";
+        const string RateLimited = "patient-demo-rate-limited";
+        static int rateLimitedCases, retryBaseline; // Play Mode only; no domain reload happens between these stages.
         const BindingFlags Private = BindingFlags.Instance | BindingFlags.NonPublic;
         static ShellPlayModeValidation()
         {
@@ -115,26 +117,38 @@ namespace Scalpal.Shell.Editor
                         Stage("catalog"); break;
                     case "catalog":
                         if (!hub || hub.Model.Patients.Length != 9 || hub.Model.CaseFor(Female) == null || hub.service.IsOffline) return;
-                        Check(hub.service.BaseUrl == endpoint && hub.Model.UnavailableCount == 1 && hub.Model.Patients.All(patient => !string.IsNullOrEmpty(patient.patientId) && patient.status != "blocked"), "live runtime catalog shows nine available patients with cached metadata and one unavailable record");
-                        Check(hub.Select("patient-demo-rate-limited") && !hub.Model.DetailLoading && PendingCount(hub) == 0, "selecting retry patient opens recovery detail without requesting a failing brief");
-                        hub.Retry();
-                        Check(PendingCount(hub) == 1, "explicit Retry starts exactly one actual case request");
+                        Check(hub.service.BaseUrl == endpoint && hub.Model.UnavailableCount == 1 && hub.Model.Patients.All(patient => !string.IsNullOrEmpty(patient.patientId) && patient.status != "blocked"), "live runtime catalog keeps nine selectable records with cached metadata and one unavailable record");
+                        Check(hub.Model.VisiblePatients().Length == 7 && Cards(hub).Length == 7 && !hub.content.GetComponentsInChildren<Transform>(true).Any(item => item.name == "Filters"), "live explore shows seven playable cards and no filter bar");
+                        // Controlled variant of the live catalog: the rate-limited record with an authored interview.
+                        var catalog = JsonUtility.FromJson<Scalpal.Exercises.Data.PatientList>(JsonUtility.ToJson(new Scalpal.Exercises.Data.PatientList { patients = hub.Model.Patients }));
+                        catalog.patients.Single(patient => patient.patientId == RateLimited).encounterAvailable = true;
+                        rateLimitedCases = 0; hub.service.CaseLoaded += value => { if (value?.patientId == RateLimited) rateLimitedCases++; };
+                        hub.PatientsLoaded(catalog);
+                        Check(hub.Model.Recoverable(hub.Model.Patients.Single(patient => patient.patientId == RateLimited)) && !hub.Select(RateLimited), "recoverable rate-limited record without a procedure is hidden but retried in the background");
                         Stage("retry"); break;
                     case "retry":
-                        if (!hub || hub.RetryRemaining <= 0 || PendingCount(hub) != 0) return;
-                        Check(hub.Model.Selected?.status == "retry" && !hub.CanBegin, "actual case HTTP200 retry state sets a live cooldown and closed Begin gate");
-                        hub.Retry();
-                        Check(PendingCount(hub) == 0, "repeated Retry during service-provided cooldown starts no request");
-                        hub.Select(Female); hub.Select("patient-demo-rate-limited");
-                        Check(hub.RetryRemaining > 0, "switching cards cannot bypass the rate-limited patient's cooldown");
-                        hub.service.CancelPendingRequests();
+                        if (!hub || hub.Remaining(RateLimited) <= 0 || PendingCount(hub) != 0 || rateLimitedCases < 1) return;
+                        Check(hub.Model.Patients.Single(patient => patient.patientId == RateLimited).status == "retry", "background case request (no Refresh press) returns the actual HTTP200 retry state and its Retry-After cooldown");
+                        hub.ServiceRetries();
+                        Check(PendingCount(hub) == 0, "background retry starts no request during the service-provided cooldown");
+                        retryBaseline = rateLimitedCases;
+                        Stage("retryAgain"); break;
+                    case "retryAgain":
+                        if (!hub || (PendingCount(hub) == 0 && rateLimitedCases <= retryBaseline)) return;
+                        Check(rateLimitedCases > retryBaseline || hub.Remaining(RateLimited) <= 0, "background retry fires again on its own after Retry-After elapses");
+                        hub.Reload();
+                        Stage("reloaded"); break;
+                    case "reloaded":
+                        if (!hub || hub.Model.Patients.Length != 9 || hub.Model.CaseFor(Female) == null || PendingCount(hub) != 0 || hub.service.IsOffline) return;
+                        Check(!hub.Model.Recoverable(hub.Model.Patients.Single(patient => patient.patientId == RateLimited)), "the live catalog's rate-limited record without an interview is not retried");
                         var row = hub.Model.Patients.Single(patient => patient.patientId == Female);
-                        hub.content.GetComponentsInChildren<ShellButton>(true).Single(button => button.name == "Patient_" + row.scenarioId && button.gameObject.activeInHierarchy).Press();
+                        Cards(hub).Single(button => button.name == "Patient_" + row.scenarioId).Press();
                         Check(hub.Model.SelectedPatientId == Female && !hub.Transitioning, "one patient-card press selects detail without scene activation");
                         Stage("detail"); break;
                     case "detail":
                         if (!hub || hub.Model.DetailLoading) return;
-                        Check(hub.Model.SelectedBrief?.patientId == Female && hub.CanBegin && hub.BeginButton && hub.BeginButton.interactable, "live matching brief enables explicit encounter begin");
+                        Check(hub.Model.SelectedBrief?.patientId == Female && hub.CanBegin && hub.BeginButton && hub.BeginButton.interactable && hub.SkipButton && hub.SkipButton.interactable, "live matching brief enables explicit Begin and Skip to surgery");
+                        Check(!hub.content.GetComponentsInChildren<TMPro.TextMeshPro>().Any(text => text.name == "Availability"), "an enabled Begin shows no availability message");
                         hub.BeginButton.Press();
                         Check(hub.Transitioning && ShellTransition.Busy, "actual Begin button starts async fade and scene handoff");
                         Stage("office"); break;
@@ -145,6 +159,7 @@ namespace Scalpal.Shell.Editor
                         Check(SessionState.GetBool(Prefix + "httpOnlyOffice", false) && office.realtime == null && UnityEngine.Object.FindObjectsByType<QuestSessionBridge>(FindObjectsInactive.Include, FindObjectsSortMode.None).All(bridge => !bridge.enabled), "component fixture disables realtime invite pairing before office Start; no realtime integration is claimed");
                         Check(string.IsNullOrEmpty(ShellTransition.LastError), "asynchronous office handoff completed without transition error");
                         Check(office.baseUrl == endpoint && office.State.patientId == Female && !string.IsNullOrEmpty(office.State.encounterId) && office.State.phase == "interview", "loaded office creates actual authoritative encounter for exact selected patient and endpoint");
+                        Check(office.VoiceEnabled, "Begin keeps the patient's live voice enabled so she answers each pick");
                         Check(!ShellTransition.TryConsumeSelection(out _), "scene activation consumed the selected-patient handoff exactly once");
                         var pause = ShellPause.Instance;
                         Check(pause && !pause.IsPaused && Mathf.Approximately(Time.timeScale, 1) && !AudioListener.pause, "global pause survives hub-to-office transition in resumed state");
@@ -154,7 +169,7 @@ namespace Scalpal.Shell.Editor
                         Check(!pause.IsPaused && Mathf.Approximately(Time.timeScale, 1) && !AudioListener.pause, "actual Resume control restores simulation time and audio output");
                         pause.Pause();
                         MenuButton(pause, "Back to explore").Press();
-                        Check(pause.IsPaused && !ShellTransition.Busy && SceneManager.GetActiveScene().name == "DiagnosisOffice" && Menu(pause).GetComponentsInChildren<TextMesh>().Any(text => text.text == "Leave this encounter?"), "first Back press opens confirmation and cannot leave encounter");
+                        Check(pause.IsPaused && !ShellTransition.Busy && SceneManager.GetActiveScene().name == "DiagnosisOffice" && Menu(pause).GetComponentsInChildren<TMPro.TextMeshPro>().Any(text => text.text == "Leave this encounter?"), "first Back press opens confirmation and cannot leave encounter");
                         MenuButton(pause, "Back to explore").Press();
                         Check(!pause.IsPaused && ShellTransition.Busy, "second confirmed Back press starts actual return transition");
                         Stage("return"); break;
@@ -173,6 +188,7 @@ namespace Scalpal.Shell.Editor
             }
         }
 
+        static ShellButton[] Cards(HubController hub) => hub.content.GetComponentsInChildren<ShellButton>().Where(button => button.name.StartsWith("Patient_", StringComparison.Ordinal)).ToArray();
         static int PendingCount(HubController hub) => ((System.Collections.IEnumerable)hub.service.GetType().GetField("pending", Private).GetValue(hub.service)).Cast<object>().Count();
         static Transform Menu(ShellPause pause) => (Transform)typeof(ShellPause).GetField("panel", Private).GetValue(pause);
         static ShellButton MenuButton(ShellPause pause, string label) => Menu(pause).GetComponentsInChildren<ShellButton>().Single(button => button.label && button.label.text == label);

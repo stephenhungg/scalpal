@@ -10,7 +10,7 @@
 //   identity.
 // - All tables are private; clients read through the views at the bottom.
 
-import { ScheduleAt, Timestamp } from 'spacetimedb';
+import { ScheduleAt, Timestamp, type Infer } from 'spacetimedb';
 import {
   SenderError,
   t,
@@ -32,13 +32,27 @@ import spacetimedb, {
   membership,
   motionJob,
   replayState,
+  robotResult,
   rtcSignal,
   session,
   serviceGrant,
   sessionInvite,
+  simLog,
   sweepTimer,
   transferGrant,
+  patientCondition,
+  patientTickTimer,
 } from './schema';
+import {
+  DEMO_HEMORRHAGE_SCALE,
+  REGIONS,
+  REGION_IDS,
+  conditionVitals,
+  deathCause,
+  regionRate,
+  type ConditionInputs,
+  type RegionId,
+} from './physiology';
 
 export default spacetimedb;
 
@@ -68,7 +82,7 @@ const RECORDING = ['off', 'recording', 'failed', 'complete'];
 const PRACTICE_STATUS = ['not_started', 'in_progress', 'completed', 'abandoned'];
 const SPEAKERS = ['learner', 'coach', 'system', 'patient'];
 const ENCOUNTER_PHASES = ['interview', 'attending', 'scored'];
-const ENCOUNTER_EVENT_KINDS = ['history', 'exam', 'test', 'assessment', 'transcript'];
+const ENCOUNTER_EVENT_KINDS = ['history', 'exam', 'test', 'assessment', 'transcript', 'choice'];
 const ENCOUNTER_SPEAKERS = ['learner', 'patient', 'coach'];
 const COACH_STATUS = ['offline', 'connecting', 'listening', 'thinking', 'speaking', 'error'];
 const ARTIFACT_KINDS = [
@@ -97,7 +111,29 @@ const ACTIONS: Record<string, 'none' | 'target' | 'bool' | 'number'> = {
   requestHint: 'none',
   pausePractice: 'none',
   resumePractice: 'none',
+  // Scrub-nurse actions on the open-case instrument stand. handInstrument's
+  // optional argNumber picks the hand: 0 = left, 1 = right, absent = either.
+  handInstrument: 'target',
+  highlightInstrument: 'target',
 };
+
+/** Actions a viewer (e.g. a browser scrub nurse) may request, besides coach/operator. */
+const INSTRUMENT_ACTIONS = ['handInstrument', 'highlightInstrument'];
+
+/** Instruments on the open-appendectomy stand (targetId of the instrument actions). */
+const OPEN_CASE_INSTRUMENTS = [
+  'skin_marker',
+  'scalpel',
+  'toothed_forceps',
+  'retractor',
+  'babcock',
+  'hemostat',
+  'right_angle_clamp',
+  'metzenbaum_scissors',
+  'suture_tie',
+  'suction_irrigator',
+  'laparoscope_30',
+];
 
 const COMMAND_TTL_MS = 15_000;
 const GRANT_REQUEST_TTL_MS = 30_000;
@@ -796,7 +832,7 @@ export const setAttemptResult = spacetimedb.reducer(
 );
 
 // ---------------------------------------------------------------------------
-// Coach (Jarvis) transcript and status
+// Coach (Scalpal) transcript and status
 // ---------------------------------------------------------------------------
 
 export const postCoachMessage = spacetimedb.reducer(
@@ -830,7 +866,7 @@ export const setCoachStatus = spacetimedb.reducer(
 );
 
 // ---------------------------------------------------------------------------
-// Pre-op encounter (Jarvis lane)
+// Pre-op encounter (Scalpal lane)
 // ---------------------------------------------------------------------------
 
 function encounterFor(ctx: Ctx, encounterId: string) {
@@ -898,6 +934,44 @@ export const appendEncounterEvent = spacetimedb.reducer(
   }
 );
 
+// ---------------------------------------------------------------------------
+// Operating-room logs (companion dashboard)
+// ---------------------------------------------------------------------------
+
+const SIM_LOG_KINDS = ['event', 'alert', 'vitals', 'checklist', 'outcome'] as const;
+const MAX_SIM_LOG_TEXT = 2_000;
+const MAX_SIM_LOG_DATA = 8_000;
+/** Rows kept per session; the oldest are dropped past this. */
+const MAX_SIM_LOG_ROWS = 2_000;
+
+export const appendSimLog = spacetimedb.reducer(
+  { sessionId: t.string(), coachSessionId: t.string(), kind: t.string(), text: t.string(), dataJson: t.string() },
+  (ctx, a) => {
+    requireRole(ctx, a.sessionId, ['coach', 'operator']);
+    activeSession(ctx, a.sessionId);
+    oneOf(a.kind, SIM_LOG_KINDS, 'kind');
+    checkText(a.coachSessionId, 'coachSessionId', 120);
+    checkText(a.text, 'text', MAX_SIM_LOG_TEXT);
+    checkText(a.dataJson, 'dataJson', MAX_SIM_LOG_DATA);
+    if (!a.text.trim()) return;
+    const ids: bigint[] = [];
+    for (const row of ctx.db.simLog.sessionId.filter(a.sessionId)) ids.push(row.id);
+    if (ids.length >= MAX_SIM_LOG_ROWS) {
+      ids.sort((x, y) => (x < y ? -1 : x > y ? 1 : 0));
+      for (const id of ids.slice(0, ids.length - MAX_SIM_LOG_ROWS + 1)) ctx.db.simLog.id.delete(id);
+    }
+    ctx.db.simLog.insert({
+      id: 0n,
+      sessionId: a.sessionId,
+      coachSessionId: a.coachSessionId,
+      kind: a.kind,
+      text: a.text,
+      dataJson: a.dataJson,
+      at: ctx.timestamp,
+    });
+  }
+);
+
 export const setEncounterPhase = spacetimedb.reducer(
   { encounterId: t.string(), phase: t.string() },
   (ctx, { encounterId, phase }) => {
@@ -944,7 +1018,8 @@ export const requestCommand = spacetimedb.reducer(
     expectedStepVersion: t.u64(),
   },
   (ctx, a) => {
-    const role = requireRole(ctx, a.sessionId, ['coach', 'operator']);
+    const instrument = INSTRUMENT_ACTIONS.includes(a.action);
+    const role = requireRole(ctx, a.sessionId, instrument ? ['coach', 'operator', 'viewer', 'headset'] : ['coach', 'operator']);
     checkId(a.commandId, 'commandId');
     const existing = ctx.db.command.commandId.find(a.commandId);
     if (existing) {
@@ -957,6 +1032,12 @@ export const requestCommand = spacetimedb.reducer(
     if (kind === 'bool' && a.argBool == null) fail(`${a.action} requires argBool`);
     if (kind === 'number' && a.argNumber == null) fail(`${a.action} requires argNumber`);
     if (a.targetId) checkText(a.targetId, 'targetId', 120);
+    if (instrument) {
+      oneOf(a.targetId ?? '', OPEN_CASE_INSTRUMENTS, 'instrument');
+      if (a.action === 'handInstrument' && a.argNumber != null && a.argNumber !== 0 && a.argNumber !== 1) {
+        fail('handInstrument argNumber must be 0 (left) or 1 (right)');
+      }
+    }
 
     const state = ctx.db.exerciseState.sessionId.find(a.sessionId) ?? fail('no exercise state');
     const stale = a.expectedStepVersion !== state.stepVersion;
@@ -1782,6 +1863,69 @@ export const sessionEncounterEvents = spacetimedb.view(
   ])
 );
 
+// ---------------------------------------------------------------------------
+// Robot learner verdicts
+// ---------------------------------------------------------------------------
+
+const MAX_ROBOT_RESULTS = 500;
+
+export const postRobotResult = spacetimedb.reducer(
+  {
+    sessionId: t.string(),
+    stepId: t.string(),
+    success: t.bool(),
+    pathErrorMm: t.option(t.f64()),
+    policySuccessRate: t.option(t.f64()),
+    demosHuman: t.u32(),
+    demosSynthetic: t.u32(),
+    videoUrl: t.option(t.string()),
+  },
+  (ctx, a) => {
+    requireRole(ctx, a.sessionId, ['coach', 'operator']);
+    const s = activeSession(ctx, a.sessionId);
+    checkText(a.stepId, 'stepId', 120);
+    if (a.videoUrl) checkText(a.videoUrl, 'videoUrl', 1_000);
+    if (a.policySuccessRate != null && !(a.policySuccessRate >= 0 && a.policySuccessRate <= 1)) {
+      fail('policySuccessRate must be between 0 and 1');
+    }
+    const ids: bigint[] = [];
+    for (const row of ctx.db.robotResult.sessionId.filter(a.sessionId)) ids.push(row.id);
+    if (ids.length >= MAX_ROBOT_RESULTS) {
+      ids.sort((x, y) => (x < y ? -1 : x > y ? 1 : 0));
+      for (const id of ids.slice(0, ids.length - MAX_ROBOT_RESULTS + 1)) ctx.db.robotResult.id.delete(id);
+    }
+    ctx.db.robotResult.insert({
+      id: 0n,
+      sessionId: a.sessionId,
+      attemptId: s.currentAttemptId,
+      stepId: a.stepId,
+      success: a.success,
+      pathErrorMm: a.pathErrorMm,
+      policySuccessRate: a.policySuccessRate,
+      demosHuman: a.demosHuman,
+      demosSynthetic: a.demosSynthetic,
+      videoUrl: a.videoUrl,
+      at: ctx.timestamp,
+    });
+  }
+);
+
+export const sessionRobotResults = spacetimedb.view(
+  { name: 'session_robot_results', public: true },
+  t.array(robotResult.rowType),
+  ctx => [...viewerSessions(ctx.db as ViewDb, ctx.sender)].flatMap(id => [
+    ...ctx.db.robotResult.sessionId.filter(id),
+  ])
+);
+
+export const sessionSimLogs = spacetimedb.view(
+  { name: 'session_sim_logs', public: true },
+  t.array(simLog.rowType),
+  ctx => [...viewerSessions(ctx.db as ViewDb, ctx.sender)].flatMap(id => [
+    ...ctx.db.simLog.sessionId.filter(id),
+  ])
+);
+
 export const sessionCommands = spacetimedb.view(
   { name: 'session_commands', public: true },
   t.array(command.rowType),
@@ -1851,4 +1995,350 @@ export const myRtcSignals = spacetimedb.view(
   { name: 'my_rtc_signals', public: true },
   t.array(rtcSignal.rowType),
   ctx => [...ctx.db.rtcSignal.to.filter(ctx.sender)]
+);
+
+// ---------------------------------------------------------------------------
+// Simulated patient condition: the database is the authoritative patient
+// ---------------------------------------------------------------------------
+//
+// The coach starts a condition with the chart/measured baseline and reports
+// facts (body blood loss and active bleeds from the open-body reducer,
+// injuries outside the surgical field). `patientTick` runs once a second while
+// any condition is in progress: it accrues blood loss from the active bleeds,
+// recomputes the vitals with src/physiology.ts (same math as the coach's
+// patient-condition.ts), detects death and logs class changes to sim_log.
+
+const PATIENT_TICK_MICROS = 1_000_000n;
+/** e.g. 'chart', 'chart+authored', 'measured', 'demo', 'authored' */
+const BASELINE_SOURCE = /^[a-z0-9+_-]{1,24}$/;
+const END_RESULTS = ['completed', 'ended'];
+const MAX_BLEEDS = 32;
+const PHYSIOLOGY_LOG_SOURCE = 'spacetimedb-physiology';
+
+type ConditionRow = Infer<typeof patientCondition.rowType>;
+
+interface StoredRegion {
+  region: RegionId;
+  label: string;
+  bleeding: boolean;
+  rawBleedMlPerMin: number;
+  at: number;
+}
+
+function finite(value: number, field: string, min: number, max: number) {
+  if (!Number.isFinite(value) || value < min || value > max) fail(`invalid ${field}`);
+}
+
+function parseRegions(json: string): StoredRegion[] {
+  try {
+    const list = JSON.parse(json || '[]');
+    return Array.isArray(list) ? list.filter(r => REGION_IDS.includes(r?.region)) : [];
+  } catch {
+    return [];
+  }
+}
+
+function conditionInputs(row: ConditionRow, regions: StoredRegion[]): ConditionInputs {
+  return {
+    baseline: { hr: row.baselineHr, rr: row.baselineRr, sys: row.baselineSys, dia: row.baselineDia, source: row.baselineSource },
+    spo2Baseline: row.baselineSpo2 < 0 ? null : row.baselineSpo2,
+    weightKg: row.weightKg,
+    mlPerKg: row.mlPerKg,
+    bodyLostMl: row.bodyLostMl,
+    bodyBleedMlPerMin: row.bodyBleedMlPerMin,
+    regionLostMl: row.regionLostMl,
+    regions: regions.map(r => ({ region: r.region, bleeding: r.bleeding })),
+    died: row.outcomeResult === 'died',
+    scale: row.scale,
+  };
+}
+
+function physiologyLog(ctx: Ctx, sessionId: string, kind: 'vitals' | 'outcome', text: string, data: unknown) {
+  const ids: bigint[] = [];
+  for (const r of ctx.db.simLog.sessionId.filter(sessionId)) ids.push(r.id);
+  if (ids.length >= MAX_SIM_LOG_ROWS) {
+    ids.sort((x, y) => (x < y ? -1 : x > y ? 1 : 0));
+    for (const id of ids.slice(0, ids.length - MAX_SIM_LOG_ROWS + 1)) ctx.db.simLog.id.delete(id);
+  }
+  let dataJson = JSON.stringify(data) ?? '';
+  if (dataJson.length > MAX_SIM_LOG_DATA) dataJson = '';
+  ctx.db.simLog.insert({
+    id: 0n,
+    sessionId,
+    coachSessionId: PHYSIOLOGY_LOG_SOURCE,
+    kind,
+    text: text.slice(0, MAX_SIM_LOG_TEXT),
+    dataJson,
+    at: ctx.timestamp,
+  });
+}
+
+/**
+ * Integrates blood loss up to now, recomputes the vitals, applies death and
+ * writes the row (logging class changes and death). `patch` is applied after
+ * the accrual and before the vitals, so a reported fact counts immediately.
+ */
+function advanceCondition(ctx: Ctx, row: ConditionRow, patch: (r: ConditionRow, regions: StoredRegion[]) => void = () => {}) {
+  const regions = parseRegions(row.regionInjuriesJson);
+  const next: ConditionRow = { ...row };
+  if (next.outcomeResult === 'in_progress') {
+    const dtMin = Math.max(0, Number(ctx.timestamp.microsSinceUnixEpoch - row.advancedAt.microsSinceUnixEpoch) / 60_000_000);
+    next.bodyLostMl = row.bodyLostMl + row.bodyBleedMlPerMin * dtMin;
+    next.regionLostMl = row.regionLostMl + regionRate(regions) * dtMin;
+  }
+  next.advancedAt = ctx.timestamp;
+  patch(next, regions);
+  next.regionInjuriesJson = JSON.stringify(regions);
+
+  const before = row.hemorrhageClass;
+  if (next.outcomeResult === 'in_progress') {
+    const cause = deathCause(conditionInputs(next, regions));
+    if (cause) {
+      next.outcomeResult = 'died';
+      next.outcomeCause = cause;
+      next.outcomeAt = ctx.timestamp;
+    }
+  }
+  const v = conditionVitals(conditionInputs(next, regions));
+  next.hr = v.hr;
+  next.rr = v.rr;
+  next.sys = v.sys;
+  next.dia = v.dia;
+  next.spo2 = v.spo2;
+  next.bloodLossPct = v.bloodLossPct;
+  next.hemorrhageClass = v.hemorrhageClass;
+  next.label = v.label;
+  next.bloodLostMl = (next.bodyLostMl + next.regionLostMl) * next.scale;
+  next.version = row.version + 1n;
+  next.updatedAt = ctx.timestamp;
+  ctx.db.patientCondition.sessionId.update(next);
+
+  const vitalsText = `HR ${v.hr} · BP ${v.sys}/${v.dia} · RR ${v.rr} · loss ${v.bloodLossPct}% (simulated in SpacetimeDB from ${next.baselineSource} baseline)`;
+  if (v.hemorrhageClass !== before && next.outcomeResult !== 'died') {
+    physiologyLog(ctx, row.sessionId, 'vitals', `Hemorrhage class ${before} -> ${v.hemorrhageClass}: ${vitalsText}`, {
+      source: 'spacetimedb',
+      fromClass: before,
+      toClass: v.hemorrhageClass,
+      hr: v.hr, rr: v.rr, sys: v.sys, dia: v.dia, spo2: v.spo2,
+      bloodLossPct: v.bloodLossPct,
+      hemorrhageClass: v.hemorrhageClass,
+      rawBloodLossMl: Math.round(next.bodyLostMl + next.regionLostMl),
+      simulated: true,
+    });
+  }
+  if (row.outcomeResult !== 'died' && next.outcomeResult === 'died') {
+    physiologyLog(ctx, row.sessionId, 'outcome', `Patient died (simulated in SpacetimeDB): ${next.outcomeCause}`, {
+      source: 'spacetimedb',
+      result: 'died',
+      cause: next.outcomeCause,
+      hr: 0, rr: 0, sys: 0, dia: 0,
+      simulated: true,
+    });
+  }
+  return next;
+}
+
+function ensurePatientTick(ctx: Ctx) {
+  for (const _ of ctx.db.patientTickTimer.iter()) return;
+  ctx.db.patientTickTimer.insert({ scheduledId: 0n, scheduledAt: ScheduleAt.interval(PATIENT_TICK_MICROS) });
+}
+
+function conditionFor(ctx: Ctx, sessionId: string) {
+  requireRole(ctx, sessionId, ['coach', 'operator']);
+  return ctx.db.patientCondition.sessionId.find(sessionId) ?? fail('no patient condition for this session');
+}
+
+/** Starts (or restarts) the session's simulated patient from a baseline. */
+export const startPatientCondition = spacetimedb.reducer(
+  {
+    sessionId: t.string(),
+    coachSessionId: t.string(),
+    baselineHr: t.f64(),
+    baselineRr: t.f64(),
+    baselineSys: t.f64(),
+    baselineDia: t.f64(),
+    baselineSpo2: t.f64(),
+    baselineSource: t.string(),
+    weightKg: t.f64(),
+    mlPerKg: t.f64(),
+  },
+  (ctx, a) => {
+    requireRole(ctx, a.sessionId, ['coach', 'operator']);
+    activeSession(ctx, a.sessionId);
+    checkText(a.coachSessionId, 'coachSessionId', 120);
+    if (!BASELINE_SOURCE.test(a.baselineSource)) fail('invalid baselineSource');
+    finite(a.baselineHr, 'baselineHr', 20, 250);
+    finite(a.baselineRr, 'baselineRr', 4, 80);
+    finite(a.baselineSys, 'baselineSys', 40, 260);
+    finite(a.baselineDia, 'baselineDia', 20, 180);
+    if (a.baselineSpo2 !== -1) finite(a.baselineSpo2, 'baselineSpo2', 50, 100);
+    finite(a.weightKg, 'weightKg', 1, 400);
+    finite(a.mlPerKg, 'mlPerKg', 40, 120);
+    const existing = ctx.db.patientCondition.sessionId.find(a.sessionId);
+    const row = {
+      sessionId: a.sessionId,
+      coachSessionId: a.coachSessionId,
+      baselineHr: a.baselineHr,
+      baselineRr: a.baselineRr,
+      baselineSys: a.baselineSys,
+      baselineDia: a.baselineDia,
+      baselineSpo2: a.baselineSpo2,
+      baselineSource: a.baselineSource,
+      weightKg: a.weightKg,
+      mlPerKg: a.mlPerKg,
+      ebvMl: a.weightKg * a.mlPerKg,
+      scale: DEMO_HEMORRHAGE_SCALE,
+      hr: 0, rr: 0, sys: 0, dia: 0, spo2: -1,
+      bloodLossPct: 0,
+      hemorrhageClass: 1,
+      label: '',
+      bodyLostMl: 0,
+      regionLostMl: 0,
+      bloodLostMl: 0,
+      bodyBleedMlPerMin: 0,
+      activeBleedsJson: '[]',
+      regionInjuriesJson: '[]',
+      outcomeResult: 'in_progress',
+      outcomeCause: '',
+      outcomeAt: undefined,
+      version: existing ? existing.version + 1n : 0n,
+      startedAt: ctx.timestamp,
+      advancedAt: ctx.timestamp,
+      updatedAt: ctx.timestamp,
+    };
+    if (existing) ctx.db.patientCondition.sessionId.update(row);
+    else ctx.db.patientCondition.insert(row);
+    advanceCondition(ctx, row);
+    ensurePatientTick(ctx);
+  }
+);
+
+/** New baseline (e.g. Presage at the Time-Out); blood loss and injuries carry over. */
+export const setPatientBaseline = spacetimedb.reducer(
+  { sessionId: t.string(), baselineHr: t.f64(), baselineRr: t.f64(), baselineSys: t.f64(), baselineDia: t.f64(), baselineSource: t.string() },
+  (ctx, a) => {
+    const row = conditionFor(ctx, a.sessionId);
+    if (!BASELINE_SOURCE.test(a.baselineSource)) fail('invalid baselineSource');
+    finite(a.baselineHr, 'baselineHr', 20, 250);
+    finite(a.baselineRr, 'baselineRr', 4, 80);
+    finite(a.baselineSys, 'baselineSys', 40, 260);
+    finite(a.baselineDia, 'baselineDia', 20, 180);
+    advanceCondition(ctx, row, r => {
+      r.baselineHr = a.baselineHr;
+      r.baselineRr = a.baselineRr;
+      r.baselineSys = a.baselineSys;
+      r.baselineDia = a.baselineDia;
+      r.baselineSource = a.baselineSource;
+    });
+  }
+);
+
+/**
+ * Facts from the surgical field: raw blood lost so far (the open-body
+ * reducer's own accounting) and the active bleeds with their raw rates. The
+ * server keeps accruing from the bleeds between reports; a report never lowers
+ * the accrued loss.
+ */
+export const reportBodyState = spacetimedb.reducer(
+  { sessionId: t.string(), bloodLostMl: t.f64(), activeBleedsJson: t.string() },
+  (ctx, a) => {
+    const row = conditionFor(ctx, a.sessionId);
+    finite(a.bloodLostMl, 'bloodLostMl', 0, 1_000_000);
+    checkText(a.activeBleedsJson, 'activeBleedsJson', 4_000);
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(a.activeBleedsJson || '[]');
+    } catch {
+      fail('activeBleedsJson is not JSON');
+    }
+    if (!Array.isArray(parsed) || parsed.length > MAX_BLEEDS) fail('activeBleedsJson must be a list of at most 32 bleeds');
+    const bleeds = (parsed as { name?: unknown; rateMlPerMin?: unknown }[]).map(b => {
+      const rate = Number(b?.rateMlPerMin);
+      if (!Number.isFinite(rate) || rate < 0 || rate > 10_000) fail('invalid bleed rate');
+      return { name: String(b?.name ?? 'bleed').slice(0, 80), rateMlPerMin: rate };
+    });
+    if (row.outcomeResult !== 'in_progress') return;
+    advanceCondition(ctx, row, r => {
+      r.bodyLostMl = Math.max(r.bodyLostMl, a.bloodLostMl);
+      r.bodyBleedMlPerMin = bleeds.reduce((sum, b) => sum + b.rateMlPerMin, 0);
+      r.activeBleedsJson = JSON.stringify(bleeds);
+    });
+  }
+);
+
+/** A cutting tool hit a region outside the surgical field, or its bleeding was controlled. */
+export const reportInjury = spacetimedb.reducer(
+  { sessionId: t.string(), region: t.string(), controlled: t.bool() },
+  (ctx, a) => {
+    const row = conditionFor(ctx, a.sessionId);
+    oneOf(a.region, REGION_IDS, 'region');
+    if (row.outcomeResult !== 'in_progress') return;
+    const region = a.region as RegionId;
+    const def = REGIONS[region];
+    advanceCondition(ctx, row, (_r, regions) => {
+      const existing = regions.find(x => x.region === region);
+      if (a.controlled) {
+        if (existing) existing.bleeding = false;
+      } else if (existing) {
+        if (def.rawBleedMlPerMin > 0) existing.bleeding = true;
+      } else {
+        regions.push({
+          region,
+          label: def.label,
+          bleeding: def.rawBleedMlPerMin > 0,
+          rawBleedMlPerMin: def.rawBleedMlPerMin,
+          at: Number(ctx.timestamp.microsSinceUnixEpoch / 1000n),
+        });
+      }
+    });
+  }
+);
+
+/** The case finished without a death: 'completed' (goals reached) or 'ended' (stopped early). */
+export const endPatientCondition = spacetimedb.reducer(
+  { sessionId: t.string(), result: t.string(), cause: t.string() },
+  (ctx, a) => {
+    const row = conditionFor(ctx, a.sessionId);
+    oneOf(a.result, END_RESULTS, 'result');
+    checkText(a.cause, 'cause', 500);
+    if (row.outcomeResult !== 'in_progress') return;
+    advanceCondition(ctx, row, r => {
+      r.outcomeResult = a.result;
+      r.outcomeCause = a.cause;
+      r.outcomeAt = ctx.timestamp;
+    });
+  }
+);
+
+/** Advances every in-progress condition once a second; stops itself when none are left. */
+export const patientTick = spacetimedb.reducer(
+  { onSchedule: patientTickTimer },
+  { timer: patientTickTimer.rowType },
+  (ctx, { timer }) => {
+    if (!ctx.sender.isEqual(ctx.databaseIdentity)) fail('patientTick is scheduled only');
+    let live = 0;
+    for (const row of [...ctx.db.patientCondition.iter()]) {
+      if (row.outcomeResult !== 'in_progress') continue;
+      const s = ctx.db.session.sessionId.find(row.sessionId);
+      if (!s || s.status !== 'active') {
+        advanceCondition(ctx, row, r => {
+          r.outcomeResult = 'ended';
+          r.outcomeCause = 'session ended';
+          r.outcomeAt = ctx.timestamp;
+        });
+        continue;
+      }
+      if (advanceCondition(ctx, row).outcomeResult === 'in_progress') live += 1;
+    }
+    if (live === 0) ctx.db.patientTickTimer.scheduledId.delete(timer.scheduledId);
+  }
+);
+
+export const sessionPatientCondition = spacetimedb.view(
+  { name: 'session_patient_condition', public: true },
+  t.array(patientCondition.rowType),
+  ctx => [...viewerSessions(ctx.db as ViewDb, ctx.sender)].flatMap(id => {
+    const c = ctx.db.patientCondition.sessionId.find(id);
+    return c ? [c] : [];
+  })
 );

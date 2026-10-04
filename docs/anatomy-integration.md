@@ -1,4 +1,4 @@
-# Anatomy, cases, and Jarvis integration
+# Anatomy, cases, and Scalpal integration
 
 Updated October 3, 2026. The first demo is **lap_appendectomy**, using the adult `patient-demo-multi-source` fixture. Gallbladder and sigmoid colectomy follow. This describes implemented code boundaries and explicitly separates them from unbuilt headset/robotics integration.
 
@@ -8,8 +8,8 @@ Updated October 3, 2026. The first demo is **lap_appendectomy**, using the adult
 | --- | --- |
 | `services/preop/src/server.ts`, `app.ts` | Hono service entry, patient/case/catalog routes and offline bundle endpoint |
 | `services/preop/src/catalog/` | Canonical anatomy IDs, tools, procedures, authored checks and mistakes |
-| `services/preop/src/coach*.ts` | Jarvis tools, in-memory coach sessions, commands, events and SSE |
-| `services/preop/scripts/` | Generate C# IDs, bundle, asset manifest and Jarvis setup |
+| `services/preop/src/coach*.ts` | Scalpal tools, in-memory coach sessions, commands, events and SSE |
+| `services/preop/scripts/` | Generate C# IDs, bundle, asset manifest and Scalpal setup |
 | `apps/quest/Assets/Scalpal/Exercises/` | DTOs, offline-capable service client, pure case engine, coach transport |
 | `apps/quest/Assets/Scalpal/Anatomy/Runtime/` | Anatomy identity, visibility, colliders-to-case input, service case selection and coach highlighting |
 | `apps/quest/Assets/Scalpal/Anatomy/Editor/` | Atlas prefab and desktop preview/demo scene generators |
@@ -43,7 +43,7 @@ Case selection displays only required targets and available procedure context. T
 3. The scene generator assigns the atlas, `AnatomyExerciseBinding`, `AnatomyCaseSource`, `ScalpalPreopService`, `CoachRelay`, `AnatomyCoachBinding`, and the desktop panel. The panel offers appendectomy first and explicit review acknowledgement for review-required synthetic fixtures.
 4. Local buttons use the packaged case bundle. Enable **simulated** registration, choose tools, identify structures, simulate collider contacts, place ports, and confirm steps. These inputs all pass through the same guarded binding. Tracking loss stops scoring. This desktop panel is excluded from Android players.
 5. To exercise the service path, run `npm run dev` in `services/preop` and choose the service-load button. `AnatomyCaseSource` consumes `CaseLoaded`, stops the old attempt during loading/failure, and requires review acknowledgement where appropriate. The relay uses the same configured endpoint as the case client.
-6. For live Jarvis, start a fresh untouched session for the same patient on the existing Jarvis page, then choose the live-session load button. Unity is the sole scoring writer for this attempt; do not simultaneously use laptop simulation controls.
+6. For live Scalpal, start a fresh untouched session for the same patient on the existing Scalpal page, then choose the live-session load button. Unity is the sole scoring writer for this attempt; do not simultaneously use laptop simulation controls.
 
 Opening a generated desktop scene is not a Quest test. Scene generation, Unity physics, shaders and rendering still require a real Unity editor run; the local checks use doubles.
 

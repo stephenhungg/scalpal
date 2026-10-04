@@ -5,7 +5,7 @@ One folder per FinchNode demo subject (`<subjectId>/`), each with three files. A
 | File | Read by | What it is |
 |---|---|---|
 | `patient.md` | the ElevenLabs patient voice agent | Second-person persona: who the patient is, how they talk and feel, and everything they know about their own story in plain language. Never today's diagnosis, exam findings, test results or the answer key. |
-| `patient_status.md` | Jarvis, in the operating room | Third-person clinical summary: presentation, key findings, working diagnosis, procedure and urgency, chart risk flags and how they change the operation, data gaps, and what the learner should have elicited. |
+| `patient_status.md` | Scalpal, in the operating room | Third-person clinical summary: presentation, key findings, working diagnosis, procedure and urgency, chart risk flags and how they change the operation, data gaps, and what the learner should have elicited. |
 | `interview.json` | the office runtime | The fixed choice-based interview (`PatientInterview` in `src/interview-types.ts`). Same rounds in the same order every run, so scores compare. `validateInterview` must return no problems. |
 
 ## Sources

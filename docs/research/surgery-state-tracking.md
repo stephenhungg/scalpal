@@ -1,6 +1,6 @@
 # Surgical State Tracking for Scalpal's Coach and Grader
 
-Research date: 2026-10-03. Scope: how to engineer procedure-state tracking for an open-body VR/AR sim so that Jarvis (ElevenLabs conversational agent) and the grader get accurate, low-latency context from ground-truth sim state, not video.
+Research date: 2026-10-03. Scope: how to engineer procedure-state tracking for an open-body VR/AR sim so that Scalpal (ElevenLabs conversational agent) and the grader get accurate, low-latency context from ground-truth sim state, not video.
 
 Legend: **[S]** = sourced claim (citation follows). **[R]** = my recommendation or inference. **[C]** = observation from the Scalpal code I read (`services/preop/src/open-body.ts`, `engine.ts`, `coach.ts`, `jarvis/app.js`, `docs/surgery-procedure.md`, `docs/data-and-realtime.md`). No repo was edited.
 
@@ -45,7 +45,7 @@ The architecture is already the right shape. The gaps below are refinements.
   - Activity = `BodyAction` triplet.
   - Motion = raw tool poses (do not send these to the LLM).
 
-  Adding a `phase` field to each milestone is cheap and gives Jarvis a stable coarse label ("you're in vascular control").
+  Adding a `phase` field to each milestone is cheap and gives Scalpal a stable coarse label ("you're in vascular control").
 - [R] **What still needs inference.** Even with ground truth, three things remain judgment calls:
   1. **Intent.** Is the learner hovering near the cecum exploring, or about to cut it? Use proximity, hand speed and instrument state, not the LLM.
   2. **Quality.** Economy and tissue respect come from motion metrics (§4).
@@ -72,7 +72,7 @@ The architecture is already the right shape. The gaps below are refinements.
 | L1 semantic events | `BodyAction` (triplet + geometry + `actionId` + monotonic `timeMs`), plus `tick`, `tracking`, `held`, `focus`, `hint_given`, `alert_spoken` | Unity emits; append-only | Reducer, replay, grader |
 | L2 body projection | `BodyState.facts` (reducer output) | Deterministic reducer, run identically in Unity (CaseRunner.cs) and TS | Milestones, guardrails |
 | L3 case projection | Achieved milestones, current/next, phase, guardrail hits, order deviations, decisions | Case evaluator (pure function of L2 + L1) | Coach, grader, UI |
-| L4 coach projection | Salient, versioned, compact view (§3) | Coach service | Jarvis |
+| L4 coach projection | Salient, versioned, compact view (§3) | Coach service | Scalpal |
 | L5 grade | Final scorecard | Pure function over the full L1 log | Recap LLM (writes prose only) |
 
 Specific engineering points:
@@ -97,7 +97,7 @@ Specific engineering points:
   - `coach_alert` (with `stateVersion`, so stale alerts are dropped).
 
   Optionally the module runs the reducer itself to compute `session_state`, which works because reducers are pure and transactional. Do **not** subscribe broad clients to the raw event table. The repo doc already notes that a filtered subscription is not a security boundary.
-- [R] **Offline.** Unity buffers L1 events with `eventSeq` and flushes them on reconnect. The server replays them, and the coach resumes from the verified state. During an outage Jarvis can still play local reflex clips. The LLM simply misses context for those seconds.
+- [R] **Offline.** Unity buffers L1 events with `eventSeq` and flushes them on reconnect. The server replays them, and the coach resumes from the verified state. During an outage Scalpal can still play local reflex clips. The LLM simply misses context for those seconds.
 
 ---
 
@@ -123,7 +123,7 @@ Specific engineering points:
 - [S] Tools should be token-efficient, unambiguous and non-overlapping, and should return meaningful, high-signal fields rather than raw IDs and dumps. ([Anthropic, Writing effective tools for agents](https://www.anthropic.com/engineering/writing-tools-for-agents))
 - [S] LLMs use information at the start and end of the context best and degrade for information in the middle. ([Liu et al. 2024, "Lost in the Middle", TACL](https://aclanthology.org/2024.tacl-1.9/))
 
-[R] Concrete design for Jarvis:
+[R] Concrete design for Scalpal:
 
 1. **Push a small, salient "state card," and pull detail through a tool.** Every contextual update should be ≤ ~120 tokens with a fixed order, so that the most important line is first and the "now" line is last (Liu et al.):
    ```
@@ -139,10 +139,10 @@ Specific engineering points:
 3. **Facts-only grounding.**
    - Keep the explicit rule "only state progress that appears in STATE or a tool result; if unsure, call `get_surgery_state`."
    - Have the card state negatives explicitly ("appendix NOT yet delivered"), because the absence of a fact invites guessing.
-   - Have `get_surgery_state` return the same version number, so Jarvis can cite it.
+   - Have `get_surgery_state` return the same version number, so Scalpal can cite it.
    - Add an eval check that flags any agent utterance naming a milestone not in `achievedMilestones` at that version. You have `jarvis-live-eval.ts`, so extend it.
 4. **Tool vs push.**
-   - Use **push** (contextual updates) for anything Jarvis must be aware of without being asked.
+   - Use **push** (contextual updates) for anything Scalpal must be aware of without being asked.
    - Use **pull** (`get_surgery_state`, `get_hint`, `explain_structure`) for detail and for escalation side effects. A hint tier increments only when actually delivered, which you already do.
    - Use **`sendUserMessage("[SIM EVENT]")`** only for cautions that *should* produce a spoken turn now.
    - Do not rely on dynamic variables for live state. They are best for session-static data (patient, case, mode). Tool results can update them, but that only happens when a tool is called.
@@ -151,7 +151,7 @@ Specific engineering points:
    - **Cautions (≤ 2–2.5 s):** state is projected locally (< 10 ms), then one `sendUserMessage`, then the LLM turn. Keep the context small; prompt size is the controllable part of time to first token.
    - **Advisories:** silent context only.
    - **Staleness rule:** drop any queued caution whose `stateVersion` is older than the current milestone or hazard set. Your alert `version` field exists for this.
-6. **Interrupts.** Pre-rendered clips should *duck or barge in on* Jarvis audio for warnings. Gate the next LLM turn until `agent_response_complete` so cautions do not stack. Rate-limit spoken cautions (for example, at most one per 6 s unless the tier rises) to avoid alarm fatigue. This is consistent with your FAA-derived tiering.
+6. **Interrupts.** Pre-rendered clips should *duck or barge in on* Scalpal audio for warnings. Gate the next LLM turn until `agent_response_complete` so cautions do not stack. Rate-limit spoken cautions (for example, at most one per 6 s unless the tier rises) to avoid alarm fatigue. This is consistent with your FAA-derived tiering.
 7. **Grader/recap LLM.** Give it the deterministic scorecard (L5) plus a compressed event narrative. Instruct it to cite event times. It writes prose only and never computes scores.
 
 ---
@@ -162,7 +162,7 @@ Specific engineering points:
 
 [R] Signal inventory, where it comes from, and where it goes:
 
-| Signal | Derivation | Push to Jarvis? | Grader? |
+| Signal | Derivation | Push to Scalpal? | Grader? |
 |---|---|---|---|
 | Phase / current milestone / n of N | L3, first unsatisfied milestone + phase label | Yes (card header) | Time per phase |
 | Next expected milestone + its unmet predicates in plain words | Evaluate `predicates` that are false and render them ("clamps 1/2", "tie not within 5 mm") | Yes; this is the most useful coaching fact | — |

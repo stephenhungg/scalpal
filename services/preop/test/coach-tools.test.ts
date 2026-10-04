@@ -20,7 +20,7 @@ async function session(req: ReturnType<typeof rig>["req"]) {
   return (await req("POST", "/coach/sessions", { patientId: "patient-demo-pediatric-asthma", mode: "virtual" })).json.sessionId as string;
 }
 
-describe("shared Jarvis tools", () => {
+describe("shared Scalpal tools", () => {
   it("answers every tool from the server, so any voice client gets the same coaching", async () => {
     const { req } = rig();
     const sid = await session(req);

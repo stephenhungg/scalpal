@@ -2,7 +2,7 @@
 // MediaPipe finds the patient's torso and the learner's hand; the fingertip is mapped onto the generic
 // anatomy, and the result goes to the live coach session exactly like headset events: focus when the
 // finger rests on a structure, touch when the learner pinches, tracking validity when the body is lost.
-// Acting as the headset (sending those events and acking Jarvis's highlights) is opt-in via the
+// Acting as the headset (sending those events and acking Scalpal's highlights) is opt-in via the
 // "act as the headset" toggle and needs a running camera; by default the page only observes, so it never
 // competes with a real Quest on the same session. The camera is requested only when Start is clicked.
 import { FilesetResolver, HandLandmarker, ObjectDetector, PoseLandmarker } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/vision_bundle.mjs";
@@ -48,7 +48,7 @@ async function send(event) {
 
 function applySnapshot(s) {
   snapshot = s;
-  // Draw the newest applied highlight, whoever acked it (this page or the Jarvis page's simulator).
+  // Draw the newest applied highlight, whoever acked it (this page or the Scalpal page's simulator).
   const latest = [...(s.commands ?? [])].reverse().find((c) => c.status === "applied");
   if (latest) highlighted = latest.action === "highlight" ? latest.targetId : "";
   const st = s.step;
@@ -59,7 +59,7 @@ function applySnapshot(s) {
 
 const option = (value, text) => Object.assign(document.createElement("option"), { value, textContent: text });
 
-// Find the live coach session (started from the Jarvis page) and keep its state fresh.
+// Find the live coach session (started from the Scalpal page) and keep its state fresh.
 const rig = createRigSession({
   api,
   actsAsHeadset: () => $("headset").checked && loop.running,
@@ -74,10 +74,10 @@ const rig = createRigSession({
     trackingValid = null;
   },
   onSnapshot: applySnapshot,
-  // Acting as the headset for Jarvis's highlight requests: draw it (the ack already went out).
+  // Acting as the headset for Scalpal's highlight requests: draw it (the ack already went out).
   onCommand: (c) => {
     highlighted = c.action === "highlight" ? c.targetId : "";
-    feed(c.action === "highlight" ? `Jarvis highlighted ${nameOf(c.targetId)}` : "Jarvis cleared the highlight");
+    feed(c.action === "highlight" ? `Scalpal highlighted ${nameOf(c.targetId)}` : "Scalpal cleared the highlight");
   },
   feed,
 });
@@ -207,7 +207,7 @@ function frame() {
 }
 const loop = createFrameLoop((cb) => requestAnimationFrame(cb), frame, (e) => feed(`vision frame failed: ${e?.message ?? e}`, "warning"));
 
-// Jarvis's eyes: the composited view (camera plus overlay) with labeled boxes, every couple of seconds.
+// Scalpal's eyes: the composited view (camera plus overlay) with labeled boxes, every couple of seconds.
 // Region boxes come from the body map (exact for this rig); object boxes come from the detector.
 const frameCanvas = document.createElement("canvas");
 function regionMarks(torso) {

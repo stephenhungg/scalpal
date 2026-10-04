@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Scalpal.Brand;
 using Scalpal.EncounterOffice;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -23,6 +24,8 @@ namespace Scalpal.Shell
         bool officeWasEnabled, menuTransition, officeAligned;
         string transitionFailure;
         bool failureCanResume;
+        // Office: voice on/off is chosen here (the room has no control panel); it applies on Resume.
+        bool officeVoiceCaptured, voiceOnResume, confirmingSkip;
         readonly List<XRInputSubsystem> inputs = new List<XRInputSubsystem>();
         readonly List<XRInputSubsystem> subscribed = new List<XRInputSubsystem>();
         public static ShellPause Ensure()
@@ -86,15 +89,19 @@ namespace Scalpal.Shell
         {
             officeRig = FindFirstObjectByType<EncounterOfficeRig>();
             if (officeRig) { officeWasEnabled = officeRig.enabled; officeRig.enabled = false; }
-            var session = FindFirstObjectByType<NativeEncounterSession>(); if (session) session.StopVoice();
+            var session = FindFirstObjectByType<NativeEncounterSession>();
+            if (session) { if (!officeVoiceCaptured) { voiceOnResume = session.VoiceEnabled; officeVoiceCaptured = true; } session.StopVoice(); }
         }
         public void Resume()
         {
             // Focus/headset return alone never resumes. A deliberate menu action is required.
             if (!IsPaused || !focused || suspended || !wasPresent || (!string.IsNullOrEmpty(transitionFailure) && !failureCanResume)) return;
             transitionFailure=null;
-            IsPaused = false; confirming = false; Time.timeScale = savedScale; AudioListener.pause=savedAudioPause;
-            if (panel) { Destroy(panel.gameObject); panel = null; }
+            IsPaused = false; confirming = confirmingSkip = false; Time.timeScale = savedScale; AudioListener.pause=savedAudioPause;
+            var office = FindFirstObjectByType<NativeEncounterSession>();
+            if (office && officeVoiceCaptured && voiceOnResume && office.State?.phase == "interview") office.ToggleVoice();
+            officeVoiceCaptured = false;
+            if (panel) { Discard(panel.gameObject); panel = null; }
             if (pauseInput) { pauseInput.Release(); pauseInput.enabled = false; }
             if (officeRig) officeRig.enabled = officeWasEnabled;
             if (hubInput) hubInput.Release();
@@ -106,13 +113,11 @@ namespace Scalpal.Shell
         }
         void BuildMenu()
         {
-            if (panel) Destroy(panel.gameObject);
-            var head = Camera.main; if (!head || !ShellView.Font || !ShellView.Glass) return;
+            if (panel) Discard(panel.gameObject);
+            var head = Camera.main; if (!head || !ShellView.Configured) return;
             menuTransition=ShellTransition.Busy;
             panel = ShellView.Panel(transform, "Paused", Vector3.zero, new Vector2(.82f,.67f));
-            ShellView.Text(panel, confirming ? "Leave this encounter?" : string.IsNullOrEmpty(transitionFailure) ? "Paused · press to continue" : "Unable to begin", new Vector3(-.36f,.27f,-.012f), .035f,.72f);
-            string phase = SceneManager.GetActiveScene().name == "DiagnosisOffice" ? "Explore  ›  OFFICE  ›  OR  ›  Replay  ›  Recap" : "EXPLORE  ›  Office  ›  OR  ›  Replay  ›  Recap";
-            ShellView.Text(panel, phase, new Vector3(-.36f,.19f,-.012f), .022f,.72f);
+            ShellView.Text(panel, confirming ? "Leave this encounter?" : string.IsNullOrEmpty(transitionFailure) ? "Paused" : "Unable to begin", new Vector3(-.36f,.285f,-.012f), .040f,.72f,TextAnchor.UpperLeft,ScalpalTextRole.Title);
             if (!string.IsNullOrEmpty(transitionFailure) && !confirming)
             {
                 ShellView.Text(panel,EncounterOfficePanel.Wrap(transitionFailure,42),new Vector3(-.36f,.10f,-.012f),.025f,.72f);
@@ -128,20 +133,39 @@ namespace Scalpal.Shell
             }
             else
             {
-                ShellView.Button(panel,"Resume",new Vector3(0,.05f,-.014f),new Vector2(.66f,.075f),Resume);
+                ShellView.Button(panel,"Resume",new Vector3(0,.05f,-.014f),new Vector2(.66f,.075f),Resume,true,true);
                 ShellView.Button(panel,ShellTransition.Busy?"Back after loading":"Back to explore",new Vector3(0,-.06f,-.014f),new Vector2(.66f,.075f),()=>{confirming=true;BuildMenu();},!ShellTransition.Busy);
                 ShellView.Button(panel,"Recenter",new Vector3(0,-.17f,-.014f),new Vector2(.66f,.075f),Recenter);
-                ShellView.Text(panel,"Voice stays stopped until you start it again.",new Vector3(-.36f,-.26f,-.012f),.022f,.72f);
+                var office = FindFirstObjectByType<NativeEncounterSession>();
+                if (office && office.State != null && office.State.phase == "interview")
+                {
+                    ShellView.Button(panel,voiceOnResume?"Voice on · select for off":"Voice off · select for on",new Vector3(-.17f,-.28f,-.014f),new Vector2(.32f,.075f),()=>{voiceOnResume=!voiceOnResume;BuildMenu();});
+                    ShellView.Button(panel,confirmingSkip?"Confirm skip":"Skip to surgery",new Vector3(.17f,-.28f,-.014f),new Vector2(.32f,.075f),SkipToSurgery,!ShellTransition.Busy,false,true);
+                }
             }
             pauseInput.head = head; pauseInput.origin = officeRig ? officeRig.origin : hubInput ? hubInput.origin : head.transform.parent;
             pauseInput.allowedRoot = panel; pauseInput.content = null; pauseInput.enabled = true; pauseInput.Release(); PlaceMenu(head);
+        }
+        static void Discard(GameObject value) { if (Application.isPlaying) Destroy(value); else DestroyImmediate(value); }
+        // Office pause: "Skip to surgery" asks once, then leaves the interview for the Theatre card.
+        public void SkipToSurgery()
+        {
+            var office = FindFirstObjectByType<NativeEncounterSession>();
+            if (!office || office.State?.phase != "interview") return;
+            if (!confirmingSkip) { confirmingSkip = true; BuildMenu(); return; }
+            voiceOnResume = false; Resume();
+            office.SkipToSurgery();
         }
         void PlaceMenu(Camera head)
         {
             if (!panel || !head) return;
             var forward = Vector3.ProjectOnPlane(head.transform.forward, Vector3.up).normalized;
             if (forward.sqrMagnitude < .5f) forward = Vector3.forward;
-            panel.SetPositionAndRotation(head.transform.position + forward * 1.0f + Vector3.down*.07f,Quaternion.LookRotation(forward));
+            // Level with the horizon: yaw-only facing, never the head's pitch or roll.
+            panel.SetPositionAndRotation(head.transform.position + forward * .7f + Vector3.down*.05f,ScalpalPlacement.Level(forward));
+            // Paused at timeScale 0 no physics step runs, so new/moved button colliders are invisible to the
+            // pointer raycast until synced (the Quest pause menu looked fine but ignored every press).
+            Physics.SyncTransforms();
         }
         public void Recenter()
         {

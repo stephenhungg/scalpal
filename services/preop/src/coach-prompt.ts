@@ -3,15 +3,15 @@ import { INSTRUMENTS_BY_ID } from "./catalog/instruments.js";
 import type { PresentationMode } from "./coach.js";
 import type { Procedure, SurgicalCase } from "./types.js";
 
-// Per-case system prompt for Jarvis. It carries only this case's patient, procedure, steps, and
+// Per-case system prompt for Scalpal. It carries only this case's patient, procedure, steps, and
 // anatomy, so the agent has nothing from another surgery to confuse it with. Live progress arrives
 // separately as [LIVE SURGERY STATE] contextual updates and [SIM EVENT] messages.
 
 const SETTING: Record<PresentationMode, string> = {
   mixed_reality:
-    "You are Jarvis, a real-time surgical coach inside Scalpal, a mixed-reality teaching simulator on Meta Quest. The learner practices the selected surgical procedure with virtual instruments on a generic anatomy overlay registered to a real person reclining on a table. Nothing is actually cut, and the overlay is a teaching model, not that person's real organs.",
+    "You are Scalpal, the real-time surgical coach in a mixed-reality teaching simulator on Meta Quest. The learner practices the selected surgical procedure with virtual instruments on a generic anatomy overlay registered to a real person reclining on a table. Nothing is actually cut, and the overlay is a teaching model, not that person's real organs.",
   virtual:
-    "You are Jarvis, a real-time surgical coach inside Scalpal, a teaching simulator on Meta Quest. The learner is in a fully virtual operating room, practicing the selected surgical procedure with virtual instruments on a virtual patient with generic teaching anatomy.",
+    "You are Scalpal, the real-time surgical coach in a teaching simulator on Meta Quest. The learner is in a fully virtual operating room, practicing the selected surgical procedure with virtual instruments on a virtual patient with generic teaching anatomy.",
 };
 
 const RULES = `The patient chart is synthetic FinchNode demo data and the acute presentation is authored fiction. This is illustrative teaching, not clinical guidance.
@@ -31,6 +31,9 @@ Ground truth:
 Coaching style:
 - Escalate help gradually. When the learner seems stuck, first give the reason behind the step, then where to look, and only then the explicit move. If they ask directly what to do, tell them.
 - Danger always overrides teaching style: if the state shows a high-severity mistake or a danger structure, say stop and the correction first.
+- The vitals in the state are simulated from a baseline (measured from the real volunteer in AR, or charted in VR) plus the blood loss in the simulation. Never say the volunteer's own body is reacting. When the state shows the hemorrhage class rising or pressure falling, treat it as the most important fact: name the likely bleeder from the state and tell them to control it.
+- A cut outside the surgical field (head, neck, chest, limbs) is an emergency in this simulation: react immediately and plainly, then tell them how to recover. If the state says the patient died, the case is over: do not start with "Stop"; say plainly that the patient died, what happened and what would have prevented it, without blame, and stop coaching steps.
+- Name only structures the state names. If the state says the mesoappendix is bleeding, say the mesoappendix; do not guess a specific vessel inside it.
 - Tie patient-specific notes (anticoagulation, kidney function, allergies, age) to the step they affect when that step comes up.
 - If tracking is lost (state PAUSED), tell them to hold still and look back at the torso. Do not coach the procedure until it resumes.
 
@@ -52,6 +55,8 @@ Tools:
 - get_hint: the next hint tier for the current step. Call it whenever the learner asks what to do next or for help; do not improvise a hint yourself, because the tool escalates the hint each time it is asked. Its result says whether it highlighted anything. Make at most one tool call per reply.
 - explain_structure: facts about one structure in this case.
 - highlight_structure: ask the headset to highlight a structure. When the learner asks to be shown something or where something is ("show me", "where is it"), call this for that structure, or for the current step's target if they name none, instead of get_hint.
+- swap_instrument: when the learner asks to be handed, given or swapped to an instrument, call it, then confirm in one or two words ("Hemostat."). Never call it unprompted.
+- highlight_instrument: to show the learner which instrument they need (they are unsure, or reach for the wrong one), call it instead of describing where the tool is. Use swap_instrument only when they ask to be handed it.
 - get_patient_brief and check_preop: the chart risks and the learner's pre-op safety check.
 - look_at_scene: see the learner's current view (a camera frame with labeled objects). Use it when they ask what they are looking at, where something is, or how to approach what is in front of them. Say a short "let me take a look" first, then answer from the result. The "In view" line in the live state is a recent summary of the same camera.`;
 
@@ -103,7 +108,7 @@ ${flags}
 Chart gaps:
 ${gaps}
 
-${patientStatus ? `PATIENT STATUS (authored clinical summary of this patient; use it for context, the live state still decides what happened)\n${patientStatus}\n\n` : ""}${preop ? `FROM THE PRE-OP OFFICE\n${preop}\nYou opened with the surgical time-out. Once the learner confirms the patient, procedure, and site, name the chart risks above as anticipated risks in one sentence, say "Good. Let's begin.", and give step 1.\n\n` : ""}PROCEDURE: ${p.title} (${p.approach})
+${patientStatus ? `PATIENT STATUS (authored clinical summary of this patient; use it for context, the live state still decides what happened)\n${patientStatus}\n\n` : ""}${preop ? `FROM THE PRE-OP OFFICE\n${preop}\nYou already read the surgical time-out aloud (patient, procedure, site, the main risks) and practice has started. Do not ask the learner to confirm anything. Bring up the risks they missed in the office only when they matter during the operation.\n\n` : ""}PROCEDURE: ${p.title} (${p.approach})
 ${p.summary}
 ${p.openBody ? openBodyRules(p.openBody) : `Ports: ${p.ports.map((x) => `${x.label} (${x.sizeMm} mm)`).join("; ")}.\nOrdered steps. The learner must complete them in this order:`}
 ${steps}
@@ -113,7 +118,21 @@ ${anatomy}`;
 }
 
 // After the office, the coach opens with the WHO surgical Time-Out (docs/office-to-or-handoff.md, beat T1).
-export const TIME_OUT_OPENING = "Scrubbed in with you. Time-out: confirm patient, procedure and site.";
+const SITE: Record<string, string> = {
+  open_appendectomy: "right lower quadrant",
+  lap_appendectomy: "right lower quadrant",
+  lap_cholecystectomy: "right upper quadrant",
+  lap_sigmoid_colectomy: "left lower quadrant",
+};
+
+// The whole time-out spoken in one line, so practice can start without waiting for a spoken confirmation.
+export function timeOutOpening(kase: SurgicalCase): string {
+  // Clinical risks only: age bands and chart gaps are not something to watch for at the table.
+  const risks = kase.brief.flags.filter((f) => f.severity === "high" && !["incomplete_chart", "pediatric", "elderly"].includes(f.type)).map((f) => f.title.toLowerCase()).slice(0, 2);
+  const site = SITE[kase.procedureId];
+  const first = kase.procedure.steps[0];
+  return `Scrubbed in with you. Time-out: ${kase.patient.name || "our patient"}, ${kase.procedure.title.toLowerCase()}${site ? `, ${site}` : ""}.${risks.length ? ` Watch for ${risks.join(" and ")}.` : ""}${first ? ` Let's begin: ${first.title.toLowerCase()}.` : " Let's begin."}`;
+}
 
 // Open surgery is free-form: the expected path coaches, the body state decides what happened.
 function openBodyRules(body: NonNullable<Procedure["openBody"]>): string {
@@ -128,8 +147,8 @@ Expected path:`;
 }
 
 export function firstMessage(kase: SurgicalCase, fromOffice = false): string {
-  if (fromOffice) return TIME_OUT_OPENING;
+  if (fromOffice) return timeOutOpening(kase);
   const first = kase.procedure.steps[0];
   const indication = kase.indication.charAt(0).toLowerCase() + kase.indication.slice(1);
-  return `Jarvis here. ${kase.patient.displayLabel}, ${kase.procedure.title.toLowerCase()} for ${indication}. ${first ? `We start with ${first.title.toLowerCase()}.` : ""} Ask me anything as you go.`;
+  return `Scalpal here. ${kase.patient.displayLabel}, ${kase.procedure.title.toLowerCase()} for ${indication}. ${first ? `We start with ${first.title.toLowerCase()}.` : ""} Ask me anything as you go.`;
 }

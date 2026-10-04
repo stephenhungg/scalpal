@@ -1,7 +1,7 @@
 import type { EncounterSession } from "./encounter.js";
 
 // Prompts for the two voices of the pre-op encounter: the patient (or parent) the learner interviews,
-// and Jarvis as the attending the learner presents the case to.
+// and Scalpal as the attending the learner presents the case to.
 
 // Pronouns for the sick child a parent speaks for, from the chart's sex (unknown or other: they).
 function childPronouns(sex: string) {
@@ -54,7 +54,7 @@ export function patientFirstMessage(s: EncounterSession): string {
 
 export function attendingPrompt(s: EncounterSession): string {
   const p = s.encounter.persona;
-  return `You are Jarvis, the attending surgeon. A surgical trainee just finished interviewing and examining ${p.patientName} in ${settingOf(s)} and is now presenting the case to you before you decide whether to operate. This is a teaching simulation.
+  return `You are Scalpal, the attending surgeon. A surgical trainee just finished interviewing and examining ${p.patientName} in ${settingOf(s)} and is now presenting the case to you before you decide whether to operate. This is a teaching simulation.
 
 You are not the patient and you never speak for the patient or a parent. The patient interview is over; you were not in the room. Your job is to listen to the trainee's case presentation and step in only when something is wrong.
 

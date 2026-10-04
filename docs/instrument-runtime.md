@@ -1,6 +1,6 @@
 # Unity Instrument Runtime
 
-This package is a functional virtual-tool prototype for Unity 6000.0.66f2. It is separate from Matthew's feature branch and does not change his exercise state machine or Jarvis service. All fifteen prefab IDs match Matthew's current catalog, including `scalpel`, added upstream at `a629fdf`.
+This package is a functional virtual-tool prototype for Unity 6000.0.66f2. It is separate from Matthew's feature branch and does not change his exercise state machine or Scalpal service. All fifteen prefab IDs match Matthew's current catalog, including `scalpel`, added upstream at `a629fdf`.
 
 ## Build and Open
 
@@ -19,8 +19,10 @@ The generator adds a Rigidbody, compound box/capsule colliders, and a small dist
 For each controller, attach `InstrumentInteractor` and `XRInstrumentInput` to a dedicated GameObject. Select `LeftHand` or `RightHand`, and assign the **actual tracking-origin transform** from the application's XR rig. The sandbox's `TrackingOrigin` is an integration placeholder; it does not start XR or track its desktop preview camera. The native scene already supplies a stereo head camera and shared floor-space origin; use it for physical controller tests.
 
 - Grip crossing 0.65 picks up the nearest unheld instrument within 14 cm of the controller's grip point.
-- Grip below 0.25 releases it and restores its earlier physics settings.
+- Grip below 0.25 releases it and restores its earlier physics settings. A released dynamic tool sweeps with `ContinuousDynamic` detection so a drop cannot tunnel through the table or patient; while held (kinematic) it uses `ContinuousSpeculative`.
 - Trigger above 0.7 activates a held tool. Below 0.2 releases its target and rearms discrete actions.
+- Open-body cases (`OpenSurgerySession.ApplyOpenToolSet`) keep only the expected-path set active: skin marker, scalpel, toothed forceps, two retractors, Babcock, two hemostats, right-angle clamp, Metzenbaum scissors, suture tie and suction. Every other tool and the training patch is deactivated (not grabbable, not pointer-labelled, never in coach events). The set lies in step order in two tight rows on the theatre instrument stand (`RoomCollision/InstrumentStand`) beside the table, and the separate tool table is hidden in VR (AR keeps it as the tool surface).
+- In the open-body OR every tool effect (mark, cut, grasp, retract, clamp, tie, seal, suction) needs the trigger held. A held tool resting on wound tissue without it applies nothing; `OpenBodyInteraction.TouchedWithoutTrigger` fires once per touch and `SurgeryTriggerHint` shows "Hold trigger to <verb>" at the tip with a short haptic tap.
 - A held instrument follows the controller at its `GripAnchor`; its Rigidbody becomes kinematic and disables physics interpolation while held. Release restores the original interpolation policy. The XR adapter refreshes poses before rendering, without repeating trigger/grip actions.
 - Losing valid controller tracking immediately releases the instrument, ends its action, and releases any grasped virtual target. Recovery requires a physical grip release before another pickup.
 
@@ -55,7 +57,7 @@ Subscribe to `InstrumentBehaviour.ActionApplied` for a structured `InstrumentAct
 - the Unity-world interaction point in meters;
 - `unityMonotonicSeconds`, from `Time.realtimeSinceStartupAsDouble`.
 
-These events report a simulated scene effect, not an automatically completed surgery step or score. The exercise owner must validate instrument/target/step and current attempt before feeding an accepted event to Matthew's runner, Jarvis context, or Nathan's shared session state. Session/attempt/exercise versions are deliberately not guessed in this standalone package.
+These events report a simulated scene effect, not an automatically completed surgery step or score. The exercise owner must validate instrument/target/step and current attempt before feeding an accepted event to Matthew's runner, Scalpal context, or Nathan's shared session state. Session/attempt/exercise versions are deliberately not guessed in this standalone package.
 
 The timestamp uses the Unity monotonic clock. It is not a camera acquisition timestamp or synchronized video time; capture integration must record the clock relationship and uncertainty separately.
 

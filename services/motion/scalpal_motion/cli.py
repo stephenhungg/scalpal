@@ -107,6 +107,74 @@ def cmd_gateway_worker(args: argparse.Namespace) -> None:
     run_worker(args.gateway, token, lease_ms=args.lease_ms, mirrored=args.mirrored, once=args.once, hand=args.hand)
 
 
+def cmd_learn(args: argparse.Namespace) -> None:
+    from .learning import evaluate as ev
+
+    tag = args.tag
+    if args.stage in ("extract", "all"):
+        if not args.motion:
+            raise SystemExit("extract needs --motion <motion.json ...> (retargeted hand motion from `run`)")
+        ev.stage_extract([Path(p) for p in args.motion])
+    if args.stage in ("sweep", "all"):
+        ev.stage_sweep([int(n) for n in args.n.split(",")], args.seeds, args.budget, args.steps, args.workers, tag,
+                       teleop=Path(args.teleop) if args.teleop else None)
+    if args.stage in ("report", "all"):
+        ev.stage_report(tag)
+    if args.stage in ("video", "all"):
+        ev.stage_video(args.video_n or max(int(n) for n in args.n.split(",")), tag=tag)
+
+
+def cmd_teleop(args: argparse.Namespace) -> None:
+    from .teleop import TELEOP_DIR, run_teleop
+
+    if args.record and not args.consented:
+        raise SystemExit("--record saves the participant's motion; pass --consented once they agreed")
+    out = Path(args.record) if args.record else (TELEOP_DIR if args.consented else None)
+    episodes = run_teleop(args.port, args.hand, out, show=not args.headless, max_seconds=args.seconds, seed=args.seed,
+                          coach_url=args.coach, coach_session=args.session, coach_patient=args.patient,
+                          report=not args.no_report)
+    print(json.dumps({"attempts": len(episodes), "successes": sum(e.success for e in episodes), "saved_to": str(out) if out else None}))
+
+
+def cmd_send_controller(args: argparse.Namespace) -> None:
+    from .teleop import run_controller_sender
+
+    run_controller_sender(args.host, args.port, args.source, args.seed)
+
+
+def cmd_export_lerobot(args: argparse.Namespace) -> None:
+    from .export import export_lerobot
+
+    print(json.dumps(export_lerobot(Path(args.attempts), Path(args.out), success_only=args.success_only, fmt=args.format)))
+
+
+def cmd_robot_serve(args) -> None:
+    from .mark.worker import serve
+
+    serve(args.coach, interval=args.interval, once=args.once, n_synthetic=args.synthetic, rollouts=args.rollouts, steps=args.steps)
+
+
+def cmd_robot_curve(args) -> None:
+    from .mark.learn import learning_curve
+    from .mark.worker import CURVE_FILE
+
+    curve = learning_curve([int(x) for x in args.n.split(",")], seeds=args.seeds, k=args.rollouts, steps=args.steps)
+    CURVE_FILE.write_text(json.dumps(curve, indent=1))
+    print(f"wrote {CURVE_FILE}")
+
+
+def cmd_robot_send_demo(args) -> None:
+    from .mark.demos import synthetic_demo, to_capture_frames
+    from .mark.grader import Landmarks
+    from .mark.worker import Coach
+
+    coach = Coach(args.coach)
+    sid = args.session or coach.get("/coach/current")["sessionId"]
+    frames = to_capture_frames(synthetic_demo(np.random.default_rng(args.seed), Landmarks.authored()))
+    res = coach.post(f"/coach/sessions/{sid}/robot-demo", {"stepId": "mark_incision", "frames": frames})
+    print(json.dumps({"sessionId": sid, "frames": len(frames), "synthetic": True, **res}))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="scalpal-motion", description=__doc__)
     sub = parser.add_subparsers(required=True)
@@ -156,6 +224,69 @@ def main() -> None:
     p.add_argument("--mirrored", action="store_true", help="treat clips as mirrored (selfie/webcam test footage)")
     p.add_argument("--once", action="store_true", help="handle at most one job, then exit")
     p.set_defaults(func=cmd_gateway_worker)
+
+    p = sub.add_parser("learn", help="proof-of-learning experiment: demos -> sim data -> BC policy -> held-out eval")
+    p.add_argument("stage", choices=["extract", "sweep", "report", "video", "all"])
+    p.add_argument("--motion", nargs="*", default=[], help="extract: motion.json files (output of `run`)")
+    p.add_argument("--n", default="1,5,10,20", help="sweep: comma-separated numbers of human demos")
+    p.add_argument("--seeds", type=int, default=3, help="sweep: training seeds per N")
+    p.add_argument("--budget", type=int, default=1000, help="sweep: generated sim episodes per N (before filtering)")
+    p.add_argument("--steps", type=int, default=6000, help="sweep: gradient steps per policy")
+    p.add_argument("--workers", type=int, default=8)
+    p.add_argument("--video-n", type=int, default=None)
+    p.add_argument("--tag", default="", help="suffix for results/chart/video files (e.g. _smoke)")
+    p.add_argument("--teleop", default=None, help="sweep: folder of teleop attempts (scalpal-motion teleop) as the human demos")
+    p.set_defaults(func=cmd_learn)
+
+    p = sub.add_parser("teleop", help="Quest controller drives the simulated robot hand (physics on); saves each attempt")
+    p.add_argument("--port", type=int, default=9124)
+    p.add_argument("--hand", choices=["right", "left"], default="right")
+    p.add_argument("--record", default=None, help="save attempts here (default out/teleop when --consented)")
+    p.add_argument("--consented", action="store_true", help="the operator confirmed the participant agreed to recording")
+    p.add_argument("--headless", action="store_true", help="no window (checks)")
+    p.add_argument("--seconds", type=float, default=None, help="stop after this many seconds")
+    p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--coach", default=None, help="Scalpal coach URL (e.g. http://127.0.0.1:8787): stamp frames with the surgery step")
+    p.add_argument("--session", default=None, help="coach session id to follow (default: newest via GET /coach/current)")
+    p.add_argument("--patient", default=None, help="with no --session, follow the newest session for this patient")
+    p.add_argument("--no-report", action="store_true", help="do not POST attempt summaries to the coach")
+    p.set_defaults(func=cmd_teleop)
+
+    p = sub.add_parser("send-controller", help="stand-in headset: replay controller frames.jsonl, or a scripted reach-and-place")
+    p.add_argument("source", nargs="?", default=None, help="controller frames.jsonl; omit for a scripted demo")
+    p.add_argument("--host", default="127.0.0.1")
+    p.add_argument("--port", type=int, default=9124)
+    p.add_argument("--seed", type=int, default=0)
+    p.set_defaults(func=cmd_send_controller)
+
+    p = sub.add_parser("export-lerobot", help="saved teleop attempts -> LeRobot-style dataset folder (v2.1 layout)")
+    p.add_argument("attempts", nargs="?", default=str(MOTION_ROOT / "out" / "teleop"), help="folder of teleop attempt .json files")
+    p.add_argument("--out", default=str(MOTION_ROOT / "out" / "lerobot" / "scalpal_robot_hand"))
+    p.add_argument("--success-only", action="store_true", help="keep only attempts that placed the handle")
+    p.add_argument("--format", choices=["parquet", "jsonl"], default=None, help="default: parquet when pyarrow is installed, else jsonl")
+    p.set_defaults(func=cmd_export_lerobot)
+
+    p = sub.add_parser("robot-serve", help="coach demos -> arm + hand sim policy for mark_incision -> graded replay -> coach result")
+    p.add_argument("--coach", default="http://127.0.0.1:8787")
+    p.add_argument("--interval", type=float, default=2.0, help="seconds between polls for new demos")
+    p.add_argument("--rollouts", type=int, default=30, help="held-out evaluation rollouts per cycle")
+    p.add_argument("--synthetic", type=int, default=10, help="synthetic demos always in the dataset")
+    p.add_argument("--steps", type=int, default=3000, help="gradient steps per (cached) policy")
+    p.add_argument("--once", action="store_true", help="post the baseline, process pending demos once, exit")
+    p.set_defaults(func=cmd_robot_serve)
+
+    p = sub.add_parser("robot-curve", help="mark_incision success vs number of (synthetic) demos -> learning-results/robot_mark_curve.json")
+    p.add_argument("--n", default="1,2,3,5,10,20")
+    p.add_argument("--seeds", type=int, default=2)
+    p.add_argument("--rollouts", type=int, default=30)
+    p.add_argument("--steps", type=int, default=3000)
+    p.set_defaults(func=cmd_robot_curve)
+
+    p = sub.add_parser("robot-send-demo", help="stand-in headset: POST a SYNTHETIC marking stroke as ControllerMotionCapture frames")
+    p.add_argument("--coach", default="http://127.0.0.1:8787")
+    p.add_argument("--session", default=None, help="coach session (default: newest via GET /coach/current)")
+    p.add_argument("--seed", type=int, default=7)
+    p.set_defaults(func=cmd_robot_send_demo)
 
     args = parser.parse_args()
     if getattr(args, "video", None) and args.func is cmd_run and args.out is None:

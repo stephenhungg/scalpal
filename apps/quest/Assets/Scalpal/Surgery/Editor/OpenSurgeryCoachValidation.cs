@@ -4,8 +4,11 @@ using System.Reflection;
 using Scalpal.Exercises.Coach;
 using Scalpal.Exercises.Data;
 using Scalpal.Exercises.Engine;
+using Scalpal.Instruments;
+using Scalpal.Quest;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.XR;
 
 namespace Scalpal.Surgery.Editor
 {
@@ -41,6 +44,7 @@ namespace Scalpal.Surgery.Editor
                 SetProperty(relay, "IsSynchronized", false);
                 relay.Forward(CaseEvent.Surgery(evidence), "mark");
                 Assert(pending.Count == 1, "uncertain delivery gates subsequent scoring evidence");
+                VerifyTrackerFacts(fixture, relay, pending);
                 relay.UseSession("");
                 Assert(pending.Count == 0 && relay.AlertCursor == 0 && relay.AlertSnapshot == null, "reset drops evidence and alert cursor");
                 var hint = new CoachAlertDto { kind = "stuck", stepId = "mark", say = "Follow the line.", tier = "caution" };
@@ -68,9 +72,54 @@ namespace Scalpal.Surgery.Editor
                     "safety warnings may interrupt Jarvis");
                 Assert(!OpenSurgeryCoach.InterruptsAgent(new CoachAlertDto { kind = "stuck", tier = "warning" }) &&
                     !OpenSurgeryCoach.InterruptsAgent(new CoachAlertDto { kind = "step_complete", tier = "caution" }), "non-safety alerts never interrupt Jarvis");
+                // Jarvis must not talk constantly: a burst of the same caution plays once, and cautions are spaced out.
+                var paced = new System.Collections.Generic.Queue<CoachAlertDto>();
+                for (int i = 0; i < 6; i++) OpenSurgeryCoach.Enqueue(paced, new CoachAlertDto { kind = "stuck", say = "hint " + i, tier = "caution" });
+                OpenSurgeryCoach.Enqueue(paced, new CoachAlertDto { kind = "wrong_tool", say = "tool", tier = "caution" });
+                Assert(paced.Count == 2 && paced.Peek().say == "hint 5", "repeated cautions collapse to the newest of each kind");
+                Assert(OpenSurgeryCoach.CautionGapSeconds >= 10, "cautions leave a quiet gap of at least 10 s between them");
+                Assert(OpenSurgeryCoach.Fresh(100, 100 + OpenSurgeryCoach.StaleSeconds) && !OpenSurgeryCoach.Fresh(100, 100 + OpenSurgeryCoach.StaleSeconds + .1f),
+                    "a queued line expires once it has waited longer than the stale limit");
+                Assert(!OpenSurgeryCoach.Relevant(new CoachAlertDto { kind = "stuck", stepId = "mark", say = "Follow the line.", tier = "caution" }, "incise_skin", true, false),
+                    "a queued hint for a finished step is no longer relevant");
                 Debug.Log("SCALPAL_OPEN_SURGERY_COACH_VALIDATION_OK synthetic relay serialization, gating, stale captions, reset and reflex URL checks; no audio hardware test");
             }
             finally { UnityEngine.Object.DestroyImmediate(fixture); }
+        }
+        // Jarvis's state tracker: what each hand holds (on change only) and the wire shape of every tracker event.
+        // These never score, so they are not gated on scoring synchronization.
+        static void VerifyTrackerFacts(GameObject fixture, CoachRelay relay, Queue<CoachEventDto> pending)
+        {
+            pending.Clear();
+            InstrumentBehaviour Tool(string id) { var go = new GameObject(id); go.transform.SetParent(fixture.transform, false); var tool = go.AddComponent<InstrumentBehaviour>(); tool.instrumentId = id; return tool; }
+            XRInstrumentInput Hand(XRNode node) { var go = new GameObject(node.ToString()); go.transform.SetParent(fixture.transform, false); var input = go.AddComponent<XRInstrumentInput>(); input.controller = node; return input; }
+            var scalpel = Tool("scalpel"); var hemostat = Tool("hemostat");
+            var left = Hand(XRNode.LeftHand); var right = Hand(XRNode.RightHand);
+            var native = fixture.AddComponent<NativeCaseSession>(); native.coach = relay;
+            native.workbench = fixture.AddComponent<NativeWorkbench>(); native.workbench.inputs = new[] { left, right };
+            var room = fixture.AddComponent<OpenSurgerySession>(); typeof(OpenSurgerySession).GetField("session", Private).SetValue(room, native);
+            void Hold(XRInstrumentInput input, InstrumentBehaviour tool) => SetProperty(input.GetComponent<InstrumentInteractor>(), "HeldInstrument", tool);
+            void Report() => typeof(OpenSurgerySession).GetMethod("ReportHands", Private).Invoke(room, null);
+            string Sent() { var text = string.Join(",", Array.ConvertAll(pending.ToArray(), e => e.instrumentId + "/" + e.hand + "/" + e.held)); pending.Clear(); return text; }
+            Hold(right, scalpel); Report(); Report();
+            Assert(Sent() == "scalpel/right/True", "picking up the scalpel is one held event, not one per frame");
+            Hold(right, null); Hold(left, scalpel); Report();
+            Assert(Sent() == "scalpel/right/False,scalpel/left/True", "passing the scalpel to the other hand drops it from the right and picks it up in the left");
+            Hold(left, hemostat); Report(); Report();
+            Assert(Sent() == "scalpel/left/False,hemostat/left/True", "swapping tools in a hand puts the old one down first");
+            relay.Instrument("scalpel", "right", true);
+            relay.Contact("scalpel", "skin");
+            relay.Injury("neck", "scalpel"); relay.Injury("neck", "hemostat", true);
+            relay.Injury("abdomen", "scalpel"); relay.Instrument("scalpel", "both", true); relay.Contact("scalpel", "");
+            Assert(pending.Count == 4 && Array.TrueForAll(pending.ToArray(), e => e.eventId.StartsWith("unity-")), "only coach regions, hands and structures are queued, each with retry identity");
+            var wire = JsonUtility.ToJson(new CoachEventBatch { events = pending.ToArray() });
+            var events = JsonUtility.FromJson<CoachEventBatch>(wire).events;
+            Assert(events[0].type == "instrument" && events[0].hand == "right" && events[0].held && wire.Contains("\"hand\":\"right\",\"region\":\"\",\"held\":true"),
+                "instrument event carries hand and held: " + wire);
+            Assert(events[1].type == "contact" && events[1].instrumentId == "scalpel" && events[1].structureId == "skin", "contact names the tool and the touched structure");
+            Assert(events[2].type == "injury" && events[2].region == "neck" && events[2].instrumentId == "scalpel" && !events[2].controlled
+                && events[3].region == "neck" && events[3].instrumentId == "hemostat" && events[3].controlled, "injury then control of the same region");
+            pending.Clear();
         }
         static void SetProperty(object target, string name, object value) => target.GetType().GetProperty(name).GetSetMethod(true).Invoke(target, new[] { value });
         static void Assert(bool passed, string reason) { if (!passed) throw new InvalidOperationException("Open surgery coach validation: " + reason); }

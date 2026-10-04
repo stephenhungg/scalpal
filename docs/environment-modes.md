@@ -1,12 +1,12 @@
 # Mixed Reality and Full VR Modes
 
-> **Scope notice:** the current product flow is the [latest experience flow](current-direction.md#latest-experience-flow): launch → explore patients → diagnosis office → full-VR surgery → required robot replay. Mixed reality with a real participant, conversational selection and the rotating preview are off the main path. Where this document disagrees, current direction wins. This page records the earlier two-mode engineering.
+> **Current scope:** AR on a reclining volunteer and full VR are both main-path OR choices after the full-VR office. Theatre selects the ticket mode; AR automatically acquires a generic torso fit after silent capability checks, without an extra checkbox or OS dialog. Replay uses controller motion only. The [October4 AR audit](ar-surgery-audit.md) distinguishes current runtime from the older engineering proposals below.
 
-Updated October 3, 2026 from the user's explicit direction: support a real reclining person with generic virtual organs and a separate entirely virtual surgery-themed demo. These share one exercise, tool behavior, voice coach and state flow. The two modes were the product direction at the time; the main flow is now full VR only, with MR kept off the main path; a standalone native full-VR workbench now combines the room art, XR rig and instrument patch. The native case/coach and organ assembly are now connected. The AR/body-fit milestone uses a cached native environment-raycast grid plus MediaPipe for automatic generic torso alignment; physical participant alignment remains pending. See [body registration](body-registration.md) and [native session](native-session.md).
+The modes share one exercise, tools, voice coach and lifecycle. The room/patient authoring and the native case/coach/organ assembly are connected. The AR adapter uses MediaPipe image landmarks plus a cached native environment-raycast grid for generic planar torso alignment. Physical reclining-participant fit remains unverified. See [body registration](body-registration.md) and [native session](native-session.md). The subsequent design discussion includes proposals that are not all runtime features.
 
 ## Shared Core
 
-Use one registration/presentation boundary, with a common patient/anatomy root, organ IDs, tool IDs, authored exercise rules, Jarvis action validation and attempt state. A mode chooses the source of the patient transform and background; it does not create another voice agent or duplicate the exercise engine.
+Use one registration/presentation boundary, with a common patient/anatomy root, organ IDs, tool IDs, authored exercise rules, Scalpal action validation and attempt state. A mode chooses the source of the patient transform and background; it does not create another voice agent or duplicate the exercise engine.
 
 | Concern | Mixed reality | Full VR |
 | --- | --- | --- |
@@ -35,9 +35,11 @@ A translucent body outline and focused anatomy window can show correspondence wi
 
 The prepared CC0 room and mannequin are available in `Assets/Scalpal/Environment/Samples/OperatingRoomPreview.unity`. The source model is approximate, static scene art. `PatientRoot` and `AnatomyRoot_Unbound` make the missing organ binding visible; no organs or surgery logic are secretly attached.
 
+Both prefabs carry static collision on the Ignore Raycast layer (`EnvironmentPreviewBuilder.ApplyCollision`): `RoomCollision` boxes for the operating table frame, mattress pads and pedestal, the instrument stand and tray, and the visible floor (y 0.06 m), and `PatientCollision`, a copy of the 1,578-triangle body mesh with every triangle wound outward (264 source triangles on the midline face inward, which let tools fall into the chest). The imported mannequin lies head toward -Z with its back inside the mattress, while the atlas fit and torso frame are +Z cranial; the native VR session (`NativeSessionBuild.SeatVirtualPatient`) turns the mannequin end for end and raises it until its skin under the McBurney teaching wound is 2 mm below the wound plane (back about 2 cm above the mattress), and renders it with opaque `Scalpal/PatientSkin`, which cuts the skin away only inside a live teaching wound's wall footprint and draws blade incisions made outside it ([surgery procedure](surgery-procedure.md)). AR disables the hidden mannequin's collider.
+
 The native workbench supplies the XR rig and shared tool prefabs for an authored patch test. Next integrate a selected anatomy/case assembly. Validate that the anatomy source frame fits the mannequin/table; Matthew's Z-Anatomy layers and separate HRA detail models are not automatically interchangeable. Existing authored seam cutting remains a practice-patch effect rather than arbitrary organ slicing.
 
-At a mode transition, release held tools, invalidate the previous patient fit and rebind the same exercise to the new patient root before accepting another action. Record the presentation mode in session context for the companion and Jarvis; field names and migration are proposed until agreed with Nathan and Matthew.
+At a mode transition, release held tools, invalidate the previous patient fit and rebind the same exercise to the new patient root before accepting another action. Record the presentation mode in session context for the companion and Scalpal; field names and migration are proposed until agreed with Nathan and Matthew.
 
 ## Recording and Robotics
 
@@ -45,4 +47,4 @@ Raw passthrough contains the physical room, hands and participant, not virtual o
 
 ## Next Bounded Checks
 
-First make the existing tools usable in the native XR rig inside the virtual room. Separately validate an accepted real table surface and visible body-fit markers on the actual reclining participant. Only connect the two-mode selector after both use the same registration/action validity gate. Then rehearse the same authored exercise with Jarvis in each mode. Headset frame time, body alignment error, stereo rendering and registration recovery remain unmeasured for this new scene.
+First make the existing tools usable in the native XR rig inside the virtual room. Separately validate an accepted real table surface and visible body-fit markers on the actual reclining participant. Only connect the two-mode selector after both use the same registration/action validity gate. Then rehearse the same authored exercise with Scalpal in each mode. Headset frame time, body alignment error, stereo rendering and registration recovery remain unmeasured for this new scene.

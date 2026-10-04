@@ -1,0 +1,58 @@
+---
+title: "Pre-op and Scalpal"
+description: "FinchNode patient cases and the live voice coach."
+---
+
+Owner: Matthew.
+
+`services/preop` does two jobs: it turns FinchNode's synthetic health records into surgical cases, and it runs Scalpal, the voice coach in the operating room.
+
+## Patient cases
+
+Every synthetic patient gets an authored surgical scenario that fits their chart. A 78-year-old on apixaban with kidney disease gets an urgent cholecystectomy. A 9-year-old with asthma gets an appendectomy. The chart is real FinchNode data, and the acute story is authored fiction, labeled as such.
+
+- **Risks are rules, not a model.** Flags come from coded data (RxNorm, LOINC, SNOMED), each with the record entries behind it. Missing data is reported as unknown, never as none.
+- **Everything renders in Unity.** Every payload maps one to one onto the C# DTOs in `apps/quest/Assets/Scalpal/Exercises/Data/`.
+- **No dead ends.** Every response carries `actions`, and every failure renders a state with a way forward.
+
+There are two ways in. **Demo records** need nothing and read FinchNode's public demo API. **Connect admission** uses a sandbox key (`ck_test_...`) to run FinchNode's real consent flow on synthetic patients.
+
+## Office interview (no Scalpal)
+
+The office is a 1:1 interview with the patient voice: a tool-less ElevenLabs agent embodying the patient's committed `patient.md`. After each patient turn the learner picks the next clinician move from four choices (one correct, at most one partial), by tap or by voice. Spoken answers are transcribed by ElevenLabs and matched to a choice by Claude Haiku. The rounds, grades and score live on the server and are the same every run. Content for each patient (`patient.md`, `patient_status.md`, `interview.json`) is under `services/preop/content/patients/`. See [office interview](https://github.com/stephenhungg/scalpal/blob/main/docs/office-interview.md).
+
+## Scalpal in the operating room
+
+Scalpal is the only AI that talks. He first speaks in the operating room, runs the Time-Out, then coaches live. He is fed by analyzers that do not talk:
+
+- **State tracker:** tools in each hand, tool contact, every measured cut, clamp and tie, the checklist and what the next step still needs, in plain words.
+- **Patient condition:** simulated vitals from blood loss on the shared ATLS model (chart baseline in VR, Presage baseline in AR), injuries outside the surgical field (head, neck, chest, limbs), and the outcome, including death.
+- **Alarms:** pre-rendered clips play instantly for safety warnings (a cut neck, falling pressure, an uncontrolled bleed past 30 s); Scalpal explains after.
+- **Stall hints** escalate at about 15, 25, 40 and 60 s.
+- **Vision:** POV screenshots summarized by Claude, plus OWLv2 tool boxes from the camera. Vision supports the state but never decides it.
+
+Everything he sees and says is logged to SpacetimeDB `sim_log` for the dashboard's Live logs panel.
+
+```sh
+cd services/preop
+cp .env.example .env
+npm run scalpal:setup   # creates or updates the ElevenLabs agents
+npm run dev            # http://localhost:8787/scalpal (for a demo, use npx tsx src/server.ts: watch mode restarts on edits)
+```
+
+## Environment
+
+| Variable | Meaning |
+| --- | --- |
+| `ELEVENLABS_API_KEY`, `ELEVENLABS_AGENT_ID` | Scalpal voice agent |
+| `PATIENT_AGENT_ID` | Legacy free-form patient agent |
+| `INTERVIEW_PATIENT_AGENT_ID` | Patient voice in the office interview (no tools) |
+| `SCALPAL_VOICE_ID` | Scalpal's voice |
+| `ANTHROPIC_API_KEY` | Vision and spoken-answer matching |
+| `VITALS_URL` | Presage vitals service for the AR Time-Out baseline (http://127.0.0.1:8791) |
+| `VISION_DETECT_URL` | OWLv2 tool detector (http://127.0.0.1:8792) |
+| `FINCHNODE_API_KEY` | Optional sandbox key for Connect admission |
+| `PORT` | Defaults to 8787 |
+| `SPACETIMEDB_URI`, `SPACETIMEDB_DB` | Where the coach posts its transcript and status |
+
+See the [API reference](/api/preop) for every route.

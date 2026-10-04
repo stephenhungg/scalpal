@@ -223,6 +223,49 @@ export type MySessions = __Infer<typeof MySessions>;
 export const MyTransferGrants = __t.object("MyTransferGrants", {});
 export type MyTransferGrants = __Infer<typeof MyTransferGrants>;
 
+export const PatientCondition = __t.object("PatientCondition", {
+  sessionId: __t.string(),
+  coachSessionId: __t.string(),
+  baselineHr: __t.f64(),
+  baselineRr: __t.f64(),
+  baselineSys: __t.f64(),
+  baselineDia: __t.f64(),
+  baselineSpo2: __t.f64(),
+  baselineSource: __t.string(),
+  weightKg: __t.f64(),
+  mlPerKg: __t.f64(),
+  ebvMl: __t.f64(),
+  scale: __t.f64(),
+  hr: __t.i32(),
+  rr: __t.i32(),
+  sys: __t.i32(),
+  dia: __t.i32(),
+  spo2: __t.i32(),
+  bloodLossPct: __t.f64(),
+  hemorrhageClass: __t.u32(),
+  label: __t.string(),
+  bodyLostMl: __t.f64(),
+  regionLostMl: __t.f64(),
+  bloodLostMl: __t.f64(),
+  bodyBleedMlPerMin: __t.f64(),
+  activeBleedsJson: __t.string(),
+  regionInjuriesJson: __t.string(),
+  outcomeResult: __t.string(),
+  outcomeCause: __t.string(),
+  outcomeAt: __t.option(__t.timestamp()),
+  version: __t.u64(),
+  startedAt: __t.timestamp(),
+  advancedAt: __t.timestamp(),
+  updatedAt: __t.timestamp(),
+});
+export type PatientCondition = __Infer<typeof PatientCondition>;
+
+export const PatientTickTimer = __t.object("PatientTickTimer", {
+  scheduledId: __t.u64(),
+  scheduledAt: __t.scheduleAt(),
+});
+export type PatientTickTimer = __Infer<typeof PatientTickTimer>;
+
 export const QualitySummary = __t.object("QualitySummary", {
   framesTotal: __t.u32(),
   framesValid: __t.u32(),
@@ -243,6 +286,21 @@ export const ReplayState = __t.object("ReplayState", {
   updatedBy: __t.identity(),
 });
 export type ReplayState = __Infer<typeof ReplayState>;
+
+export const RobotResult = __t.object("RobotResult", {
+  id: __t.u64(),
+  sessionId: __t.string(),
+  attemptId: __t.string(),
+  stepId: __t.string(),
+  success: __t.bool(),
+  pathErrorMm: __t.option(__t.f64()),
+  policySuccessRate: __t.option(__t.f64()),
+  demosHuman: __t.u32(),
+  demosSynthetic: __t.u32(),
+  videoUrl: __t.option(__t.string()),
+  at: __t.timestamp(),
+});
+export type RobotResult = __Infer<typeof RobotResult>;
 
 export const RtcSignal = __t.object("RtcSignal", {
   signalId: __t.u64(),
@@ -355,8 +413,28 @@ export type SessionMembers = __Infer<typeof SessionMembers>;
 export const SessionMotionJobs = __t.object("SessionMotionJobs", {});
 export type SessionMotionJobs = __Infer<typeof SessionMotionJobs>;
 
+export const SessionPatientCondition = __t.object("SessionPatientCondition", {});
+export type SessionPatientCondition = __Infer<typeof SessionPatientCondition>;
+
 export const SessionReplayState = __t.object("SessionReplayState", {});
 export type SessionReplayState = __Infer<typeof SessionReplayState>;
+
+export const SessionRobotResults = __t.object("SessionRobotResults", {});
+export type SessionRobotResults = __Infer<typeof SessionRobotResults>;
+
+export const SessionSimLogs = __t.object("SessionSimLogs", {});
+export type SessionSimLogs = __Infer<typeof SessionSimLogs>;
+
+export const SimLog = __t.object("SimLog", {
+  id: __t.u64(),
+  sessionId: __t.string(),
+  coachSessionId: __t.string(),
+  kind: __t.string(),
+  text: __t.string(),
+  dataJson: __t.string(),
+  at: __t.timestamp(),
+});
+export type SimLog = __Infer<typeof SimLog>;
 
 export const SweepTimer = __t.object("SweepTimer", {
   scheduledId: __t.u64(),

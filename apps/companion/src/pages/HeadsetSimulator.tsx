@@ -1,5 +1,5 @@
 // Synthetic headset: publishes exercise state, events and command
-// acknowledgements exactly as the Quest app would, so the companion, Jarvis
+// acknowledgements exactly as the Quest app would, so the companion, Scalpal
 // bridge and motion pipeline can be exercised without the headset. Everything
 // it produces is labelled synthetic.
 
@@ -406,7 +406,7 @@ export default function HeadsetSimulator({ sessionId }: { sessionId: string }) {
                     }}
                   >
                     <select value={speaker} onChange={e => setSpeaker(e.target.value)}>
-                      <option value="coach">Jarvis</option>
+                      <option value="coach">Scalpal</option>
                       <option value="learner">Learner</option>
                       <option value="system">System</option>
                     </select>

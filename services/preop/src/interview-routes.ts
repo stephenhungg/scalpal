@@ -1,7 +1,7 @@
 import type { Context, Hono } from "hono";
 import { ENCOUNTERS_BY_PLAN, type Encounter } from "./catalog/encounters.js";
 import { DEFAULT_PATIENT_VOICES } from "./encounter.js";
-import type { AnswerClassifier, SpeechToText } from "./answer-classifier.js";
+import { letterFrom, wordMatch, type AnswerClassifier, type SpeechToText } from "./answer-classifier.js";
 import { loadPatientContent } from "./interview-content.js";
 import { interviewPatientPrompt } from "./interview-prompt.js";
 import { InterviewSession } from "./interview.js";
@@ -10,7 +10,7 @@ import { NO_REALTIME, type RealtimeSink } from "./realtime-bridge.js";
 import type { Action, SurgicalCase } from "./types.js";
 
 // The pre-op office: a 1:1 interview with the patient voice, driven by committed rounds of four
-// clinician moves. Jarvis takes no part here. The scored interview carries into the operating room through
+// clinician moves. Scalpal takes no part here. The scored interview carries into the operating room through
 // POST /coach/sessions {encounterId: <interviewId>}.
 
 export interface InterviewRouteOptions {
@@ -74,7 +74,17 @@ export function registerInterviewRoutes(app: Hono, options: InterviewRouteOption
     sessions.set(id, s);
     meta.set(id, { prompt: interviewPatientPrompt(content, kase), firstMessage: content.interview.openingLine, voiceId: voices[persona?.voiceKey ?? "adult_female"] ?? "" });
     realtime.attachInterview?.(s);
-    return c.json({ ...s.state(), speakerName: persona?.name ?? patientName, speaker: persona?.speaker ?? "patient", openingLine: content.interview.openingLine, actions: actionsFor(id) }, 201);
+    // Demographics seat the right avatars in the Quest office: the patient, and for a parent speaker the parent beside them.
+    const speaker = persona?.speaker ?? "patient";
+    const patientAge = persona?.age ?? kase.patient.age ?? 0;
+    const patientSex = persona?.sex ?? kase.patient.sex ?? "";
+    const demographics = {
+      patientAge,
+      patientSex,
+      speakerAge: speaker === "parent" ? (persona?.speakerAge ?? 0) : patientAge,
+      speakerSex: speaker === "parent" ? (persona?.speakerSex ?? "") : patientSex,
+    };
+    return c.json({ ...s.state(), speakerName: persona?.name ?? patientName, speaker, ...demographics, openingLine: content.interview.openingLine, actions: actionsFor(id) }, 201);
   });
 
   app.get("/interviews/:id", (c) => {
@@ -107,20 +117,24 @@ export function registerInterviewRoutes(app: Hono, options: InterviewRouteOption
     if (!round) return bad(c, 409, "invalid_phase", "The interview is already scored.", actionsFor(s.id));
     const b = await body(c);
     let key: ChoiceKey | null = typeof b.key === "string" && /^[ABCD]$/.test(b.key) ? (b.key as ChoiceKey) : null;
-    let heard = typeof b.text === "string" ? b.text.slice(0, 1000) : "";
+    let heard = typeof b.text === "string" ? b.text.trim().slice(0, 1000) : "";
     const via = key ? "tap" : "voice";
     if (!key && typeof b.audio === "string") {
       if (!options.speechToText) return bad(c, 503, "speech_unconfigured", "Speech answers need ELEVENLABS_API_KEY; tap a choice instead.", actionsFor(s.id));
       if (b.audio.length > MAX_AUDIO_CHARS) return bad(c, 400, "audio_too_large", "Keep spoken answers under about 20 seconds.", actionsFor(s.id));
       try {
-        heard = await options.speechToText.transcribe(Buffer.from(b.audio, "base64"), typeof b.mimeType === "string" ? b.mimeType : "audio/webm");
+        heard = (await options.speechToText.transcribe(Buffer.from(b.audio, "base64"), typeof b.mimeType === "string" ? b.mimeType : "audio/webm")).trim();
       } catch (e) {
         return bad(c, 503, "speech_failed", `Could not transcribe that (${(e as Error).message}). Tap a choice or try again.`, actionsFor(s.id));
       }
     }
+    // A bare letter ("B", "option c") needs no model; anything else goes to the classifier.
+    if (!key && heard) key = letterFrom(heard);
+    // The model when configured; shared content words when there is no model or it is unreachable. A model
+    // that judges the answer unclear (a hedge, a negation) is respected, so the learner is asked again.
     if (!key && heard) {
-      if (!options.classifier) return bad(c, 503, "classifier_unconfigured", "Spoken answers need ANTHROPIC_API_KEY; tap a choice instead.", actionsFor(s.id));
-      key = await options.classifier.classify(heard, round.choices);
+      if (!options.classifier) key = wordMatch(heard, round.choices);
+      else key = await options.classifier.classify(heard, round.choices).catch(() => wordMatch(heard, round.choices));
     }
     if (!key) return bad(c, 422, "unclear_answer", heard ? `Heard "${heard}", which did not match one choice. Say A, B, C or D, or tap one.` : "Send key, text or audio.", actionsFor(s.id), { heard });
     if (heard) s.transcript("learner", heard);

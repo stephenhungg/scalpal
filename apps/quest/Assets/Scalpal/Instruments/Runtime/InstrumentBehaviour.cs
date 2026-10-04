@@ -61,6 +61,9 @@ namespace Scalpal.Instruments
             restRotation = transform.rotation;
         }
 
+        // A case layout that moves a tool to a new resting place makes that its rest pose.
+        public void RecaptureRestPose() { restPoseCaptured = false; CaptureRestPose(); }
+
         public void ReturnToRestPose()
         {
             if (!restPoseCaptured) return;

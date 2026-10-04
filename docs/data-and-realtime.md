@@ -47,7 +47,7 @@ R2 [presigned URLs](https://developers.cloudflare.com/r2/api/s3/presigned-urls/)
 flowchart TD
     Q[Quest application] <--> D[SpacetimeDB shared session state]
     C[Companion display] <--> D
-    V[Jarvis action bridge] <--> D
+    V[Scalpal action bridge] <--> D
     G[Nathan's thin gateway] <--> D
     Q -->|Permitted clip upload| O[Private file or object store]
     G -->|Authorize access and confirm artifacts| O
@@ -62,7 +62,7 @@ The gateway route for local files may proxy a transfer; cloud object storage can
 ## One Session, End to End
 
 1. Nathan's backend establishes a session and participant roles. The Quest and companion subscribe only to the authorized state they need.
-2. Jarvis uses the current exercise/step context. A supported action request carries a command ID, target session, expected version, and bounded parameters. Unity validates it, applies or rejects it, and reports the outcome. Local pause works immediately without waiting for the cloud.
+2. Scalpal uses the current exercise/step context. A supported action request carries a command ID, target session, expected version, and bounded parameters. Unity validates it, applies or rejects it, and reports the outcome. Local pause works immediately without waiting for the cloud.
 3. The learner starts a defined recording segment. The Quest writes a local clip and associated scene/timing metadata. The session exposes recording progress/status, not live video frames.
 4. The gateway authorizes an upload to the chosen storage route. It confirms the expected artifact actually arrived before marking it available. Uploading does not automatically mean reconstruction succeeded.
 5. A unique processing job references the available clip/manifest. The gateway dispatches it to Silas's worker, which estimates hand motion and produces the selected robot replay.
@@ -76,7 +76,7 @@ For job coordination, an atomic reducer creates or returns the job under an agre
 
 ## What "Realtime" Means Here
 
-The proposed realtime features are shared exercise state, selected structure, pause/resume, command acknowledgement, recording/job status, and optional synchronized replay controls. A laptop observer can see a step change immediately; Jarvis can reason about the same confirmed step rather than an outdated prompt.
+The proposed realtime features are shared exercise state, selected structure, pause/resume, command acknowledgement, recording/job status, and optional synchronized replay controls. A laptop observer can see a step change immediately; Scalpal can reason about the same confirmed step rather than an outdated prompt.
 
 Headset camera rendering, body attachment, and virtual-tool interaction remain local. Publish coarse observer state only when useful and measure update load. Do not send every camera frame or wait for a remote database round trip before rendering the next overlay.
 
@@ -84,7 +84,7 @@ Recording, object upload, and clip processing are asynchronous. SpacetimeDB noti
 
 ## Nathan's Assigned Responsibilities
 
-Nathan is named by the user; no GitHub account mapping is assumed. Matthew's existing Jarvis agent remains Matthew's responsibility.
+Nathan is named by the user; no GitHub account mapping is assumed. Matthew's existing Scalpal agent remains Matthew's responsibility.
 
 - Define the smallest shared schema: sessions/membership, exercise state/events, required command acknowledgements, artifact metadata, and motion jobs/results.
 - Build the companion website, including live composited headset video over a separate media connection and relevant session/coach/processing panels.

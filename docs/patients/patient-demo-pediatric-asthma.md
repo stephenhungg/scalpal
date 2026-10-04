@@ -7,7 +7,7 @@
 | Sex | Male |
 | Speaker | Parent: Laura Abernathy, Theo's mother. She relays what Theo says. |
 | Subject id | `patient-demo-pediatric-asthma` |
-| Procedure | Laparoscopic appendectomy (`lap_appendectomy`) |
+| Procedure | Open appendectomy (`open_appendectomy`) |
 | Urgency | Urgent |
 | Voice preset | `parent_female` |
 
@@ -159,7 +159,7 @@
 
 ---
 
-## 2. CLINICIAN KEY (never given to the patient agent; for Jarvis and authors)
+## 2. CLINICIAN KEY (never given to the patient agent; for Scalpal and authors)
 
 ### 2.1 Case summary
 
@@ -260,7 +260,7 @@ His Pediatric Appendicitis Score is about 9–10 of 10 (pain with cough, hop or 
    - There is no anaphylaxis episode or ED encounter around 2022–2023 in the chart.
    - The dossier reconciles the two: first reaction at age 2 (hives and lip swelling, as charted), then anaphylaxis at age 5 (not charted). Consider adding a 2022 reaction entry or ED encounter to FinchNode, or accept the gap as a teaching point.
 2. **No epinephrine auto-injector on the chart medication list** (albuterol, fluticasone, montelukast and cetirizine only), even though the encounter says he carries an EpiPen. This is a real-world style reconciliation gap. Flag it to authors.
-3. **"Never been hospitalized" vs the ED visit.** The chart has an `emergency` encounter "Acute asthma exacerbation" on **2024-11-03** with SpO2 **94%** and RR **30**. The encounter's wording is technically compatible (treated and released), and the dossier has Laura disclose it when asked about the ER. But the authored `past_medical` answer volunteers only "well controlled." Jarvis should reward a learner who uncovers the ED visit.
+3. **"Never been hospitalized" vs the ED visit.** The chart has an `emergency` encounter "Acute asthma exacerbation" on **2024-11-03** with SpO2 **94%** and RR **30**. The encounter's wording is technically compatible (treated and released), and the dossier has Laura disclose it when asked about the ER. But the authored `past_medical` answer volunteers only "well controlled." Scalpal should reward a learner who uncovers the ED visit.
 4. **Weight.** The encounter vitals give 30 kg. The last charted weight is 26.8 kg on 2025-06-10 (age 7 years 11 months). A gain of 3.2 kg in about 16 months is plausible. No conflict.
 5. **Medication start dates.** The chart MedicationRequests for fluticasone and albuterol are dated 2025-03-22 (the asthma follow-up), and montelukast and cetirizine 2025-06-10. The dossier has Laura say the daily inhaler was "kept/continued" after the ER visit. This is consistent.
 6. **cases.ts matches encounters.ts**: 18 h, migration, anorexia, one vomit, 38.0 C, WBC 14.2, noncompressible 9 mm appendix. Age (9 on 2026-10-03) and sex match the chart.

@@ -10,12 +10,13 @@ import { RollButton } from "./RollButton";
 import { Shell } from "./Shell";
 import { TrackWheel } from "./TrackWheel";
 import { useLeave } from "./useLeave";
+import { AGENT_PROMPT } from "@/lib/links";
 import { EXIT } from "@/lib/scene";
 import { session } from "@/lib/session";
 import { wordCount } from "@/lib/text";
 
 const TITLE = "The future of surgery.";
-const LEDE = "One rep, from the first cut to the robot replay.";
+const LEDE = "One workflow, from the first cut to the robot replay.";
 
 export function ExploreBody({ apkUrl, videoUrl }: { apkUrl: string; videoUrl: string }) {
   const { leaving, go } = useLeave("/");
@@ -60,7 +61,7 @@ export function ExploreBody({ apkUrl, videoUrl }: { apkUrl: string; videoUrl: st
                   Download soon
                 </span>
               )}
-              <RollButton href="/" variant="secondary" label="Back" hoverLabel="Home" onClick={go("/")} />
+              <RollButton href="#" variant="secondary" copy={AGENT_PROMPT} label="Build your own case" hoverLabel="Copy agent prompt" />
             </div>
             <p className="text-[14px] leading-[22px] text-white/50">Meta Quest 3 and 3S. Install with SideQuest or adb.</p>
           </FadeIn>

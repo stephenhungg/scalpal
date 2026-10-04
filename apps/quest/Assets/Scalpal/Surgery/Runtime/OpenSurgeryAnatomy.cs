@@ -142,7 +142,8 @@ namespace Scalpal.Surgery
             filter = null; mesh = null;
             foreach (var candidate in part.GetComponentsInChildren<MeshFilter>(true))
             {
-                if (candidate.GetComponentInParent<AnatomyPart>(true) != part || !candidate.sharedMesh) continue;
+                if (candidate.GetComponentInParent<AnatomyPart>(true) != part || !candidate.sharedMesh ||
+                    candidate.GetComponentInParent<SurgicalVisualGeometry>(true)) continue;
                 if (filter) return false;
                 filter = candidate;
             }

@@ -2,7 +2,7 @@
 // The patient (an ElevenLabs agent embodying patient.md) talks; after each patient turn the learner picks
 // the next clinician move from four choices, by tap or by voice. Exactly one choice is correct, at most one
 // is partially correct, the rest are wrong. The same rounds run in the same order every time, so scores
-// compare across runs. Jarvis takes no part; he reads patient_status.md and the result later, in the OR.
+// compare across runs. Scalpal takes no part; he reads patient_status.md and the result later, in the OR.
 
 export type ChoiceKey = "A" | "B" | "C" | "D";
 export type ChoiceGrade = "correct" | "partial" | "wrong";

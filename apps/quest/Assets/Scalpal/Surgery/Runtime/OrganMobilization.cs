@@ -19,6 +19,8 @@ namespace Scalpal.Surgery
         public float returnSpeedMps = .1f;
         public float maxTiltDegrees = 15;
         public float maxTiltDegreesPerSecond = 45;
+        [Tooltip("Optional held-wrist rotation from the authored pose. Zero retains positional mobilization only.")]
+        public float maxGripRotationDegrees;
     }
 
     // Rigid mobilization of a group of atlas parts, on top of each part's local cage deformation.
@@ -36,10 +38,13 @@ namespace Scalpal.Surgery
         readonly MeshFilter deliveryFilter;
         Vector3 pivot, offset, grip;
         Quaternion tilt = Quaternion.identity;
+        Quaternion gripToolRotation, gripStartTilt;
+        bool followsWrist;
         public bool Held { get; private set; }
         public MobileOrganGroup Definition => definition;
         public Vector3 OffsetMeters => offset;
         public Quaternion Tilt => tilt;
+        public Vector3 GripWorldPosition => FromReference(pivot + offset + tilt * (grip - pivot));
         public bool AtRest => offset == Vector3.zero && tilt == Quaternion.identity;
         public IReadOnlyList<Transform> Parts => parts;
 
@@ -65,7 +70,9 @@ namespace Scalpal.Surgery
             reason = "";
             if (!anatomy || group == null || group.partIds == null || group.partIds.Length == 0) { reason = "empty mobile group"; return null; }
             if (!Positive(group.maxTravelMm) || !Positive(group.maxSpeedMps) || !Positive(group.returnSpeedMps)
-                || !(group.maxTiltDegrees >= 0) || !(group.maxTiltDegreesPerSecond >= 0)) { reason = "invalid mobile group limits"; return null; }
+                || !float.IsFinite(group.maxTiltDegrees) || !(group.maxTiltDegrees >= 0)
+                || !float.IsFinite(group.maxTiltDegreesPerSecond) || !(group.maxTiltDegreesPerSecond >= 0)
+                || !float.IsFinite(group.maxGripRotationDegrees) || group.maxGripRotationDegrees < 0 || group.maxGripRotationDegrees > 180) { reason = "invalid mobile group limits"; return null; }
             var members = new List<Transform>();
             foreach (var id in group.partIds)
             {
@@ -100,31 +107,62 @@ namespace Scalpal.Surgery
             if (Held || !reference || !OpenSurgeryStroke.Finite(worldGrip)) return false;
             // Store the grip in rest coordinates so the held point stays fixed on the tissue.
             grip = pivot + Quaternion.Inverse(tilt) * (ToReference(worldGrip) - pivot - offset);
-            Held = true; return true;
+            followsWrist = false; Held = true; return true;
         }
-        public void EndHold() => Held = false;
+        public bool BeginHold(Vector3 worldGrip, Quaternion worldToolRotation)
+        {
+            if (!FiniteRotation(worldToolRotation) || !BeginHold(worldGrip)) return false;
+            gripToolRotation = Quaternion.Inverse(reference.rotation) * worldToolRotation.normalized;
+            gripStartTilt = tilt;
+            followsWrist = definition.maxGripRotationDegrees > 0;
+            return true;
+        }
+        public void EndHold() { Held = false; followsWrist = false; }
+        static bool FiniteRotation(Quaternion value) => float.IsFinite(value.x) && float.IsFinite(value.y)
+            && float.IsFinite(value.z) && float.IsFinite(value.w)
+            && float.IsFinite(Quaternion.Dot(value, value)) && Quaternion.Dot(value, value) > .000001f;
 
         // Speed-limited follow of the held point toward the tool, with a slight bounded tilt
         // and the tether travel bound. Returns false when nothing moved.
         public bool Follow(Vector3 worldTool, float seconds)
         {
-            if (!Held || !reference || !OpenSurgeryStroke.Finite(worldTool) || !(seconds > 0)) return false;
+            if (!Held || !reference || !OpenSurgeryStroke.Finite(worldTool) || !float.IsFinite(seconds) || !(seconds > 0)) return false;
             Vector3 target = ToReference(worldTool), arm = grip - pivot, reach = target - pivot - offset;
             if (definition.maxTiltDegrees > 0 && arm.sqrMagnitude > .005f * .005f && reach.sqrMagnitude > .005f * .005f)
             {
                 var desired = Quaternion.RotateTowards(Quaternion.identity, Quaternion.FromToRotation(arm, reach), definition.maxTiltDegrees);
                 tilt = Quaternion.RotateTowards(tilt, desired, definition.maxTiltDegreesPerSecond * seconds);
             }
+            FollowPoint(target, arm, seconds); return true;
+        }
+
+        // A grasped assembly rotates with the learner's wrist. Appearance, source colliders,
+        // deformation frames and base references all share this same bounded rigid transform.
+        // Re-grasping captures the current pose; it never snaps the organ back to rest.
+        public bool Follow(Vector3 worldTool, Quaternion worldToolRotation, float seconds)
+        {
+            if (!followsWrist) return Follow(worldTool, seconds);
+            if (!Held || !reference || !OpenSurgeryStroke.Finite(worldTool) || !FiniteRotation(worldToolRotation)
+                || !float.IsFinite(seconds) || seconds <= 0) return false;
+            var current = Quaternion.Inverse(reference.rotation) * worldToolRotation.normalized;
+            var delta = current * Quaternion.Inverse(gripToolRotation);
+            var desired = Quaternion.RotateTowards(Quaternion.identity, delta * gripStartTilt, definition.maxGripRotationDegrees);
+            tilt = Quaternion.RotateTowards(tilt, desired, definition.maxTiltDegreesPerSecond * seconds);
+            FollowPoint(ToReference(worldTool), grip - pivot, seconds);
+            return true;
+        }
+        void FollowPoint(Vector3 target, Vector3 arm, float seconds)
+        {
             Vector3 step = Vector3.ClampMagnitude(target - pivot - tilt * arm - offset, definition.maxSpeedMps * seconds);
             offset = Vector3.ClampMagnitude(offset + step, definition.maxTravelMm * .001f);
-            Apply(); return true;
+            Apply();
         }
 
         // Unheld: a delivered group rests where it was left; otherwise it eases back to rest
         // at a bounded speed and lands on the exact authored pose.
         public bool Settle(float seconds, Transform wound)
         {
-            if (Held || AtRest || !(seconds > 0)) return false;
+            if (Held || AtRest || !float.IsFinite(seconds) || !(seconds > 0)) return false;
             if (Delivered(wound)) return false;
             offset = Vector3.MoveTowards(offset, Vector3.zero, definition.returnSpeedMps * seconds);
             tilt = Quaternion.RotateTowards(tilt, Quaternion.identity, Mathf.Max(definition.maxTiltDegreesPerSecond, 1) * seconds);
@@ -143,7 +181,7 @@ namespace Scalpal.Surgery
 
         public void RestoreRest()
         {
-            Held = false; offset = Vector3.zero; tilt = Quaternion.identity;
+            Held = false; followsWrist = false; offset = Vector3.zero; tilt = Quaternion.identity;
             for (int i = 0; i < parts.Length; i++)
                 if (parts[i]) { parts[i].localPosition = restPositions[i]; parts[i].localRotation = restRotations[i]; }
             Physics.SyncTransforms();

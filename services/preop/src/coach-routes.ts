@@ -1,5 +1,6 @@
 import { validBodyAction, type BodyAction } from "./open-body.js";
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import type { Context, Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { ANATOMY, ANATOMY_BY_ID } from "./catalog/anatomy.js";
@@ -11,13 +12,18 @@ import type { Frame, FrameMark, SceneVision } from "./scene-vision.js";
 import type { FrameDetector } from "./frame-detector.js";
 import { ReflexAudio } from "./reflex.js";
 import { openBodySimulation, restampForBody } from "./open-body-sim.js";
+import { REGION_IDS, type RegionId } from "./patient-condition.js";
+import type { Baseline } from "./physiology.js";
+import { plausibleBaseline } from "./chart-vitals.js";
 import { NO_REALTIME, type RealtimeBridge, type RealtimeSink } from "./realtime-bridge.js";
 import { buildSystemPrompt, firstMessage } from "./coach-prompt.js";
+import { briefingLines } from "./briefing.js";
 import { createContextFeed, type ContextFeed } from "./jarvis/context-feed.js";
 import type { EncounterVoices } from "./encounter-routes.js";
 import type { Action, SurgicalCase } from "./types.js";
+import { registerRobotRoutes } from "./robot-routes.js";
 
-// Live coach API. Unity (or the SpacetimeDB bridge) posts exercise events here; the Jarvis voice
+// Live coach API. Unity (or the SpacetimeDB bridge) posts exercise events here; the Scalpal voice
 // page reads state, hints, and alerts from it. Sessions live in memory: fine for one demo laptop,
 // and the event contract is what moves to SpacetimeDB later.
 
@@ -33,10 +39,14 @@ export interface CoachRouteOptions {
   bridge?: RealtimeBridge | null; // the live connection, for /realtime status and join
   encounters?: EncounterVoices; // live encounters, so /jarvis/connection can bind a voice to one
   encounterFor?: (id: string) => { kase: SurgicalCase; carryover(): string } | null;
-  patientStatus?: (patientId: string) => string; // authored patient_status.md for Jarvis's OR context
-  vision?: SceneVision | null; // Jarvis's eyes; null when no vision model is configured
+  patientStatus?: (patientId: string) => string; // authored patient_status.md for Scalpal's OR context
+  vision?: SceneVision | null; // Scalpal's eyes; null when no vision model is configured
   watchMs?: number; // minimum gap between background scene summaries (0 disables watching)
   detector?: FrameDetector | null; // real-camera instrument and hand boxes (services/vision); null when not running
+  // Baseline vitals for a case from the patient's chart (VR, and AR until the Presage baseline is captured).
+  baselineFor?: (kase: SurgicalCase) => Promise<{ baseline: Baseline; weightKg: number; spo2: number | null; mlPerKg?: number } | null>;
+  vitalsUrl?: string; // services/vitals (Presage); POST /baseline/capture at Time-Out in AR
+  robotDataDir?: string; // robot demos and replay videos (gitignored); SCALPAL_ROBOT_DIR or services/preop/.robot
 }
 
 const MAX_FRAME_CHARS = 4_000_000; // about 3 MB of JPEG
@@ -156,12 +166,18 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
     }
     const sid = `coach-${crypto.randomUUID().replaceAll("-", "").slice(0, 16)}`;
     const session = new CoachSession(sid, kase, options.now, options.stuckPolicy, mode);
+    const chart = await options.baselineFor?.(kase).catch(() => null);
+    if (chart) session.setBaseline(chart.baseline, { weightKg: chart.weightKg, spo2: chart.spo2, mlPerKg: chart.mlPerKg, quiet: true });
+    forwardLogs(session);
+    forwardCondition(session);
     // Office to operating room: the scored encounter for this patient informs the surgery coaching.
     const office = typeof encounterId === "string" ? options.encounterFor?.(encounterId) : null;
     const preop = office && office.kase.patientId === kase.patientId ? office.carryover() : "";
     sessions.set(sid, session);
     if (typeof runId === "string") runSessions.set(runId, sid);
     if (preop) officeCarryover.set(sid, preop);
+    // Bleeding, vitals and stall hints advance even when no client holds the SSE stream.
+    ensureTicker();
     const snapshot = session.snapshot();
     return c.json(
       {
@@ -177,12 +193,12 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
     );
   });
 
-  // The headset adopts the newest live session (the laptop Jarvis page creates it). Single-room demo
+  // The headset adopts the newest live session (the laptop Scalpal page creates it). Single-room demo
   // shortcut; SpacetimeDB session membership replaces it.
   app.get("/coach/current", (c) => {
     const patientId = c.req.query("patientId") ?? "";
     const latest = [...sessions.values()].reverse().find((s) => !patientId || s.kase.patientId === patientId || s.kase.scenarioId === patientId);
-    if (!latest) return bad(c, 404, "no_live_session", "No live coach session yet. Start one from the Jarvis page.", [{ id: "choose_patient", label: "Choose a patient", method: "GET", route: "/patients" }]);
+    if (!latest) return bad(c, 404, "no_live_session", "No live coach session yet. Start one from the Scalpal page.", [{ id: "choose_patient", label: "Choose a patient", method: "GET", route: "/patients" }]);
     return c.json({ sessionId: latest.id, patientId: latest.kase.patientId, procedureId: latest.kase.procedureId, actions: coachActions(latest.id) });
   });
 
@@ -214,7 +230,7 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
 
   // Recap has no conversational agent, client prompt override, or surgery tools.
   // Canonical routes resolve only ids bound at session creation; recap request
-  // bodies cannot select another coach or override what Jarvis says.
+  // bodies cannot select another coach or override what Scalpal says.
   const reactionQuestion = "How did that feel?";
   const selfAssessmentQuestion = "What is one thing you would do differently?";
   const recapSession = (c: Context) => {
@@ -234,12 +250,12 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
   const recapAudio = async (c: Context) => {
     const s = recapSession(c);
     if (!s) return missing(c);
-    if (!reflex?.configured) return bad(c, 503, "recap_voice_unconfigured", "Jarvis speech is unavailable. Use the reflection panel.", []);
+    if (!reflex?.configured) return bad(c, 503, "recap_voice_unconfigured", "Scalpal speech is unavailable. Use the reflection panel.", []);
     try {
       const audio = await reflex.render(reactionQuestion);
       return c.body(new Uint8Array(audio), 200, { "Content-Type": "audio/mpeg", "Cache-Control": "no-store" });
     } catch {
-      return bad(c, 503, "recap_voice_failed", "Jarvis speech is unavailable. Use the reflection panel.", []);
+      return bad(c, 503, "recap_voice_failed", "Scalpal speech is unavailable. Use the reflection panel.", []);
     }
   };
   app.post("/coach/runs/:runId/recap", recapMetadata);
@@ -344,7 +360,7 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
     return c.json({ stored: true, marks: frame.marks.length, watching: due, actions: coachActions(s.id) });
   });
 
-  // One implementation of Jarvis's client tools for every voice client (laptop page, Quest native voice).
+  // One implementation of Scalpal's client tools for every voice client (laptop page, Quest native voice).
   app.post("/coach/sessions/:sid/tools/:name", async (c) => {
     const s = getSession(c);
     if (!s) return missing(c);
@@ -363,7 +379,7 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
       ackWaitMs: options.toolAckWaitMs,
       realtime: options.realtime,
     });
-    if (result == null) return bad(c, 404, "unknown_tool", `No Jarvis tool named "${c.req.param("name")}".`, coachActions(s.id));
+    if (result == null) return bad(c, 404, "unknown_tool", `No Scalpal tool named "${c.req.param("name")}".`, coachActions(s.id));
     return c.json({ result, actions: coachActions(s.id) });
   });
 
@@ -457,16 +473,187 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
     return c.json({ command, actions: coachActions(s.id) });
   });
 
-  // Demo driver: lets the laptop exercise Jarvis before the headset is wired in.
+  // Operating-room logs for the companion dashboard: new timeline lines, alerts, a vitals sample at most
+  // every 2 s (and on every class change), checklist progress and the outcome. Logs only, no video.
+  function forwardLogs(session: CoachSession) {
+    const sink = options.realtime;
+    if (!sink?.simLog) return;
+    const log = (kind: "event" | "alert" | "vitals" | "checklist" | "outcome", text: string, data?: unknown) => sink.simLog!({ coachSessionId: session.id, kind, text, data });
+    let lastLine = "";
+    let lastVitalsAt = 0;
+    let lastClass = 0;
+    let doneCount = 0;
+    let outcome = "in_progress";
+    session.subscribe(({ snapshot, alerts }) => {
+      const timeline = snapshot.timeline;
+      const from = timeline.findIndex((t) => `${t.atSeconds}|${t.text}` === lastLine);
+      for (const t of from === -1 ? timeline.slice(-3) : timeline.slice(from + 1)) log("event", t.text, { atSeconds: t.atSeconds });
+      if (timeline.length) lastLine = `${timeline.at(-1)!.atSeconds}|${timeline.at(-1)!.text}`;
+      for (const a of alerts) log("alert", a.say, { kind: a.kind, tier: a.tier });
+      const v = snapshot.condition.vitals;
+      const now = options.now().getTime();
+      // Always sample on an outcome change, so the dashboard's pinned vitals show asystole after a death.
+      if (now - lastVitalsAt >= 2000 || v.hemorrhageClass !== lastClass || snapshot.condition.outcome.result !== outcome) {
+        lastVitalsAt = now;
+        lastClass = v.hemorrhageClass;
+        log("vitals", `HR ${v.hr} · BP ${v.sys}/${v.dia} · RR ${v.rr}${v.spo2 >= 0 ? ` · SpO2 ${v.spo2}` : ""} · loss ${v.bloodLossPct}% (class ${v.hemorrhageClass}, simulated from ${snapshot.condition.baselineSource})`, { ...v, rawBloodLossMl: snapshot.condition.rawBloodLossMl });
+      }
+      const done = snapshot.checklist.filter((c) => c.done).length;
+      if (done !== doneCount) {
+        doneCount = done;
+        log("checklist", `${done}/${snapshot.checklist.length} steps done${snapshot.checklist.find((c) => c.current) ? `; now: ${snapshot.checklist.find((c) => c.current)!.title}` : ""}`, snapshot.checklist);
+      }
+      if (snapshot.condition.outcome.result !== outcome) {
+        outcome = snapshot.condition.outcome.result;
+        log("outcome", outcome === "died" ? `Patient died: ${snapshot.condition.outcome.cause}` : outcome === "completed" ? "Case goals reached" : outcome, snapshot.condition.outcome);
+      }
+    });
+  }
+
+  // The simulated patient in SpacetimeDB (patient_condition): started from this session's baseline, fed the
+  // body facts and injuries as they change (bleed set and injuries at once, blood loss at most once a second;
+  // the module accrues between reports), and read back as the snapshot condition while its row is fresh.
+  function forwardCondition(session: CoachSession) {
+    const sink = options.realtime;
+    if (!sink?.startCondition || !sink.readCondition) return;
+    let started = false;
+    let baselineSig = "";
+    let bleedSig = "";
+    let lost = -1;
+    let reportedAt = -Infinity;
+    let ended = false;
+    const regions = new Map<string, boolean>(); // region -> bleeding, as last reported
+    const sig = (b: Baseline) => `${b.hr}/${b.rr}/${b.sys}/${b.dia}/${b.source}`;
+    const start = () => {
+      if (!sink.bound) return false;
+      const p = session.condition.params;
+      sink.startCondition!(session.id, { baseline: p.baseline, spo2: p.spo2, weightKg: p.weightKg, mlPerKg: p.mlPerKg });
+      baselineSig = sig(p.baseline);
+      started = true;
+      return true;
+    };
+    start();
+    session.conditionFeed = { read: () => sink.readCondition!(session.id) };
+    session.subscribe(({ snapshot }) => {
+      if (!started && !start()) return;
+      const local = session.condition.view();
+      const b = session.condition.currentBaseline;
+      if (sig(b) !== baselineSig) {
+        baselineSig = sig(b);
+        sink.setConditionBaseline?.(session.id, b);
+      }
+      for (const r of local.regions) {
+        const prev = regions.get(r.region);
+        if (prev === undefined || prev !== r.bleeding) sink.reportInjury?.(session.id, r.region, prev !== undefined && !r.bleeding);
+        regions.set(r.region, r.bleeding);
+      }
+      const bleeds = snapshot.activeBleeds.map((x) => ({ name: x.structure.name, rateMlPerMin: x.rateMlPerMin }));
+      const now = options.now().getTime();
+      if (JSON.stringify(bleeds) !== bleedSig || (snapshot.bloodLossMl !== lost && now - reportedAt >= 1000)) {
+        bleedSig = JSON.stringify(bleeds);
+        lost = snapshot.bloodLossMl;
+        reportedAt = now;
+        sink.reportBody?.(session.id, snapshot.bloodLossMl, bleeds);
+      }
+      if (!ended && (local.outcome.result === "completed" || local.outcome.result === "ended")) {
+        ended = true;
+        sink.endCondition?.(session.id, local.outcome.result, local.outcome.cause);
+      }
+    });
+  }
+
+  // Time-Out in AR: freeze the volunteer's measured baseline (Presage, services/vitals) and use it for the
+  // simulated monitor. A body {baseline: {hr, rr, sys, dia}} sets it directly (tests, or a headset that
+  // reads the vitals service itself). Without either, the chart baseline stays.
+  app.post("/coach/sessions/:sid/vitals/baseline", async (c) => {
+    const s = getSession(c);
+    if (!s) return missing(c);
+    const b = (await body(c)).baseline as Record<string, unknown> | undefined;
+    const ok = (x: unknown) => typeof x === "number" && Number.isFinite(x) && x > 0 && x < 400;
+    let baseline: Baseline | null = null;
+    if (b && ok(b.hr) && ok(b.rr) && ok(b.sys) && ok(b.dia) && plausibleBaseline(b as { hr: number; rr: number; sys: number; dia: number })) {
+      baseline = { hr: b.hr as number, rr: b.rr as number, sys: b.sys as number, dia: b.dia as number, source: typeof b.source === "string" ? b.source.slice(0, 20) : "measured" };
+    } else if (options.vitalsUrl) {
+      const res = await fetch(`${options.vitalsUrl.replace(/\/$/, "")}/baseline/capture`, { method: "POST", signal: AbortSignal.timeout(4000) }).catch(() => null);
+      const j = res?.ok ? ((await res.json().catch(() => null)) as Record<string, unknown> | null) : null;
+      // Presage measures heart and breathing rate only; blood pressure stays as charted (its sys/dia are authored).
+      const current = s.condition.currentBaseline;
+      if (j && ok(j.hr) && ok(j.rr)) baseline = { hr: j.hr as number, rr: j.rr as number, sys: current.sys, dia: current.dia, source: typeof j.source === "string" ? j.source : "measured", bpSource: current.source ?? "authored" };
+      else return bad(c, 503, "vitals_unavailable", "The vitals service did not return a baseline; the chart baseline stays.", coachActions(s.id));
+    } else {
+      return bad(c, 400, "invalid_baseline", 'Send {"baseline": {"hr", "rr", "sys", "dia", "source"}} or set VITALS_URL for Presage capture.', coachActions(s.id));
+    }
+    s.setBaseline(baseline);
+    return c.json({ baseline, condition: s.snapshot().condition, actions: coachActions(s.id) });
+  });
+
+  // Robot hand attempts (services/motion teleop, scalpal.robot_attempt.v1): the simulated Shadow hand driven
+  // by the Quest controllers, labeled with the surgery step. Kept per session and logged to the dashboard.
+  const robotAttempts = new Map<string, Record<string, unknown>[]>();
+  const pushRobotAttempt = (sid: string, attempt: Record<string, unknown>) => {
+    const list = robotAttempts.get(sid) ?? [];
+    list.push(attempt);
+    if (list.length > 50) list.shift();
+    robotAttempts.set(sid, list);
+    return list;
+  };
+  app.post("/coach/sessions/:sid/robot-attempts", async (c) => {
+    const s = getSession(c);
+    if (!s) return missing(c);
+    const a = await body(c);
+    if (a.schema !== "scalpal.robot_attempt.v1" || typeof a.attemptId !== "string" || typeof a.success !== "boolean") {
+      return bad(c, 400, "invalid_robot_attempt", 'Send a scalpal.robot_attempt.v1 body with attemptId and success.', coachActions(s.id));
+    }
+    const str = (v: unknown, n = 200) => (typeof v === "string" ? v.slice(0, n) : "");
+    const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
+    const attempt = {
+      attemptId: str(a.attemptId, 80), stepId: str(a.stepId, 80), stepTitle: str(a.stepTitle), task: str(a.task, 80),
+      success: a.success, frames: num(a.frames), durationS: num(a.durationS), labeledFraction: num(a.labeledFraction),
+      heldInstruments: Array.isArray(a.heldInstruments) ? a.heldInstruments.filter((x): x is string => typeof x === "string").slice(0, 4) : [],
+      source: str(a.source), createdAt: str(a.createdAt, 40),
+    };
+    const list = pushRobotAttempt(s.id, attempt);
+    options.realtime?.simLog?.({
+      coachSessionId: s.id,
+      kind: "event",
+      text: `Robot hand attempt ${attempt.success ? "succeeded" : "failed"}${attempt.stepTitle ? ` during "${attempt.stepTitle}"` : ""}: ${attempt.frames} frames, ${attempt.durationS.toFixed(1)} s (simulated Shadow hand, Quest controller teleop).`,
+      data: { robotAttempt: attempt },
+    });
+    return c.json({ stored: true, count: list.length, actions: coachActions(s.id) }, 201);
+  });
+  app.get("/coach/sessions/:sid/robot-attempts", (c) => {
+    const s = getSession(c);
+    if (!s) return missing(c);
+    const list = robotAttempts.get(s.id) ?? [];
+    return c.json({ attempts: list, successes: list.filter((x) => x.success).length, actions: coachActions(s.id) });
+  });
+
+  // Headset demos -> simulated arm + hand policy -> graded replay (services/motion robot-serve).
+  registerRobotRoutes(app, {
+    dataDir: options.robotDataDir ?? process.env.SCALPAL_ROBOT_DIR ?? fileURLToPath(new URL("../.robot", import.meta.url)),
+    now: options.now,
+    session: (sid) => (SESSION_ID.test(sid) ? (sessions.get(sid) ?? null) : null),
+    realtime: options.realtime,
+    recordAttempt: (sid, attempt) => void pushRobotAttempt(sid, attempt),
+  });
+
+  // Demo driver: lets the laptop exercise Scalpal before the headset is wired in.
   app.post("/coach/sessions/:sid/simulate", async (c) => {
     const s = getSession(c);
     if (!s) return missing(c);
     const { kind } = await body(c);
     let events: CoachEvent[] = [];
     const stepResults: ReturnType<CoachSession["handle"]>[] = [];
-    const open = typeof kind === "string" ? openBodySimulation(s, kind) : null;
+    s.simulated = true;
+    const region = typeof kind === "string" ? ({ cut_neck: "neck", cut_head: "head", cut_chest: "chest", cut_arm: "right_arm" } as Record<string, RegionId>)[kind] : undefined;
+    if (region) events = [{ type: "injury", region, instrumentId: "scalpel" }];
+    else if (kind === "control_injury") {
+      const bleedingRegion = s.condition.view().regions.find((r) => r.bleeding)?.region;
+      events = bleedingRegion ? [{ type: "injury", region: bleedingRegion, instrumentId: "hemostat", controlled: true }] : [];
+    }
+    const open = region || kind === "control_injury" ? null : typeof kind === "string" ? openBodySimulation(s, kind) : null;
     if (open) events = open;
-    else switch (kind) {
+    else if (!region && kind !== "control_injury") switch (kind) {
       case "correct_action": {
         const e = restampForBody(s, s.nextCorrectEvent());
         events = e ? [e] : [];
@@ -522,7 +709,7 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
         events = [{ type: "tracking", valid: true }];
         break;
       default:
-        return bad(c, 400, "invalid_simulation", "kind must be correct_action, complete_step, mistake, wrong_instrument, off_target, look_at_danger, tracking_lost, tracking_restored, bleed, or stop_bleed.", coachActions(s.id));
+        return bad(c, 400, "invalid_simulation", "kind must be correct_action, complete_step, mistake, wrong_instrument, off_target, look_at_danger, tracking_lost, tracking_restored, bleed, stop_bleed, cut_neck, cut_head, cut_chest, cut_arm, or control_injury.", coachActions(s.id));
     }
     const results = [...stepResults, ...events.map((e) => s.handle(e))];
     const snapshot = s.snapshot();
@@ -550,6 +737,15 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
 
   // Pre-rendered warning clips for a session's case. The page fetches them all at start so a warning
   // plays instantly, without an LLM turn.
+  // The flythrough narration: one line per briefing beat with its pre-rendered clip route. The headset
+  // plays clip N when the camera reaches beat N; the text doubles as captions.
+  app.get("/coach/sessions/:sid/briefing", (c) => {
+    const s = getSession(c);
+    if (!s) return missing(c);
+    const lines = briefingLines(s.kase).map((l) => ({ ...l, route: reflex?.configured ? `/jarvis/reflex/${s.id}/${l.key}` : "" }));
+    return c.json({ sessionId: s.id, procedureId: s.kase.procedureId, lines, actions: coachActions(s.id) });
+  });
+
   app.get("/jarvis/reflex/:sid", (c) => {
     const s = getSession(c);
     if (!s) return missing(c);
@@ -571,8 +767,13 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
     }
   });
 
-  // Jarvis voice page (laptop browser) and its ElevenLabs connection details.
+  // Scalpal voice page (laptop browser) and its ElevenLabs connection details.
   app.get("/jarvis", (c) => c.html(readFileSync(new URL("./jarvis/index.html", import.meta.url), "utf8")));
+  // The coach is called Scalpal now; /jarvis paths stay so existing headset builds keep working.
+  app.get("/scalpal", (c) => c.redirect("/jarvis"));
+  app.get("/scalpal/camera", (c) => c.redirect("/jarvis/camera"));
+  app.get("/scalpal/connection", (c) => c.redirect(`/jarvis/connection${new URL(c.req.url).search}`));
+  app.get("/scalpal/reflex/:sid/:key", (c) => c.redirect(`/jarvis/reflex/${c.req.param("sid")}/${c.req.param("key")}`));
   // Camera test rig: a webcam or iPhone (Continuity Camera) stands in for the Quest camera.
   app.get("/jarvis/camera", (c) => c.html(readFileSync(new URL("./jarvis/camera.html", import.meta.url), "utf8")));
   for (const file of ["app.js", "arbiter.js", "context-feed.js", "interview.js", "encounter.js", "camera.js", "camera-rig.js", "body-map.js"]) {
@@ -582,8 +783,8 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
   }
 
   // A connection is minted only for something live, and the prompt comes from the server:
-  //   ?sessionId=coach-...   Jarvis coaching that surgery session (prompt = the session's system prompt)
-  //   ?encounterId=enc-...   the patient agent during the interview, Jarvis as attending afterwards
+  //   ?sessionId=coach-...   Scalpal coaching that surgery session (prompt = the session's system prompt)
+  //   ?encounterId=enc-...   the patient agent during the interview, Scalpal as attending afterwards
   // Legacy calls without an id (the Quest client: none, or ?agent=patient) still work, but only while a
   // matching coach session or encounter phase is live; they carry no prompt.
   app.get("/jarvis/connection", async (c) => {
@@ -665,6 +866,12 @@ function parseEvent(e: unknown): CoachEvent | string {
       return id("instrumentId") || { type: "instrument", instrumentId: str("instrumentId"), hand: ev.hand, held: ev.held };
     case "contact":
       return id("instrumentId") || id("structureId") || { type: "contact", instrumentId: str("instrumentId"), structureId: str("structureId") };
+    case "injury": {
+      const region = str("region") as RegionId;
+      if (!REGION_IDS.includes(region)) return `injury needs region one of ${REGION_IDS.join(", ")}`;
+      if (ev.controlled !== undefined && typeof ev.controlled !== "boolean") return "injury controlled must be a boolean";
+      return id("instrumentId") || { type: "injury", region, instrumentId: str("instrumentId"), ...(ev.controlled === true ? { controlled: true } : {}) };
+    }
     case "tracking":
       return typeof ev.valid === "boolean" ? { type: "tracking", valid: ev.valid } : "tracking needs a boolean valid";
     case "bleeding": {
@@ -675,7 +882,7 @@ function parseEvent(e: unknown): CoachEvent | string {
       return id("structureId") || { type: "bleeding", structureId: str("structureId"), active: ev.active, rateMlPerMin: rate, totalMl: total };
     }
     default:
-      return "type must be place_port, touch, identify, confirm, surgery, instrument, contact, focus, tracking, or bleeding";
+      return "type must be place_port, touch, identify, confirm, surgery, instrument, contact, injury, focus, tracking, or bleeding";
   }
 }
 

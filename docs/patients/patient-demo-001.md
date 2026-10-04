@@ -143,7 +143,7 @@ Synthetic patient. Illustrative teaching content, not clinical guidance.
 
 ---
 
-## 2. CLINICIAN KEY (never given to the patient agent; for Jarvis and authors)
+## 2. CLINICIAN KEY (never given to the patient agent; for Scalpal and authors)
 
 ### Case summary
 
@@ -193,7 +193,7 @@ Morgan Rivera is a 38-year-old teacher with type 2 diabetes (metformin, dose dou
 
 > "Ms. Rivera is a 38-year-old teacher with well-controlled type 2 diabetes and hypertension. She has had four episodes of postprandial right upper quadrant and epigastric pain over three months, the last eight days ago. Each episode came within about twenty minutes of a fatty dinner, was steady and 8 out of 10, radiated to the right scapula, came with nausea and one episode of vomiting, and resolved on its own within two to three hours. She has had no fever, jaundice, dark urine or acholic stools. Today she's afebrile with normal vitals and a soft abdomen with minimal deep RUQ tenderness and a negative Murphy sign. CBC, CRP, LFTs and lipase are normal. Ultrasound shows multiple mobile gallstones with a 2 mm wall, no pericholecystic fluid and a 4 mm duct. Urine hCG is negative. This is symptomatic cholelithiasis, or biliary colic. I considered acute cholecystitis, choledocholithiasis and pancreatitis, and the timing, exam, labs and duct size argue against all three. Being diabetic, I asked about exertional symptoms, and she has none. Her penicillin allergy is a childhood rash, and she has since taken cephalexin, so cefazolin is fine. Plan: elective laparoscopic cholecystectomy. Hold metformin and lisinopril the morning of surgery, check glucose before incision, and repeat hCG on the day. She should go to the ED for pain lasting more than six hours, fever or jaundice while she waits."
 
-### Socratic probes Jarvis can use (for common misses)
+### Socratic probes Scalpal can use (for common misses)
 
 - Missed allergy detail: "Her chart says penicillin allergy. What would you want to know before you pick the prophylactic antibiotic?"
 - Missed the pregnancy test: "She's 38. Is there anything you need to rule out before any elective anesthetic?"
@@ -233,7 +233,7 @@ No hard contradictions between `encounters.ts`, `cases.ts` and the live chart. D
 - **Chart agrees with the encounter:** metformin 500 mg BID (chart `MedicationRequest` active since 2026-07-18; prior regimen once daily 2026-01-18 to 2026-07-17), lisinopril 10 mg daily, type 2 diabetes (onset 2021-03-12, about 5.5 years, matching "about five years"), hypertension (onset 2023-10-02), penicillin rash (mild, criticality low).
 - **Small numeric drift, explained by different dates:** chart creatinine 0.88 (Jul) vs encounter 0.86; Hb 13.6 vs 13.5; BMI 27.2 vs 27; weight 74 kg matches. Chart July glucose is 98 vs encounter BMP glucose 118 (non-fasting at clinic, plausible).
 - **Ultrasound timing ambiguity:** `cases.ts` presentation says "Ultrasound shows multiple gallstones ... Scheduled from clinic", which implies the ultrasound came before the visit. In the encounter, ultrasound is something the learner orders. This dossier has the patient know a scan was done but not the result, so both readings hold. Authors should decide whether the learner "orders" or "reviews" the ultrasound.
-- **Chart lipids:** LDL 116 and 104 (flagged H) earlier in 2026 with no statin and no lipid problem on the list. This is not surgery-relevant, but Jarvis shouldn't claim she is on a statin.
+- **Chart lipids:** LDL 116 and 104 (flagged H) earlier in 2026 with no statin and no lipid problem on the list. This is not surgery-relevant, but Scalpal shouldn't claim she is on a statin.
 - **Prompt vs authored text:** the patient prompt says "Never name or guess any diagnosis or medical condition," but the authored opener says "about my gallbladder." That's harmless (an organ, not a diagnosis), but the planned leak filter must not block "gallbladder" for this case.
 - **Voice preset:** `voiceKey: "mature_female"` (Bella, "middle-aged female") for a 38-year-old. `middle_female` is used for the 63-year-old. The labels look swapped relative to the ages.
 - **Naming:** FinchNode `/patients` lists `displayName: "Morgan Rivera"` without the "(synthetic)" suffix every other subject carries. The scenario object says "Morgan Rivera (synthetic)". This is cosmetic, but the demographic guard compares `chart.name === "Morgan Rivera"`, so keep it that way.

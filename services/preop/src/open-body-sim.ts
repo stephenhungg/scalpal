@@ -2,7 +2,7 @@ import type { CoachEvent, CoachSession } from "./coach.js";
 import { bodyAction, type BodyAction } from "./open-body.js";
 
 // Laptop demo driver for open-body cases: the same sim buttons as the laparoscopic flow, expressed as
-// measured body actions and tracker events, so Jarvis can be exercised without the headset. Each button
+// measured body actions and tracker events, so Scalpal can be exercised without the headset. Each button
 // does something real in the body reducer; none of it bypasses the coach's normal event path.
 
 // A wrong way to do each expected milestone, chosen so the matching guardrail fires.
@@ -39,7 +39,7 @@ export function openBodySimulation(s: CoachSession, kind: string): CoachEvent[] 
   const act = (values: Partial<BodyAction> & { verb: string; tissueId: string }): CoachEvent => {
     n += 1;
     const { verb, tissueId, ...rest } = values;
-    return { type: "surgery", evidence: bodyAction(verb, tissueId, { actionId: `sim-${kind}-${Date.now()}-${n}`, timeMs: lastT + 1000 * n, ...rest }) };
+    return { type: "surgery", evidence: bodyAction(verb, tissueId, { actionId: `sim-${kind}-${lastT + 1000 * n}`, timeMs: lastT + 1000 * n, ...rest }) };
   };
   const target = step?.targets[0] && step.targets[0] !== "abdominal_wall" ? step.targets[0] : "skin";
   // The perfused tissue a bleed can come from right now, deepest exposed first.

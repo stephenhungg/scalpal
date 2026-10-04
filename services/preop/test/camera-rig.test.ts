@@ -4,7 +4,7 @@ import { createFrameLoop, createRigSession, type RigApiResult } from "../src/jar
 import { NOW, fixtureClient } from "./helpers.js";
 
 // The camera page is a stand-in for the headset. A tab left open during a real Quest run must not ack
-// Jarvis's commands (the first ack is final, so Jarvis would hear "applied" for a highlight the headset
+// Scalpal's commands (the first ack is final, so Scalpal would hear "applied" for a highlight the headset
 // never drew) or post tracking loss that pauses headset scoring, unless the operator opts in.
 
 function harness(actsAsHeadset: { on: boolean }) {

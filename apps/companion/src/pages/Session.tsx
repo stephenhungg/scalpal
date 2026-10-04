@@ -3,10 +3,11 @@ import Commands from '../components/Commands';
 import Events from '../components/Events';
 import ExerciseState from '../components/ExerciseState';
 import Learning from '../components/Learning';
-import LiveView from '../components/LiveView';
 import Members from '../components/Members';
 import Motion from '../components/Motion';
 import Replay from '../components/Replay';
+import SimLogs from '../components/SimLogs';
+import Vitals from '../components/Vitals';
 import { copy, Panel, StatusPill } from '../components/ui';
 import { useLive, useSession } from '../data/live';
 import { Link } from '../lib/router';
@@ -58,6 +59,7 @@ export default function SessionPage({ sessionId }: { sessionId: string }) {
           </div>
         </div>
         <div className="spacer" />
+        <Link to={`/s/${sessionId}/or`} className="btn sm primary">Live OR</Link>
         <Link to={`/s/${sessionId}/recap`} className="btn sm">Run recap</Link>
         <StatusPill status={s.status} label={s.status === 'active' ? 'Session active' : 'Session ended'} />
         {roles.map(r => (
@@ -69,12 +71,13 @@ export default function SessionPage({ sessionId }: { sessionId: string }) {
 
       <div className="session-grid">
         <div className="col">
-          <LiveView data={data} />
           <Replay data={data} />
           <Motion data={data} />
         </div>
         <div className="col">
           <ExerciseState data={data} />
+          <Vitals />
+          <SimLogs data={data} />
           <Coach data={data} />
           <Learning data={data} />
           <Commands data={data} />

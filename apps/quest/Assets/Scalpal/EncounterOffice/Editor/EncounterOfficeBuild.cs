@@ -1,7 +1,10 @@
 using System;
 using System.IO;
 using System.Linq;
+using Scalpal.Brand;
+using Scalpal.Brand.Editor;
 using Scalpal.Voice;
+using TMPro;
 using Scalpal.Realtime;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -17,17 +20,16 @@ namespace Scalpal.EncounterOffice.Editor
         public const string Root = "Assets/Scalpal/EncounterOffice";
         public const string ScenePath = Root + "/Scenes/DiagnosisOffice.unity";
         public const string SurgeryScenePath = "Assets/Scalpal/Quest/Scenes/NativeSession.unity";
-        static Material lilac, glass, glassBorder, glassButton;
-        static readonly Color InkColor = new Color(.94f,.97f,.95f);
+        static ScalpalBrand brand;
+        // Seated clinician eye position in the scene's tracking-origin space (see TrackedHeadCamera below).
+        public static readonly Vector3 Viewer = new Vector3(0,1.2f,1.75f);
         [MenuItem("Scalpal/Encounter Office/Prepare Diagnosis Office")]
         public static void Prepare()
         {
             // Deliberately reuse current Android OpenXR project configuration without changing surgery build settings.
             Directory.CreateDirectory(Root + "/Scenes"); Directory.CreateDirectory(Root + "/Materials"); Directory.CreateDirectory(Root + "/Prefabs"); AssetDatabase.Refresh();
-            lilac = Material("office_ui_lilac", new Color(.83f,.79f,.91f));
-            glass=Glass("office_glass_card",new Color(.055f,.082f,.086f,.78f));
-            glassBorder=Glass("office_glass_border",new Color(.73f,.83f,.78f,.35f));
-            glassButton=Glass("office_glass_button",new Color(.26f,.36f,.33f,.78f));
+            brand = ScalpalBrandBuild.Prepare();
+            EncounterOfficeLighting.EnsureLightmapUVs();
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             var office = Art("DoctorOffice", "BotanicalDoctorOffice");
             office.transform.position = Vector3.zero;
@@ -51,48 +53,51 @@ namespace Scalpal.EncounterOffice.Editor
             head.gameObject.AddComponent<AudioListener>(); rig.head = head;
             rig.left = new GameObject("LeftTrackedController").transform; rig.left.SetParent(origin,false);
             rig.right = new GameObject("RightTrackedController").transform; rig.right.SetParent(origin,false);
-            rig.leftRay = Ray(rig.left); rig.rightRay = Ray(rig.right);
+            // Rays are built at runtime from each controller's aim pose (ScalpalPointerHand); the grip transforms only carry the talk hint.
             rig.talkHint = Text(rig.left,"TalkHint","Hold grip to talk",new Vector3(0,.075f,.06f),.024f,TextAnchor.MiddleCenter);
-            var talkFit = rig.talkHint.GetComponent<EncounterOfficeText>(); talkFit.maximumWidth = .28f; talkFit.maximumHeight = .05f;
+            // Read at roughly half a metre on the left controller: 32 mm per metre label floor.
+            var talkFit = rig.talkHint.GetComponent<ScalpalTextFit>(); talkFit.preferredSize = Em(ScalpalTextRole.Label,.5f); talkFit.maximumWidth = .30f; talkFit.maximumHeight = .05f; talkFit.Fit();
             rig.talkHint.gameObject.SetActive(false);
             var ui = new GameObject("EncounterVisualFallback").AddComponent<EncounterOfficePanel>(); ui.session = session;
-            var left = Panel("InterviewConsole", new Vector3(.94f,1.48f,-.20f), new Vector3(0,1.2f,1.75f), new Vector2(.88f,1.1f)); left.SetParent(ui.transform,true);
-            var right = Panel("FindingsConsole", new Vector3(-.94f,1.48f,-.20f), new Vector3(0,1.2f,1.75f), new Vector2(.88f,1.1f)); right.SetParent(ui.transform,true);
-            ui.heading = Text(left,"Title","Scalpal",new Vector3(-.38f,.49f,-.026f),.034f);
-            ui.status = Text(left,"Status","Choose a synthetic patient.",new Vector3(-.38f,.35f,-.026f),.024f);
-            Button(left,ui,"Patients","page","patients",-.21f,.20f,.39f);
-            Button(left,ui,"Reload list","reload_patients","",.21f,.20f,.39f);
-            Button(left,ui,"History","page","history",-.28f,.10f,.25f); Button(left,ui,"Examine","page","exam",0,.10f,.25f); Button(left,ui,"Tests","page","tests",.28f,.10f,.25f);
+            // Consoles flank the patient, yaw-facing the seated clinician at ~1.55 m so body type clears 24 mm/m.
+            var left = Panel("InterviewConsole", new Vector3(.95f,1.42f,.55f), Viewer, new Vector2(1.0f,1.16f)); left.SetParent(ui.transform,true);
+            var right = Panel("FindingsConsole", new Vector3(-.95f,1.42f,.55f), Viewer, new Vector2(1.0f,1.16f)); right.SetParent(ui.transform,true);
+            ui.heading = Text(left,"Title","Scalpal",new Vector3(-.45f,.545f,-.026f),.034f);
+            ui.status = Text(left,"Status","Choose a synthetic patient.",new Vector3(-.45f,.425f,-.026f),.024f);
+            Button(left,ui,"Patients","page","patients",-.235f,.225f,.43f);
+            Button(left,ui,"Reload list","reload_patients","",.235f,.225f,.43f);
+            Button(left,ui,"History","page","history",-.31f,.14f,.28f); Button(left,ui,"Examine","page","exam",0,.14f,.28f); Button(left,ui,"Tests","page","tests",.31f,.14f,.28f);
             ui.options = new EncounterOfficeButton[4];
-            for (int i=0;i<4;i++) ui.options[i] = Button(left,ui,"Question","option","",0,-i*.09f,.80f);
-            ui.suggestions = Button(left,ui,"Suggestions","suggestions","",0,0,.80f);
-            Button(left,ui,"Back","previous","",-.315f,-.36f,.19f); Button(left,ui,"More","next","",-.105f,-.36f,.19f);
-            Button(left,ui,"Voice","voice","",.105f,-.36f,.19f); Button(left,ui,"Stop","stop","",.315f,-.36f,.19f);
-            Button(left,ui,"Present to Jarvis","attending","",-.105f,-.46f,.60f); Button(left,ui,"Refresh","refresh","",.315f,-.46f,.19f);
-            Text(right,"FindingsTitle","Your findings",new Vector3(-.38f,.49f,-.026f),.034f);
-            ui.chart = Text(right,"Chart","No examinations performed.",new Vector3(-.38f,.37f,-.026f),.024f);
-            Button(right,ui,"Back","chart_previous","",-.28f,-.09f,.25f); Button(right,ui,"More","chart_next","",0,-.09f,.25f); Button(right,ui,"Findings / score","chart_toggle","",.28f,-.09f,.25f);
+            for (int i=0;i<4;i++) ui.options[i] = Button(left,ui,"Question","option","",0,.05f-i*.09f,.90f);
+            ui.suggestions = Button(left,ui,"Suggestions","suggestions","",0,.05f,.90f);
+            Button(left,ui,"Back","previous","",-.36f,-.32f,.18f); Button(left,ui,"More","next","",-.17f,-.32f,.18f);
+            Button(left,ui,"Voice","voice","",.07f,-.32f,.28f); Button(left,ui,"Stop","stop","",.335f,-.32f,.21f);
+            Button(left,ui,"Present to Jarvis","attending","",-.115f,-.42f,.67f); Button(left,ui,"Refresh","refresh","",.345f,-.42f,.21f);
+            Text(right,"FindingsTitle","Your findings",new Vector3(-.45f,.53f,-.026f),.034f);
+            ui.chart = Text(right,"Chart","No examinations performed.",new Vector3(-.45f,.455f,-.026f),.024f);
+            Button(right,ui,"Back","chart_previous","",-.345f,-.095f,.21f); Button(right,ui,"More","chart_next","",-.115f,-.095f,.21f); Button(right,ui,"Findings / score","chart_toggle","",.235f,-.095f,.43f);
             // Patient, parent and Jarvis lines appear in the shared lower-middle DialogueBox, not on this panel.
-            Button(right,ui,"Summary","summary","",-.21f,-.51f,.39f);
-            ui.microphoneMode=Button(right,ui,"Open mic","mic_mode","",.28f,-.51f,.25f);
-            var assessment = Panel("AssessmentConsole",new Vector3(0,.70f,.22f),new Vector3(0,1.2f,1.75f),new Vector2(1.15f,.40f)); assessment.SetParent(ui.transform,true);ui.assessment=assessment;
-            ui.draft = Text(assessment,"Draft","Your assessment",new Vector3(-.52f,.16f,-.026f),.025f);
-            Button(assessment,ui,"‹","draft_previous","",.405f,.13f,.09f);Button(assessment,ui,"›","draft_next","",.51f,.13f,.09f);
+            Button(right,ui,"Summary","summary","",-.235f,-.19f,.43f);
+            ui.microphoneMode=Button(right,ui,"Open mic","mic_mode","",.235f,-.19f,.43f);
+            var assessment = Panel("AssessmentConsole",new Vector3(0,.70f,.22f),Viewer,new Vector2(1.42f,.50f)); assessment.SetParent(ui.transform,true);ui.assessment=assessment;
+            ui.draft = Text(assessment,"Draft","Your assessment",new Vector3(-.66f,.22f,-.026f),.025f);
+            Button(assessment,ui,"‹","draft_previous","",.52f,.18f,.10f);Button(assessment,ui,"›","draft_next","",.64f,.18f,.10f);
             string[] fields={"diagnosis","differential","procedure","urgency"};
-            for(int i=0;i<4;i++) Button(assessment,ui,fields[i],"field",fields[i],-.42f+i*.28f,-.02f,.25f);
-            Button(assessment,ui,"Options","page","assessment",-.42f,-.12f,.25f); Button(assessment,ui,"Keyboard","keyboard","",-.14f,-.12f,.25f);
-            ui.surgery=Button(assessment,ui,"Enter OR","surgery","",.14f,-.12f,.25f);ui.surgery.gameObject.SetActive(false);
-            Button(assessment,ui,"Submit","submit","",.42f,-.12f,.25f);
-            var keys = Panel("RayKeyboard",new Vector3(0,.31f,.22f),new Vector3(0,1.2f,1.75f),new Vector2(1.5f,.45f)); keys.SetParent(ui.transform,true); ui.keyboard=keys;
+            for(int i=0;i<4;i++) Button(assessment,ui,fields[i],"field",fields[i],-.525f+i*.35f,-.04f,.34f);
+            Button(assessment,ui,"Options","page","assessment",-.525f,-.16f,.34f); Button(assessment,ui,"Keyboard","keyboard","",-.175f,-.16f,.34f);
+            ui.surgery=Button(assessment,ui,"Enter OR","surgery","",.175f,-.16f,.34f);ui.surgery.gameObject.SetActive(false);
+            Button(assessment,ui,"Submit","submit","",.525f,-.16f,.34f);
+            var keys = Panel("RayKeyboard",new Vector3(0,.31f,.22f),Viewer,new Vector2(1.5f,.45f)); keys.SetParent(ui.transform,true); ui.keyboard=keys;
             string alphabet="abcdefghijklmnopqrstuvwxyz";
-            for(int i=0;i<alphabet.Length;i++) Button(keys,ui,alphabet[i].ToString(),"key",alphabet[i].ToString(),-.66f+(i%10)*.146f,.16f-(i/10)*.105f,.13f);
-            Button(keys,ui,"Space","key","space",-.32f,-.16f,.3f); Button(keys,ui,";","key",";",0,-.16f,.14f); Button(keys,ui,"Back","key","back",.24f,-.16f,.3f); Button(keys,ui,"Clear","key","clear",.57f,-.16f,.3f);
+            for(int i=0;i<alphabet.Length;i++) Button(keys,ui,alphabet[i].ToString(),"key",alphabet[i].ToString(),-.66f+(i%10)*.146f,.16f-(i/10)*.105f,.13f,.092f);
+            Button(keys,ui,"Space","key","space",-.32f,-.16f,.3f,.092f); Button(keys,ui,";","key",";",0,-.16f,.14f,.092f); Button(keys,ui,"Back","key","back",.24f,-.16f,.3f,.092f); Button(keys,ui,"Clear","key","clear",.57f,-.16f,.3f,.092f);
             // Keep lower controls physically in front of seated hands/legs while preserving their angular layout.
             ForegroundPanel(assessment,new Vector3(0,.922f,.90f),.556f);
             ForegroundPanel(keys,new Vector3(0,.705f,.90f),.556f);
+            // Size every panel string for its real distance from the seated clinician (brand floors: 32 mm/m labels, 24 mm/m body).
+            ScalpalBrandLayout.SizeForViewer(ui.transform,Viewer);
+            ScalpalBrandLayout.SizeForViewer(patients.stateLabel.transform,Viewer);
             keys.gameObject.SetActive(false);
-            var light = new GameObject("WarmDaylight").AddComponent<Light>(); light.type=LightType.Directional; light.transform.rotation=Quaternion.Euler(45,-30,0);light.intensity=.8f;light.color=new Color(1,.96f,.88f);light.shadows=LightShadows.None;
-            RenderSettings.ambientMode=AmbientMode.Flat;RenderSettings.ambientLight=new Color(.74f,.76f,.7f);
             // Measure imported face rather than assume Blender/FBX handedness.
             var nose = female.GetComponentsInChildren<Transform>(true).FirstOrDefault(t=>t.name=="NoseTip");
             var headPivot = female.GetComponentsInChildren<Transform>(true).First(t=>t.name=="HeadPivot");
@@ -102,20 +107,22 @@ namespace Scalpal.EncounterOffice.Editor
             if (faceZ < 0) foreach (var art in new[]{office,female,male}) art.transform.rotation = Quaternion.Euler(0,180,0) * art.transform.rotation;
             Debug.Log("SCALPAL_ENCOUNTER_ART_FACING importedNoseOffsetZ="+faceZ+" clinician=positiveZ artYawCorrection="+(faceZ<0?180:0));
             systems.SetActive(true);patients.Select(null);ui.Refresh();
-            foreach(var fit in UnityEngine.Object.FindObjectsByType<EncounterOfficeText>(FindObjectsInactive.Include,FindObjectsSortMode.None))fit.Fit();
+            foreach(var fit in UnityEngine.Object.FindObjectsByType<ScalpalTextFit>(FindObjectsInactive.Include,FindObjectsSortMode.None))fit.Fit();
+            EncounterOfficeLighting.Apply(office,female,male);
             EditorSceneManager.SaveScene(scene,ScenePath);AssetDatabase.SaveAssets();
+            EncounterOfficeLighting.Bake(scene);
             CleanupUnusedGeneratedAssets();
             Debug.Log("SCALPAL_ENCOUNTER_OFFICE_PREPARED scene="+ScenePath+" globalBuildSettingsUnchanged=true");
         }
         [MenuItem("Scalpal/Encounter Office/Verify Diagnosis Office")]
-        public static void Verify() { EncounterOfficeValidation.Run(); EncounterRouteValidation.Run(); Scalpal.Shell.Editor.DialogueBoxValidation.Run(); }
+        public static void Verify() { EncounterOfficeValidation.Run(); EncounterRouteValidation.Run(); Scalpal.Shell.Editor.DialogueBoxValidation.Run(); EncounterOfficeLightingValidation.Run(); }
         public static void PrepareAndVerify() { Prepare(); Verify(); }
 
         static void ForegroundPanel(Transform panel,Vector3 position,float scale)
         {
             panel.position=position;panel.localScale=Vector3.one*scale;
             // Fit limits are world meters; shrink them with the card so text retains its relative button/field size.
-            foreach(var text in panel.GetComponentsInChildren<EncounterOfficeText>(true))
+            foreach(var text in panel.GetComponentsInChildren<ScalpalTextFit>(true))
             {
                 text.maximumWidth*=scale;text.maximumHeight*=scale;text.Fit();
             }
@@ -152,7 +159,7 @@ namespace Scalpal.EncounterOffice.Editor
                 }
                 box.CompleteLine();box.Tick(0);for(int i=0;i<60;i++)box.Tick(1f/72);
             }
-            foreach(var fit in UnityEngine.Object.FindObjectsByType<EncounterOfficeText>(FindObjectsInactive.Include,FindObjectsSortMode.None))fit.Fit();
+            foreach(var fit in UnityEngine.Object.FindObjectsByType<ScalpalTextFit>(FindObjectsInactive.Include,FindObjectsSortMode.None))fit.Fit();
             var camera = UnityEngine.Object.FindFirstObjectByType<EncounterOfficeRig>().head;
             var render = new RenderTexture(1920, 1080, 24);
             var previous = RenderTexture.active;
@@ -265,12 +272,6 @@ namespace Scalpal.EncounterOffice.Editor
             string path=Root+"/Materials/"+name+".mat";var material=AssetDatabase.LoadAssetAtPath<Material>(path);
             if(!material){material=new Material(Shader.Find("Standard"));AssetDatabase.CreateAsset(material,path);}material.enableInstancing=true;material.color=color;material.SetFloat("_Glossiness",.15f);EditorUtility.SetDirty(material);return material;
         }
-        static Material Glass(string name,Color color)
-        {
-            string path=Root+"/Materials/"+name+".mat";var material=AssetDatabase.LoadAssetAtPath<Material>(path);
-            if(!material){material=new Material(Shader.Find("Scalpal/Encounter Office/Glass"));AssetDatabase.CreateAsset(material,path);}
-            material.shader=Shader.Find("Scalpal/Encounter Office/Glass");material.renderQueue=name=="office_glass_button"?3010:name=="office_glass_border"?3001:3000;material.color=color;EditorUtility.SetDirty(material);return material;
-        }
         static Mesh Rounded(float width,float height,float radius)
         {
             string name="ui_round_"+Mathf.RoundToInt(width*10000)+"_"+Mathf.RoundToInt(height*10000)+"_"+Mathf.RoundToInt(radius*10000);
@@ -291,14 +292,6 @@ namespace Scalpal.EncounterOffice.Editor
             for(int i=1;i<vertices.Length;i++){int t=(i-1)*3;triangles[t]=0;triangles[t+1]=i;triangles[t+2]=i==vertices.Length-1?1:i+1;}
             var mesh=new Mesh{name=name,vertices=vertices,uv=uv,triangles=triangles};mesh.RecalculateNormals();mesh.RecalculateBounds();AssetDatabase.CreateAsset(mesh,path);return mesh;
         }
-        static Mesh Border(float width,float height,float radius,float thickness)
-        {
-            var outside=Rounded(width,height,radius);var inside=Rounded(width-2*thickness,height-2*thickness,radius-thickness);
-            string path=Root+"/Materials/"+outside.name+"_ring.asset";var stored=AssetDatabase.LoadAssetAtPath<Mesh>(path);if(stored)return stored;
-            int count=outside.vertexCount-1;var vertices=new Vector3[count*2];var triangles=new int[count*6];var outer=outside.vertices;var inner=inside.vertices;
-            for(int i=0;i<count;i++){vertices[i*2]=outer[i+1];vertices[i*2+1]=inner[i+1];int next=(i+1)%count;int t=i*6;triangles[t]=i*2;triangles[t+1]=next*2;triangles[t+2]=i*2+1;triangles[t+3]=i*2+1;triangles[t+4]=next*2;triangles[t+5]=next*2+1;}
-            var mesh=new Mesh{name=outside.name+"_ring",vertices=vertices,triangles=triangles};mesh.RecalculateNormals();mesh.RecalculateBounds();AssetDatabase.CreateAsset(mesh,path);return mesh;
-        }
         static GameObject Surface(Transform parent,string name,float width,float height,float radius,Material material,Vector3 local)
         {
             var go=new GameObject(name,typeof(MeshFilter),typeof(MeshRenderer));go.transform.SetParent(parent,false);go.transform.localPosition=local;
@@ -306,37 +299,26 @@ namespace Scalpal.EncounterOffice.Editor
         }
         static Transform Panel(string name,Vector3 position,Vector3 viewer,Vector2 size)
         {
-            var panel=new GameObject(name).transform;panel.SetPositionAndRotation(position,Quaternion.Euler(0,180,0));
-            Surface(panel,"FrostedGlass",size.x,size.y,.045f,glass,Vector3.zero);
-            var border=Surface(panel,"SubtleGlassBorder",size.x+.004f,size.y+.004f,.047f,glassBorder,new Vector3(0,0,.003f));
-            border.GetComponent<MeshFilter>().sharedMesh=Border(size.x+.004f,size.y+.004f,.047f,.002f);
+            // Level, yaw-only facing toward the seated viewer (text reads on the panel's -Z face).
+            var panel=new GameObject(name).transform;panel.SetPositionAndRotation(position,ScalpalPlacement.Level(position-viewer));
+            Surface(panel,"FrostedGlass",size.x,size.y,Mathf.Min(.05f,size.y*.16f),brand.glass,Vector3.zero);
             return panel;
         }
-        static TextMesh Text(Transform parent,string name,string content,Vector3 position,float size,TextAnchor anchor=TextAnchor.UpperLeft)
+        static float Em(ScalpalTextRole role,float distance) => ScalpalBrandLayout.Em(brand,role,distance);
+        static TextMeshPro Text(Transform parent,string name,string content,Vector3 position,float size,TextAnchor anchor=TextAnchor.UpperLeft)
         {
-            var text=new GameObject(name).AddComponent<TextMesh>();text.transform.SetParent(parent,false);text.transform.localPosition=position;text.text=content;text.anchor=anchor;text.characterSize=size*.25f;text.fontSize=48;
-            string fontName=name.StartsWith("Label_",StringComparison.Ordinal)||name=="PatientState"?"Inter-Medium":name=="Title"||name=="FindingsTitle"?"Inter-SemiBold":"Inter-Regular";
-            text.font=AssetDatabase.LoadAssetAtPath<Font>(Root+"/Fonts/"+fontName+".ttf");
-            if(!text.font)throw new InvalidOperationException("The licensed Inter font must be imported before preparing the scene.");
-            var fontMaterial=AssetDatabase.LoadAssetAtPath<Material>(Root+"/Materials/office_world_text_"+fontName+".mat");
-            if(!fontMaterial){fontMaterial=new Material(Shader.Find("Scalpal/Encounter Office/World Text"));AssetDatabase.CreateAsset(fontMaterial,Root+"/Materials/office_world_text_"+fontName+".mat");}
-            fontMaterial.renderQueue=3020;fontMaterial.mainTexture=text.font.material.mainTexture;EditorUtility.SetDirty(fontMaterial);text.GetComponent<Renderer>().sharedMaterial=fontMaterial;text.color=InkColor;
-            var fit=text.gameObject.AddComponent<EncounterOfficeText>();fit.preferredCharacterSize=size*.25f;
-            fit.maximumWidth=name=="Draft"?.80f:name=="PatientState"?1.1f:.76f;
-            fit.maximumHeight=name=="Draft"?.13f:name=="Chart"?.44f:name=="Status"?.12f:.10f;fit.Fit();
-            return text;
+            var role=name.StartsWith("Label_",StringComparison.Ordinal)||name=="PatientState"||name=="TalkHint"?ScalpalTextRole.Label:name=="Title"||name=="FindingsTitle"?ScalpalTextRole.Title:ScalpalTextRole.Body;
+            float width=name=="Draft"?1.0f:name=="PatientState"?1.1f:.90f;
+            float height=name=="Draft"?.19f:name=="Chart"?.50f:name=="Status"?.15f:name=="Title"?.12f:.10f;
+            return brand.Text(parent,name,content,role,position,size*1.2f,width,height,anchor);
         }
-        static EncounterOfficeButton Button(Transform parent,EncounterOfficePanel panel,string label,string command,string argument,float x,float y,float width)
+        static EncounterOfficeButton Button(Transform parent,EncounterOfficePanel panel,string label,string command,string argument,float x,float y,float width,float height=.072f)
         {
-            var go=Surface(parent,"Button_"+command+"_"+label,width,.072f,.036f,glassButton,new Vector3(x,y,-.012f));
-            var collider=go.AddComponent<BoxCollider>();collider.size=new Vector3(width,.072f,.025f);
+            var go=Surface(parent,"Button_"+command+"_"+label,width,height,height/2,brand.button,new Vector3(x,y,-.012f));
+            var collider=go.AddComponent<BoxCollider>();collider.size=new Vector3(width,height,.025f);
             var button=go.AddComponent<EncounterOfficeButton>();button.panel=panel;button.command=command;button.argument=argument;
             var text=Text(parent,"Label_"+label,label,new Vector3(x,y,-.024f),.028f,TextAnchor.MiddleCenter);text.transform.SetParent(go.transform,true);button.label=text;
-            var fit=text.GetComponent<EncounterOfficeText>();fit.maximumWidth=width-.035f;fit.maximumHeight=.062f;fit.Fit();return button;
-        }
-        static LineRenderer Ray(Transform parent)
-        {
-            var ray=new GameObject("ControllerSelectionRay").AddComponent<LineRenderer>();ray.transform.SetParent(parent,false);ray.useWorldSpace=true;ray.positionCount=2;ray.startWidth=.003f;ray.endWidth=.001f;ray.sharedMaterial=lilac;ray.enabled=false;return ray;
+            var fit=text.GetComponent<ScalpalTextFit>();fit.maximumWidth=width-.035f;fit.maximumHeight=height-.008f;fit.Fit();return button;
         }
     }
 }

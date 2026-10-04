@@ -4,7 +4,7 @@ import { copy, Panel, Pill, useAction } from './ui';
 
 const ROLE_HELP: Record<string, string> = {
   viewer: 'Watch only',
-  coach: 'Jarvis bridge',
+  coach: 'Scalpal bridge',
   headset: 'Quest app',
   operator: 'Full control',
 };

@@ -2,7 +2,7 @@
 
 > **Scope notice:** the current product flow is the [latest experience flow](current-direction.md#latest-experience-flow): launch → explore patients → diagnosis office → full-VR surgery → required robot replay. Mixed reality with a real participant, conversational selection and the rotating preview are off the main path. Where this document disagrees, current direction wins.
 
-> Scope update: Solana, wallets, payouts, and monetary completion rewards are removed. Nathan owns the companion website + SpacetimeDB/routing lane; Matthew continues Jarvis. This earlier proposal contains superseded reward/challenge references. Read [current direction](current-direction.md) and [Nathan's implementation plan](nathan-plan.md) first.
+> Scope update: Solana, wallets, payouts, and monetary completion rewards are removed. Nathan owns the companion website + SpacetimeDB/routing lane; Matthew continues Scalpal. This earlier proposal contains superseded reward/challenge references. Read [current direction](current-direction.md) and [Nathan's implementation plan](nathan-plan.md) first.
 
 This is a proposed sequence for a documentation-and-folder-scaffold repo. The user requested repository context, folder structure, and a team work split; application implementation has not begun. See the [team plan](team-plan.md) for proposed ownership, component boundaries, and parallel checkpoints.
 
@@ -39,7 +39,7 @@ Independent owners can investigate bounded prerequisites concurrently, but freez
 1. **Prove the risky input path.** Run the video-to-hand-to-robot test. Diagnose recognition, calibration, depth, and timing separately.
 2. **Choose the shared task.** Use those results to select a movement the robot can reproduce and an educational objective the learner can understand. Author the acceptance rules and clarify what the replay can demonstrate.
 3. **Build the local experience.** Add the launch screen, explore page, diagnosis office and full-VR operating room with one exercise and a structured result. Test scene transitions without depending on voice.
-4. **Connect the voices.** Implement the patient and attending in the office and the Jarvis coach in the OR: supported tool calls, grounded explanations, rejection handling, interruption, and local pause/fallback. Voice responses acknowledge actual app results.
+4. **Connect the voices.** Implement the patient and attending in the office and the Scalpal coach in the OR: supported tool calls, grounded explanations, rejection handling, interruption, and local pause/fallback. Voice responses acknowledge actual app results.
 5. **Connect recording and replay.** Tie the recording segment and virtual scene state to the attempt. Show processing, replay-ready, and reconstruction-failed states separately from learning completion. Every run ends with the robot replay.
 6. **Rehearse the complete session.** Run consecutive physical-headset sessions with the laptop mirror, actual recorded motion and resulting replay. Fix integration failures before adding another exercise.
 

@@ -15,7 +15,7 @@ namespace Scalpal.EncounterOffice
             EncounterReply liveEncounter, EncounterReply liveScore, out string reason)
         {
             if (handoff == null || !EncounterContract.ValidPatientId(handoff.patientId)
-                || !QuestJarvisVoice.ValidEncounterId(handoff.encounterId) || string.IsNullOrEmpty(handoff.procedureId)
+                || !EncounterContract.ValidOfficeId(handoff.encounterId) || string.IsNullOrEmpty(handoff.procedureId)
                 || handoff.assessment == null || handoff.scorecard == null)
                 return Reject("The office handoff is missing its committed encounter or surgery.", out reason);
             if (liveCase == null || liveCase.patientId != handoff.patientId || string.IsNullOrEmpty(liveCase.caseId)
@@ -24,12 +24,13 @@ namespace Scalpal.EncounterOffice
                 || liveCase.brief.patientId != handoff.patientId || !liveCase.brief.synthetic
                 || (liveCase.status != "ready" && liveCase.status != "needs_review"))
                 return Reject("The live surgical case is unavailable or differs from the selected synthetic patient.", out reason);
-            if (EncounterContract.HasError(liveEncounter) || EncounterContract.HasError(liveScore)
-                || !Matches(liveEncounter?.state, handoff) || !Matches(liveScore?.state, handoff)
-                || liveEncounter.state.version != liveScore.state.version)
+            bool interview = EncounterContract.IsInterview(handoff.encounterId);
+            if (EncounterContract.HasError(liveEncounter) || EncounterContract.HasError(liveScore) || !Matches(liveEncounter?.state, handoff)
+                || !interview && (!Matches(liveScore?.state, handoff) || liveEncounter.state.version != liveScore.state.version))
                 return Reject("The service has not confirmed the same scored office encounter.", out reason);
-            if (!Same(handoff.assessment, liveEncounter.state.assessment)
-                || !Same(handoff.assessment, liveScore.state.assessment))
+            // The choice interview has no free-text assessment: its picks live in the scorecard compared below.
+            if (!interview && (!Same(handoff.assessment, liveEncounter.state.assessment)
+                || !Same(handoff.assessment, liveScore.state.assessment)))
                 return Reject("The committed learner assessment differs from the office handoff.", out reason);
             var score = liveScore.scorecard;
             if (score == null || score.max != 100 || score.total < 0 || score.total > 100
@@ -43,7 +44,7 @@ namespace Scalpal.EncounterOffice
         public static string CoachCreateJson(EncounterSurgeryHandoff handoff, string mode)
         {
             if (handoff == null || !EncounterContract.ValidPatientId(handoff.patientId)
-                || !QuestJarvisVoice.ValidEncounterId(handoff.encounterId))
+                || !EncounterContract.ValidOfficeId(handoff.encounterId))
                 throw new ArgumentException("A confirmed office encounter is required.", nameof(handoff));
             if (mode != "virtual")
                 throw new ArgumentException("The office handoff requires virtual presentation.", nameof(mode));

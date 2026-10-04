@@ -1,0 +1,36 @@
+---
+title: "Realtime (SpacetimeDB)"
+description: "The shared state for every session."
+---
+
+Owner: Nathan.
+
+A TypeScript SpacetimeDB 2.10.2 module in `services/realtime` is the source of truth for a session. It holds:
+
+- sessions, invite codes, roles and presence
+- the exercise state and events the headset publishes
+- the Scalpal transcript and status
+- app commands and their acknowledgements
+- artifact metadata and transfer grants
+- motion jobs with leases
+- replay transport and WebRTC signaling
+
+**Every table is private.** Clients read through views that only return their own sessions, and writes go through reducers that check the caller's role. Only service identities, like the gateway, can issue URLs, verify uploads or drive jobs. Reducers do no network or file I/O; the gateway does that and reports back.
+
+## Commands
+
+```sh
+cd services/realtime
+npm install
+npm run build
+npm run publish:local      # to `spacetime start` on :3000 as `scalpal`
+npm run generate           # TypeScript bindings for dashboard and gateway, C# for Unity
+```
+
+Regenerate bindings after any schema change and commit them, so nobody else needs the CLI to build.
+
+Register the gateway as a service identity:
+
+```sh
+spacetime call --server local scalpal add_service_identity '"0x<gateway identity hex>"' '"gateway"'
+```

@@ -1,5 +1,5 @@
-// Jarvis voice page. State arrives from the coach over SSE; the arbiter decides what is spoken and when.
-// Warnings play a pre-rendered clip in Jarvis's voice (no LLM in the loop); cautions become queued LLM
+// Scalpal voice page. State arrives from the coach over SSE; the arbiter decides what is spoken and when.
+// Warnings play a pre-rendered clip in Scalpal's voice (no LLM in the loop); cautions become queued LLM
 // turns; the agent's background context is updated only when something meaningful changes.
 import { Conversation } from "https://esm.sh/@elevenlabs/client@1.26.0";
 import { createArbiter, percentile, semanticKey } from "/jarvis/arbiter.js";
@@ -54,6 +54,9 @@ function render(snap) {
         ["Danger", s.dangers.length ? `<span class="danger">${esc(s.dangers.map((d) => d.name).join(", "))}</span>` : "none flagged"],
         ["Looking at", snap.focusStructure.name || "n/a"],
         ["This patient", s.patientNotes.join(" ") || "no step-specific notes"],
+        ["Vitals (sim)", snap.condition ? `HR ${snap.condition.vitals.hr} · BP ${snap.condition.vitals.sys}/${snap.condition.vitals.dia} · RR ${snap.condition.vitals.rr}${snap.condition.vitals.spo2 >= 0 ? ` · SpO2 ${snap.condition.vitals.spo2}` : ""} · loss ${snap.condition.vitals.bloodLossPct}% (class ${snap.condition.vitals.hemorrhageClass}, ${snap.condition.baselineSource} baseline)` : "n/a"],
+        ["Outcome", snap.condition ? (snap.condition.outcome.result === "died" ? `DIED: ${snap.condition.outcome.cause}` : snap.condition.outcome.result) : "n/a"],
+        ["Checklist", (snap.checklist ?? []).map((c) => `${c.done ? "✓" : c.current ? "▸" : "·"} ${c.title}`).join("  ")],
         ["Last event", snap.lastEvent],
         ["Mistakes", `${snap.mistakeCount} total`],
       ];
@@ -90,7 +93,7 @@ function stateTag() {
   return snapshot ? `v${snapshot.version} step ${snapshot.stepNumber}/${snapshot.stepCount} "${snapshot.step.title}"` : "";
 }
 
-// Mirror what Jarvis and the learner actually said, and the voice status, into the shared session.
+// Mirror what Scalpal and the learner actually said, and the voice status, into the shared session.
 function mirrorTranscript(speaker, text) {
   if (sid && text) api("POST", `/coach/sessions/${sid}/transcript`, { speaker, text }).catch(() => {});
 }
@@ -218,6 +221,19 @@ const clientTools = Object.fromEntries(
   ]),
 );
 
+// Headset-only tools (the Quest hands over or lights up a stand instrument). On the laptop there is no stand,
+// so they act through the state tracker: a swap is logged as the tool in hand, a highlight is shown in the log.
+clientTools.swap_instrument = async ({ instrument, hand } = {}) => {
+  const h = hand === "left" ? "left" : "right";
+  await api("POST", `/coach/sessions/${sid}/events`, { event: { type: "instrument", instrumentId: String(instrument ?? ""), hand: h, held: true } });
+  log("event", `Handed over: ${instrument} (${h} hand, simulated on the laptop).`);
+  return `Handed the ${instrument} to the ${h} hand.`;
+};
+clientTools.highlight_instrument = async ({ instrument } = {}) => {
+  log("event", `Highlighted on the stand: ${instrument} (simulated on the laptop).`);
+  return `The ${instrument} is lit up on the stand.`;
+};
+
 // ---- voice --------------------------------------------------------------------------------------
 
 async function startVoice() {
@@ -265,7 +281,7 @@ async function startVoice() {
 }
 
 // Pick a patient: the 1:1 patient interview first when the patient has one, otherwise straight to surgery.
-// Jarvis is not part of the interview; he connects in the operating room.
+// Scalpal is not part of the interview; he connects in the operating room.
 const encounter = createInterviewFlow({
   api,
   log,
@@ -289,7 +305,7 @@ async function startSurgery(encounterId = "") {
   // The scored office encounter carries into the operating room prompt.
   const created = await api("POST", "/coach/sessions", { patientId, mode: $("presentation").value, ...(encounterId ? { encounterId } : {}) });
   if (!created.ok) { log("event", created.json.error?.message ?? "Could not start.", "urgent"); $("start").disabled = false; return; }
-  log("event", "Surgery: Jarvis is coaching. Use the simulator or the headset.");
+  log("event", "Surgery: Scalpal is coaching. Use the simulator or the headset.");
   sid = created.json.sessionId;
   arbiter = createArbiter();
   traces.length = 0;

@@ -34,7 +34,7 @@ Render polished steel, dark insulation, differentiated handles, visible pivots, 
 
 The first meaningful interaction slice is scalpel/scissors plus a generic virtual practice surface, followed by grasper plus a movable virtual object. A material color change is feedback, not mesh separation. If the first implementation separates preauthored segments or draws an incision ribbon, label it as that behavior. Arbitrary deformable-organ cutting requires additional topology, deformation, collision, and contact work; meshes do not establish tissue mechanics or clinical fidelity.
 
-Every irreversible virtual action should include the tool ID, target ID, contact point, activation state, session/attempt identity, and a result acknowledgment. Use an authored allowlist of tool/target/action combinations. Jarvis should explain actual acknowledged actions and current state rather than infer successful cutting from a spoken command.
+Every irreversible virtual action should include the tool ID, target ID, contact point, activation state, session/attempt identity, and a result acknowledgment. Use an authored allowlist of tool/target/action combinations. Scalpal should explain actual acknowledged actions and current state rather than infer successful cutting from a spoken command.
 
 ## CV: Two Distinct Inputs
 

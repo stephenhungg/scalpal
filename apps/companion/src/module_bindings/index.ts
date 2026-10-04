@@ -38,6 +38,7 @@ import AckSignalsReducer from "./ack_signals_reducer";
 import AddServiceIdentityReducer from "./add_service_identity_reducer";
 import AppendEncounterEventReducer from "./append_encounter_event_reducer";
 import AppendExerciseEventReducer from "./append_exercise_event_reducer";
+import AppendSimLogReducer from "./append_sim_log_reducer";
 import CancelMotionJobReducer from "./cancel_motion_job_reducer";
 import ClaimMotionJobReducer from "./claim_motion_job_reducer";
 import CompleteMotionJobReducer from "./complete_motion_job_reducer";
@@ -46,6 +47,7 @@ import CreateSessionReducer from "./create_session_reducer";
 import DeleteArtifactReducer from "./delete_artifact_reducer";
 import DenyGrantReducer from "./deny_grant_reducer";
 import DenyServiceGrantReducer from "./deny_service_grant_reducer";
+import EndPatientConditionReducer from "./end_patient_condition_reducer";
 import EndSessionReducer from "./end_session_reducer";
 import FailMotionJobReducer from "./fail_motion_job_reducer";
 import HeartbeatMotionJobReducer from "./heartbeat_motion_job_reducer";
@@ -55,10 +57,13 @@ import JoinSessionReducer from "./join_session_reducer";
 import LeaveSessionReducer from "./leave_session_reducer";
 import MarkUploadedReducer from "./mark_uploaded_reducer";
 import PostCoachMessageReducer from "./post_coach_message_reducer";
+import PostRobotResultReducer from "./post_robot_result_reducer";
 import PublishExerciseStateReducer from "./publish_exercise_state_reducer";
 import RegisterJobOutputReducer from "./register_job_output_reducer";
 import RemoveMemberReducer from "./remove_member_reducer";
 import RemoveServiceIdentityReducer from "./remove_service_identity_reducer";
+import ReportBodyStateReducer from "./report_body_state_reducer";
+import ReportInjuryReducer from "./report_injury_reducer";
 import RequestCommandReducer from "./request_command_reducer";
 import RequestDownloadReducer from "./request_download_reducer";
 import RequestMotionJobReducer from "./request_motion_job_reducer";
@@ -74,9 +79,11 @@ import SetDisplayNameReducer from "./set_display_name_reducer";
 import SetEncounterPhaseReducer from "./set_encounter_phase_reducer";
 import SetEncounterResultReducer from "./set_encounter_result_reducer";
 import SetMediaSourceReducer from "./set_media_source_reducer";
+import SetPatientBaselineReducer from "./set_patient_baseline_reducer";
 import SetReplayStateReducer from "./set_replay_state_reducer";
 import StartAttemptReducer from "./start_attempt_reducer";
 import StartEncounterReducer from "./start_encounter_reducer";
+import StartPatientConditionReducer from "./start_patient_condition_reducer";
 
 // Import all procedure arg schemas
 
@@ -100,7 +107,10 @@ import SessionInvitesRow from "./session_invites_table";
 import SessionMediaSourceRow from "./session_media_source_table";
 import SessionMembersRow from "./session_members_table";
 import SessionMotionJobsRow from "./session_motion_jobs_table";
+import SessionPatientConditionRow from "./session_patient_condition_table";
 import SessionReplayStateRow from "./session_replay_state_table";
+import SessionRobotResultsRow from "./session_robot_results_table";
+import SessionSimLogsRow from "./session_sim_logs_table";
 
 /** Type-only namespace exports for generated type groups. */
 
@@ -239,6 +249,13 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, SessionMotionJobsRow),
+  sessionPatientCondition: __table({
+    name: 'session_patient_condition',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, SessionPatientConditionRow),
   sessionReplayState: __table({
     name: 'session_replay_state',
     indexes: [
@@ -246,6 +263,20 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, SessionReplayStateRow),
+  sessionRobotResults: __table({
+    name: 'session_robot_results',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, SessionRobotResultsRow),
+  sessionSimLogs: __table({
+    name: 'session_sim_logs',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, SessionSimLogsRow),
 });
 
 /** The schema information for all reducers in this module. This is defined the same way as the reducers would have been defined in the server, except the body of the reducer is omitted in code generation. */
@@ -254,6 +285,7 @@ const reducersSchema = __reducers(
   __reducerSchema("add_service_identity", AddServiceIdentityReducer),
   __reducerSchema("append_encounter_event", AppendEncounterEventReducer),
   __reducerSchema("append_exercise_event", AppendExerciseEventReducer),
+  __reducerSchema("append_sim_log", AppendSimLogReducer),
   __reducerSchema("cancel_motion_job", CancelMotionJobReducer),
   __reducerSchema("claim_motion_job", ClaimMotionJobReducer),
   __reducerSchema("complete_motion_job", CompleteMotionJobReducer),
@@ -262,6 +294,7 @@ const reducersSchema = __reducers(
   __reducerSchema("delete_artifact", DeleteArtifactReducer),
   __reducerSchema("deny_grant", DenyGrantReducer),
   __reducerSchema("deny_service_grant", DenyServiceGrantReducer),
+  __reducerSchema("end_patient_condition", EndPatientConditionReducer),
   __reducerSchema("end_session", EndSessionReducer),
   __reducerSchema("fail_motion_job", FailMotionJobReducer),
   __reducerSchema("heartbeat_motion_job", HeartbeatMotionJobReducer),
@@ -271,10 +304,13 @@ const reducersSchema = __reducers(
   __reducerSchema("leave_session", LeaveSessionReducer),
   __reducerSchema("mark_uploaded", MarkUploadedReducer),
   __reducerSchema("post_coach_message", PostCoachMessageReducer),
+  __reducerSchema("post_robot_result", PostRobotResultReducer),
   __reducerSchema("publish_exercise_state", PublishExerciseStateReducer),
   __reducerSchema("register_job_output", RegisterJobOutputReducer),
   __reducerSchema("remove_member", RemoveMemberReducer),
   __reducerSchema("remove_service_identity", RemoveServiceIdentityReducer),
+  __reducerSchema("report_body_state", ReportBodyStateReducer),
+  __reducerSchema("report_injury", ReportInjuryReducer),
   __reducerSchema("request_command", RequestCommandReducer),
   __reducerSchema("request_download", RequestDownloadReducer),
   __reducerSchema("request_motion_job", RequestMotionJobReducer),
@@ -290,9 +326,11 @@ const reducersSchema = __reducers(
   __reducerSchema("set_encounter_phase", SetEncounterPhaseReducer),
   __reducerSchema("set_encounter_result", SetEncounterResultReducer),
   __reducerSchema("set_media_source", SetMediaSourceReducer),
+  __reducerSchema("set_patient_baseline", SetPatientBaselineReducer),
   __reducerSchema("set_replay_state", SetReplayStateReducer),
   __reducerSchema("start_attempt", StartAttemptReducer),
   __reducerSchema("start_encounter", StartEncounterReducer),
+  __reducerSchema("start_patient_condition", StartPatientConditionReducer),
 );
 
 /** The schema information for all procedures in this module. This is defined the same way as the procedures would have been defined in the server. */

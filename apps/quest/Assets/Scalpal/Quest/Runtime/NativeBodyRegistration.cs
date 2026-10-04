@@ -31,7 +31,7 @@ namespace Scalpal.Quest
         public bool CandidateValid => candidateValid && Fresh(observationTime, Time.realtimeSinceStartup, MaximumFitAge);
         public float LastObservationLatency { get; private set; }
         public int ConsecutiveFailures => failedFrames;
-        public string Status { get; private set; } = "Participant agreed? Left stick: enable local body detection";
+        public string Status { get; private set; } = "Waiting for AR selection. Left stick: restart local body detection";
         public bool EnabledByOperator { get; private set; }
         public int PersonCount { get; private set; }
         public bool[] VisibleLandmarks { get; } = new bool[4];
@@ -123,19 +123,11 @@ namespace Scalpal.Quest
             if (!cameraAccess || !surfaceAccess || !EnvironmentRaycastManager.IsSupported)
             { Status = "Automatic body depth unavailable on this runtime; alignment paused"; return; }
 #if UNITY_ANDROID && !UNITY_EDITOR
-            var permissions = new List<string>();
-            if (!Permission.HasUserAuthorizedPermission("horizonos.permission.HEADSET_CAMERA"))
-                permissions.Add("horizonos.permission.HEADSET_CAMERA");
-            if (!Permission.HasUserAuthorizedPermission(OVRPermissionsRequester.ScenePermission))
-                permissions.Add(OVRPermissionsRequester.ScenePermission);
-            if (permissions.Count > 0)
+            if (!PermissionsGranted())
             {
+                // Check existing grants silently; choosing AR never opens a permission dialog.
                 WaitForPermissions();
-                int generation = epoch;
-                var callbacks = new PermissionCallbacks();
-                callbacks.PermissionDenied += _ => CancelPermissionRequest(generation);
-                callbacks.PermissionDeniedAndDontAskAgain += _ => CancelPermissionRequest(generation);
-                Permission.RequestUserPermissions(permissions.ToArray(), callbacks);
+                Status = "Camera/spatial permission is off; enable it in Quest settings to use AR";
                 return;
             }
 #endif
@@ -414,7 +406,7 @@ namespace Scalpal.Quest
             EnabledByOperator = awaitingPermissions = false;
             if (cameraAccess) cameraAccess.enabled = false;
             if (surfaceAccess) surfaceAccess.enabled = false;
-            Status = "Participant agreed? Left stick: enable local body detection";
+            Status = "Waiting for AR selection. Left stick: restart local body detection";
         }
         void OriginChanged(XRInputSubsystem subsystem)
         {

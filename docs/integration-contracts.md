@@ -26,11 +26,11 @@ Validity gates practice visibility, interaction colliders, tool effects, contact
 
 ## Voice Requests and Outcomes
 
-A command identifies command/session/attempt, expected step/state version, allowlisted action, stable target and bounded parameters. Serialize conflicting actions and reject stale requests. The actual scene consumer returns applied, rejected, unavailable or loading with a reason; Jarvis announces completion after actual application.
+A command identifies command/session/attempt, expected step/state version, allowlisted action, stable target and bounded parameters. Serialize conflicting actions and reject stale requests. The actual scene consumer returns applied, rejected, unavailable or loading with a reason; Scalpal announces completion after actual application.
 
 Nathan's allowlist includes preview/rotate/zoom/isolate/restore/confirm/highlight/hint/pause/resume. Matthew's current anatomy command consumer implements only highlight/clear-highlight. Reconcile action names and capability availability; a requested row is not proof of a scene handler. Browser auto-ack and autoplay are test tools and cannot acknowledge a real headset outcome.
 
-Failed event/ack delivery remains retryable. Explicitly publish initial tracking and confirmed state on pairing/reconnect. A server snapshot version alone does not provide inbound event deduplication or expected-version validation. The latest Jarvis HTTP receipt separates `accepted` from `applied` and exposes `eventCount`; the anatomy relay still checks version zero and reads only receipt acceptance. Reconcile late-join freshness and progression confirmation explicitly.
+Failed event/ack delivery remains retryable. Explicitly publish initial tracking and confirmed state on pairing/reconnect. A server snapshot version alone does not provide inbound event deduplication or expected-version validation. The latest Scalpal HTTP receipt separates `accepted` from `applied` and exposes `eventCount`; the anatomy relay still checks version zero and reads only receipt acceptance. Reconcile late-join freshness and progression confirmation explicitly.
 
 ## Capture Artifact
 
