@@ -22,18 +22,27 @@ namespace Scalpal.Shell
         public bool Transitioning { get; private set; }
         public ShellButton BeginButton { get; private set; }
         public ShellButton SkipButton { get; private set; }
-        Transform launch, explore, cards, detail, filters, paging;
+        Transform launch, explore, frame, cards, detail, paging;
         public int Page { get; private set; }
-        public int PageCount => Mathf.Max(1,Mathf.CeilToInt(Model.VisiblePatients().Length/12f));
-        TextMeshPro banner, summary;
-        ShellButton retryButton;
-        string notice = "Loading patient records…", retrying = "";
+        // Three columns, at most three rows: fewer, larger targets with generous gutters.
+        public const int Columns = 3, Rows = 3, PageSize = Columns * Rows;
+        public const float CardWidth = .50f, CardHeight = .21f, ColumnGap = .06f, RowGap = .06f;
+        const float SideMargin = .13f, TitleBand = .23f, BottomMargin = .13f, PagingBand = .11f;
+        // Detail panel sits to the right of the grid, facing the viewer at this yaw and distance.
+        public const float DetailYaw = 54, DetailDistance = 1.45f, DetailWidth = .76f;
+        public int PageCount => Mathf.Max(1,Mathf.CeilToInt(Model.VisiblePatients().Length/(float)PageSize));
+        // Shown only when a Begin or office load fails; cleared by the next selection.
+        string beginError = "";
         readonly Dictionary<string,float> retryDeadlines = new Dictionary<string,float>();
-        string liveBriefId = "", renderedBanner, renderedRetry;
-        int renderedSeconds=-1;string renderedRetrying;
+        readonly HashSet<string> retryInFlight = new HashSet<string>();
+        float catalogDeadline = -1;
+        bool catalogInFlight;
+        public const float DefaultRetrySeconds = 10, BriefRetrySeconds = 5;
+        string liveBriefId = "";
         ShellTransition transition;
-        public float RetryRemaining => Mathf.Max(0, retryDeadlines.TryGetValue(Model.SelectedPatientId,out var until) ? until-Time.unscaledTime : 0);
-        bool initialized, wired, offlineSeen;
+        public float RetryRemaining => Remaining(Model.SelectedPatientId);
+        public float Remaining(string patientId) => Mathf.Max(0, patientId!=null && retryDeadlines.TryGetValue(patientId,out var until) ? until-Time.unscaledTime : 0);
+        bool initialized, wired;
         public bool CanBegin => Model.CanBegin && liveBriefId == Model.SelectedPatientId && service;
         [Serializable] sealed class EndpointConfig { public string coachBaseUrl, encounterBaseUrl; }
         void Awake() { Initialize(); }
@@ -55,14 +64,10 @@ namespace Scalpal.Shell
             wordmark.name = "Wordmark";
             ShellView.Button(launch, "Start", new Vector3(0,-.12f,-.008f),new Vector2(.32f,.080f),Enter,true,true);
             explore = new GameObject("Explore").transform; explore.SetParent(content,false); explore.localPosition = new Vector3(0,0,1.3f);
-            ShellView.Panel(explore,"ExploreGlass",new Vector3(0,-.03f,.012f),new Vector2(2.22f,1.60f));
-            ShellView.Text(explore,"Explore patients",new Vector3(-1.04f,.715f,-.01f),.05f,1.0f,TextAnchor.UpperLeft,ScalpalTextRole.Title);
-            filters = Child(explore,"Filters"); cards = Child(explore,"PatientCards"); detail = Child(explore,"PatientDetail");paging=Child(explore,"Paging");
-            banner = ShellView.Text(explore,"",new Vector3(-1.04f,-.668f,-.01f),.026f,1.70f);
-            summary = ShellView.Text(explore,"",new Vector3(-1.04f,-.602f,-.01f),.026f,1.72f);
-            ShellView.Button(explore,"Refresh",new Vector3(.91f,-.74f,-.012f),new Vector2(.24f,.07f),Reload);
-            Readable(launch);Readable(explore);
-            RenderFilters(); RenderCards(); RenderDetail(); explore.gameObject.SetActive(false);
+            // Explore is the title "Patients" and the cards. No filters, counts, hints or Refresh.
+            frame = Child(explore,"ExploreFrame"); cards = Child(explore,"PatientCards"); detail = Child(explore,"PatientDetail");paging=Child(explore,"Paging");
+            Readable(launch);
+            RenderCards(); RenderDetail(); explore.gameObject.SetActive(false);
         }
         public const string Wordmark = "Scalpal.";
         static Transform Child(Transform parent,string name) { var child=new GameObject(name).transform;child.SetParent(parent,false);return child; }
@@ -77,7 +82,7 @@ namespace Scalpal.Shell
 #endif
             if (!File.Exists(path)) return;
             try { var c=JsonUtility.FromJson<EndpointConfig>(File.ReadAllText(path)); var url=string.IsNullOrWhiteSpace(c.encounterBaseUrl)?c.coachBaseUrl:c.encounterBaseUrl; service.Configure(url); }
-            catch(Exception) { notice="Service configuration invalid. Using default endpoint."; }
+            catch(Exception error) { Debug.LogWarning("Scalpal shell: session-config.json is invalid; using the default endpoint. "+error.Message); }
         }
         void Wire()
         {
@@ -85,7 +90,7 @@ namespace Scalpal.Shell
             service.BundleLoaded += BundleLoaded; service.PatientsLoaded += PatientsLoaded; service.BriefLoaded += BriefLoaded;
             service.RequestRetryAfterForRoute += RetryAfter;
             transition=ShellTransition.Ensure();transition.Finished += TransitionFinished;
-            service.CaseLoaded += CaseLoaded; service.RequestFailedForRoute += Failed;service.OfflineModeChanged += OfflineChanged;
+            service.CaseLoaded += CaseLoaded; service.RequestFailedForRoute += Failed;
         }
         void OnDestroy()
         {
@@ -93,91 +98,86 @@ namespace Scalpal.Shell
             service.BundleLoaded -= BundleLoaded; service.PatientsLoaded -= PatientsLoaded; service.BriefLoaded -= BriefLoaded;
             service.RequestRetryAfterForRoute -= RetryAfter;
             if(transition)transition.Finished -= TransitionFinished;
-            service.CaseLoaded -= CaseLoaded; service.RequestFailedForRoute -= Failed;service.OfflineModeChanged -= OfflineChanged;
+            service.CaseLoaded -= CaseLoaded; service.RequestFailedForRoute -= Failed;
         }
-        void Update()
+        void Update() { if(Exploring) ServiceRetries(); }
+        // Background recovery in place of a Refresh button. Every retry waits for the service's
+        // Retry-After (or a fixed backoff) and only one request per target is ever in flight.
+        public void ServiceRetries()
         {
-            if(retryButton)
+            if(!service || Transitioning) return;
+            float now=Time.unscaledTime;
+            if(catalogDeadline>=0 && now>=catalogDeadline && !catalogInFlight) { catalogDeadline=-1;catalogInFlight=true;service.LoadPatients(); }
+            foreach(var row in Model.Patients.Where(Model.Recoverable).ToArray())
             {
-                int seconds=Mathf.CeilToInt(RetryRemaining);
-                retryButton.interactable=retrying.Length==0&&seconds==0;
-                if(renderedSeconds==seconds && renderedRetrying==retrying && renderedRetry!=null)return;
-                renderedSeconds=seconds;renderedRetrying=retrying;
-                string label=retrying.Length>0?"Retrying…":seconds>0?"Try again in "+seconds+"s":"Try again";
-                if(renderedRetry!=label) { renderedRetry=label;ShellView.SetText(retryButton.label,label); }
+                if(retryInFlight.Contains(row.patientId) || Remaining(row.patientId)>0) continue;
+                retryInFlight.Add(row.patientId);service.LoadCase(row.patientId);
             }
+            var selected=Model.Selected;
+            if(selected==null || selected.status=="retry" || Model.DetailLoading || retryInFlight.Contains(selected.patientId) || RetryRemaining>0) return;
+            // A failed chart, or an offline one once the service answers live again, is re-requested.
+            if(Model.DetailError.Length>0 && retryDeadlines.ContainsKey(selected.patientId) || Model.SelectedBrief!=null && liveBriefId!=selected.patientId && !service.IsOffline)
+                Select(selected.patientId);
         }
-        void RefreshBanner()
+        void Defer(string patientId,float seconds)
         {
-            string value=notice;
-            if(renderedBanner==value)return;renderedBanner=value;ShellView.SetText(banner,value);
+            float until=Time.unscaledTime+Mathf.Max(1,seconds);
+            if(!retryDeadlines.TryGetValue(patientId,out var current) || current<until) retryDeadlines[patientId]=until;
         }
-        void OfflineChanged(bool value) { offlineSeen=value;RefreshBanner(); }
         void TransitionFinished(bool success,string error)
         {
             Transitioning=false;
-            if(!success) { notice=error??"Unable to load office. Try again.";RenderDetail(); }
+            if(!success) { beginError=error??"Unable to load the office.";RenderDetail(); }
         }
         void RetryAfter(string route,int seconds)
         {
             string id=Uri.UnescapeDataString(route.Split('/').ElementAtOrDefault(2)??"");
             if(id.Length>0)retryDeadlines[id]=Time.unscaledTime+Mathf.Max(1,seconds);
+            else if(route=="/patients")catalogDeadline=Time.unscaledTime+Mathf.Max(1,seconds);
         }
         public void Enter() { Initialize(); Exploring=true; launch.gameObject.SetActive(false); explore.gameObject.SetActive(true); }
         public void Reload()
         {
             if(!service || Transitioning) return;
-            Wire(); service.CancelPendingRequests(); retrying=""; liveBriefId=""; Model.ClearSelection();
-            notice="Loading patient records…"; RenderDetail(); service.LoadPatients();
+            Wire(); service.CancelPendingRequests(); retryInFlight.Clear(); catalogInFlight=true; catalogDeadline=-1; liveBriefId=""; beginError=""; Model.ClearSelection();
+            RenderDetail(); service.LoadPatients();
         }
         public void BundleLoaded(ScalpalBundle bundle) { Model.ApplyBundle(bundle); RenderCards(); RenderDetail(); }
         public void PatientsLoaded(PatientList list)
         {
-            offlineSeen=service.LastResponseOffline;Model.ApplyPatients(list);
-            notice=list?.patients==null?"Patient list unavailable. Refresh to retry.":"Select a chart to explore.";
+            catalogInFlight=false;
+            Model.ApplyPatients(list);
+            // An offline catalog keeps probing for the live service in the background.
+            if(service && service.LastResponseOffline && catalogDeadline<0) catalogDeadline=Time.unscaledTime+DefaultRetrySeconds;
             // Live list comes first. The local bundle only fills metadata missing from this DTO.
-            service.LoadCachedBundle();RenderCards();RenderDetail();
+            if(service) service.LoadCachedBundle();
+            RenderCards();RenderDetail();
         }
         public void BriefLoaded(PreopBrief brief)
         {
             if(!Model.ApplyBrief(brief))return;
+            retryDeadlines.Remove(brief.patientId);
             liveBriefId=service.LastResponseOffline?"":brief.patientId;
-            if(!service.LastResponseOffline)offlineSeen=false;
             RenderDetail();
         }
         void CaseLoaded(SurgicalCase value)
         {
-            if(value==null) return; Model.ApplyCase(value);
-            if(retrying==value.patientId) { retrying="";if(value.status=="retry")retryDeadlines[value.patientId]=Time.unscaledTime+Mathf.Max(1,value.retryAfterSeconds);else retryDeadlines.Remove(value.patientId); }
+            if(value==null) return;
+            retryInFlight.Remove(value.patientId);
+            if(value.status=="retry")Defer(value.patientId,value.retryAfterSeconds);else retryDeadlines.Remove(value.patientId);
+            bool wasSelected=Model.SelectedPatientId==value.patientId;
+            Model.ApplyCase(value);
             RenderCards();
-            if(value.status!="retry"&&Model.SelectedPatientId==value.patientId)Select(value.patientId);
+            if(value.status!="retry"&&wasSelected&&Model.SelectedPatientId==value.patientId)Select(value.patientId);
             else RenderDetail();
         }
         void Failed(string route,ErrorResponse error)
         {
-            var id=route.Split('/').ElementAtOrDefault(2);
-            if(route.EndsWith("/brief",StringComparison.Ordinal)) Model.FailDetail(Uri.UnescapeDataString(id??""),error?.error?.message);
-            else notice=error?.error?.message??"Request failed. Refresh to retry.";
-            if(Uri.UnescapeDataString(id??"")==retrying)retrying=""; RenderDetail();
-        }
-        public void Filter(string procedure="",string urgency="") { Page=0;Model.SetFilters(procedure,urgency);RenderFilters();RenderCards();RenderDetail(); }
-        void RenderFilters()
-        {
-            ShellView.Clear(filters);
-            string[] labels={"All","Appendix","Gallbladder","Colon"}; string[] ids={"","appendectomy","lap_cholecystectomy","lap_sigmoid_colectomy"};
-            // Chips size to their label so mono labels keep the 32 mm/m floor; the active chip carries the accent.
-            float x=-1.06f;
-            for(int i=0;i<labels.Length;i++) { string id=ids[i]; x=Chip(labels[i],x,Model.ProcedureFilter==id,()=>Filter(id,Model.UrgencyFilter)); }
-            string[] urgencies={"","emergency","urgent","elective"}; string[] urgencyLabels={"Any","Emergency","Urgent","Elective"};
-            x+=.09f;
-            for(int i=0;i<urgencies.Length;i++) { string id=urgencies[i]; x=Chip(urgencyLabels[i],x,Model.UrgencyFilter==id,()=>Filter(Model.ProcedureFilter,id)); }
-            Readable(filters);
-        }
-        float Chip(string label,float left,bool active,Action action)
-        {
-            float width=label.Length*.0262f+.055f;
-            ShellView.Button(filters,label,new Vector3(left+width/2,.565f,-.006f),new Vector2(width,.056f),action,true,active);
-            return left+width+.016f;
+            string id=Uri.UnescapeDataString(route.Split('/').ElementAtOrDefault(2)??"");
+            if(route=="/patients") { catalogInFlight=false;if(catalogDeadline<Time.unscaledTime)catalogDeadline=Time.unscaledTime+DefaultRetrySeconds; }
+            else if(route.EndsWith("/brief",StringComparison.Ordinal)) { Model.FailDetail(id,error?.error?.message);if(id.Length>0&&Remaining(id)<=0)Defer(id,BriefRetrySeconds); }
+            else if(route.EndsWith("/case",StringComparison.Ordinal)) { retryInFlight.Remove(id);if(id.Length>0&&Remaining(id)<=0)Defer(id,DefaultRetrySeconds); }
+            RenderDetail();
         }
         // Raise every string under root to its brand floor for its distance from the hub viewer (content origin + 8 cm).
         void Readable(Transform root) { if(content) ScalpalBrandLayout.SizeForViewer(root,content.TransformPoint(Vector3.up*.08f)); }
@@ -185,30 +185,40 @@ namespace Scalpal.Shell
         {
             Page=Mathf.Clamp(page,0,PageCount-1);Model.ClearSelection();liveBriefId="";RenderCards();RenderDetail();
         }
+        public static float GridWidth => Columns*CardWidth+(Columns-1)*ColumnGap;
         void RenderCards()
         {
-            RefreshBanner();ShellView.Clear(cards);ShellView.Clear(paging);
-            var all=Model.VisiblePatients();Page=Mathf.Clamp(Page,0,PageCount-1);var rows=all.Skip(Page*12).Take(12).ToArray();
+            ShellView.Clear(frame);ShellView.Clear(cards);ShellView.Clear(paging);
+            var all=Model.VisiblePatients();Page=Mathf.Clamp(Page,0,PageCount-1);var rows=all.Skip(Page*PageSize).Take(PageSize).ToArray();
+            int lines=Mathf.Max(1,Mathf.CeilToInt(rows.Length/(float)Columns));
+            float gridHeight=lines*CardHeight+(lines-1)*RowGap;
+            float height=TitleBand+gridHeight+BottomMargin+(PageCount>1?PagingBand:0), width=GridWidth+2*SideMargin;
+            float top=height/2, left=-GridWidth/2, gridTop=top-TitleBand;
+            ShellView.Panel(frame,"ExploreGlass",new Vector3(0,0,.012f),new Vector2(width,height));
+            var title=ShellView.Text(frame,"Patients",new Vector3(left,top-.085f,-.01f),.05f,GridWidth,TextAnchor.UpperLeft,ScalpalTextRole.Title);
+            title.name="Title";
+            Readable(frame);
             for(int i=0;i<rows.Length;i++)
             {
-                var row=rows[i];int column=i%4,line=i/4;
-                var card=ShellView.Button(cards,"",new Vector3(-.795f+column*.53f,.26f-line*.34f,0),new Vector2(.50f,.32f),()=>Select(row.patientId),ExplorePatientModel.CanSelect(row));
+                var row=rows[i];int column=i%Columns,line=i/Columns;
+                // A short last row is centred under the full rows.
+                int inRow=Mathf.Min(Columns,rows.Length-line*Columns);
+                float x=left+CardWidth/2+(column+(Columns-inRow)*.5f)*(CardWidth+ColumnGap);
+                float y=gridTop-CardHeight/2-line*(CardHeight+RowGap);
+                var card=ShellView.Button(cards,"",new Vector3(x,y,0),new Vector2(CardWidth,CardHeight),()=>Select(row.patientId),true);
                 card.name="Patient_"+row.scenarioId;card.lift=true;var c=card.transform;
-                ShellView.FixedText(c,Model.Name(row),new Vector3(-.228f,.148f,-.009f),.060f,.456f,ScalpalTextRole.Title);
-                ShellView.FixedText(c,Model.Demographics(row),new Vector3(-.228f,.075f,-.009f),.043f,.456f);
-                ShellView.FixedText(c,Model.Complaint(row),new Vector3(-.228f,.019f,-.009f),.043f,.456f);
-                ShellView.FixedText(c,ProcedureLabel(row.procedureId)+" · "+(row.urgency??""),new Vector3(-.228f,-.037f,-.009f),.043f,.456f);
-                Icon(c,row.status,new Vector3(-.215f,-.113f,-.01f));
-                ShellView.FixedText(c,ExplorePatientModel.StatusLabel(row.status),new Vector3(-.190f,-.093f,-.009f),.043f,.418f);
+                // Name and one quiet line. Everything else lives in the side panel.
+                ShellView.FixedText(c,Model.Name(row),new Vector3(-.21f,.0625f,-.009f),.060f,.40f,ScalpalTextRole.Title).name="Name";
+                var meta=ShellView.FixedText(c,Model.CardLine(row),new Vector3(-.21f,-.0195f,-.009f),.043f,.40f);
+                meta.name="Line";meta.color=new Color(1,1,1,.6f);
+                if(row.status=="retry")RetryDot(c,new Vector3(.215f,.07f,-.01f));
             }
-            string count=all.Length==0?"No matching patients":all.Length+" patients";
-            ShellView.SetText(summary,count);
             if(PageCount>1)
             {
-                ShellView.Button(paging,"Previous",new Vector3(.62f,-.645f,-.014f),new Vector2(.27f,.065f),()=>SetPage(Page-1),Page>0);
-                ShellView.Button(paging,"Next",new Vector3(.91f,-.645f,-.014f),new Vector2(.27f,.065f),()=>SetPage(Page+1),Page<PageCount-1);
+                float y=-top+BottomMargin*.5f+PagingBand*.5f;
+                ShellView.Button(paging,"Previous",new Vector3(GridWidth/2-.42f,y,-.014f),new Vector2(.26f,.075f),()=>SetPage(Page-1),Page>0,false,true);
+                ShellView.Button(paging,"Next",new Vector3(GridWidth/2-.13f,y,-.014f),new Vector2(.26f,.075f),()=>SetPage(Page+1),Page<PageCount-1,false,true);
                 Readable(paging);
-                ShellView.SetText(summary,all.Length+" patients · page "+(Page+1)+" / "+PageCount);
             }
         }
         static string Excerpt(string value,int width,int count)
@@ -218,70 +228,85 @@ namespace Scalpal.Shell
             var shown=lines.Take(count).ToArray();shown[count-1]=Short(shown[count-1],width-1).TrimEnd('…')+"…";return string.Join("\n",shown);
         }
         static string Short(string text,int max) => string.IsNullOrEmpty(text)?"Unavailable":text.Length>max?text.Substring(0,max-1)+"…":text;
-        static string ProcedureLabel(string id) => (id=="lap_appendectomy" || id=="open_appendectomy")?"Appendix":id=="lap_cholecystectomy"?"Gallbladder":id=="lap_sigmoid_colectomy"?"Colon":"No procedure";
-        static void Icon(Transform parent,string status,Vector3 at)
+        // The only status mark on a card: a small neutral ring when the chart is still being retried.
+        static void RetryDot(Transform parent,Vector3 at)
         {
-            // Geometry icons, drawn in the brand accent: check, flag, lock, or retry arrow.
-            var path=new GameObject("StatusIcon_"+status).AddComponent<LineRenderer>();path.transform.SetParent(parent,false);path.transform.localPosition=at;
-            path.useWorldSpace=false;path.startWidth=path.endWidth=.0018f;path.sharedMaterial=ShellView.Accent;
-            Vector3[] points=status=="ready"?new[]{new Vector3(-.006f,0,0),new Vector3(-.001f,-.005f,0),new Vector3(.007f,.005f,0)}:
-                status=="needs_review"?new[]{new Vector3(-.006f,-.007f,0),new Vector3(-.006f,.007f,0),new Vector3(.006f,.003f,0),new Vector3(-.006f,0,0)}:
-                status=="retry"?new[]{new Vector3(.005f,-.006f,0),new Vector3(-.005f,-.006f,0),new Vector3(-.007f,.003f,0),new Vector3(0,.008f,0),new Vector3(.007f,.002f,0),new Vector3(.001f,.002f,0)}:
-                new[]{new Vector3(-.007f,-.006f,0),new Vector3(.007f,-.006f,0),new Vector3(.007f,.002f,0),new Vector3(-.007f,.002f,0),new Vector3(-.007f,-.006f,0),new Vector3(-.004f,.002f,0),new Vector3(-.004f,.008f,0),new Vector3(.004f,.008f,0),new Vector3(.004f,.002f,0)};
-            path.positionCount=points.Length;path.SetPositions(points);
+            var ring=new GameObject("RetryDot").AddComponent<LineRenderer>();ring.transform.SetParent(parent,false);ring.transform.localPosition=at;
+            ring.useWorldSpace=false;ring.loop=true;ring.startWidth=ring.endWidth=.004f;ring.sharedMaterial=ShellView.Accent;
+            const int segments=16;ring.positionCount=segments;
+            for(int i=0;i<segments;i++){float a=i*Mathf.PI*2/segments;ring.SetPosition(i,new Vector3(Mathf.Cos(a),Mathf.Sin(a),0)*.007f);}
         }
         public bool Select(string patientId)
         {
             if(Transitioning)return false;
-            liveBriefId="";
+            liveBriefId="";beginError="";
             if(!Model.Select(patientId)){RenderDetail();return false;}
-            RenderDetail(); if(Model.Selected.status!="retry")service.LoadBrief(patientId);return true;
+            if(Model.Selected.status!="retry")service.LoadBrief(patientId);
+            RenderDetail();return true;
+        }
+        // One short line, only when Begin cannot be pressed (or an attempt just failed).
+        string Availability()
+        {
+            if(beginError.Length>0)return beginError;
+            if(CanBegin)return "";
+            var selected=Model.Selected;
+            if(selected.status=="retry"||Model.DetailError.Length>0)return "Chart unavailable · retrying";
+            if(Model.CanBegin)return "Offline · reconnect to begin";
+            return Model.AvailabilityReason;
         }
         void RenderDetail()
         {
-            RefreshBanner();ShellView.Clear(detail);BeginButton=null;SkipButton=null;retryButton=null;renderedRetry=null;
+            ShellView.Clear(detail);BeginButton=null;SkipButton=null;
             var selected=Model.Selected;if(selected==null)return;
-            var panel=ShellView.Panel(detail,"SelectedChart",new Vector3(1.472f,-.035f,-.45f),new Vector2(.70f,.72f));
-            ShellView.Text(panel,Model.Name(selected),new Vector3(-.263f,.325f,-.008f),.037f,.526f,TextAnchor.UpperLeft,ScalpalTextRole.Title);
-            ShellView.Text(panel,Model.Demographics(selected),new Vector3(-.263f,.258f,-.008f),.029f,.526f);
-            ShellView.Text(panel,Excerpt(Model.Complaint(selected),35,2),new Vector3(-.263f,.205f,-.008f),.028f,.526f);
-            string chart=Model.DetailLoading?"Loading chart…":Model.DetailError;
-            if(Model.SelectedBrief!=null)
+            var panel=Child(detail,"SelectedChart");
+            float yaw=DetailYaw*Mathf.Deg2Rad;
+            panel.localPosition=new Vector3(Mathf.Sin(yaw)*DetailDistance,0,Mathf.Cos(yaw)*DetailDistance-explore.localPosition.z);
+            panel.localRotation=Quaternion.Euler(0,DetailYaw,0);
+            const float pad=.06f, gap=.028f, sectionGap=.05f;
+            float inner=DetailWidth-2*pad, left=-inner/2;
+            var items=new List<(Transform item,float space)>();
+            void Add(string value,ScalpalTextRole role,float space,string name)
             {
-                var brief=Model.SelectedBrief;
-                chart=string.Join("\n",(brief.chart??Array.Empty<ChartLine>()).Where(c=>!string.Equals(c.section,"Patient",StringComparison.OrdinalIgnoreCase)).Take(3).Select(c=>c.section+": "+c.text));
-                if(brief.dataGaps?.Length>0)chart+="\nChart has gaps: "+brief.dataGaps[0].message;
-                chart=Excerpt("Chart highlights\n"+chart,36,7);
+                if(string.IsNullOrWhiteSpace(value))return;
+                var text=ShellView.Text(panel,value,new Vector3(left,0,-.008f),role==ScalpalTextRole.Title?.04f:.026f,inner,TextAnchor.UpperLeft,role);
+                text.name=name;var fit=text.GetComponent<ScalpalTextFit>();fit.maximumHeight=value.Split('\n').Length*.08f;
+                items.Add((text.transform,space));
             }
-            ShellView.Text(panel,chart??"",new Vector3(-.263f,.105f,-.008f),.027f,.526f);
-            string reason=Model.AvailabilityReason;
-            if(Model.CanBegin && !CanBegin)reason="Offline chart · reconnect to begin";
-            ShellView.Text(panel,EncounterOfficePanel.Wrap(reason,38),new Vector3(-.263f,-.16f,-.008f),.026f,.526f);
-            if(selected.status=="retry"||!string.IsNullOrEmpty(Model.DetailError))
-                retryButton=ShellView.Button(panel,"Try again",new Vector3(0,-.265f,-.012f),new Vector2(.49f,.07f),Retry,retrying.Length==0&&RetryRemaining<=0);
-            else
-            {
-                // Begin stays the primary action; Skip to surgery (ghost) goes to the Theatre card without the interview.
-                BeginButton=ShellView.Button(panel,"Begin encounter",new Vector3(-.105f,-.265f,-.012f),new Vector2(.28f,.07f),()=>Begin(),CanBegin,true);
-                SkipButton=ShellView.Button(panel,"Skip to surgery",new Vector3(.155f,-.265f,-.012f),new Vector2(.20f,.07f),()=>Begin(true),CanBegin,false,true);
-            }
-            panel.localRotation=Quaternion.Euler(0,60,0);panel.localScale=Vector3.one*1.4f;
-            foreach(var fit in panel.GetComponentsInChildren<ScalpalTextFit>()) { fit.maximumWidth*=1.4f;fit.maximumHeight*=1.4f;fit.Fit(); }
+            Add(Model.Name(selected),ScalpalTextRole.Title,gap,"Name");
+            Add(Model.AgeSex(selected),ScalpalTextRole.Body,sectionGap,"AgeSex");
+            Add(Excerpt(Model.Presenting(selected),32,3),ScalpalTextRole.Body,gap,"Complaint");
+            Add(Model.ProcedureAndUrgency(selected),ScalpalTextRole.Body,sectionGap,"Procedure");
+            var highlights=Model.Highlights();
+            Add(highlights.Length>0?string.Join("\n",highlights.Select(line=>Short(line,32))):Model.DetailLoading?"Loading chart…":"",ScalpalTextRole.Caption,sectionGap,"Highlights");
+            Add(Availability(),ScalpalTextRole.Caption,gap,"Availability");
             Readable(panel);
+            // Stack top-down with measured line extents so raising text to its floor can never overlap.
+            float y=0;
+            foreach(var (item,space) in items)
+            {
+                var fit=item.GetComponent<ScalpalTextFit>();fit.Fit();
+                item.localPosition=new Vector3(left,y,-.008f);y-=fit.MeasuredSize().y+space;
+            }
+            const float buttonHeight=.085f, buttonGap=.02f;
+            float beginWidth=.22f, skipWidth=inner-beginWidth-buttonGap, buttonY=y-buttonHeight/2;
+            // Begin stays the primary action; Skip to surgery (ghost) goes to the Theatre card without the interview.
+            BeginButton=ShellView.Button(panel,"Begin",new Vector3(left+beginWidth/2,buttonY,-.012f),new Vector2(beginWidth,buttonHeight),()=>Begin(),CanBegin,true);
+            SkipButton=ShellView.Button(panel,"Skip to surgery",new Vector3(left+beginWidth+buttonGap+skipWidth/2,buttonY,-.012f),new Vector2(skipWidth,buttonHeight),()=>Begin(true),CanBegin,false,true);
+            Readable(BeginButton.transform);Readable(SkipButton.transform);
+            float contentHeight=-(buttonY-buttonHeight/2), height=contentHeight+2*pad;
+            // Centre the stack vertically on the panel.
+            foreach(Transform child in panel)child.localPosition+=Vector3.up*(contentHeight/2);
+            ShellView.Panel(panel,"Glass",new Vector3(0,0,.004f),new Vector2(DetailWidth,height));
+            DetailHalfHeight=height/2;
         }
-        public void Retry()
-        {
-            if(retrying.Length>0||RetryRemaining>0||Model.Selected==null)return;
-            retrying=Model.SelectedPatientId;notice="Retrying chart…";RenderDetail();
-            if(Model.Selected.status=="retry")service.LoadCase(retrying);else {retrying="";Select(Model.SelectedPatientId);}
-        }
+        public float DetailHalfHeight { get; private set; }
         public bool Begin(bool skipToSurgery=false)
         {
             if(!CanBegin||Transitioning)return false;
             var row=Model.Selected;string title="Office · "+Model.Name(row)+", "+(Model.SelectedBrief.patient != null && Model.SelectedBrief.patient.age>=0?Model.SelectedBrief.patient.age.ToString():"age unknown")+"\n"+Short(Model.Complaint(row),90);
             if(skipToSurgery)title="Skip to surgery · "+Model.Name(row);
             Transitioning=ShellTransition.Ensure().BeginOffice(row.patientId,title,service.BaseUrl,skipToSurgery);
-            if(!Transitioning) { notice=ShellTransition.LastError??"Unable to begin. Refresh and try again.";RenderDetail(); }
+            if(!Transitioning) { beginError=ShellTransition.LastError??"Unable to begin. Try again.";RenderDetail(); }
             return Transitioning;
         }
     }

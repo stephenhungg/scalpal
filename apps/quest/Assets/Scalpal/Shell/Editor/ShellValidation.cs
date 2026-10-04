@@ -73,10 +73,10 @@ namespace Scalpal.Shell.Editor
             Check(!model.CanBegin && !model.DetailLoading && model.DetailError.Contains("Try again"), "failed detail closes begin gate with retry explanation");
             model.Select(retry.patientId); model.ApplyBrief(Brief(retry.patientId));
             Check(!model.CanBegin, "retry state never begins an encounter from an old or cached chart");
-            model.Select(unsupported.patientId); model.ApplyBrief(Brief(unsupported.patientId));
-            Check(!model.CanBegin && model.AvailabilityReason == "Interview coming soon", "server capability false disables begin even for a ready matching synthetic brief");
+            Check(!model.Select(unsupported.patientId) && !model.CanBegin && !model.VisiblePatients().Contains(unsupported), "server capability false hides the subject from the grid and refuses selection or begin");
             unsupported.encounterAvailable = true;
-            Check(model.CanBegin, "service-confirmed canonical subject outside the packaged demo set can begin without a fixed ID catalog");
+            model.Select(unsupported.patientId); model.ApplyBrief(Brief(unsupported.patientId));
+            Check(model.CanBegin && model.VisiblePatients().Contains(unsupported), "service-confirmed canonical subject outside the packaged demo set is listed and can begin without a fixed ID catalog");
             unsupported.encounterAvailable = false;
             model.Select(pediatric.patientId); model.ApplyBrief(Brief(pediatric.patientId));
             Check(model.CanBegin, "server capability true enables matching synthetic patient without a hardcoded adult ID gate");
@@ -98,14 +98,7 @@ namespace Scalpal.Shell.Editor
             Check(!model.CanBegin && model.DetailError.Length > 0, "non-synthetic detail cannot begin");
             model.Select(Female); var sandbox = Brief(Female); sandbox.dataSource = "sandbox"; model.ApplyBrief(sandbox);
             Check(model.CanBegin, "server-capable synthetic sandbox brief can begin without pretending to be a demo record");
-            model.Select(Female); model.ApplyBrief(Brief(Female));
-            model.SetFilters("lap_cholecystectomy");
-            Check(model.VisiblePatients().Length == 2 && model.VisiblePatients().All(p => p.procedureId == "lap_cholecystectomy") && model.Selected == null, "procedure filter returns matching cards and clears hidden selection");
-            model.SetFilters("", "urgent");
-            Check(model.VisiblePatients().Length == 4 && model.VisiblePatients().All(p => p.urgency == "urgent"), "urgency filter returns only matching cards");
-            model.SetFilters("lap_cholecystectomy", "elective");
-            Check(model.VisiblePatients().Length == 1 && model.VisiblePatients()[0].patientId == Male, "procedure and urgency filters combine");
-            model.SetFilters(); Check(model.VisiblePatients().Length == 5, "All restores the complete patient grid");
+            ValidateGridVisibility();
             model.ApplyBundle(new ScalpalBundle { patients = new[] { Entry(Female, "blocked", "", "") }, cases = Array.Empty<SurgicalCase>() });
             Check(model.Patients.Length == 5 && model.Patients.Single(p => p.patientId == Female).status == "ready", "slow bundle cannot replace fresher live patient statuses");
             model.Select(Female); model.ApplyBrief(Brief(Female)); ready.status = "blocked";
@@ -120,6 +113,32 @@ namespace Scalpal.Shell.Editor
             Check(!model.CanBegin && model.Selected == null && model.Patients.Length == 0 && model.UnavailableCount == 1 && model.StatusReason(revokedEntry) == "Consent revoked", "retry response revoking consent removes card, clears selection and preserves actual reason");
             model.ApplyPatients(new PatientList { patients = new[] { new PatientListEntry { patientId = "", scenarioId = "connect-cancelled", status = "connect" }, new PatientListEntry { patientId = "", scenarioId = "connect-failed", status = "connect" } } });
             Check(model.Patients.Length == 0 && model.UnavailableCount == 0 && !model.Select("") && !model.CanBegin, "connection-only scenarios are omitted without counting them as patient records");
+        }
+
+        // The explore grid shows only rows a clinician can open: everything else is hidden, not greyed.
+        static void ValidateGridVisibility()
+        {
+            var model = new ExplorePatientModel();
+            var playable = Entry("patient-validation-playable", "ready", "lap_appendectomy", "urgent"); playable.displayLabel = "Ada Playable";
+            var review = Entry("patient-validation-review", "needs_review", "lap_cholecystectomy", "elective"); review.displayLabel = "Ben Review";
+            var recovering = Entry("patient-validation-recovering", "retry", "lap_sigmoid_colectomy", "elective"); recovering.displayLabel = "Cy Recovering";
+            var noProcedure = Entry("patient-validation-no-procedure", "ready", "", "urgent"); noProcedure.displayLabel = "Dee Noprocedure";
+            var unnamed = Entry("patient-validation-unnamed", "needs_review", "lap_cholecystectomy", "elective"); unnamed.displayLabel = "Unnamed patient (limited chart)";
+            var unavailable = Entry("patient-validation-unavailable", "retry", "lap_appendectomy", "urgent"); unavailable.displayLabel = "Unavailable patient";
+            var noInterview = Entry("patient-validation-no-interview", "ready", "lap_appendectomy", "urgent"); noInterview.displayLabel = "Eve Nointerview"; noInterview.encounterAvailable = false;
+            var blocked = Entry("patient-validation-blocked", "blocked", "lap_appendectomy", "urgent"); blocked.displayLabel = "Fay Blocked";
+            var unrecoverable = Entry("patient-validation-unrecoverable", "retry", "lap_appendectomy", "urgent"); unrecoverable.displayLabel = "Gus Unrecoverable"; unrecoverable.encounterAvailable = false;
+            var connect = new PatientListEntry { patientId = "", scenarioId = "connect-failed", displayLabel = "Connect session failed", status = "connect" };
+            model.ApplyPatients(new PatientList { patients = new[] { connect, blocked, unrecoverable, noInterview, unavailable, unnamed, noProcedure, recovering, review, playable } });
+            var visible = model.VisiblePatients().Select(p => p.patientId).OrderBy(id => id, StringComparer.Ordinal).ToArray();
+            Check(visible.SequenceEqual(new[] { playable.patientId, recovering.patientId, review.patientId }), "grid lists playable rows (ready, needs review, recoverable retry) and nothing else: " + string.Join(",", visible));
+            foreach (var hidden in new[] { noProcedure, unnamed, unavailable, noInterview, blocked, unrecoverable, connect })
+                Check(!model.Select(hidden.patientId) && !model.CanBegin, "hidden row cannot be selected or begun: " + hidden.displayLabel);
+            Check(model.Recoverable(recovering) && !model.Recoverable(unrecoverable) && !model.Recoverable(playable), "only retry rows with an authored interview are retried in the background");
+            model.ApplyBundle(new ScalpalBundle { patients = Array.Empty<PatientListEntry>(), cases = new[] { new SurgicalCase { patientId = playable.patientId, procedureId = "lap_appendectomy", patient = new PatientSummary { name = "Ada Playable", age = 40, sex = "female" }, presentation = "Right lower quadrant pain since last night. Nausea." } } });
+            Check(model.CardLine(playable) == "40 · Appendix" && model.CardLine(review) == "Gallbladder" && model.CardLine(recovering) == "Colon", "card line is age · procedure short name only (age omitted when unknown)");
+            Check(ExplorePatientModel.ProcedureShort(Entry(Female, "ready", "open_appendectomy", "")) == "Appendix" && ExplorePatientModel.ProcedureShort(Entry(Female, "ready", "lap_appendectomy", "")) == "Appendix", "open and laparoscopic appendectomy share the Appendix short name");
+            Check(model.Presenting(playable) == "Right lower quadrant pain since last night." && model.AgeSex(playable) == "40 · Female" && model.ProcedureAndUrgency(playable) == "Appendix · Urgent", "detail panel lines: one-sentence complaint, age · sex, procedure · urgency");
         }
 
         static void ValidateExchange()
@@ -184,15 +203,18 @@ namespace Scalpal.Shell.Editor
                 liveHub.BundleLoaded(bundle); liveHub.PatientsLoaded(patients);
                 typeof(HubController).GetMethod("Wire", Private).Invoke(liveHub, null);
                 var model = liveHub.Model;
-                Check(model.Patients.Length == 9 && model.UnavailableCount == 1, "actual catalog shows nine available patient cards plus one unavailable patient, excluding connection scenarios");
+                Check(model.Patients.Length == 9 && model.UnavailableCount == 1, "actual catalog keeps nine selectable records plus one unavailable patient, excluding connection scenarios");
+                Check(model.VisiblePatients().Length == 7 && !model.VisiblePatients().Any(p => p.patientId == "patient-demo-consent-partial" || p.patientId == "patient-demo-rate-limited"), "actual catalog grid hides the unnamed limited chart and the rate-limited record without an interview");
                 Check(model.Select(Female), "live selected patient opens detail");
                 var getBrief = Send(client, "/patients/" + Female + "/brief"); getBrief.Run();
                 Check(getBrief.paths.Single() == "/patients/" + Female + "/brief" && brief?.patientId == Female && brief.synthetic && brief.chart.Length > 0, "real brief carries matching synthetic identity and actual chart highlights");
-                Check(model.CanBegin && model.Name(model.Selected) == "Priya Ramaswamy" && liveHub.BeginButton && liveHub.BeginButton.interactable, "actual live brief callback renders supported adult detail and enables explicit Begin");
+                Check(model.CanBegin && model.Name(model.Selected) == "Priya Ramaswamy" && liveHub.BeginButton && liveHub.BeginButton.interactable && liveHub.SkipButton && liveHub.SkipButton.interactable, "actual live brief callback renders supported adult detail and enables explicit Begin and Skip to surgery");
+                Check(!DetailText(liveHub).Any(text => text.name == "Availability"), "an enabled Begin shows no availability message");
                 Check(ShellTransition.TryStageSelection(model.SelectedPatientId, client.BaseUrl) && ShellTransition.TryConsumeSelection(out var liveSelection) && liveSelection.patientId == Female && liveSelection.serviceUrl == endpoint, "live service UI selection stages the exact production office handoff identity");
                 var available = patients.patients.Where(patient => (patient.status == "ready" || patient.status == "needs_review") && patient.encounterAvailable).ToArray();
                 Check(available.Length == 8, "live HTTP catalog exposes all eight service-authorized subjects for the explicit shell handoff");
-                foreach (var patient in available)
+                Check(available.Count(model.Listed) == 7 && !model.Listed(available.Single(p => p.patientId == "patient-demo-consent-partial")), "every named, interview-capable subject with a procedure is listed; the unnamed limited chart is not");
+                foreach (var patient in available.Where(model.Listed))
                 {
                     Check(model.Select(patient.patientId), "every available live canonical subject can select detail: " + patient.patientId);
                     Send(client, "/patients/" + patient.patientId + "/brief").Run();
@@ -232,17 +254,15 @@ namespace Scalpal.Shell.Editor
                 rateLimitedCase = null; error = null; retryRoute = ""; retrySeconds = 0;
                 const string legacyPatientId = "patient-validation-legacy429";
                 string legacyRoute = "/patients/" + legacyPatientId + "/case";
-                var legacyRow = Entry(legacyPatientId, "retry", "", ""); legacyRow.encounterAvailable = false;
+                var legacyRow = Entry(legacyPatientId, "retry", "", "");
                 liveHub.PatientsLoaded(new PatientList { patients = patients.patients.Concat(new[] { legacyRow }).ToArray() });
-                Check(liveHub.Select(legacyPatientId) && !model.DetailLoading && liveHub.RetryRemaining == 0, "controlled legacy retry patient can select recovery detail without loading a brief or inheriting another patient's cooldown");
+                Check(!liveHub.Select(legacyPatientId) && model.Recoverable(legacyRow) && !model.VisiblePatients().Contains(legacyRow) && liveHub.Remaining(legacyPatientId) == 0, "retry record without a procedure stays out of the grid but remains a background recovery target with no inherited cooldown");
                 Send(client, legacyRoute).Run();
                 Check(rateLimitedCase == null && error?.error?.code == "rate_limited" && retryRoute == legacyRoute && retrySeconds == 3, "controlled canonical legacy HTTP429 case response preserves Retry-After header despite never invoking CaseLoaded");
-                Check(model.SelectedPatientId == legacyPatientId && liveHub.RetryRemaining > 0, "actual canonical HTTP429 route sets the selected retry patient's cooldown");
-                liveHub.Retry();
-                Check(((System.Collections.IEnumerable)typeof(ScalpalPreopService).GetField("pending", Private).GetValue(client)).Cast<object>().Count() == 0 && (string)typeof(HubController).GetField("retrying", Private).GetValue(liveHub) == "", "Retry during the canonical HTTP429 cooldown emits no additional request");
-                model.Select(Female);
-                liveHub.Select(legacyPatientId);
-                Check(liveHub.RetryRemaining > 0, "leaving and reselecting canonical legacy retry card cannot bypass its per-patient cooldown");
+                Check(liveHub.Remaining(legacyPatientId) > 2, "actual canonical HTTP429 Retry-After sets that record's background retry cooldown");
+                liveHub.ServiceRetries();
+                var inFlight = (HashSet<string>)typeof(HubController).GetField("retryInFlight", Private).GetValue(liveHub);
+                Check(((System.Collections.IEnumerable)typeof(ScalpalPreopService).GetField("pending", Private).GetValue(client)).Cast<object>().Count() == 0 && inFlight.Count == 0, "background retry emits no request during the service's Retry-After");
                 int callbacksAfterCancellation = 0;
                 Action<PreopBrief> cancellationObserver = value => callbacksAfterCancellation++;
                 client.BriefLoaded += cancellationObserver;
@@ -326,13 +346,12 @@ namespace Scalpal.Shell.Editor
             Check(hub.Exploring && !start.gameObject.activeInHierarchy, "left trigger on Start opens explore without scene launch");
             hub.Reload(); // Real dispatch path with forceOffline synchronously loads Resources/scalpal_bundle.
             var patientCards = hub.content.GetComponentsInChildren<ShellButton>(true).Where(button => button.name.StartsWith("Patient_", StringComparison.Ordinal)).ToArray();
-            Check(patientCards.Length == 9 && hub.Model.Patients.Length == 9 && hub.Model.UnavailableCount == 1, "offline callbacks render nine available patient cards and count the unavailable patient separately");
-            Check(patientCards.Select(button => button.transform.localPosition.x).Distinct().Count() == 4 && patientCards.Select(button => button.transform.localPosition.y).Distinct().Count() == 3, "nine patient cards occupy four columns and three rows on the first page");
-            Check(patientCards.All(button => { var bounds = button.GetComponent<BoxCollider>().size; return Mathf.Abs(bounds.x - .50f) < .001f && Mathf.Abs(bounds.y - .32f) < .001f; }), "each expanded grid card is a 0.50 by 0.32 metre ray target");
+            Check(patientCards.Length == 7 && hub.Model.Patients.Length == 9 && hub.Model.UnavailableCount == 1, "offline callbacks render seven playable patient cards; the unnamed and rate-limited records are hidden");
+            ValidateMinimalExplore(hub, patientCards);
             Check(hub.content.GetComponentsInChildren<ShellButton>(true).All(button => { var bounds = button.GetComponent<BoxCollider>().size; return bounds.x >= .022f && bounds.y >= .022f; }), "all shell buttons meet the 22 mm minimum target size");
             var adult = hub.Model.Patients.Single(patient => patient.patientId == Female);
             var cardPress = ScalpalPointerProbe.Press(1, hub.input.origin, patientCards.Single(button => button.name == "Patient_" + adult.scenarioId).GetComponent<Collider>(), () => hub.input.Pointer(1), hub.input.StepPointers);
-            Check(cardPress.RayMatchesAim && cardPress.hovered, "right controller aim ray focuses a patient card");
+            Check(cardPress.RayMatchesAim && cardPress.hovered && cardPress.accentOnHover, "right controller aim ray focuses a patient card with the neutral rim");
             Check(hub.Model.SelectedPatientId == Female && hub.Model.SelectedBrief?.patientId == Female && hub.BeginButton && !hub.BeginButton.interactable && !hub.Transitioning && hub.Model.CanBegin, "actual card action loads matching offline chart but disables network-required Begin without transitioning");
             Check(!hub.Begin(), "offline chart browsing never attempts to create a network-only office encounter");
             ValidateBeginPointer(hub);
@@ -340,11 +359,13 @@ namespace Scalpal.Shell.Editor
             MeasureAndValidateTypography(hub, patientCards);
             Check(!hub.Model.Patients.Any(patient => patient.status == "blocked" || string.IsNullOrEmpty(patient.patientId)), "blocked and connection-only rows produce no patient ray targets");
             Check(!hub.Select("patient-demo-consent-revoked") && !hub.Begin(), "direct blocked selection and begin commands fail closed even without a visible card");
-            var availableOffline = hub.Model.Patients.Where(patient => patient.status == "ready" || patient.status == "needs_review").ToArray();
-            Check(availableOffline.Length == 8, "cached grid retains all eight available authored subjects alongside the retry record");
+            var availableOffline = hub.Model.VisiblePatients();
+            Check(availableOffline.Length == 7 && availableOffline.All(patient => patient.status == "ready" || patient.status == "needs_review"), "cached grid lists all seven named authored subjects");
+            Check(!hub.Select("patient-demo-consent-partial") && !hub.Select("patient-demo-rate-limited"), "hidden unnamed and rate-limited records cannot be selected directly");
             foreach (var patient in availableOffline)
             {
-                Check(hub.Select(patient.patientId) && hub.Model.SelectedBrief?.patientId == patient.patientId && !hub.CanBegin && hub.BeginButton && !hub.BeginButton.interactable, "every available subject loads matching offline chart without establishing live begin authority: " + patient.patientId);
+                Check(hub.Select(patient.patientId) && hub.Model.SelectedBrief?.patientId == patient.patientId && !hub.CanBegin && hub.BeginButton && !hub.BeginButton.interactable && !hub.SkipButton.interactable, "every available subject loads matching offline chart without establishing live begin authority: " + patient.patientId);
+                Check(DetailText(hub).Count(text => text.name == "Availability") == 1 && DetailText(hub).Single(text => text.name == "Availability").text == "Offline · reconnect to begin", "a disabled Begin explains itself in one short line: " + patient.patientId);
                 hub.BeginButton.Press();
                 Check(!hub.Begin() && !hub.Transitioning, "offline browsing never transitions for an otherwise available canonical subject: " + patient.patientId);
             }
@@ -352,13 +373,8 @@ namespace Scalpal.Shell.Editor
             var unsupported = capabilityFixture.patients.First(patient => patient.encounterAvailable && patient.status != "retry" && patient.patientId != Female);
             unsupported.encounterAvailable = false;
             hub.PatientsLoaded(capabilityFixture);
-            Check(hub.Select(unsupported.patientId) && hub.BeginButton && !hub.BeginButton.interactable && hub.Model.AvailabilityReason == "Interview coming soon", "unsupported interview detail has explicit coming-soon reason and disabled Begin");
-            hub.BeginButton.Press();
-            Check(!hub.Begin() && !hub.Transitioning, "both UI press and direct Begin reject unsupported interview");
+            Check(!hub.Select(unsupported.patientId) && !PatientCards(hub).Any(card => card.name == "Patient_" + unsupported.scenarioId) && !hub.Begin() && !hub.Transitioning, "a subject without an authored interview has no card and cannot be selected or begun");
             hub.Reload();
-            var appendixChip = hub.content.GetComponentsInChildren<ShellButton>(true).Single(button => button.label && button.label.text == "Appendix");
-            appendixChip.Press();
-            Check(hub.Model.VisiblePatients().Length == 3 && hub.Model.VisiblePatients().All(patient => patient.procedureId == "open_appendectomy") && hub.Model.ProcedureFilter == "appendectomy", "actual Appendix chip admits all three current open appendix patients and excludes other procedures");
             Check(hub.Model.CaseFor(Female).procedureId == "open_appendectomy" && !hub.Model.Complaint(adult).StartsWith("Advanced offline"), "packaged advanced variant cannot overwrite the catalog primary display case");
             var variantModel = new ExplorePatientModel();
             var variantRows = new[] { Entry(Female, "ready", "open_appendectomy", "urgent") };
@@ -369,10 +385,6 @@ namespace Scalpal.Shell.Editor
                 variantModel.ApplyBundle(new ScalpalBundle { patients=variantRows, cases=variants });
                 Check(variantModel.CaseFor(Female) == primary, "primary metadata remains selected in either bundle variant order");
             }
-            variantModel.ApplyPatients(new PatientList { patients=new[] { variantRows[0], Entry(Male,"ready","lap_appendectomy","urgent"), Entry("patient-validation-colon","ready","lap_sigmoid_colectomy","elective") } });
-            variantModel.SetFilters("appendectomy");
-            Check(variantModel.VisiblePatients().Length == 2, "Appendix category includes open and advanced laparoscopic subjects but excludes colon");
-            hub.Filter();
             hub.Select(Female);
             Check(ShellTransition.TryStageSelection(hub.Model.SelectedPatientId, hub.service.BaseUrl), "the production Begin handoff contract accepts supported selected patient plus explicit endpoint");
             Check(ShellTransition.TryConsumeSelection(out var selected) && selected.patientId == Female && selected.serviceUrl == hub.service.BaseUrl, "office consumes exact selected patient and service endpoint once");
@@ -422,6 +434,18 @@ namespace Scalpal.Shell.Editor
                 Check(enabled.hovered && enabled.accentOnHover && begun == 1, "an enabled Begin on the angled chart panel is hit by the left aim ray and pressed once: hovered=" + enabled.hovered + " accent=" + enabled.accentOnHover + " begun=" + begun + " visible=" + enabled.rayVisible + " end=" + enabled.lineEnd + " target=" + begin.transform.position);
             }
             finally { begin.action = action; begin.interactable = hub.CanBegin; }
+            var skip = hub.SkipButton;
+            Check(skip && skip.ghost && !skip.primary && Mathf.Abs(skip.transform.position.y - begin.transform.position.y) < .001f, "Skip to surgery is the ghost action on Begin's row");
+            var skipDisabled = ScalpalPointerProbe.Press(1, hub.input.origin, skip.GetComponent<Collider>(), () => hub.input.Pointer(1), hub.input.StepPointers);
+            Check(skipDisabled.RayMatchesAim && !skipDisabled.hovered && !hub.Transitioning, "offline (disabled) Skip to surgery cannot be focused or pressed by the ray");
+            var skipAction = skip.action; int skipped = 0;
+            try
+            {
+                skip.interactable = true; skip.action = () => skipped++;
+                var enabled = ScalpalPointerProbe.Press(1, hub.input.origin, skip.GetComponent<Collider>(), () => hub.input.Pointer(1), hub.input.StepPointers);
+                Check(enabled.hovered && enabled.accentOnHover && skipped == 1 && !hub.Transitioning, "an enabled Skip to surgery is hit by the right aim ray and pressed once without pressing Begin");
+            }
+            finally { skip.action = skipAction; skip.interactable = hub.CanBegin; }
         }
         static void ValidatePausePointer(HubController hub)
         {
@@ -460,20 +484,20 @@ namespace Scalpal.Shell.Editor
         {
             var entries = Enumerable.Range(0, 25).Select(index => Entry("patient-validation-" + index.ToString("D2"), "ready", "lap_appendectomy", "urgent")).ToArray();
             hub.PatientsLoaded(new PatientList { patients = entries });
-            Check(hub.Page == 0 && hub.PageCount == 3 && PatientCards(hub).Length == 12, "catalog expansion to 25 patients starts on a bounded first page of twelve");
+            Check(hub.Page == 0 && hub.PageCount == 3 && PatientCards(hub).Length == HubController.PageSize, "catalog expansion to 25 patients starts on a bounded first page of nine");
+            float glassBottom = -GlassSize(hub).y / 2;
             var seen = new System.Collections.Generic.HashSet<string>();
             for (int page = 0; page < 3; page++)
             {
                 hub.SetPage(page); var cards = PatientCards(hub);
-                Check(cards.Length == (page < 2 ? 12 : 1) && cards.All(card => card.transform.localPosition.y - card.GetComponent<BoxCollider>().size.y * .5f >= -.581f), "page " + page + " stays within three rows above footer controls");
+                var pagers = hub.content.GetComponentsInChildren<ShellButton>().Where(button => button.transform.parent.name == "Paging").ToArray();
+                Check(cards.Length == (page < 2 ? 9 : 7) && pagers.Length == 2 && cards.All(card => pagers.All(pager => card.transform.localPosition.y - HubController.CardHeight * .5f > pager.transform.localPosition.y + .04f)) && pagers.All(pager => pager.transform.localPosition.y - .04f > glassBottom), "page " + page + " stays within three rows above the paging controls inside the glass");
                 Check(cards.All(card => seen.Add(card.name)), "page " + page + " introduces no duplicate patient from another page");
             }
             Check(seen.Count == 25, "all 25 patients are reachable across pages without dropping rows");
             hub.SetPage(999); Check(hub.Page == 2, "page index clamps to the last available page");
             hub.SetPage(-1); Check(hub.Page == 0, "negative page index clamps to the first page");
-            hub.SetPage(2); hub.Filter("lap_appendectomy", "urgent");
-            Check(hub.Page == 0 && hub.PageCount == 3, "filter changes return to first page instead of leaving a stale page index");
-            hub.Filter(); hub.Reload();
+            hub.Reload();
         }
 
         // Read-only physical measurements are logged separately from bounds assertions: passing
@@ -489,9 +513,9 @@ namespace Scalpal.Shell.Editor
             {
                 var lines = card.GetComponentsInChildren<ScalpalTextFit>().Where(fit => !string.IsNullOrWhiteSpace(fit.Text.text)).OrderByDescending(fit => fit.transform.position.y).ToArray();
                 float distance = Vector3.Distance(card.transform.position, hub.input.head.transform.position);
-                minimumCardSizes &= lines.Length == 5 && lines.Select((fit, index) => fit.MeasuredSize().y / distance * 1000 >= (index == 0 ? 32 : 24) - .05f).All(value => value);
+                minimumCardSizes &= lines.Length == 2 && lines.Select((fit, index) => fit.MeasuredSize().y / distance * 1000 >= (index == 0 ? 32 : 24) - .05f).All(value => value);
             }
-            Check(minimumCardSizes, "all five card text rows meet 32 mm name and 24 mm body at one-metre equivalent using each card's actual viewing distance: " + string.Join(" ", cards.Select(card => string.Join(",", card.GetComponentsInChildren<ScalpalTextFit>().Where(fit => !string.IsNullOrWhiteSpace(fit.Text.text)).OrderByDescending(fit => fit.transform.position.y).Select(fit => (fit.MeasuredSize().y / Vector3.Distance(card.transform.position, hub.input.head.transform.position) * 1000).ToString("F1"))))));
+            Check(minimumCardSizes, "both card text rows meet 32 mm name and 24 mm body at one-metre equivalent using each card's actual viewing distance: " + string.Join(" ", cards.Select(card => string.Join(",", card.GetComponentsInChildren<ScalpalTextFit>().Where(fit => !string.IsNullOrWhiteSpace(fit.Text.text)).OrderByDescending(fit => fit.transform.position.y).Select(fit => (fit.MeasuredSize().y / Vector3.Distance(card.transform.position, hub.input.head.transform.position) * 1000).ToString("F1"))))));
             var panel = hub.content.GetComponentsInChildren<Transform>().Single(item => item.name == "SelectedChart");
             var detailFits = panel.GetComponentsInChildren<ScalpalTextFit>().Where(fit => !string.IsNullOrWhiteSpace(fit.Text.text)).ToArray();
             foreach (var fit in detailFits) fit.Fit();
@@ -503,8 +527,9 @@ namespace Scalpal.Shell.Editor
                 " detailLineCounts=" + string.Join(",", detailFits.Select(fit => fit.LineCount)) +
                 " cardAndDetailNormalization=actualPanelCenterDistance requestedBodyMm=24 requestedLabelMm=32 headset=false readabilityPassClaim=false");
             Check(detailMm.Min() >= ScalpalBrand.BodyMinimumMmAt1m - .05f, "selected chart detail text meets the 24 mm/m body floor at its viewing distance: min=" + detailMm.Min().ToString("F2"));
-            foreach (var card in cards) ValidateTextRegions(card.transform, .16f, "patient card " + card.name);
-            ValidateTextRegions(panel, .36f, "selected detail");
+            foreach (var card in cards) ValidateTextRegions(card.transform, HubController.CardHeight / 2, "patient card " + card.name);
+            ValidateTextRegions(panel, hub.DetailHalfHeight, "selected detail");
+            ValidateDetailBesideGrid(hub);
             var originalCase = hub.Model.SelectedCase;
             string originalPresentation = originalCase.presentation;
             var originalBrief = hub.Model.SelectedBrief;
@@ -514,17 +539,78 @@ namespace Scalpal.Shell.Editor
                 // the original resource data and restoring the real selected chart immediately after.
                 originalCase.presentation = string.Join(" ", Enumerable.Repeat("Authored presentation with additional context", 12));
                 var longBrief = JsonUtility.FromJson<PreopBrief>(JsonUtility.ToJson(originalBrief));
-                longBrief.chart = new[] { new ChartLine { section = "Regression fixture", text = string.Join(" ", Enumerable.Repeat("Returned chart context", 60)) } };
+                longBrief.chart = Enumerable.Range(0, 5).Select(index => new ChartLine { section = "Section " + index, text = string.Join(" ", Enumerable.Repeat("Returned chart context", 60)) }).ToArray();
                 hub.BriefLoaded(longBrief);
                 panel = hub.content.GetComponentsInChildren<Transform>().Single(item => item.name == "SelectedChart");
-                var directText = panel.GetComponentsInChildren<TMPro.TextMeshPro>().Where(text => text.transform.parent == panel).ToArray();
-                Check(directText.Single(text => Mathf.Abs(text.transform.localPosition.y - .205f) < .001f).text.Split('\n').Length == 2 &&
-                    directText.Single(text => Mathf.Abs(text.transform.localPosition.y - .105f) < .001f).text.Split('\n').Length == 7,
-                    "long complaint and chart exercise actual bounded two-line and seven-line detail layouts");
-                ValidateTextRegions(panel, .36f, "maximum-line detail regression");
+                var directText = DetailText(hub);
+                Check(directText.Single(text => text.name == "Complaint").text.Split('\n').Length == 3 &&
+                    directText.Single(text => text.name == "Highlights").text.Split('\n').Length == 3,
+                    "long complaint and chart are bounded to three complaint lines and three one-line highlights");
+                ValidateTextRegions(panel, hub.DetailHalfHeight, "maximum-line detail regression");
+                ValidateDetailBesideGrid(hub);
             }
             finally { originalCase.presentation = originalPresentation; hub.BriefLoaded(originalBrief); }
         }
+        static TMPro.TextMeshPro[] DetailText(HubController hub) => hub.content.GetComponentsInChildren<Transform>().Single(item => item.name == "SelectedChart")
+            .GetComponentsInChildren<TMPro.TextMeshPro>().Where(text => !string.IsNullOrWhiteSpace(text.text) && !text.GetComponentInParent<ShellButton>()).ToArray();
+        static Vector2 GlassSize(HubController hub) => hub.content.GetComponentsInChildren<Transform>(true).Single(item => item.name == "ExploreGlass").GetComponent<MeshFilter>().sharedMesh.bounds.size;
+
+        // Clean, minimal explore: the serif title "Patients" and cards that show a name and one quiet line.
+        static void ValidateMinimalExplore(HubController hub, ShellButton[] cards)
+        {
+            var explore = hub.content.Find("Explore");
+            var brand = ScalpalBrand.Active;
+            string[] removed = { "All", "Appendix", "Gallbladder", "Colon", "Any", "Emergency", "Urgent", "Elective", "Refresh", "Try again", "Previous", "Next" };
+            Check(!explore.GetComponentsInChildren<Transform>(true).Any(item => item.name == "Filters") &&
+                !explore.GetComponentsInChildren<ShellButton>(true).Any(button => button.label && removed.Contains(button.label.text)), "explore has no filter bar, Refresh, retry or paging controls for a single page");
+            var chrome = explore.GetComponentsInChildren<TMPro.TextMeshPro>(true).Where(text => !string.IsNullOrWhiteSpace(text.text) && !text.GetComponentInParent<ShellButton>() && !text.transform.IsChildOf(explore.Find("PatientDetail"))).ToArray();
+            Check(chrome.Length == 1 && chrome[0].text == "Patients" && chrome[0].font == brand.display, "the only explore text outside the cards is the serif title \"Patients\" (no count, hint or status footer): " + string.Join(" | ", chrome.Select(text => text.text)));
+            // Independent of the model's filter: the packaged catalog's seven named, interview-capable patients.
+            var expected = new[] { "Dolores Marchetti", "Harriet Lindqvist", "Ingrid Solano", "Jonah Okoye", "Morgan Rivera", "Priya Ramaswamy", "Theo Abernathy" };
+            var names = cards.Select(card => card.GetComponentsInChildren<TMPro.TextMeshPro>().Single(text => text.name == "Name").text).OrderBy(name => name, StringComparer.Ordinal).ToArray();
+            Check(names.SequenceEqual(expected), "every playable patient has exactly one card and no placeholder is shown: " + string.Join(", ", names));
+            var line = new System.Text.RegularExpressions.Regex("^(\\d+ · )?(Appendix|Gallbladder|Colon)$");
+            foreach (var card in cards)
+            {
+                var texts = card.GetComponentsInChildren<TMPro.TextMeshPro>().Where(text => !string.IsNullOrWhiteSpace(text.text)).ToArray();
+                Check(texts.Length == 2 && texts[0].name == "Name" && texts[0].font == brand.display && texts[1].name == "Line" && line.IsMatch(texts[1].text) && Mathf.Abs(texts[1].color.a - .6f) < .01f,
+                    "card shows only the serif name and one quiet age · procedure line: " + card.name + " " + string.Join(" / ", texts.Select(text => text.text)));
+                var row = hub.Model.VisiblePatients().Single(patient => card.name == "Patient_" + patient.scenarioId);
+                int marks = card.GetComponentsInChildren<LineRenderer>().Length;
+                Check(marks == (row.status == "retry" ? 1 : 0), "a status mark appears only on a card that is still retrying: " + card.name);
+                Check(card.lift && !card.primary && !card.ghost, "cards lift on hover with the neutral brand rim");
+            }
+            Check(cards.Single(card => card.name == "Patient_multi-source-overlap").GetComponentsInChildren<TMPro.TextMeshPro>().Single(text => text.name == "Line").text == "40 · Appendix", "Priya's card line reads \"40 · Appendix\"");
+            var rects = cards.Select(card => new Rect((Vector2)card.transform.localPosition - new Vector2(HubController.CardWidth, HubController.CardHeight) / 2, new Vector2(HubController.CardWidth, HubController.CardHeight))).ToArray();
+            Check(rects.SelectMany((a, i) => rects.Skip(i + 1).Select(b => (a, b))).All(pair => !pair.a.Overlaps(pair.b) &&
+                (Mathf.Abs(pair.a.center.x - pair.b.center.x) >= HubController.CardWidth + HubController.ColumnGap - .001f || Mathf.Abs(pair.a.center.y - pair.b.center.y) >= HubController.CardHeight + HubController.RowGap - .001f)), "cards never overlap and keep the full column and row gutters");
+            Check(cards.Select(card => card.transform.localPosition.x).Distinct().Count() == HubController.Columns && cards.Select(card => card.transform.localPosition.y).Distinct().Count() == 3, "seven cards occupy three columns and three rows");
+            Check(Mathf.Abs(rects.Min(r => r.xMin) + rects.Max(r => r.xMax)) < .001f && rects.Where(r => Mathf.Approximately(r.center.y, rects.Min(m => m.center.y))).All(r => Mathf.Abs(r.center.x) < .001f), "grid is centred and a short last row is centred under it");
+            var glass = GlassSize(hub);
+            float side = glass.x / 2 - rects.Max(r => r.xMax), bottom = rects.Min(r => r.yMin) + glass.y / 2;
+            Check(Mathf.Abs(side - bottom) < .001f && side >= .1f, "consistent side and bottom margins around the grid: side=" + side.ToString("F3") + " bottom=" + bottom.ToString("F3"));
+            var title = chrome[0].GetComponent<ScalpalTextFit>(); var titleBounds = title.LocalBounds();
+            Check(title.transform.localPosition.y - titleBounds.size.y > rects.Max(r => r.yMax) + .03f, "title sits clear above the first row of cards");
+            Check(cards.All(button => { var bounds = button.GetComponent<BoxCollider>().size; return Mathf.Abs(bounds.x - HubController.CardWidth) < .001f && Mathf.Abs(bounds.y - HubController.CardHeight) < .001f; }), "each grid card is a 0.50 by 0.21 metre ray target");
+            Check(hub.Model.Selected == null && !explore.Find("PatientDetail").GetComponentsInChildren<Transform>().Any(item => item.name == "SelectedChart"), "the side panel appears only once a card is selected");
+        }
+
+        // The side panel opens to the right of the grid and never overlaps it from the viewer's eye.
+        static void ValidateDetailBesideGrid(HubController hub)
+        {
+            var panel = hub.content.GetComponentsInChildren<Transform>().Single(item => item.name == "SelectedChart");
+            var glass = hub.content.GetComponentsInChildren<Transform>(true).Single(item => item.name == "ExploreGlass");
+            var eye = hub.input.head.transform.position;
+            float Yaw(Vector3 point) { var flat = Vector3.ProjectOnPlane(point - eye, Vector3.up); return Vector3.SignedAngle(Vector3.ProjectOnPlane(hub.input.head.transform.forward, Vector3.up), flat, Vector3.up); }
+            float gridRight = Yaw(glass.TransformPoint(new Vector3(GlassSize(hub).x / 2, 0, 0)));
+            float panelLeft = Yaw(panel.TransformPoint(new Vector3(-HubController.DetailWidth / 2, 0, 0)));
+            Check(panelLeft > gridRight + 1, "detail panel sits to the right of the grid without overlapping it: grid edge " + gridRight.ToString("F1") + " deg, panel edge " + panelLeft.ToString("F1") + " deg");
+            Check(Vector3.Angle(Vector3.ProjectOnPlane(-panel.forward, Vector3.up), Vector3.ProjectOnPlane(eye - panel.position, Vector3.up)) < 3, "detail panel faces the viewer");
+            var texts = DetailText(hub).Select(text => text.name).ToArray();
+            Check(texts.Take(4).SequenceEqual(new[] { "Name", "AgeSex", "Complaint", "Procedure" }) && texts.All(name => new[] { "Name", "AgeSex", "Complaint", "Procedure", "Highlights", "Availability" }.Contains(name)), "detail reads name, age · sex, complaint, procedure · urgency, highlights, then an availability line only when needed: " + string.Join(",", texts));
+            Check(hub.BeginButton.transform.localPosition.y < DetailText(hub).Min(text => text.transform.localPosition.y - text.GetComponent<ScalpalTextFit>().MeasuredSize().y), "Begin and Skip sit below all detail text");
+        }
+
         static void ValidateTextRegions(Transform panel, float halfHeight, string description)
         {
             var regions = panel.GetComponentsInChildren<ScalpalTextFit>()
