@@ -33,7 +33,7 @@ namespace Scalpal.Quest
         sealed class View
         {
             public GameObject root;
-            public LineRenderer box;
+            public LineRenderer box, laser;
             public TextMeshPro label;
             public ScalpalTextFit fit;
             public string rawLabel;
@@ -79,13 +79,19 @@ namespace Scalpal.Quest
                 var sample = ScalpalAim.Read(hand);
                 var input = FindInput(hand);
                 var interactor = input ? input.GetComponent<InstrumentInteractor>() : null;
-                if (sample.kind != ScalpalPointerKind.Controller || !input || !input.isActiveAndEnabled
-                    || !interactor || !interactor.TrackingValid)
+                if (!sample.Valid || !Finite(sample.position)
+                    || (sample.kind == ScalpalPointerKind.Controller && (!input || !input.isActiveAndEnabled
+                        || !interactor || !interactor.TrackingValid)))
                 { Hide(views[hand]); continue; }
                 var ray = new Ray(rig.trackingOrigin.TransformPoint(sample.position),
                     rig.trackingOrigin.rotation * (sample.rotation * Vector3.forward));
-                if (!TryResolve(ray, interactor.HeldInstrument, out var target, out var bounds))
+                if (!Finite(ray.direction) || ray.direction.sqrMagnitude < .99f)
                 { Hide(views[hand]); continue; }
+                bool resolved = TryResolve(ray, interactor ? interactor.HeldInstrument : null, out var target, out var bounds, out float beamDistance);
+                ShowLaser(views[hand], ray, beamDistance);
+                // Hand aim still draws a laser; instrument/organ naming retains its controller contract.
+                if (sample.kind != ScalpalPointerKind.Controller || !resolved)
+                { HideIdentity(views[hand]); continue; }
                 string id = target.tool ? target.tool.instrumentId : target.part.stableId;
                 string label = target.tool ? id.Replace('_',' ') : string.IsNullOrEmpty(target.part.displayName) ? id.Replace('_',' ') : target.part.displayName;
                 Show(views[hand], new PointedObject { id=id, label=label, instrument=target.tool, worldBounds=bounds, ray=ray });
@@ -114,12 +120,11 @@ namespace Scalpal.Quest
                 if (!(renderer is LineRenderer) && (part ? renderer.GetComponentInParent<AnatomyPart>() == part : renderer.GetComponentInParent<InstrumentBehaviour>() == tool)) result.Add(renderer);
             return result.ToArray();
         }
-        bool TryResolve(Ray ray, InstrumentBehaviour held, out Target target, out Bounds bounds)
+        bool TryResolve(Ray ray, InstrumentBehaviour held, out Target target, out Bounds bounds, out float beamDistance)
         {
-            target=null; bounds=default;
+            target=null; bounds=default; beamDistance=MaximumDistance;
             int count = Physics.RaycastNonAlloc(ray,hits,MaximumDistance,Physics.DefaultRaycastLayers,QueryTriggerInteraction.Collide);
             // Overflow can omit the nearest surface, so do not label through an unknown occluder.
-            if (count == hits.Length) return false;
             Collider nearest = null; float distance=MaximumDistance;
             for (int i=0;i<count;i++)
             {
@@ -130,6 +135,8 @@ namespace Scalpal.Quest
                 if (tool && (tool == held || collider.GetComponent<InstrumentTipContact>())) continue;
                 nearest=collider; distance=hits[i].distance;
             }
+            beamDistance = distance;
+            if (count == hits.Length) return false;
             if (!nearest || nearest.GetComponentInParent<IScalpalPressable>() != null) return false;
             var part=nearest.GetComponentInParent<AnatomyPart>();
             var instrument=nearest.GetComponentInParent<InstrumentBehaviour>();
@@ -147,6 +154,24 @@ namespace Scalpal.Quest
             return any && Finite(bounds.center) && Finite(bounds.size) && bounds.size.sqrMagnitude>0;
         }
         static bool Finite(Vector3 value) => float.IsFinite(value.x) && float.IsFinite(value.y) && float.IsFinite(value.z);
+        void ShowLaser(View view, Ray ray, float distance)
+        {
+            if (!view.laser)
+            {
+                view.laser = new GameObject("ORHandLaser").AddComponent<LineRenderer>();
+                view.laser.transform.SetParent(transform, false);
+                view.laser.useWorldSpace = true; view.laser.positionCount = 2;
+                view.laser.startWidth = .0015f; view.laser.endWidth = .0008f;
+                view.laser.sharedMaterial = ScalpalBrand.Active.ray;
+                view.laser.startColor = view.laser.endColor = ScalpalBrand.SurgicalGreen;
+                view.laser.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                view.laser.receiveShadows = false;
+            }
+            view.laser.enabled = true;
+            // Leave the controller's near field clear; stop at the actual foreground collider.
+            view.laser.SetPosition(0, ray.GetPoint(Mathf.Min(.015f, distance)));
+            view.laser.SetPosition(1, ray.GetPoint(Mathf.Max(0, distance)));
+        }
         void Show(View view, PointedObject hit)
         {
             if (!view.root)
@@ -218,15 +243,21 @@ namespace Scalpal.Quest
         }
         public LineRenderer BoxVisual(int hand) => hand>=0&&hand<views.Length ? views[hand].box : null;
         public TextMeshPro LabelVisual(int hand) => hand>=0&&hand<views.Length ? views[hand].label : null;
+        public LineRenderer LaserVisual(int hand) => hand>=0&&hand<views.Length ? views[hand].laser : null;
         public void Clear() { foreach(var view in views)Hide(view); }
-        static void Hide(View view) { view.visible=false; view.hit=default; if(view.root)view.root.SetActive(false); }
+        static void HideIdentity(View view) { view.visible=false; view.hit=default; if(view.root)view.root.SetActive(false); }
+        static void Hide(View view) { HideIdentity(view); if(view.laser)view.laser.enabled=false; }
         void OnApplicationPause(bool value) { paused=value; if(value)Clear(); }
         void OnApplicationFocus(bool value) { if(!value)Clear(); }
         void OnDisable() => Clear();
         void OnDestroy()
         {
             if(rig)rig.ToolsReset-=Clear;
-            foreach(var view in views)if(view.root) { if(Application.isPlaying)Destroy(view.root);else DestroyImmediate(view.root); }
+            foreach(var view in views)
+            {
+                if(view.root) { if(Application.isPlaying)Destroy(view.root);else DestroyImmediate(view.root); }
+                if(view.laser) { if(Application.isPlaying)Destroy(view.laser.gameObject);else DestroyImmediate(view.laser.gameObject); }
+            }
         }
     }
 }

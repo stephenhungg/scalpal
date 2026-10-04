@@ -93,6 +93,12 @@ namespace Scalpal.Quest.Editor
                     Require(pointer.TryGetPointed(aimHand,out var hit)&&hit.id==part.stableId&&!hit.instrument,part.stableId+" identified by actual imported collider");
                     Require(Vector3.Distance(hit.ray.origin,origin)<.00001f&&Vector3.Angle(hit.ray.direction,direction)<.01f,"aim pose is transformed once, independently of grip pose");
                     AssertBounds(pointer,aimHand,part,mesh,hit);
+                    var beam=pointer.LaserVisual(aimHand);
+                    Require(beam&&beam.enabled&&beam.positionCount==2&&beam.useWorldSpace,"tracked hand retains a visible world-space laser alongside target identity");
+                    Require(Vector3.Distance(beam.GetPosition(0),origin+direction*.015f)<.00001f
+                        &&Vector3.Dot(beam.GetPosition(1)-origin,direction)>0
+                        &&Vector3.Dot(beam.GetPosition(1)-origin,direction)<=NativeScenePointer.MaximumDistance,
+                        "laser uses the controller aim origin/direction and stops at a bounded scene surface");
                     int other=1-aimHand;Require(!pointer.TryGetPointed(other,out _),"untracked other controller has no stale box");
                     bool highlighted=part.IsHighlighted;
                     sample.select=1;Step();Require(part.IsHighlighted==highlighted,"pointing and trigger do not own coach highlight");
@@ -109,12 +115,17 @@ namespace Scalpal.Quest.Editor
                     Step();Require(!pointer.TryGetPointed(aimHand,out _),"tracking grace freezes a tool but cannot invent a pointer pose");
                     rig.inputs[aimHand].GetComponent<InstrumentInteractor>().SetTrackedPose(origin,Quaternion.identity,true,100.1);
                     Step();Require(pointer.TryGetPointed(aimHand,out _),"pointer reacquires after valid controller pose");
-                    sample.kind=ScalpalPointerKind.Hand;Step();Require(!pointer.TryGetPointed(aimHand,out _),"hand fallback is not reported as a Quest controller");sample.kind=ScalpalPointerKind.Controller;
+                    sample.kind=ScalpalPointerKind.Hand;Step();Require(!pointer.TryGetPointed(aimHand,out _),"hand fallback is not reported as a Quest controller");
+                    Require(pointer.LaserVisual(aimHand)&&pointer.LaserVisual(aimHand).enabled,"valid hand-aim fallback still shows its laser");
+                    sample.kind=ScalpalPointerKind.Controller;
                     // A non-target collider in front blocks names and boxes behind it, including cards.
                     var blocker=GameObject.CreatePrimitive(PrimitiveType.Cube);blocker.transform.SetParent(fixture.transform,false);
                     blocker.transform.position=origin+direction*.015f;blocker.transform.localScale=Vector3.one*.007f;
                     var foreign=blocker.AddComponent<AnatomyPart>();foreign.stableId=part.stableId;foreign.SetVisible(true);
-                    Step();Require(!pointer.TryGetPointed(aimHand,out _),"foreground UI/foreign geometry occludes a scene target");UnityEngine.Object.DestroyImmediate(blocker);
+                    Step();Require(!pointer.TryGetPointed(aimHand,out _),"foreground UI/foreign geometry occludes a scene target");
+                    Require(pointer.LaserVisual(aimHand).enabled&&Vector3.Distance(pointer.LaserVisual(aimHand).GetPosition(1),origin)<.03f,
+                        "laser stays visible and terminates on the foreground blocker even when no organ/tool can be identified");
+                    UnityEngine.Object.DestroyImmediate(blocker);
                     Step();Require(pointer.TryGetPointed(aimHand,out _),"removing foreground occluder restores actual scene identity");
                     if(sourcePart==longest)
                     {
@@ -161,9 +172,15 @@ namespace Scalpal.Quest.Editor
                 toolObject.transform.position+=new Vector3(.1f,.04f,-.02f);Physics.SyncTransforms();
                 toolOrigin=handle.bounds.center-toolObject.transform.right*.3f;Aim(toolOrigin,(handle.bounds.center-toolOrigin).normalized);Step();
                 Require(pointer.TryGetPointed(aimHand,out toolHit)&&Vector3.Distance(toolHit.worldBounds.center,beforeToolBounds.center)>.1f,"tool box follows actual transformed tool geometry");
+                Aim(toolOrigin,Vector3.up);Step();
+                Require(!pointer.TryGetPointed(aimHand,out _)&&pointer.LaserVisual(aimHand).enabled
+                    &&Mathf.Abs(Vector3.Distance(pointer.LaserVisual(aimHand).GetPosition(1),toolOrigin)-NativeScenePointer.MaximumDistance)<.00001f,
+                    "an empty-space aim keeps a visible full-length laser without inventing a target");
+                inputSource.focused=false;Step();Require(!pointer.LaserVisual(aimHand).enabled,"focus loss hides the laser rather than freezing a stale hand ray");inputSource.focused=true;Step();
                 // This is an Editor fixture: OnDisable is not Play Mode lifecycle
                 // evidence. Exercise the production disabled-input branch explicitly.
                 pointer.enabled=false;pointer.Simulate();Require(!pointer.TryGetPointed(aimHand,out _),"disabled runtime input cycle clears scene identities");
+                Require(!pointer.LaserVisual(aimHand).enabled,"disabled pointer clears its laser too");
                 Debug.Log("SCALPAL_NATIVE_SCENE_POINTER_VALIDATION_OK checks="+checks+" actual imported mesh/prefab ray fixtures; not physical headset or Play Mode evidence");
             }
             finally
