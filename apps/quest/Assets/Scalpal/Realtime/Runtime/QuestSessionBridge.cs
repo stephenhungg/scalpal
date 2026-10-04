@@ -28,6 +28,8 @@ namespace Scalpal.Realtime
         public string Status { get; private set; } = "Unavailable: configure a headset invite";
         public ExerciseState ObservedState { get; private set; }
         public bool AttemptPending => attemptInFlight;
+        // Same client identity used by the authenticated gateway; never serialize or log it.
+        public string GetClientAccessToken() => Paired ? ReadToken() : "";
         public event Action<string> AttemptFailed;
         public event Action<Command> CommandRequested;
         public event Action<string> AttemptStarted;

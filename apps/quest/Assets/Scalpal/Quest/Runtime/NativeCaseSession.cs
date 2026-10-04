@@ -10,6 +10,7 @@ using Scalpal.Exercises.Coach;
 using Scalpal.Exercises.Data;
 using Scalpal.Exercises.Engine;
 using Scalpal.Realtime;
+using Scalpal.Recap;
 using Scalpal.Voice;
 using SpacetimeDB.Types;
 using UnityEngine;
@@ -65,6 +66,8 @@ namespace Scalpal.Quest
         bool previousB, previousX, previousY;
         bool sharedAttemptReady, attemptFailed;
         string boundSharedSession = "", boundSharedAttempt = "";
+        string retrySession = "", retryPreviousAttempt = "", officeEncounterAttempt = "";
+        bool ending, resultCommitted;
         Vector3 previewScale;
         bool SharedMatches => sharedAttemptReady && realtime.Paired && realtime.SessionId == boundSharedSession && realtime.AttemptId == boundSharedAttempt
             && (OfficeHandoff == null || OfficeSharedMatches(out _))
@@ -76,9 +79,9 @@ namespace Scalpal.Quest
 
         [Serializable] public class DevelopmentConfig
         {
-            public string uri, database, joinCode, preferredSessionId, coachBaseUrl;
+            public string uri, database, joinCode, preferredSessionId, coachBaseUrl, gatewayBaseUrl;
         }
-        [Serializable] public class CreateRequest { public string patientId, mode, encounterId; }
+        [Serializable] public class CreateRequest { public string patientId, mode, encounterId, runId; }
         [Serializable] class Created
         {
             public string sessionId, context, systemPrompt, firstMessage;
@@ -88,7 +91,11 @@ namespace Scalpal.Quest
 
         void Awake()
         {
-            if (HasHandoff || !EncounterOfficeRoute.TakeSurgery(out var handoff)) return;
+            EncounterSurgeryHandoff handoff;
+            bool retry = RecapSessionIntegration.TakeRetry(out handoff, out retrySession, out retryPreviousAttempt, out officeEncounterAttempt);
+            if (HasHandoff) return;
+            if (retry) { if (handoff == null) return; }
+            else if (!EncounterOfficeRoute.TakeSurgery(out handoff)) return;
             OfficeHandoff = handoff;
             SelectedPatientId = handoff.patientId;
             SelectedProcedureId = handoff.procedureId;
@@ -126,6 +133,7 @@ namespace Scalpal.Quest
             coach.CommandRequested += CoachCommand;
             realtime.AttemptStarted += AttemptStarted;
             realtime.AttemptFailed += AttemptFailed;
+            realtime.ResultCommitted += ResultCommitted;
             realtime.CommandRequested += SharedCommand;
             voice.ClientToolRequested += VoiceTool;
             voice.Transcript += VoiceTranscript;
@@ -157,6 +165,7 @@ namespace Scalpal.Quest
             {
                 var config = JsonUtility.FromJson<DevelopmentConfig>(File.ReadAllText(path));
                 if (OfficeHandoff == null && !string.IsNullOrWhiteSpace(config.coachBaseUrl)) coachBaseUrl = config.coachBaseUrl;
+                if (!string.IsNullOrWhiteSpace(config.gatewayBaseUrl)) RecapRunContext.Ensure().gatewayUrl = config.gatewayBaseUrl;
                 if (!string.IsNullOrWhiteSpace(config.uri)) realtime.uri = config.uri;
                 if (!string.IsNullOrWhiteSpace(config.database)) realtime.database = config.database;
                 realtime.joinCode = config.joinCode ?? "";
@@ -251,6 +260,13 @@ namespace Scalpal.Quest
         void RequestAttempt()
         {
             if (attemptRequested || !realtime.Paired || candidate == null) return;
+            if (!string.IsNullOrEmpty(retryPreviousAttempt) && !sharedAttemptReady)
+            {
+                if (realtime.SessionId != retrySession) { attemptFailed = true; Message = "Retry belongs to a different shared session; return to the office."; return; }
+                if (HasHandoff && !HandoffSourceMatches(out var retrySourceReason)) { Message = retrySourceReason; return; }
+                attemptRequested = realtime.BeginAttempt(SelectedProcedureId, ContentVersion);
+                return;
+            }
             if (HasHandoff && HandoffRun.Current.sourceOffice != null)
             {
                 if (!HandoffSourceMatches(out var sourceReason)) { Message = sourceReason; return; }
@@ -290,16 +306,23 @@ namespace Scalpal.Quest
             { reason = "The shared session or attempt differs from the office encounter. Return to the office for a new case."; return false; }
             if (!realtime.TryGetEncounterBinding(handoff.encounterId, out var sessionId, out var attemptId, out var patientId, out var phase))
             { reason = "Waiting for the committed office encounter in the shared session."; return false; }
-            if (sessionId != handoff.sharedSessionId || attemptId != handoff.attemptId || patientId != SelectedPatientId || phase != "scored")
+            if (sessionId != handoff.sharedSessionId || attemptId != (string.IsNullOrEmpty(officeEncounterAttempt) ? handoff.attemptId : officeEncounterAttempt) || patientId != SelectedPatientId || phase != "scored")
             { reason = "The shared encounter does not match this scored patient and attempt."; return false; }
             reason = ""; return true;
         }
         void AttemptStarted(string id)
         {
+            if (!string.IsNullOrEmpty(retryPreviousAttempt))
+            {
+                if (!RecapSessionIntegration.IsFreshRetry(retrySession, retryPreviousAttempt, realtime.SessionId, id))
+                { AttemptFailed("Retry requires a confirmed new shared attempt in the same session."); return; }
+                if (OfficeHandoff != null) OfficeHandoff.attemptId = id;
+            }
             if (OfficeHandoff != null && (id != OfficeHandoff.attemptId || !OfficeSharedMatches(out _))) return;
             if (HasHandoff && HandoffRun.Current.sourceOffice != null && (!HandoffSourceMatches(out _)
                 || !string.IsNullOrEmpty(HandoffRun.Current.attemptId) && id != HandoffRun.Current.attemptId)) return;
             attemptRequested = false; sharedAttemptReady = true; attemptFailed = false;
+            retryPreviousAttempt = "";
             boundSharedSession = realtime.SessionId; boundSharedAttempt = id;
             if (HasHandoff) { HandoffRun.Current.sharedSessionId = boundSharedSession; HandoffRun.Current.attemptId = id; }
             Publish();
@@ -386,7 +409,7 @@ namespace Scalpal.Quest
             BeginReviewedPractice();
         }
 
-        public CreateRequest CoachRequest() => new CreateRequest { patientId = SelectedPatientId, mode = PresentationMode, encounterId = HandoffRun.Current?.encounterId ?? OfficeHandoff?.encounterId };
+        public CreateRequest CoachRequest() => new CreateRequest { patientId = SelectedPatientId, mode = PresentationMode, encounterId = HandoffRun.Current?.encounterId ?? OfficeHandoff?.encounterId, runId = HandoffRun.Current?.runId };
         public bool PrepareTimeOut()
         {
             if (!HasHandoff || !HandoffVerified || busy || !SharedMatches || !RegistrationReady || CoachPrepared) return false;
@@ -411,6 +434,8 @@ namespace Scalpal.Quest
             anatomy.SetRegistrationValid(RegistrationReady); coach.Tracking(RegistrationReady);
             busy = false; Message = "Practice starts after coach synchronization";
             realtime.AppendEvent("practice_started", exercise.Current?.id, null, "Generic teaching anatomy; " + PresentationMode, Time.realtimeSinceStartupAsDouble * 1000);
+            if (!BeginRecapRun())
+            { exercise.StopAttempt(); practicePaused = true; Phase = "Confirmed"; return false; }
             if (voiceRequested && !voice.Connected) ConnectVoice();
             Publish(); return true;
         }
@@ -419,7 +444,7 @@ namespace Scalpal.Quest
 
         public void Retry()
         {
-            if (busy) return;
+            if (busy || ending) return;
             if (OfficeHandoff != null && candidate != null)
             {
                 ReturnToOffice();
@@ -434,7 +459,7 @@ namespace Scalpal.Quest
             if (tissueSimulation) tissueSimulation.ResetTissues();
             if (volumeSimulation) volumeSimulation.ResetTissues();
             if (vesselSimulation) vesselSimulation.ResetTissues();
-            generation++; voice.Disconnect(); coachSessionId = "";
+            generation++; ending = resultCommitted = false; voice.Disconnect(); coachSessionId = "";
             sharedAttemptReady = false; attemptFailed = false; attemptRequested = false;
             exercise.StopAttempt(); workbench.ResetWorkbench();
             if (bodyRegistration) bodyRegistration.ResetFit();
@@ -452,6 +477,39 @@ namespace Scalpal.Quest
             RequestAttempt();
             if (candidate == null) StartCoroutine(LoadCase(generation));
             Publish();
+        }
+
+        bool BeginRecapRun()
+        {
+            if (!SharedMatches || candidate == null) return false;
+            try
+            {
+                if (HasHandoff)
+                    RecapSessionIntegration.Ensure().Begin(HandoffRun.Current, candidate, boundSharedSession, boundSharedAttempt,
+                        coachSessionId, coachBaseUrl, realtime.GetClientAccessToken());
+                else RecapSessionIntegration.Ensure().Begin(OfficeHandoff, candidate, boundSharedSession, boundSharedAttempt,
+                    coachSessionId, coachBaseUrl, realtime.GetClientAccessToken(), officeEncounterAttempt);
+                return true;
+            }
+            catch (ArgumentException) { Message = "Run context does not match this attempt. Start a fresh attempt."; return false; }
+        }
+        void ResultCommitted(string attempt) { if (attempt == boundSharedAttempt) resultCommitted = true; }
+        void CompleteRecapRun()
+        {
+            if (ending || !SharedMatches || !RecapSessionIntegration.Ensure().Complete(exercise, boundSharedAttempt)) return;
+            ending = true;
+            if (voice) voice.Disconnect();
+            StartCoroutine(OpenRunEnding());
+        }
+        IEnumerator OpenRunEnding()
+        {
+            // Keep the bridge pumping long enough for the accepted case result to be acknowledged.
+            float deadline = Time.realtimeSinceStartup + 5;
+            while (!resultCommitted && Time.realtimeSinceStartup < deadline) yield return null;
+            if (!resultCommitted) Debug.LogWarning("SCALPAL_RECAP shared result was not acknowledged before scene handoff; local result retained.");
+            if (!Application.CanStreamedLevelBeLoaded(RecapSessionIntegration.EndingScene))
+            { ending = false; Message = "Run complete. RunEnding is missing from this build."; yield break; }
+            SceneManager.LoadScene(RecapSessionIntegration.EndingScene);
         }
 
         void EventHandled(CaseEvent action, CaseResult result)
@@ -473,6 +531,7 @@ namespace Scalpal.Quest
                 Message = $"Complete: {completedSteps}/{candidate.procedure.steps.Length} steps, {mistakes} authored warnings. Left menu: new attempt";
                 realtime.ReportAttemptResult((uint)completedSteps, (uint)candidate.procedure.steps.Length,
                     (uint)mistakes, 0, candidate.procedure.title + " rehearsal completed; " + PresentationMode);
+                CompleteRecapRun();
             }
             Publish();
         }
@@ -663,7 +722,7 @@ namespace Scalpal.Quest
             if (workbench) workbench.RetryRequested -= WorkbenchRetry;
             if (exercise) exercise.EventHandled -= EventHandled;
             if (coach) coach.CommandRequested -= CoachCommand;
-            if (realtime) { realtime.AttemptStarted -= AttemptStarted; realtime.AttemptFailed -= AttemptFailed; realtime.CommandRequested -= SharedCommand; }
+            if (realtime) { realtime.AttemptStarted -= AttemptStarted; realtime.AttemptFailed -= AttemptFailed; realtime.ResultCommitted -= ResultCommitted; realtime.CommandRequested -= SharedCommand; }
             if (voice) { voice.ClientToolRequested -= VoiceTool; voice.Transcript -= VoiceTranscript; voice.Disconnect(); }
         }
     }

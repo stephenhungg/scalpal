@@ -40,7 +40,7 @@ namespace Scalpal.Shell.Editor
             var sun=new GameObject("SoftDaylight").AddComponent<Light>();sun.type=LightType.Directional;sun.intensity=.65f;sun.color=new Color(1,.93f,.83f);sun.shadows=LightShadows.None;sun.transform.rotation=Quaternion.Euler(40,-25,0);
             Decor(content);
             EditorSceneManager.SaveScene(scene,ScenePath);
-            var ordered=new[]{ScenePath,EncounterOfficeBuild.ScenePath,"Assets/Scalpal/Quest/Scenes/NativeSession.unity"};
+            var ordered=new[]{ScenePath,EncounterOfficeBuild.ScenePath,"Assets/Scalpal/Quest/Scenes/NativeSession.unity","Assets/Scalpal/Recap/Scenes/RunEnding.unity"};
             EditorBuildSettings.scenes=ordered.Select(p=>new EditorBuildSettingsScene(p,true)).Concat(EditorBuildSettings.scenes.Where(s=>!ordered.Contains(s.path))).ToArray();
             // EXT hand interaction drives our pointer/pinch actions; preserve all other feature settings.
             foreach(var asset in AssetDatabase.LoadAllAssetsAtPath("Assets/XR/Settings/OpenXRPackageSettings.asset"))

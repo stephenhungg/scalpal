@@ -15,7 +15,7 @@ namespace Scalpal.Recap.Editor
         public static void Run()
         {
             EditorSceneManager.OpenScene(RecapBuild.ScenePath, OpenSceneMode.Single);
-            SessionState.SetBool(Key, true); SessionState.SetInt(Key+"Stage",0);
+            SessionState.SetBool(Key, true); SessionState.SetInt(Key+"Stage",-1);
             SessionState.SetString(Key+"Deadline",(EditorApplication.timeSinceStartup+60).ToString(System.Globalization.CultureInfo.InvariantCulture));
             EditorApplication.update -= Tick; EditorApplication.update += Tick;
             EditorApplication.EnterPlaymode();
@@ -37,7 +37,18 @@ namespace Scalpal.Recap.Editor
                     Debug.Log("SCALPAL_RECAP_PLAYBACK_OK samplePrepared=true seek=true playPause=true phaseProgression=true dualScores=true exploreNavigation=true headset=false provider=false");
                     EditorApplication.Exit(0);return;
                 }
-                var c=UnityEngine.Object.FindFirstObjectByType<RecapController>();if(!c||c.Result==null)return;
+                var c=UnityEngine.Object.FindFirstObjectByType<RecapController>();if(!c)return;
+                if(stage==-1)
+                {
+                    // The shipping scene starts empty. This harness explicitly opts into the
+                    // synthetic preview in Play Mode (selection cannot survive domain reload).
+                    if(c.Result!=null)throw new InvalidOperationException("Scene silently loaded sample scores before an explicit preview selection.");
+                    var context=RecapRunContext.Ensure();
+                    if(!context.SelectSamplePreview())throw new InvalidOperationException("Sample preview selection refused.");
+                    c.Load(RunResultContract.Parse(c.previewResult.text));
+                    SessionState.SetInt(Key+"Stage",0);return;
+                }
+                if(c.Result==null)return;
                 var v=c.replay;
                 if(stage==0)
                 {

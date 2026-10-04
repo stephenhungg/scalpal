@@ -10,7 +10,7 @@ namespace Scalpal.Recap
     {
         public string schemaVersion = "scalpal.run_result.v1";
         public string runId = "", sessionId = "", attemptId = "", encounterId = "", patientId = "", procedureId = "";
-        public bool isSample;
+        public bool isSample, diagnosisAvailable;
         public DiagnosisScorecard diagnosis;
         public SurgeryGrade surgery = new SurgeryGrade();
         public ReplayResult replay = new ReplayResult();
@@ -19,22 +19,22 @@ namespace Scalpal.Recap
     [Serializable] public sealed class DiagnosisScorecard
     {
         public int total, max;
+        public string patientId, patientName, urgency, site;
+        public Scalpal.EncounterOffice.EncounterCarryoverItem[] carryoverItems = Array.Empty<Scalpal.EncounterOffice.EncounterCarryoverItem>();
         public string grade, procedureId, procedureTitle, diagnosisGiven, diagnosisExpected, diagnosisResult, spoken;
         public bool procedureChosenCorrectly;
         public ScoreSection[] sections = Array.Empty<ScoreSection>();
         public ClinicalFact[] criticalMissed = Array.Empty<ClinicalFact>(), criticalFound = Array.Empty<ClinicalFact>();
         public string[] differentialNamed = Array.Empty<string>(), differentialSuggestions = Array.Empty<string>(), feedback = Array.Empty<string>();
-        public CarryoverRisk[] risksFound = Array.Empty<CarryoverRisk>(), risksMissed = Array.Empty<CarryoverRisk>();
     }
     [Serializable] public sealed class ScoreSection { public string id, label; public int score, max; public string[] found, missed; }
     [Serializable] public sealed class ClinicalFact { public string kind, id, label, why; }
-    [Serializable] public sealed class CarryoverRisk { public string id, type, label, severity, source; }
     [Serializable] public class TimedFact { public string id, label; public double atSeconds; }
     [Serializable] public sealed class DecisionFact : TimedFact { public bool correct; }
     [Serializable] public sealed class SurgeryEconomy { public bool available; public double leftPathMeters, rightPathMeters, durationSeconds; }
     [Serializable] public sealed class SurgeryGrade
     {
-        public bool available;
+        public bool available, demoAssisted;
         public double total, max, bloodLossMl;
         public string grade = "";
         public TimedFact[] milestones = Array.Empty<TimedFact>(), guardrailViolations = Array.Empty<TimedFact>(), orderDeviations = Array.Empty<TimedFact>(), hints = Array.Empty<TimedFact>();
@@ -44,7 +44,11 @@ namespace Scalpal.Recap
     [Serializable] public sealed class ReplayResult
     {
         public string jobId = "", status = "failed", failureReason = "Capture has not supplied a motion job.";
-        public string sourceVideoUrl = "", replayVideoUrl = "", source = "learner";
+        public string sourceArtifactId = "", replayArtifactId = "", source = "unknown";
+        public uint jobRun;
+        // Access capabilities are runtime-only and are always resolved by the viewer's identity.
+        [NonSerialized] public string sourceVideoUrl = "", replayVideoUrl = "";
+        [NonSerialized] public long expiresAtUnixMs;
         public double durationSeconds, captureStartRunSeconds;
         public bool clockAligned;
     }
@@ -66,7 +70,11 @@ namespace Scalpal.Recap
         {
             if (string.IsNullOrWhiteSpace(json) || json.Length > 262144) throw new ArgumentException("RunResult is empty or exceeds 256 KiB.");
             var result = JsonUtility.FromJson<RunResult>(json);
+            // Read old v1 scorecards only when their range is valid. A zeroed JsonUtility null object is unavailable.
+            if (result != null && !System.Text.RegularExpressions.Regex.IsMatch(json, "\"diagnosisAvailable\"\\s*:"))
+                result.diagnosisAvailable = result.diagnosis != null && result.diagnosis.max > 0;
             Validate(result);
+            if (!result.diagnosisAvailable) result.diagnosis = null;
             return result;
         }
         public static void Validate(RunResult r)
@@ -74,14 +82,15 @@ namespace Scalpal.Recap
             if (r == null || r.schemaVersion != "scalpal.run_result.v1" || string.IsNullOrWhiteSpace(r.runId) || string.IsNullOrWhiteSpace(r.attemptId) || string.IsNullOrWhiteSpace(r.sessionId))
                 throw new ArgumentException("RunResult needs its version, runId and attemptId.");
             if (r.replay == null || !new[] { "queued", "processing", "ready", "failed" }.Contains(r.replay.status)) throw new ArgumentException("Unknown replay state.");
-            if (!new[] { "learner", "rehearsal", "sample" }.Contains(r.replay.source)) throw new ArgumentException("Unknown replay provenance.");
+            if (!new[] { "learner", "rehearsal", "sample", "unknown" }.Contains(r.replay.source)) throw new ArgumentException("Unknown replay provenance.");
             if (r.replay.status == "failed" && string.IsNullOrWhiteSpace(r.replay.failureReason)) throw new ArgumentException("Failed replay needs a reason.");
-            if (r.replay.status == "ready" && string.IsNullOrWhiteSpace(r.replay.replayVideoUrl)) throw new ArgumentException("Ready replay needs a video URL.");
+            if (r.replay.status == "ready" && (string.IsNullOrWhiteSpace(r.replay.jobId) || string.IsNullOrWhiteSpace(r.replay.replayArtifactId) || r.replay.source == "unknown")) throw new ArgumentException("Ready replay needs durable job/artifact identity and known provenance.");
+            if (r.isSample && r.replay.source == "learner") throw new ArgumentException("A sample run cannot claim learner footage.");
             if (!Nonnegative(r.replay.durationSeconds) || !Nonnegative(r.replay.captureStartRunSeconds)) throw new ArgumentException("Invalid replay clock.");
             if (r.demo == null || !Nonnegative(r.demo.replayHighlightSeconds)) throw new ArgumentException("Invalid demo flags.");
             foreach (var url in new[] { r.replay.sourceVideoUrl, r.replay.replayVideoUrl })
                 if (!string.IsNullOrEmpty(url) && (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme != "http" && uri.Scheme != "https")) throw new ArgumentException("Replay URLs must use HTTP(S).");
-            if (r.diagnosis != null && (r.diagnosis.max <= 0 || r.diagnosis.total < 0 || r.diagnosis.total > r.diagnosis.max)) throw new ArgumentException("Invalid diagnosis score.");
+            if (r.diagnosisAvailable && (r.diagnosis == null || r.diagnosis.max <= 0 || r.diagnosis.total < 0 || r.diagnosis.total > r.diagnosis.max)) throw new ArgumentException("Invalid diagnosis score.");
             var s = r.surgery;
             if (s == null || !s.available) return;
             if (!Nonnegative(s.total) || !Nonnegative(s.max) || s.max <= 0 || s.total > s.max || !Nonnegative(s.bloodLossMl)) throw new ArgumentException("Invalid surgery grade.");
@@ -93,8 +102,8 @@ namespace Scalpal.Recap
         public static RecapFeedback Feedback(RunResult r)
         {
             var f = new RecapFeedback();
-            foreach (var item in r.diagnosis?.criticalFound ?? Array.Empty<ClinicalFact>()) if (!string.IsNullOrWhiteSpace(item?.label) && f.strengths.Count < 2) f.strengths.Add("Elicited: " + item.label);
-            foreach (var item in r.diagnosis?.criticalMissed ?? Array.Empty<ClinicalFact>()) if (!string.IsNullOrWhiteSpace(item?.label) && f.improvements.Count < 2) f.improvements.Add("Revisit: " + item.label);
+            foreach (var item in r.diagnosisAvailable ? r.diagnosis?.criticalFound ?? Array.Empty<ClinicalFact>() : Array.Empty<ClinicalFact>()) if (!string.IsNullOrWhiteSpace(item?.label) && f.strengths.Count < 2) f.strengths.Add("Elicited: " + item.label);
+            foreach (var item in r.diagnosisAvailable ? r.diagnosis?.criticalMissed ?? Array.Empty<ClinicalFact>() : Array.Empty<ClinicalFact>()) if (!string.IsNullOrWhiteSpace(item?.label) && f.improvements.Count < 2) f.improvements.Add("Revisit: " + item.label);
             if (r.surgery?.available == true)
             {
                 foreach (var item in r.surgery.milestones ?? Array.Empty<TimedFact>()) if (f.strengths.Count < 2) f.strengths.Add("Reached: " + item.label);
@@ -108,6 +117,19 @@ namespace Scalpal.Recap
             seconds = fact.atSeconds - r.replay.captureStartRunSeconds;
             return r.replay.source == "learner" && r.replay.clockAligned && seconds >= 0 && seconds <= r.replay.durationSeconds;
         }
-        public static string ReplayLabel(ReplayResult r, bool fallback) => fallback ? "SYNTHETIC SAMPLE · not your recording. Kinematic replay, not a trained robot." : r.source == "rehearsal" ? "REHEARSAL CLIP · not this attempt. Kinematic replay, not a trained robot." : r.source == "sample" ? "SYNTHETIC SAMPLE · not your recording. Kinematic replay, not a trained robot." : "Your hand motion, retargeted to a robot hand. Kinematic replay, not a trained robot.";
+        public static TimedFact[] Errors(RunResult r) => (r.surgery?.guardrailViolations ?? Array.Empty<TimedFact>()).Concat(r.surgery?.orderDeviations ?? Array.Empty<TimedFact>()).ToArray();
+        public static double HighlightStart(RunResult r, double duration)
+        {
+            if (r.replay.source != "learner" || !r.replay.clockAligned) return 0;
+            var guards = r.surgery?.guardrailViolations ?? Array.Empty<TimedFact>();
+            var milestones = (r.surgery?.milestones ?? Array.Empty<TimedFact>()).Where(f => f.id.IndexOf("incis", StringComparison.OrdinalIgnoreCase) >= 0 || f.id.IndexOf("ligat", StringComparison.OrdinalIgnoreCase) >= 0);
+            foreach (var group in new[] { guards.AsEnumerable(), milestones })
+            {
+                var found = group.Where(f => TryClipTime(r, f, out _)).OrderBy(f => f.atSeconds).FirstOrDefault();
+                if (found != null) return Math.Max(0, Math.Min(Math.Max(0, duration - 20), found.atSeconds - r.replay.captureStartRunSeconds - 3));
+            }
+            return 0;
+        }
+        public static string ReplayLabel(ReplayResult r, bool fallback) => fallback ? "SYNTHETIC SAMPLE · not your recording. Kinematic replay, not a trained robot." : r.source == "rehearsal" ? "REHEARSAL CLIP · not this attempt. Kinematic replay, not a trained robot." : r.source == "sample" ? "SYNTHETIC SAMPLE · not your recording. Kinematic replay, not a trained robot." : r.source == "unknown" ? "Replay provenance unavailable. No learner-motion claim." : "Your hand motion, retargeted to a robot hand. Kinematic replay, not a trained robot.";
     }
 }

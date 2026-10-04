@@ -23,7 +23,7 @@ namespace Scalpal.Recap
                 case "forward": controller.replay.Seek(controller.replay.Position + 5); break;
                 case "error": controller.replay.SeekError(index); break;
                 case "errors_next": controller.panel.NextErrors(); break;
-                case "scrub": controller.replay.Seek(seekFraction * controller.replay.Duration); break;
+                case "scrub": controller.replay.Seek(controller.replay.WindowStart + seekFraction * (controller.replay.WindowEnd - controller.replay.WindowStart)); break;
                 case "demo": controller.ToggleDemo(); break;
                 case "explore": controller.Navigate(false); break;
                 case "retry": controller.Navigate(true); break;

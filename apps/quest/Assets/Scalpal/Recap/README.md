@@ -1,19 +1,44 @@
 # Run Ending
 
-Open `Scenes/RunEnding.unity`, or use **Scalpal → Recap → Prepare and Verify**. The scene is independently authored and does not modify the shell's build list. It uses the office's glass materials, world-text shader and licensed Inter font. The built-in Unity Video module is required and enabled in the project manifest.
+The single-player shell build includes `Launch → DiagnosisOffice → NativeSession → RunEnding`. Open `Scenes/RunEnding.unity` for component work. The panel reuses the office glass materials, world-text shader and licensed Inter font; Unity's built-in Video module is enabled.
 
-Without a bound run it displays the explicitly synthetic fixture. Real integration uses `RecapRunContext` on the persistent run root, `Begin(RunResult)`, then `EndSurgery(attemptId, graderResult)`. See the [integration contract](../../../../../docs/system-integration.md#run-ending-contract--recap-lane-october-3) for capture, clock, retry and demo obligations. The shell must include this scene in its player and route to it after OR completion. The independent scene includes its own XR rig; disable that rig when retaining a shared shell rig and route selects to `RecapButton.Press()`.
+A scene without a bound result shows **No result for this run**. It never silently imports sample scores. Explicit sample-demo selection enables the synthetic preview. A missing recording can still show the separately labeled bundled Shadow-hand replay fallback while retaining the real failed/queued state.
 
-The replay polls the authenticated gateway for the attached motion job, including jobs attached after the scene opens. Configure `gatewayUrl`, `clientToken` (existing SpacetimeDB client identity), `voiceServiceUrl`, and `coachSessionId` on the context. Credentials are never serialized. Ready output plays beside the source; missing/failed video uses the bundled **synthetic sample**, with the real job status still visible. Recorded outputs can already contain the worker's source/robot composite. Playback is kinematic, fixed wrist, one hand; neither metric wrist recovery nor a learned policy is claimed.
+## Native integration
 
-Grip is hold-to-talk for the single Jarvis reaction; trigger selects world-space controls. Editor mouse selects controls and space enables speech input. Jarvis receives a static server-built reflection prompt through the existing `QuestJarvisVoice` API. Missing endpoint/voice sessions retain on-screen questions. The next button advances self-assessment then independent scorecards. Feedback is deterministic selection from logged facts, at most two strengths and two improvements. No LLM grades or invents performance facts.
+`NativeCaseSession` calls `RecapSessionIntegration.Begin` after the real paired attempt, selected case and fresh coach session are bound. The existing `EncounterSurgeryHandoff` supplies diagnosis; `runId` is the actual server coach ID. Accepted case completion closes `RecapRunContext.EndSurgery` once, waits up to five seconds for shared-result acknowledgement, then opens this scene. A missing aggregate grader stays `surgery.available=false`; legacy completion counters are not a grade.
 
-The replay's Demo mode button toggles the documented run flags; this scene enforces a maximum 20-second highlight. Other phases must consume their own flags. The callback-based retry creates no attempt itself: the shell owns reset and new attempt identity. Choose another patient uses the shell’s public fade/load API to return to `Launch`, then calls `HubController.Enter()` to open explore. Unbound retry shows a specific missing-interface message. `ExportResultJson()` returns the same wire payload accepted by the companion `/recap` import; automatic publishing is not connected.
+Retry reloads the OR, resetting its tool/tissue/body/registration/coach instances. It requires a server-confirmed different attempt in the same session, retains the original scored encounter provenance and diagnosis, and clears old grade/job state. Choose another patient uses the shell transition to open explore. Component-only native build entry points remain isolated; use the shell build for the full scene chain.
+
+`RecapRunContext` retains configured gateway/voice endpoints and the nonserialized authorized client identity token. Native `session-config.json` supports `gatewayBaseUrl` alongside `coachBaseUrl`; authenticated replay requires HTTPS away from loopback. No worker credentials are exposed. The independent ending scene has its own XR rig; disable it if a future shell retains a shared rig.
+
+## Contract and capture boundary
+
+See the [integration contract](../../../../../docs/system-integration.md#run-ending-contract--recap-lane-october-3) for complete fields and source snapshots.
+
+- `diagnosisAvailable:false` means unavailable even when `JsonUtility` serializes a zeroed nested scorecard. Available diagnosis uses the real preop `Scorecard`, including `carryoverItems`; no invented risk arrays are required.
+- `ExportResultJson()` includes durable session/attempt/job/run/artifact identities. Signed video URLs and expiry are runtime-only and never exported; the companion resolves fresh authorized grants on view.
+- Source is learner/rehearsal/sample/unknown. The gateway requires a matching `scalpal.capture-provenance.v1` manifest registered as an available `capture_manifest` in the motion job's `extraArtifactIds`. Unknown provenance cannot become a ready learner replay.
+- `Begin` freezes demo flags at **OR start** and `EndSurgery` records `demoAssisted`. There is no recap toggle that retroactively changes a grade. Earlier full-flow flag ownership remains unimplemented.
+
+The capture owner must record during the OR, subscribe to `SegmentEnded`, then finalize/upload/verify the clip and provenance manifest, request the existing motion job and call `AttachMotionJob` with the same attempt ID and real source/artifact IDs. This lane has no recorder or upload/job producer. Missing capture is shown honestly; a fallback video is not proof of capture integration.
+
+Replay polling backs off from three to ten seconds and stops at terminal status. Players bind by artifact identity, so new signatures do not restart the video. Error/expiry refresh preserves playback position and play/pause state. Error markers require explicit run-to-clip clock alignment. A demo uses at most 20 seconds around the earliest aligned guardrail, otherwise an incision/ligation milestone; without aligned key facts it starts at zero. This is a contiguous highlight window, not a montage. Fixed-wrist kinematic replay does not establish metric wrist recovery or a learned robot policy.
+
+## Reflection and observer
+
+Trigger selects world-space controls; Editor mouse selects them. The headset POSTs the real run ID to `/coach/sessions/:sid/recap`, fetches the returned `reactionAudioRoute`, and plays the server-rendered reaction through the existing `QuestJarvisVoice.PlayLocalSpeech` API. The server owns the spoken text and ignores client prompt overrides. This is one spoken question with on-screen reflection, not a conversational session or recorded self-assessment. Voice failure retains the question on screen. No voice implementation file is modified.
+
+The panel advances through reaction, self-assessment and two independent scorecards. Feedback selects no more than two strengths and two improvements from logged facts. The companion `/recap` and `/s/:id/recap` import the same durable RunResult and resolve replay grants under the viewer's identity; automatic result publication remains unconnected. Sample scores require explicit `/recap?demo=sample` selection.
 
 ## Verification
 
-`Scalpal.Recap.Editor.RecapPlaybackValidation.Run` is a graphics-enabled Play Mode smoke test; invoke without `-quit` because it exits itself on pass/failure. It exercises the real decoder, seeking, play/pause, reflection progression, separate scores and return to explore.
+Run Unity 6000.0.66f2 batch-mode validations with `-executeMethod`:
 
-Run Unity 6000.0.66f2 in batch mode with `-executeMethod Scalpal.Recap.Editor.RecapBuild.PrepareAndVerify`. Assertion failure throws and fails the editor invocation. `Scalpal.Recap.Editor.RecapBuild.CapturePreviews` renders component preview PNGs into `SCALPAL_RECAP_PREVIEW` (default `/tmp/scalpal-recap-preview`); run with graphics enabled. Set `SCALPAL_RECAP_SAMPLE_FRAME` to an extracted PNG frame of the bundled sample to illustrate the replay surface in the static preview. These are component previews, not headset evidence.
+- `Scalpal.Recap.Editor.RecapValidation.Run` — scene/contract/state/fact checks.
+- `Scalpal.Recap.Editor.RecapReviewValidation.Run` — reviewed serialization, playback identity, sample and demo regressions.
+- `Scalpal.Recap.Editor.RecapIntegrationValidation.Run` — real preop scorecard → office handoff → packaged case through `AnatomyExerciseBinding` → completion, retry/reset and build inclusion.
 
-The new semantic body/predicate engine on main `1965cb34` exposes milestones, mistakes and simulated blood loss, but **does not yet export a complete end grade**. Keep `surgery.available=false` until the owning thread supplies it; do not infer a score from step count. Missing metric hand travel remains unavailable. Physical headset playback, OR-to-recap transition, actual learner capture, server/provider voice and live result publication need end-to-end verification.
+`RecapPlaybackValidation.Run` is a graphics-enabled Play Mode check; invoke without `-quit` because it exits itself. `RecapBuild.CapturePreviews` renders to `SCALPAL_RECAP_PREVIEW` (default `/tmp/scalpal-recap-preview`). These are desktop component checks, not physical headset evidence.
+
+Also run the affected API unit/integration tests, preop route tests, and companion `npm test` plus `npm ci && npm run build`; its standard test script now includes recap contracts using a fixture generated by the actual preop scorer. Report only checks that actually ran. The aggregate grader exporter, real capture/manifest/job producer, earlier full-flow demo context, automatic publication and physical full-session/provider verification remain open boundaries.
