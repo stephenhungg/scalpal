@@ -1,4 +1,4 @@
-import { BrandMark, Pill, ToastHost } from './components/ui';
+import { Pill, ToastHost } from './components/ui';
 import { useLive } from './data/live';
 import { Link, match, usePath } from './lib/router';
 import Home from './pages/Home';
@@ -21,8 +21,7 @@ export default function App() {
     <>
       <header className="topbar">
         <Link to="/" className="brand">
-          <BrandMark />
-          Scalpal <small>companion</small>
+          SCALPAL <small>companion</small>
         </Link>
         <div className="spacer" />
         {connected ? (

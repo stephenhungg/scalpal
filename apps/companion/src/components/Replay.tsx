@@ -14,7 +14,8 @@ import {
 } from '../lib/trajectory';
 import { Empty, Panel, Pill } from './ui';
 
-const PALETTE = ['#5eead4', '#60a5fa', '#f472b6', '#fbbf24', '#a78bfa', '#4ade80', '#fb923c', '#38bdf8', '#e879f9', '#facc15'];
+// Site palette first (green, white), then distinct hues so 20+ joints stay tellable apart.
+const PALETTE = ['#8ef08a', '#ffffff', '#9ec5ff', '#f5c451', '#c7a6ff', '#5fd85d', '#ff9f80', '#7fe0ff', '#ff8fd6', '#e8ff7a'];
 
 function Chart({ tr, positionMs }: { tr: Trajectory; positionMs: number }) {
   const ref = useRef<HTMLCanvasElement>(null);

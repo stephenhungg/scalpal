@@ -1,57 +1,36 @@
 :root {
-  --bg: #0b1016;
-  --bg-elev: #111821;
-  --panel: #141c26;
-  --panel-2: #19222e;
-  --line: #233041;
-  --line-strong: #2f3f54;
-  --text: #e6edf5;
-  --text-2: #a9b6c6;
-  --text-3: #74859a;
-  --accent: #5eead4;
-  --accent-strong: #2dd4bf;
-  --accent-ink: #062621;
-  --ok: #4ade80;
-  --warn: #fbbf24;
-  --bad: #f87171;
-  --info: #60a5fa;
-  --muted: #64748b;
-  --ok-bg: rgba(74, 222, 128, 0.12);
-  --warn-bg: rgba(251, 191, 36, 0.13);
-  --bad-bg: rgba(248, 113, 113, 0.13);
-  --info-bg: rgba(96, 165, 250, 0.13);
-  --muted-bg: rgba(100, 116, 139, 0.16);
-  --accent-bg: rgba(94, 234, 212, 0.12);
-  --radius: 12px;
-  --radius-sm: 8px;
-  --shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 8px 24px rgba(0, 0, 0, 0.25);
-  --font: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+  /* Scalpal site look: black page, white type, Instrument Serif headlines, Geist Mono body,
+     square corners, green accent from the landing page spark. */
+  --bg: #000000;
+  --bg-elev: #050505;
+  --panel: #0a0a0a;
+  --panel-2: #121212;
+  --line: #1f1f1f;
+  --line-strong: #2e2e2e;
+  --text: #ffffff;
+  --text-2: rgba(255, 255, 255, 0.7);
+  --text-3: rgba(255, 255, 255, 0.5);
+  --accent: #8ef08a;
+  --accent-strong: #5fd85d;
+  --accent-ink: #000000;
+  --ok: #8ef08a;
+  --warn: #f5c451;
+  --bad: #ff6b6b;
+  --info: #9ec5ff;
+  --muted: #7a7a7a;
+  --ok-bg: rgba(142, 240, 138, 0.1);
+  --warn-bg: rgba(245, 196, 81, 0.12);
+  --bad-bg: rgba(255, 107, 107, 0.12);
+  --info-bg: rgba(158, 197, 255, 0.12);
+  --muted-bg: rgba(255, 255, 255, 0.06);
+  --accent-bg: rgba(142, 240, 138, 0.1);
+  --radius: 0px;
+  --radius-sm: 0px;
+  --shadow: none;
+  --font: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --mono: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --serif: 'Instrument Serif', Georgia, serif;
   color-scheme: dark;
-}
-
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme='dark']) {
-    --bg: #f4f6f9;
-    --bg-elev: #ffffff;
-    --panel: #ffffff;
-    --panel-2: #f7f9fb;
-    --line: #e3e8ef;
-    --line-strong: #cfd7e2;
-    --text: #0f1720;
-    --text-2: #405063;
-    --text-3: #6b7a8c;
-    --accent: #0d9488;
-    --accent-strong: #0f766e;
-    --accent-ink: #ffffff;
-    --ok: #15803d;
-    --warn: #b45309;
-    --bad: #b91c1c;
-    --info: #1d4ed8;
-    --muted: #64748b;
-    --shadow: 0 1px 2px rgba(15, 23, 32, 0.06), 0 6px 18px rgba(15, 23, 32, 0.05);
-    color-scheme: light;
-  }
 }
 
 * {
@@ -453,7 +432,7 @@ table.data tr:last-child td {
 .stage {
   position: relative;
   aspect-ratio: 16 / 9;
-  background: #05080b;
+  background: #050505;
   border-radius: 0 0 var(--radius) var(--radius);
   overflow: hidden;
   display: grid;
@@ -475,16 +454,16 @@ table.data tr:last-child td {
 }
 .stage-overlay .pill {
   backdrop-filter: blur(6px);
-  background: rgba(5, 8, 11, 0.7);
+  background: rgba(0, 0, 0, 0.7);
 }
 .stage-empty {
   text-align: center;
-  color: #9fb0c3;
+  color: rgba(255, 255, 255, 0.6);
   padding: 24px;
   max-width: 420px;
 }
 .stage-empty h3 {
-  color: #e6edf5;
+  color: #ffffff;
   font-size: 16px;
   margin-bottom: 6px;
 }
@@ -792,4 +771,63 @@ table.data tr:last-child td {
   .topbar {
     gap: 10px;
   }
+}
+
+/* ---------- Scalpal site look ---------- */
+
+h1 {
+  font-family: var(--serif);
+  font-weight: 400;
+  letter-spacing: -0.03em;
+  line-height: 0.95;
+}
+h1,
+.hero h1 {
+  font-size: clamp(44px, 5.5vw, 72px);
+  font-weight: 400;
+  margin-bottom: 16px;
+}
+.hero p {
+  max-width: 660px;
+}
+.big-step .label {
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: 30px;
+  letter-spacing: -0.02em;
+}
+.topbar {
+  background: var(--bg);
+  border-bottom-color: var(--line);
+}
+/* Wordmark like the main site's nav: Geist Mono 600, uppercase. */
+.brand {
+  font-weight: 600;
+  font-size: 20px;
+  letter-spacing: 0;
+  color: var(--text);
+}
+.brand small {
+  font-size: 12px;
+  font-weight: 400;
+  text-transform: lowercase;
+}
+.panel-head h2 {
+  font-weight: 500;
+  letter-spacing: 0.08em;
+}
+/* Primary actions read like the landing page button: white on black. */
+.btn.primary {
+  background: var(--text);
+  color: var(--bg);
+  border-color: var(--text);
+}
+.btn.primary:hover:not(:disabled) {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+input,
+select,
+textarea {
+  border-radius: 0;
 }
