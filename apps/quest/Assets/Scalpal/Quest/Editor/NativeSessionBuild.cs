@@ -171,6 +171,8 @@ namespace Scalpal.Quest.Editor
             PrefabUtility.RecordPrefabInstancePropertyModifications(preview);
             foreach (var collider in previewObject.GetComponentsInChildren<Collider>(true))
                 PrefabUtility.RecordPrefabInstancePropertyModifications(collider);
+            // Robot demos: controller motion relative to PatientRoot, posted to the coach after mark_incision.
+            Scalpal.Robotics.EditorTools.ControllerMotionSetup.Ensure();
             ApplySessionSettings();
             Directory.CreateDirectory("Assets/Scalpal/Quest/Scenes");
             if (!EditorSceneManager.SaveScene(scene, ScenePath)) throw new InvalidOperationException("Could not save native session scene.");
@@ -483,7 +485,7 @@ namespace Scalpal.Quest.Editor
             NativeAppendectomyValidation.Run();
             NativeSessionBoundaryValidation.Run();
             NativeCoachRelayValidation.Run();
-            Scalpal.Capture.Editor.CaptureValidation.Run();
+            Scalpal.Robotics.EditorTools.RobotDemoValidation.Run();
             Scalpal.Shell.Editor.DialogueBoxValidation.Run();
             NativeControllerHands.Validate();
             Scalpal.Briefing.Editor.BriefingValidation.Run();

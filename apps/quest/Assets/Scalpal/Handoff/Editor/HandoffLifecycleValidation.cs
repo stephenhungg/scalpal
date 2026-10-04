@@ -165,14 +165,12 @@ namespace Scalpal.Handoff.Editor
             var ticket = Ticket("mixed_reality"); ticket.consequenceSeen = true;
             Call(flow, "SetupCard");
             Assert(p.ArAvailable && Actions(card).Length == 2 && Actions(card)[0] == "Back to theatre", "AR-ready setup has no volunteer confirmation or permission-request control");
-            Assert(!Scalpal.Capture.HandCaptureRecorder.ConsentGranted(ticket, p, out _), "AR availability never starts recording");
+            Assert(!p.learnerCaptureConsented, "AR availability never turns on motion recording");
             Select(card, 1); Call(flow, "SetupCard");
-            Assert(p.learnerCaptureConsented && !p.volunteerConsented && p.ArAvailable && Actions(card).Length == 3,
-                "actual recording callback enables only learner recording and reveals optional participant permission");
-            Assert(!Scalpal.Capture.HandCaptureRecorder.ConsentGranted(ticket, p, out _), "learner recording permission alone cannot capture the participant");
-            Select(card, 2); Call(flow, "SetupCard");
-            Assert(p.volunteerConsented && Scalpal.Capture.HandCaptureRecorder.ConsentGranted(ticket, p, out _),
-                "participant recording requires its own explicit callback");
+            // Controller motion never captures the participant, so there is no participant permission to ask for.
+            Assert(p.learnerCaptureConsented && !p.volunteerConsented && p.ArAvailable && Actions(card).Length == 2
+                && Actions(card)[1] == "Withdraw motion-recording consent",
+                "actual recording callback enables only learner motion recording");
             Select(card, 1); Call(flow, "SetupCard");
             Assert(!p.learnerCaptureConsented && !p.volunteerConsented && p.ArAvailable && Actions(card).Length == 2,
                 "turning recording off clears both permissions while AR stays available");

@@ -198,8 +198,7 @@ namespace Scalpal.Handoff
                 else { fitConfirmed = false; SetPhase("register"); }
             }, new[] { true, Ticket.presentationMode != "virtual", true });
             else if (phase == "stopped") Show("Volunteer stopped · Practice paused", "The volunteer can get up. Continue in the virtual OR with a new attempt; your office score is kept.", new[] { "Virtual OR (new attempt)", ReturnLabel }, i => { if (i == 0) SwitchToVirtual(); else BackToExplore(); });
-            else if (phase == "recap") Show("Practice complete", surgery.Message + "\n" + EncounterContract.ReasoningLine(Ticket.scorecard) +
-                "\n" + Scalpal.Capture.HandCaptureRecorder.StatusLine(), new[] { "Retry surgery", ReturnLabel }, i => { if (i == 1) BackToExplore(); else { surgery.Retry(); fitConfirmed = false; SetPhase("register"); } });
+            else if (phase == "recap") Show("Practice complete", surgery.Message + "\n" + EncounterContract.ReasoningLine(Ticket.scorecard), new[] { "Retry surgery", ReturnLabel }, i => { if (i == 1) BackToExplore(); else { surgery.Retry(); fitConfirmed = false; SetPhase("register"); } });
         }
         void Theatre()
         {
@@ -329,7 +328,7 @@ namespace Scalpal.Handoff
             { nextCoachRetry = Time.unscaledTime + 10; coachTried |= surgery.PrepareTimeOut(); }
             string voice = surgery.voice.Status == "error" ? "Voice unavailable. Continue with captions." : surgery.CoachPrepared ? "Jarvis: Scrubbed in with you. Confirm the patient, procedure and site. Hold Y to talk to me." : "Connecting Jarvis. Captions and authored local scoring are available if the coach is offline.";
             string body = "Patient: " + Ticket.scorecard.patientName + "\nProcedure: " + Ticket.procedureTitle + "\nSite: " + Ticket.scorecard.site + "\nUrgency: " + Ticket.verifiedCase.urgency + "\n" + RiskText(Ticket.scorecard) +
-                "\n" + voice + "\nMistakes are expected; this is practice.\n" + Scalpal.Capture.HandCaptureRecorder.PlannedNotice(Ticket, HandoffRun.Preflight);
+                "\n" + voice + "\nMistakes are expected; this is practice." + (HandoffRun.Preflight.learnerCaptureConsented ? "\nYour controller motion while marking the incision trains the simulated robot." : "");
             var risks = ReviewRisks(Ticket.scorecard);
             if (Ticket.patientConfirmed && Ticket.procedureConfirmed && Ticket.siteConfirmed && !Ticket.risksConfirmed && risks.Length > 0)
             {
@@ -415,14 +414,10 @@ namespace Scalpal.Handoff
         {
             var p = HandoffRun.Preflight;
             var labels = new List<string> { "Back to theatre",
-                p.learnerCaptureConsented ? "Withdraw hand-recording consent" : "Learner agreed to hand recording" };
-            string recording = "\nRecording is optional and is not required to use AR.";
-            if (p.learnerCaptureConsented)
-            {
-                recording += "\nHand recording enabled. Participant recording permission: " + p.volunteerConsented +
-                    " (required only to record an AR clip with the participant in frame).";
-                labels.Add(p.volunteerConsented ? "Withdraw participant recording permission" : "Participant recording agreed");
-            }
+                p.learnerCaptureConsented ? "Withdraw motion-recording consent" : "Learner agreed to motion recording" };
+            // Controller motion only (no camera): it records the learner's controllers, never the AR participant.
+            string recording = "\nMotion recording is optional and is not required to use AR." +
+                (p.learnerCaptureConsented ? "\nMotion recording on: the marking step's controller motion trains the simulated robot." : "");
             Show("Theatre setup · Operator", "Camera permission: " + p.cameraGranted + " · Spatial permission: " + p.sceneGranted +
                 "\nBody detection: " + (p.poseServiceOk ? "Online" : "Offline") + " · Coach: " + (p.coachServiceOk ? "Online" : "Offline") +
                 "\nAR is available when permissions and services are ready. Detection images are not saved." + recording,
@@ -433,7 +428,6 @@ namespace Scalpal.Handoff
                         p.learnerCaptureConsented = !p.learnerCaptureConsented;
                         if (!p.learnerCaptureConsented) p.volunteerConsented = false;
                     }
-                    else if (i == 2 && p.learnerCaptureConsented) p.volunteerConsented = !p.volunteerConsented;
                     else if (i == 0)
                     {
                         if (Ticket == null) { SetPhase("office"); card.Hide(); }

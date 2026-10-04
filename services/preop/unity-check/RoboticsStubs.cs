@@ -93,7 +93,11 @@ namespace UnityEditor.SceneManagement
     public static class EditorSceneManager
     {
         public static bool MarkSceneDirty(UnityEngine.SceneManagement.Scene scene) => true;
+        public static UnityEngine.SceneManagement.Scene OpenScene(string path, OpenSceneMode mode) => default;
+        public static bool SaveScene(UnityEngine.SceneManagement.Scene scene) => true;
     }
+
+    public enum OpenSceneMode { Single, Additive }
 }
 
 namespace UnityEngine.SceneManagement

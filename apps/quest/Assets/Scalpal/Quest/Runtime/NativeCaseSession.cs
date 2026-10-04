@@ -239,6 +239,7 @@ namespace Scalpal.Quest
                 Message = "Shared session/attempt changed; Left menu: start a new matching attempt";
             }
             UpdateHandoffCoachRecovery();
+            StampRobotStep();
             bool fitValid = RegistrationReady && Practicing && SharedMatches && !recoveringLocalCoach && (!localCoachReady || coach.IsSynchronized);
             patientFrame.gameObject.SetActive(fitValid);
             anatomy.SetRegistrationValid(fitValid);
@@ -516,9 +517,7 @@ namespace Scalpal.Quest
             if (!SharedMatches || candidate == null) return false;
             try
             {
-                // Subscribe the capture owner before Begin opens the segment.
-                var capture = Scalpal.Capture.HandCaptureRecorder.Ensure();
-                capture.realtimeUri = realtime.uri; capture.realtimeDatabase = realtime.database;
+                ResetRobotDemo();
                 if (HasHandoff)
                     RecapSessionIntegration.Ensure().Begin(HandoffRun.Current, candidate, boundSharedSession, boundSharedAttempt,
                         coachSessionId, coachBaseUrl, realtime.GetClientAccessToken());
@@ -559,6 +558,7 @@ namespace Scalpal.Quest
         void EventHandled(CaseEvent action, CaseResult result)
         {
             RecordLocalCoachEvent(action, result.stepId);
+            RobotDemoProgress(result);
             // Body ticks and fluid snapshots must not overwrite the learner's message or flood the shared event log.
             if (action.type == CaseEventType.Surgery && BodyState.IsTelemetry(action.evidence) && result.mistake == null && !result.advanced && !result.completed)
             { Publish(); return; }

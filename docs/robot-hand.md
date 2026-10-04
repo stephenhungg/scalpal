@@ -11,11 +11,17 @@ ControllerMotionCapture  --UDP 9124-->    scalpal-motion teleop --coach http://1
                                           scalpal-motion export-lerobot -> LeRobot-style dataset
 ```
 
+## 0. Robot demos over USB (the default demo path)
+
+No LAN needed. `NativeSession.unity` ships with one `Controller Motion Capture` (Pose Root = `PatientRoot`, UDP off). Every frame is stamped with the coach step (`stepId`, from `NativeCaseSession`). Frames of `mark_incision` are kept in memory (about 30 Hz, halved as needed to stay under the coach's 3 MB limit). When `mark_incision` completes, or when practice ends with frames for it, the headset posts `{stepId, frames}` once to `POST /coach/sessions/:coachSessionId/robot-demo` on the coach (`http://localhost:8787` through `adb reverse`). A failed post only logs a warning; surgery never waits on it.
+
+Consent: the post happens only when **Learner agreed to motion recording** is on in the Theatre setup operator card (off by default; it replaced the old hand-recording button). Without a theatre handoff, the capture's **Operator Confirmed Consent** box is the gate. With consent off, the coach still serves its synthetic baseline, and the recap says so ("Learned from N demos (synthetic)").
+
+The recap (`RunEnding`) polls `GET /coach/sessions/:id/robot-result` and streams the replay video from the coach. Validation: `Scalpal.Robotics.EditorTools.RobotDemoValidation.Run` (in `NativeSessionBuild.Verify`).
+
 ## 1. Add the capture to the OR scene
 
-1. Open `apps/quest/Assets/Scalpal/Quest/Scenes/NativeSession.unity` (and `NativeWorkbench.unity` if you demo from there).
-2. Menu **Scalpal > Robotics > Add Controller Motion Capture**. It creates `Controller Motion Capture`, sets **Pose Root** to the scene's `PatientRoot` when one exists, and turns on the Android internet permission the UDP stream needs. Save the scene.
-3. It finds both `XRInstrumentInput`s at enable time, so it reads the same tracking origin, grip, trigger and held instrument the gloves (`ControllerHandPose`) use. Nothing else to wire.
+Already done for `NativeSession.unity` (batch: `-executeMethod Scalpal.Robotics.EditorTools.ControllerMotionSetup.AddToNativeSession`). For another scene, menu **Scalpal > Robotics > Add Controller Motion Capture** creates `Controller Motion Capture` and sets **Pose Root** to the scene's `PatientRoot`. It finds both `XRInstrumentInput`s at enable time, so it reads the same tracking origin, grip, trigger and held instrument the gloves (`ControllerHandPose`) use.
 
 ## 2. Poses relative to the registered patient
 
@@ -23,16 +29,16 @@ With **Pose Root** set, every controller and head pose is sent relative to `Pati
 
 The laptop side anchors the first tracked pose of each attempt to the robot hand's home, so only relative motion matters; the patient frame keeps yaw meaningful (heading toward the patient = robot forward).
 
-## 3. Point the stream at the demo laptop
+## 3. Optional: live UDP stream to a laptop on the same Wi-Fi
 
 - On the laptop: `ipconfig getifaddr en0` gives the LAN IP. Same Wi-Fi as the headset.
-- On the capture component: **Host** = that IP, **Port** = `9124` (the teleop default), **Streaming** on.
+- On the capture component: **Host** = that IP, **Port** = `9124` (the teleop default), **Streaming** on (off by default).
 - A missing laptop never interrupts surgery: the first failed send logs a warning and turns streaming off for the session.
 - On-device episode recording (`frames.jsonl` under `persistentDataPath/scalpal-controller/`) only happens with **Operator Confirmed Consent** ticked. For the demo the laptop records, so leave it off unless you want on-headset copies.
 
-## 4. Disable the passthrough clip capture for the demo
+## 4. Passthrough clip capture: retired
 
-The camera path from `349206e` (`Capture/Runtime/HandCaptureRecorder.cs`, started from `NativeCaseSession.BeginRecapRun`) records raw passthrough hand clips and queues motion jobs. It is not part of the robot-hand demo. The no-code way to keep it off: on the Theatre setup operator card, do not press **Learner agreed to hand recording** (it is off by default; the button flips to "Withdraw hand-recording consent" when on). `ConsentGranted` then refuses, nothing is recorded or uploaded, and the recap says "Replay skipped". If you'd rather remove the recorder from the demo build entirely, that is a change in `NativeCaseSession.BeginRecapRun` (the `HandCaptureRecorder.Ensure()` call); your call, I did not touch it.
+The camera path from `349206e` (`Capture/Runtime/HandCaptureRecorder.cs`) is removed. Nothing records passthrough video, and the recap no longer waits on a clip upload.
 
 ## 5. Verify end to end
 

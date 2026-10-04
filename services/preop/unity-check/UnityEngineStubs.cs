@@ -195,7 +195,10 @@ namespace UnityEngine
         public WaitForSeconds(float seconds) { }
     }
 
-    public class AsyncOperation : YieldInstruction { }
+    public class AsyncOperation : YieldInstruction
+    {
+        public event Action<AsyncOperation> completed { add { } remove { } }
+    }
 
     public class YieldInstruction { }
 
@@ -237,6 +240,7 @@ namespace UnityEngine.Networking
         public int timeout { get; set; }
         public Result result => Result.Success;
         public long responseCode => 200;
+        public string error => null;
         public void SetRequestHeader(string name, string value) { }
         public string GetResponseHeader(string name) => null;
         public void Abort() { }
