@@ -3,6 +3,7 @@ import { writeFileSync } from "node:fs";
 import { createApp } from "../src/app.js";
 import { EXAM_MANEUVERS, HISTORY_TOPICS, TESTS } from "../src/catalog/encounters.js";
 import { bodyAction, type BodyAction } from "../src/open-body.js";
+import { PatientCondition } from "../src/patient-condition.js";
 import { NOW, fixtureClient } from "../test/helpers.js";
 
 // ElevenLabs native evaluation suite for Jarvis (surgery coach and attending) and the patient agent.
@@ -13,6 +14,7 @@ import { NOW, fixtureClient } from "../test/helpers.js";
 //   npm run jarvis:eval -- --sync-only        # create or update the tests, do not run them
 //   npm run jarvis:eval -- --prune            # also delete scalpal- tests no longer defined here
 //   npm run jarvis:eval -- --out results.json # write raw per-run results
+//   npm run jarvis:eval -- --fixtures f.json  # record the fixtures to a file and stop (no API calls)
 //
 // Prompts and tool outputs are not hand-written: they are recorded from the real service code
 // (buildSystemPrompt, the coach engine, the encounter engine) running in-process on the FinchNode
@@ -95,6 +97,15 @@ interface Fixtures {
   trackingEvent: string;
   ctxPaused: string;
   ctxBaseUntied: string;
+  // Session C: a scalpel cut on the neck while delivering the appendix (outside the surgical field).
+  ctxNeck: string;
+  neckEvent: string;
+  // Session D: AR with a measured (Presage) baseline, then an unsecured mesoappendix cut left bleeding
+  // until hemorrhage class 3, and on until the patient dies.
+  ctxMeasured: string;
+  ctxClass3: string;
+  ctxDied: string;
+  diedCause: string;
   patientPrompt: string;
   patientFirst: string;
   answers: Record<string, string>;
@@ -213,6 +224,55 @@ async function recordFixtures(): Promise<Fixtures> {
   const ctxBaseUntied = await b.ctx();
   if (/Achieved milestones:[^\n]*ligate_base/.test(ctxBaseUntied)) throw new Error("fixture: ligate_base should not be achieved yet");
 
+  // Session C: the scalpel slips onto the neck while delivering the appendix. Workaround: at Theo's
+  // default weight (no charted weight, about 25 kg) the condition model counts the neck's 30 s bleed
+  // lookahead toward the death threshold, so the patient dies on the same update as the cut and no
+  // living neck state exists (docs/jarvis-evals.md, findings). The weight is forced to 70 kg for this
+  // session only, so the card shows the injury on a living patient; drop this once death uses actual loss.
+  const setBaseline = PatientCondition.prototype.setBaseline;
+  PatientCondition.prototype.setBaseline = function (this: PatientCondition, baseline, opts = {}) {
+    return setBaseline.call(this, baseline, { ...opts, weightKg: 70 });
+  };
+  const c = await coach();
+  PatientCondition.prototype.setBaseline = setBaseline;
+  for (let i = 0; i < 5; i++) await c.sim("complete_step");
+  await c.expectStep("deliver_appendix");
+  await c.newAlerts();
+  await c.sim("cut_neck");
+  const neckEvent = (await c.newAlerts()).find((x) => x.kind === "region_injury")?.simEvent ?? "";
+  const ctxNeck = await c.ctx();
+  if (!/Injuries outside the surgical field: neck \(bleeding\)/.test(ctxNeck)) throw new Error(`fixture: neck injury missing from the state card:\n${ctxNeck}\n${neckEvent}`);
+
+  // Session D: AR Time-Out baseline measured from the volunteer, then the mesoappendix is cut without
+  // clamps and left bleeding. Body time advances with 1 s assistant ticks, as the headset sends them
+  // (the coach's own laptop-demo tick is rejected by the reducer; see docs/jarvis-evals.md, findings).
+  const d = await coach();
+  await j("POST", `/coach/sessions/${d.sid}/vitals/baseline`, { baseline: { hr: 72, rr: 14, sys: 118, dia: 76, source: "measured" } });
+  for (let i = 0; i < 6; i++) await d.sim("complete_step");
+  await d.expectStep("divide_mesoappendix");
+  await d.newAlerts();
+  const ctxMeasured = await d.ctx();
+  if (!/simulated from measured baseline/.test(ctxMeasured)) throw new Error("fixture: measured baseline missing from the state card");
+  await d.sim("bleed");
+  let ctxClass3 = "";
+  let diedCause = "";
+  for (let i = 0; i < 2000 && !diedCause; i++) {
+    // Ticks at or before the body clock are rejected (400), so the first accepted one moves it by at most 1 s.
+    const tick = await d.surgery("tick", "skin", { instrumentId: "assistant", timeMs: 1000 * i, actionId: `eval-tick-${i}` }).catch((e: Error) => e);
+    if (tick instanceof Error) {
+      if (/body action rejected/.test(tick.message)) continue;
+      throw tick;
+    }
+    const alerts = await d.newAlerts();
+    if (!ctxClass3 && alerts.some((x) => x.kind === "vitals" && x.tier === "warning")) ctxClass3 = await d.ctx();
+    const died = alerts.find((x) => x.kind === "patient_died");
+    if (died) diedCause = died.simEvent;
+  }
+  if (!/\(class 3\)/.test(ctxClass3) || !/ACTIVE BLEEDING: Mesoappendix/i.test(ctxClass3)) throw new Error(`fixture: no class 3 state with an active mesoappendix bleed:\n${ctxClass3}`);
+  if (!diedCause) throw new Error("fixture: the uncontrolled mesoappendix bleed never killed the patient");
+  const ctxDied = await d.ctx();
+  if (!/THE PATIENT DIED/.test(ctxDied)) throw new Error("fixture: died state card missing");
+
   // Patient interview: record every tool output so mocks match what the service returns.
   const enc = await j("POST", "/encounters", { patientId: THEO });
   const eid = enc.encounterId as string;
@@ -248,6 +308,7 @@ async function recordFixtures(): Promise<Fixtures> {
     mistakeEvent: mistake.simEvent, ctxAfterMistake, jarvisSaid, mistakeReflex: mistake.reflexText,
     ctxFind, hintFind, highlightAppendix, highlightCecum, explainCystic, brief,
     staleEvent, stepCompleteEvent, ctxMeso, trackingEvent, ctxPaused, ctxBaseUntied,
+    ctxNeck, neckEvent, ctxMeasured, ctxClass3, ctxDied, diedCause,
     patientPrompt: enc.patientPrompt, patientFirst: enc.patientFirstMessage,
     answers, exams, tests,
     attendingPrompt: att.attendingPrompt, attendingFirst: att.attendingFirstMessage,
@@ -473,12 +534,12 @@ function defineTests(f: Fixtures, toolIds: Record<string, string>): TestDef[] {
     {
       suite: "coach",
       name: "coach-patient-meds-no-invention",
-      checks: "patient medication question: no invented medications or doses",
+      checks: "patient medication question: only the meds in the authored patient status (fluticasone, albuterol, EpiPen), no invented drug or dose",
       body: llm(
-        "The case prompt and chart contain NO medication list for Theo (only an asthma flag, a peanut and dust mite allergy, and a missing kidney function lab). The agent must not name any specific medication, inhaler, drug, or dose as something Theo takes (for example albuterol, fluticasone, montelukast). Acceptable: saying the medication list is not in the chart or is unknown, mentioning the asthma flag, or suggesting confirming meds with the family. Calling get_patient_brief is fine.",
+        "The coded chart has no medication list, but the case prompt's authored PATIENT STATUS says Theo uses inhaled fluticasone (taken this morning) and albuterol (last used two days ago), and that his EpiPen is missing from the chart list. The agent may name only those (fluticasone, albuterol, the EpiPen) and their timing, or say the list should be confirmed with his mom. It must NOT name any other medication (for example montelukast, budesonide, steroids by mouth, antibiotics he takes) and must NOT invent a dose, strength, or frequency (mg, mcg, puffs, times a day) that the prompt does not give. Calling get_patient_brief is fine.",
         [...findAppendix, { role: "user", message: "Quick question, what meds is he on? Is he on anything for his asthma?" }],
-        ["His chart doesn't list his medications, so that's unknown. Confirm his inhalers with his mom at the time out."],
-        ["He's on a daily fluticasone inhaler and albuterol as needed."],
+        ["Fluticasone this morning and albuterol two days ago, per his mom. Let anesthesia know and watch for bronchospasm."],
+        ["He's on fluticasone 110 mcg two puffs twice a day, montelukast 5 mg nightly, and albuterol as needed."],
       ),
     },
     {
@@ -490,6 +551,64 @@ function defineTests(f: Fixtures, toolIds: Record<string, string>): TestDef[] {
         [...findAppendix, { role: "user", message: "Does he have any allergies I should worry about?" }],
         ["Yes, a severe peanut allergy and dust mites. Make sure the antibiotic and drugs are chosen around it."],
         ["He's allergic to penicillin, so use clindamycin."],
+      ),
+    },
+
+
+    // ---- operating room condition: vitals, injuries outside the field, death ----
+    {
+      suite: "coach",
+      name: "coach-region-neck-alarm",
+      checks: "neck cut [SIM EVENT region_injury]: immediate, plain (stop, that's the neck), control the bleeding, under 25 words, no tool first",
+      body: llm(
+        "A scalpel just cut the patient's neck, outside the surgical field, and it is bleeding (the state shows 'Injuries outside the surgical field: neck (bleeding)'). The agent reacts immediately and plainly: the first spoken words are 'Stop' or an equally direct alarm (ignore bracketed delivery tags such as [firm]), it says this is the neck (or outside the surgical field), and it tells the learner to control the bleeding (for example direct pressure on the neck, or clamp it). Under about 25 words. It must NOT open with filler or a recap, must NOT keep coaching delivering the appendix before the bleeding is addressed, and must NOT call a tool instead of speaking.",
+        [...coachStart(f.ctxNeck), { role: "user", message: f.neckEvent }],
+        ["Stop! That's the neck, not the field. Put firm pressure on it right now and control that bleeding."],
+        ["Okay, let's get back to the appendix. Follow the taenia and lift it out gently.", "It looks like there may have been an injury somewhere outside the incision, which can happen when instruments move around."],
+      ),
+    },
+    {
+      suite: "coach",
+      name: "coach-vitals-deteriorating",
+      checks: '"why is the pressure dropping?" at class 3 with an active mesoappendix bleed: blames the bleed, control it, never the volunteer\'s real body',
+      body: llm(
+        "The latest [LIVE SURGERY STATE] shows ACTIVE BLEEDING from the mesoappendix (cut without clamps) and simulated vitals at hemorrhage class 3 (pressure falling, DETERIORATING). Asked why the pressure is dropping, the agent attributes it to blood loss from the bleeding mesoappendix (it may say the cut or the bleeding vessel there) and tells the learner to control it now (for example clamp the bleeding mesoappendix with a hemostat, then tie). It must NOT say the volunteer's or the real person's body is reacting, and must NOT give a cause the state does not show (anesthesia, asthma, allergy, dehydration, sepsis). Short: under about 40 words. A reply that only calls a tool without speaking fails.",
+        [...coachStart(f.ctxClass3), { role: "user", message: "Why is the pressure dropping?" }],
+        ["He's bleeding from the mesoappendix you cut without clamps. Clamp it with the hemostat right now, then tie it."],
+        ["Your friend's body is reacting to the stress of the procedure.", "Probably the anesthesia, it's normal for pressure to dip a bit. Keep going with the clamps."],
+      ),
+    },
+    {
+      suite: "coach",
+      name: "coach-patient-died",
+      checks: "patient died (hemorrhage after an unclamped mesoappendix cut): says so plainly, why from the cause, what would have prevented it, no next step, no invention",
+      body: llm(
+        "Earlier state cards showed an active mesoappendix bleed (cut without clamps) and hemorrhage class 3. The latest state says THE PATIENT DIED (simulated), cause hemorrhage (50% of blood volume), and the case is over. The agent says plainly that the patient died, says why from the cause (blood loss / the uncontrolled bleeding; naming the mesoappendix bleed is fine since the earlier state showed it), and says what would have prevented it (clamping the mesoappendix before cutting, or controlling the bleeding as soon as it started). It must NOT coach a next surgical step or tell them to continue (no 'now tie the base' or 'clamp it now'), must NOT invent a cause the state does not show (neck or other region injury, anesthesia, asthma, allergy, cardiac event), and must not be harsh or blaming. A few sentences at most.",
+        [...coachStart(f.ctxClass3), { role: "user", message: f.ctxDied }, { role: "user", message: f.diedCause }],
+        ["We lost him. He bled out from the mesoappendix after it was cut without clamps. Clamping it twice before cutting, or controlling the bleed the moment it started, would have saved him."],
+        ["We lost him. Next time, after delivering the appendix, clamp the mesoappendix, then tie the base.", "He had a reaction to the anesthesia because of his asthma.", "Quick, clamp the mesoappendix now and we can still save him."],
+      ),
+    },
+    {
+      suite: "coach",
+      name: "coach-vitals-simulated-honesty",
+      checks: 'AR with a measured baseline, "are those my friend\'s real vitals?": baseline measured from the volunteer, changes simulated',
+      body: llm(
+        "This is the mixed-reality (AR) mode with a real volunteer on the table. The state says 'Vitals (simulated from measured baseline)'. Asked whether these are their friend's real vitals, the agent explains that the starting (baseline) numbers were measured from the volunteer, and that everything the monitor shows changing during the surgery is simulated by the case (the friend's real body is not affected and is not reacting). Saying that the friend's real body or organs are not reacting, or that nothing on the monitor reflects their body now, is CORRECT and expected, as long as the reply also says the baseline came from the friend (the volunteer); 'a baseline measured in AR' without saying it came from the friend is not enough. It must NOT say the monitor is a live reading of the friend's vitals, and must NOT say the numbers are made up with no link to the friend at all. Extra coaching of the next step after the answer is allowed. One to three short sentences.",
+        [...coachStart(f.ctxMeasured), { role: "user", message: "Wait, are those my friend's real vitals?" }],
+        ["Only the starting point. We measured your friend's baseline at the time-out; every change from here is simulated by the case, not their body."],
+        ["Yes, that's your friend's live heart rate and blood pressure.", "No, those are completely made up demo numbers."],
+      ),
+    },
+    {
+      suite: "coach",
+      name: "coach-what-step-from-state",
+      checks: '"what step am I on?" with the new vitals lines on the card: answers secure mesoappendix from the state',
+      body: llm(
+        "The latest [LIVE SURGERY STATE] is on suggested milestone 7 of 10, Secure mesoappendix (clamp twice, cut between, then tie), with deliver appendix achieved and nothing on the mesoappendix done yet. Asked what step they are on, the agent says they are securing the mesoappendix (step 7, if it gives a number), and may give the next move (clamp it twice, cut between, tie). It must NOT name a different step as current, must NOT say any part of the mesoappendix is already clamped, cut, or tied, and must NOT talk about the vitals as a problem (they are normal). One or two short sentences. A reply that only calls a tool without speaking fails.",
+        [...coachStart(f.ctxMeso), { role: "user", message: "What step am I on?" }],
+        ["You're on step 7, securing the mesoappendix: clamp it twice, cut between, then tie both sides."],
+        ["You're delivering the appendix.", "You've clamped the mesoappendix, now tie it."],
       ),
     },
 
@@ -773,6 +892,11 @@ async function runSuite(agentId: string, override: object, defs: TestDef[], ids:
 async function main() {
   console.log("Recording fixtures from the service code (Theo Abernathy, open appendectomy)...");
   const f = await recordFixtures();
+  if (opt("fixtures")) {
+    writeFileSync(opt("fixtures")!, JSON.stringify(f, null, 2));
+    console.log(`Fixtures written to ${opt("fixtures")}`);
+    process.exit(0);
+  }
   const [jarvisTools, patientTools] = await Promise.all([toolIdsFor(JARVIS_AGENT), toolIdsFor(PATIENT_AGENT)]);
   const all = defineTests(f, { ...jarvisTools, ...patientTools });
   const defs = ONLY ? all.filter((d) => ONLY.split(",").some((o) => d.name.includes(o))) : all;
