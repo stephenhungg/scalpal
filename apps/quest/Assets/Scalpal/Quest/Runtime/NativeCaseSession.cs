@@ -442,8 +442,13 @@ namespace Scalpal.Quest
             if (!HasHandoff || !HandoffVerified || busy || HandoffRun.Current.practiceStarted || !SharedMatches || !RegistrationReady || !HandoffRun.Current.AllConfirmed || (!CoachPrepared && !(captionsOnly && CaptionFallbackAllowed))) return false;
             HandoffRun.Current.timeOutConfirmed = true;
             exercise.requireCoachSynchronization = CoachPrepared;
-            return BeginReviewedPractice();
+            if (!BeginReviewedPractice()) return false;
+            var baseline = TimeOutBaseline(); if (baseline != null) StartCoroutine(baseline);
+            return true;
         }
+        // AR Time-Out: the coach captures the volunteer's measured (Presage) baseline; VR keeps the charted vitals.
+        public IEnumerator TimeOutBaseline() => PresentationMode != "mixed_reality" || !CoachPrepared ? null
+            : Request("POST", "/coach/sessions/" + Uri.EscapeDataString(coachSessionId) + "/vitals/baseline", "{}", _ => { });
         bool BeginReviewedPractice()
         {
             exercise.explicitCoachSessionId = coachSessionId;

@@ -40,6 +40,7 @@ namespace Scalpal.Handoff.Editor
                 ("F4 volunteer consent ends with the run", ConsentEndsWithRun),
                 ("F5 Time-Out sends only individually confirmed risks", RiskReviewSendsOnlyConfirmed),
                 ("F6/F8 Time-Out clears stale errors and releases its loading latch", TimeOutClearsErrorAndLatch),
+                ("F14 AR Time-Out captures the measured vitals baseline; VR keeps the chart", TimeOutBaselineOnlyInAr),
                 ("F6/F7 a new office run starts without old errors or coach/fit-loss state", NewRunResetsState),
                 ("F7 the fit-loss ladder restarts after leaving practice", FitLossLadderIsPerPractice),
                 ("F9 legacy office route starts in the virtual OR", LegacyOfficeRouteStartsVirtual),
@@ -180,6 +181,21 @@ namespace Scalpal.Handoff.Editor
             Assert(routine.MoveNext() && Get<string>(flow, "failure") == "", "a new Begin practice clears the previous error");
             HandoffRun.Clear();
             Assert(!routine.MoveNext() && !Get<bool>(flow, "loading"), "a response for a cleared ticket releases the loading latch");
+        }
+
+        // AR: the coach freezes the volunteer's Presage baseline at the Time-Out (POST with an empty body).
+        // VR has no volunteer, so the charted vitals stay and nothing is posted.
+        static void TimeOutBaselineOnlyInAr()
+        {
+            var flow = Flow(out _); var native = Native(flow.gameObject);
+            Set(native, "coachSessionId", "coach-fixture");
+            Assert(native.TimeOutBaseline() == null, "VR Time-Out posts no baseline");
+            native.presentation.passthrough = true;
+            var request = native.TimeOutBaseline();
+            Assert(request != null && Field<string>(request, "method") == "POST" && Field<string>(request, "path") == "/coach/sessions/coach-fixture/vitals/baseline"
+                && Field<string>(request, "body") == "{}", "AR Time-Out posts an empty body to the session's vitals baseline");
+            Set(native, "coachSessionId", "");
+            Assert(native.TimeOutBaseline() == null, "a captions-only Time-Out without a coach session posts nothing");
         }
 
         static void NewRunResetsState()
