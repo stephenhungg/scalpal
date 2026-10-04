@@ -40,6 +40,8 @@ namespace Scalpal.Surgery
         public string Status { get; private set; } = "Waiting for an open-body case";
         public OpenBodyInteraction Interaction => interaction;
         public OpenWoundView Wound => wound;
+        // Torso-frame proxy for the right ASIS when no registered landmark is bound; the wound sits a third of the way to the umbilicus origin.
+        public static readonly Vector3 AuthoredRightAsis = new Vector3(-.13f,-.015f,-.14f);
         public bool Ready => session && session.Practicing && session.RegistrationReady && session.exercise && session.exercise.CanScore && !session.exercise.Completed && GetComponent<NativeProcedureInput>() && GetComponent<NativeProcedureInput>().InteractionReady;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -85,6 +87,7 @@ namespace Scalpal.Surgery
                 kit = Instantiate(prefab); kit.name = "OpenSurgeryCaseTools";
                 var reference = session.workbench.tools != null && session.workbench.tools.Length > 0 ? session.workbench.tools[0].transform : transform;
                 kit.transform.position = reference.position + new Vector3(0,.02f,.32f);
+                KeepOnSupport(kit, reference);
                 session.workbench.RegisterAdditionalTools(kit.GetComponentsInChildren<InstrumentBehaviour>(true));
             }
             if(!riskAnatomy)
@@ -104,7 +107,7 @@ namespace Scalpal.Surgery
                 woundFrame.SetParent(session.patientFrame,false);
                 // Authored landmark proxies until the registration owner supplies actual ASIS/umbilicus
                 // transforms. These are not claims that MediaPipe resolves these bony landmarks.
-                Vector3 hip = rightAsis ? session.patientFrame.InverseTransformPoint(rightAsis.position) : new Vector3(-.13f,-.015f,-.14f);
+                Vector3 hip = rightAsis ? session.patientFrame.InverseTransformPoint(rightAsis.position) : AuthoredRightAsis;
                 Vector3 navel = umbilicus ? session.patientFrame.InverseTransformPoint(umbilicus.position) : Vector3.zero;
                 woundFrame.localPosition = OpenSurgeryStroke.McBurney(hip,navel);
                 woundFrame.localRotation = Quaternion.Euler(90,0,-35);
@@ -148,6 +151,23 @@ namespace Scalpal.Surgery
                 foreach(var group in interaction.Mobility) if(group.Contains(session.anatomy.TryGetPart("appendix",out var part)?part.transform:null)) tether=Mathf.Max(tether,group.Definition.maxTravelMm);
                 Status+=$"; delivery needs {needed:F1} mm, cage bound {maximum:F1} mm, mobilization tether {tether:F1} mm";Debug.Log("SCALPAL_OPEN_DELIVERY_BOUND "+Status);
             }
+        }
+        // The kit is laid out beside the first authored tool; slide it sideways so every kit tool lies over the same
+        // instrument table, rather than off its edge and onto the floor (where the skin marker was lost in VR).
+        static void KeepOnSupport(GameObject kit, Transform reference)
+        {
+            Physics.SyncTransforms();
+            Collider support = null; float nearest = float.PositiveInfinity;
+            foreach (var hit in Physics.RaycastAll(reference.position + Vector3.up * .1f, Vector3.down, 1f, ~0, QueryTriggerInteraction.Ignore))
+                if (!hit.collider.GetComponentInParent<InstrumentBehaviour>() && hit.distance < nearest) { support = hit.collider; nearest = hit.distance; }
+            if (!support) return;
+            var parts = kit.GetComponentsInChildren<Collider>(true);
+            if (parts.Length == 0) return;
+            Bounds tools = parts[0].bounds; foreach (var part in parts) tools.Encapsulate(part.bounds);
+            Bounds table = support.bounds; const float margin = .01f;
+            float Shift(float min, float max, float low, float high) => min < low + margin ? low + margin - min : max > high - margin ? high - margin - max : 0;
+            kit.transform.position += new Vector3(Shift(tools.min.x, tools.max.x, table.min.x, table.max.x), 0, Shift(tools.min.z, tools.max.z, table.min.z, table.max.z));
+            Physics.SyncTransforms();
         }
         void Marked(IReadOnlyList<Vector3> points) => wound.SetMarker(points);
         // State tracker facts for Jarvis (never scored): tip contact and region injuries come from the interaction.

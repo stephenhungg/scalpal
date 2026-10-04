@@ -19,8 +19,9 @@ The generator adds a Rigidbody, compound box/capsule colliders, and a small dist
 For each controller, attach `InstrumentInteractor` and `XRInstrumentInput` to a dedicated GameObject. Select `LeftHand` or `RightHand`, and assign the **actual tracking-origin transform** from the application's XR rig. The sandbox's `TrackingOrigin` is an integration placeholder; it does not start XR or track its desktop preview camera. The native scene already supplies a stereo head camera and shared floor-space origin; use it for physical controller tests.
 
 - Grip crossing 0.65 picks up the nearest unheld instrument within 14 cm of the controller's grip point.
-- Grip below 0.25 releases it and restores its earlier physics settings.
+- Grip below 0.25 releases it and restores its earlier physics settings. A released dynamic tool sweeps with `ContinuousDynamic` detection so a drop cannot tunnel through the table or patient; while held (kinematic) it uses `ContinuousSpeculative`.
 - Trigger above 0.7 activates a held tool. Below 0.2 releases its target and rearms discrete actions.
+- In the open-body OR every tool effect (mark, cut, grasp, retract, clamp, tie, seal, suction) needs the trigger held. A held tool resting on wound tissue without it applies nothing; `OpenBodyInteraction.TouchedWithoutTrigger` fires once per touch and `SurgeryTriggerHint` shows "Hold trigger to <verb>" at the tip with a short haptic tap.
 - A held instrument follows the controller at its `GripAnchor`; its Rigidbody becomes kinematic and disables physics interpolation while held. Release restores the original interpolation policy. The XR adapter refreshes poses before rendering, without repeating trigger/grip actions.
 - Losing valid controller tracking immediately releases the instrument, ends its action, and releases any grasped virtual target. Recovery requires a physical grip release before another pickup.
 

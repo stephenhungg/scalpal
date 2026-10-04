@@ -46,6 +46,8 @@ namespace Scalpal.Quest.Editor
             patient.transform.position += delta;
             room.transform.position += delta;
             var mannequin = patient.GetComponentsInChildren<Renderer>(true).Single();
+            // The atlas fit and torso frame below keep their authored placement from the imported bounds; the
+            // mannequin art is then turned and raised to match them (SeatVirtualPatient).
             var patientBounds = mannequin.bounds;
             // The VR patient reads as solid skin; it is hidden in AR, where only the anatomy overlay is drawn.
             mannequin.sharedMaterials = mannequin.sharedMaterials.Select(_ => PatientSkin()).ToArray();
@@ -74,6 +76,7 @@ namespace Scalpal.Quest.Editor
             // Authored approximate skin umbilicus; +X patient left, +Y anterior, +Z cranial.
             frame.SetPositionAndRotation(new Vector3(patientBounds.center.x, patientBounds.max.y + 0.015f,
                 patientBounds.min.z + 1.08f * AnatomyScale), Quaternion.identity);
+            SeatVirtualPatient(mannequin, frame);
             var bundle = LoadBundle();
             var selected = bundle.cases.Single(item => item.caseId == CaseId);
             foreach (var port in selected.procedure.ports)
@@ -177,6 +180,31 @@ namespace Scalpal.Quest.Editor
             Debug.Log("SCALPAL_NATIVE_SESSION_PREPARED view=mixed_reality registration=required_live_body_fit physicalPlaythroughUnverified=true");
         }
 
+        // The imported mannequin lies head toward -Z with its back inside the mattress, but the atlas fit and torso
+        // frame below are +Z cranial with the feet at min Z. Turn the mannequin end for end about its bounds centre
+        // (its footprint is unchanged), then raise it until its skin under the authored McBurney teaching wound is
+        // 2 mm below the wound's skin plane: a learner touching the visible abdomen there touches the scored wall.
+        public const float SkinBelowWoundMeters = .002f;
+        internal static void SeatVirtualPatient(Renderer mannequin, Transform frame)
+        {
+            mannequin.transform.RotateAround(mannequin.bounds.center, Vector3.up, 180f);
+            Vector3 wound = frame.TransformPoint(Scalpal.Surgery.OpenSurgeryStroke.McBurney(Scalpal.Surgery.OpenSurgerySession.AuthoredRightAsis, Vector3.zero));
+            var skin = new GameObject("SkinProbe").AddComponent<MeshCollider>(); // the rendered skin, not the physics copy
+            skin.transform.SetParent(mannequin.transform, false);
+            skin.sharedMesh = mannequin.GetComponent<MeshFilter>().sharedMesh;
+            Physics.SyncTransforms();
+            bool backfaces = Physics.queriesHitBackfaces;
+            Physics.queriesHitBackfaces = true; // A few source triangles on the midline are wound inward.
+            try
+            {
+                if (!skin.Raycast(new Ray(new Vector3(wound.x, mannequin.bounds.max.y + 1f, wound.z), Vector3.down), out var hit, 3f))
+                    throw new InvalidOperationException("No mannequin skin under the authored teaching wound.");
+                mannequin.transform.position += Vector3.up * (wound.y - SkinBelowWoundMeters - hit.point.y);
+            }
+            finally { Physics.queriesHitBackfaces = backfaces; UnityEngine.Object.DestroyImmediate(skin.gameObject); }
+            PrefabUtility.RecordPrefabInstancePropertyModifications(mannequin.transform);
+        }
+
         static void ApplySessionSettings()
         {
             PlayerSettings.productName = "Scalpal Surgical Session";
@@ -208,7 +236,14 @@ namespace Scalpal.Quest.Editor
             return bundle;
         }
 
-        static Material PatientSkin() => Material("AuthoredPatientSkin", new Color(0.65f, 0.5f, 0.4f, 1f), false);
+        static Material PatientSkin()
+        {
+            var material = Material("AuthoredPatientSkin", new Color(0.65f, 0.5f, 0.4f, 1f), false);
+            // Opaque skin that opens only over a live teaching wound (see PatientSkin.shader).
+            material.shader = Shader.Find("Scalpal/PatientSkin") ?? throw new InvalidOperationException("Scalpal/PatientSkin shader is missing.");
+            EditorUtility.SetDirty(material);
+            return material;
+        }
         static Material PortMaterial() => Material("AuthoredPortSite", new Color(0.2f, 0.7f, 0.85f), false);
 
         static Material Material(string name, Color color, bool transparent)

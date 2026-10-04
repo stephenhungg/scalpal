@@ -60,7 +60,12 @@ namespace Scalpal.Quest
         public void Apply()
         {
             if (virtualRoom) virtualRoom.SetActive(!passthrough);
-            if (virtualMannequin) virtualMannequin.enabled = !passthrough;
+            if (virtualMannequin)
+            {
+                virtualMannequin.enabled = !passthrough;
+                // The virtual body is solid only in VR; in AR it must not catch tools above the real participant.
+                foreach (var body in virtualMannequin.GetComponentsInChildren<Collider>(true)) body.enabled = !passthrough;
+            }
             if (!passthrough && initialized)
             {
                 anatomyFit.SetPositionAndRotation(authoredFit.position, authoredFit.rotation); anatomyFit.localScale = authoredScale;

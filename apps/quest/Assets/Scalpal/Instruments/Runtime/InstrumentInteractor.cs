@@ -138,6 +138,8 @@ namespace Scalpal.Instruments
                 // A tracked transform owns the held pose. Physics interpolation
                 // otherwise replays older fixed-step poses and trails the hand.
                 heldBody.interpolation = RigidbodyInterpolation.None;
+                // Kinematic bodies support only speculative continuous detection.
+                heldBody.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
                 heldBody.isKinematic = true;
                 heldBody.useGravity = false;
             }
@@ -166,6 +168,8 @@ namespace Scalpal.Instruments
                 heldBody.isKinematic = previousKinematic;
                 heldBody.useGravity = previousGravity;
                 heldBody.interpolation = previousInterpolation;
+                // A dropped or tossed tool is small and fast: sweep it so it cannot tunnel through the table or patient.
+                if (!heldBody.isKinematic) heldBody.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
             }
             HeldInstrument = null;
             heldBody = null;
