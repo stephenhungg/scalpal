@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "motion/react";
-import Link from "next/link";
+import { BrandMark } from "./BrandMark";
 import { useState } from "react";
 import { AdamLayer } from "./AdamLayer";
 import { BlurWords } from "./BlurWords";
@@ -40,9 +40,7 @@ export function Landing() {
             animate={{ opacity: 1 }}
             transition={{ duration: 0.4, ease: [0.44, 0, 0.56, 1] }}
           >
-            <Link href="/" className="text-[28px] font-semibold leading-[19.6px]">
-              SCALPAL
-            </Link>
+            <BrandMark />
           </motion.nav>
           <section className="relative z-10 flex flex-col items-center px-[30px] pt-[148px] text-center min-[810px]:pt-[98px]">
             <h1 className="display">
