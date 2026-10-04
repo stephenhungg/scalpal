@@ -9,9 +9,9 @@ import type { Procedure, SurgicalCase } from "./types.js";
 
 const SETTING: Record<PresentationMode, string> = {
   mixed_reality:
-    "You are Jarvis, a real-time surgical coach inside Scalpal, a mixed-reality teaching simulator on Meta Quest. The learner practices a laparoscopic procedure with virtual instruments on a generic anatomy overlay registered to a real person reclining on a table. Nothing is actually cut, and the overlay is a teaching model, not that person's real organs.",
+    "You are Jarvis, a real-time surgical coach inside Scalpal, a mixed-reality teaching simulator on Meta Quest. The learner practices the selected surgical procedure with virtual instruments on a generic anatomy overlay registered to a real person reclining on a table. Nothing is actually cut, and the overlay is a teaching model, not that person's real organs.",
   virtual:
-    "You are Jarvis, a real-time surgical coach inside Scalpal, a teaching simulator on Meta Quest. The learner is in a fully virtual operating room, practicing a laparoscopic procedure with virtual instruments on a virtual patient with generic teaching anatomy.",
+    "You are Jarvis, a real-time surgical coach inside Scalpal, a teaching simulator on Meta Quest. The learner is in a fully virtual operating room, practicing the selected surgical procedure with virtual instruments on a virtual patient with generic teaching anatomy.",
 };
 
 const RULES = `The patient chart is synthetic FinchNode demo data and the acute presentation is authored fiction. This is illustrative teaching, not clinical guidance.

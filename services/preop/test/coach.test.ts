@@ -1,3 +1,4 @@
+import { legacyAppendectomyCase, legacyAppendectomyApp } from "./legacy-appendectomy-fixture.js";
 import { describe, expect, it } from "vitest";
 import { createApp } from "../src/app.js";
 import { buildCase } from "../src/case-builder.js";
@@ -317,7 +318,7 @@ describe("voice connection", () => {
 
 describe("danger focus", () => {
   it("does not warn when the learner looks at the step's own target", () => {
-    const s = new CoachSession("coach-f", buildCase(fixture("patient-demo-pediatric-asthma"), "", NOW), () => NOW);
+    const s = new CoachSession("coach-f", legacyAppendectomyCase(), () => NOW);
     while (s.engine.current?.id !== "find_appendix") s.handle(s.nextCorrectEvent()!);
     expect(s.handle({ type: "focus", structureId: "appendix" }).alerts).toEqual([]);
     while ((s.engine.current?.id as string) !== "divide_mesoappendix") s.handle(s.nextCorrectEvent()!);
@@ -344,7 +345,7 @@ describe("presentation modes", () => {
 });
 
 describe("headset relay compatibility", () => {
-  const app = createApp({ client: fixtureClient(), now: () => NOW, coachTickMs: 0 });
+  const app = legacyAppendectomyApp();
   const post = async (route: string, body: unknown) =>
     (await (await app.request(route, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })).json()) as Record<string, any>;
 
@@ -373,7 +374,7 @@ describe("headset relay compatibility", () => {
 });
 
 describe("headset authority and retries", () => {
-  const app = createApp({ client: fixtureClient(), now: () => NOW, coachTickMs: 0 });
+  const app = legacyAppendectomyApp();
   const post = async (route: string, body: unknown) =>
     (await (await app.request(route, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })).json()) as Record<string, any>;
   const start = async () => (await post("/coach/sessions", { patientId: "patient-demo-pediatric-asthma" })).sessionId as string;
@@ -437,7 +438,7 @@ describe("headset authority and retries", () => {
 });
 
 describe("bleeding and checkpoints", () => {
-  const theo = () => new CoachSession("coach-bleed", buildCase(fixture("patient-demo-pediatric-asthma"), "", NOW), () => NOW, undefined, "virtual");
+  const theo = () => new CoachSession("coach-bleed", legacyAppendectomyCase(), () => NOW, undefined, "virtual");
 
   it("warns instantly when a vessel opens, coaches control first, then reports it controlled", () => {
     const s = theo();
@@ -473,7 +474,7 @@ describe("bleeding and checkpoints", () => {
   });
 
   it("accepts bleeding over HTTP and rejects malformed reports", async () => {
-    const app = createApp({ client: fixtureClient(), now: () => NOW, coachTickMs: 0 });
+    const app = legacyAppendectomyApp();
     const sid = ((await (await app.request("/coach/sessions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ patientId: "patient-demo-pediatric-asthma" }) })).json()) as { sessionId: string }).sessionId;
     const post = async (event: unknown) => (await app.request(`/coach/sessions/${sid}/events`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ event }) })).status;
     expect(await post({ type: "bleeding", structureId: "appendicular_artery", active: true, rateMlPerMin: 30, totalMl: 5 })).toBe(200);

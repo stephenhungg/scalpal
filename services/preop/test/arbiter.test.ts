@@ -1,3 +1,4 @@
+import { legacyAppendectomyCase } from "./legacy-appendectomy-fixture.js";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -144,7 +145,7 @@ describe("arbiter", () => {
 
 describe("warning alerts", () => {
   it("carry a reflex clip key, a version, and open with Stop", () => {
-    const s = new CoachSession("coach-w", buildCase(fixture("patient-demo-pediatric-asthma"), "", NOW), () => NOW);
+    const s = new CoachSession("coach-w", legacyAppendectomyCase(), () => NOW);
     while (s.engine.current?.id !== "divide_mesoappendix") s.handle(s.nextCorrectEvent()!);
     const [a] = s.handle({ type: "touch", structureId: "terminal_ileum", instrumentId: "vessel_sealer" }).alerts;
     expect(a).toMatchObject({ tier: "warning", reflexKey: "mistake.sealer_on_ileum", version: s.version });
@@ -153,7 +154,7 @@ describe("warning alerts", () => {
   });
 
   it("lists one clip per high-severity mistake plus tracking loss", () => {
-    const lines = reflexLines(buildCase(fixture("patient-demo-pediatric-asthma"), "", NOW));
+    const lines = reflexLines(legacyAppendectomyCase());
     expect(new Set(lines.map((l) => l.key)).size).toBe(lines.length);
     expect(lines.map((l) => l.key)).toEqual(expect.arrayContaining(["mistake.sealer_on_ileum", "mistake.staple_ileum", "mistake.port_into_bladder", "tracking_lost"]));
     expect(lines.map((l) => l.key)).not.toContain("mistake.grab_appendix"); // moderate: spoken by the LLM instead

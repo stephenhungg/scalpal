@@ -41,9 +41,11 @@ namespace Scalpal.Surgery.Editor
             Require(procedure.openBody.decisions.Any(d => d.id == "true_base" && d.correctChoice == "true_base"), "true-base decision authored in data");
             VerifyPerfect(procedure);
             VerifyConsequences(procedure);
+            VerifyGuardrailDeserialization(procedure);
             VerifyInputBoundary(procedure);
             VerifyBase(procedure);
             VerifySpatialControl(procedure);
+            VerifyFinish(procedure);
             Debug.Log("SCALPAL_OPEN_BODY_VALIDATION_OK: " + checks + " synthetic body, case, off-path, timing and reset assertions; no physical headset test");
         }
         static void VerifyPerfect(Procedure procedure)
@@ -120,6 +122,32 @@ namespace Scalpal.Surgery.Editor
             second.Handle(CaseEvent.Surgery(Action("other-bowel", "cut", "terminal_ileum", "scalpel")));
             Require(second.Body.Get("", "contamination") == 1 && second.Mistakes.Count == 0, "same tissue consequences in second case with different guardrails");
         }
+        static void VerifyGuardrailDeserialization(Procedure procedure)
+        {
+            // Exercise the real Unity decoder, including its omitted nested-object behavior.
+            var outcomeRule = JsonUtility.FromJson<BodyGuardrail>("{\"id\":\"regression_leak\",\"outcome\":\"hollow_leak\",\"tissueId\":\"\",\"severity\":\"high\",\"feedback\":\"Recorded leak.\"}");
+            var numericRule = JsonUtility.FromJson<BodyGuardrail>("{\"id\":\"regression_mark\",\"outcome\":\"\",\"tissueId\":\"skin\",\"verb\":\"mark\",\"eventPredicate\":{\"tissueId\":\"\",\"fact\":\"distanceMm\",\"op\":\"gte\",\"value\":20},\"severity\":\"moderate\",\"feedback\":\"Recheck landmark placement.\"}");
+            var malformed = new BodyGuardrail { id = "malformed_predicate", tissueId = "skin", verb = "mark",
+                eventPredicate = new BodyPredicate { fact = "unsupported_measurement", op = "gte", value = 0 }, severity = "high", feedback = "Must not fire." };
+            var plan = new Procedure { id = "guardrail_decode_fixture", steps = procedure.steps, firstStep = procedure.firstStep,
+                openBody = new OpenBodyCase { version = procedure.openBody.version, tissues = procedure.openBody.tissues, milestones = procedure.openBody.milestones,
+                    decisions = procedure.openBody.decisions, guardrails = new[]{ outcomeRule, numericRule, malformed } } };
+            var runner = new CaseRunner(plan);
+            var mark = Action("mark-inside", "mark", "skin", "skin_marker", distance:19.9f); mark.lengthMm = 60;
+            Require(runner.Handle(CaseEvent.Surgery(mark)).mistake == null, "decoded numeric predicate rejects below-threshold event");
+            mark = Action("mark-outside", "mark", "skin", "skin_marker", distance:20); mark.lengthMm = 60;
+            Require(runner.Handle(CaseEvent.Surgery(mark)).mistake?.id == "regression_mark", "decoded numeric event predicate fires at authored inclusive threshold");
+            var cut = Action("same-distance-wrong-verb", "cut", "skin", "scalpel", distance:25);
+            Require(runner.Handle(CaseEvent.Surgery(cut)).mistake == null, "numeric guardrail retains its authored verb filter");
+            Expose(runner, procedure);
+            var injury = runner.Handle(CaseEvent.Surgery(Action("decoded-leak", "cut", "terminal_ileum", "scalpel")));
+            Require(injury.mistake?.id == "regression_leak", "outcome guardrail survives an omitted eventPredicate after JsonUtility decode");
+            outcomeRule.eventPredicate = new BodyPredicate();
+            injury = runner.Handle(CaseEvent.Surgery(Action("default-nested-leak", "cut", "terminal_ileum", "scalpel")));
+            Require(injury.mistake?.id == "regression_leak", "all-default nested predicate also preserves original outcome guardrail");
+            Require(!runner.Mistakes.Any(m => m.id == "malformed_predicate"), "unknown nonempty predicate never broadens into an unconditional guardrail");
+        }
+
         static void VerifyInputBoundary(Procedure procedure)
         {
             var state = new BodyState(procedure.openBody.tissues);
@@ -183,6 +211,36 @@ namespace Scalpal.Surgery.Editor
             foreach (var e in CaseRunner.PerfectEvents(procedure.steps.First(s => s.id == "split_muscle"))) muscle.Handle(e);
             Require(muscle.Body.Get("muscle", "bladeUsed") == 1 && !muscle.Achieved.Contains("split_muscle"),
                 "later retraction cannot erase prior muscle cutting");
+        }
+
+        static void VerifyFinish(Procedure procedure)
+        {
+            var runner = new CaseRunner(procedure);
+            foreach (var step in procedure.steps.Take(3)) foreach (var e in CaseRunner.PerfectEvents(step)) runner.Handle(e);
+            runner.Handle(CaseEvent.Surgery(Action("irreversible-muscle", "cut", "muscle", "scalpel", 1000)));
+            var before = runner.Achieved.ToArray();
+            int endings = 0; runner.CaseCompleted += () => endings++;
+            var result = runner.Handle(CaseEvent.Finish());
+            Require(result.completed && !result.advanced && runner.Completed, "explicit finish ends incomplete attempt");
+            Require(before.SequenceEqual(runner.Achieved), "finish does not award missing milestones");
+            var grade = runner.Grade;
+            Require(!grade.complete && grade.missingMilestones.Contains("split_muscle") && grade.guardrailIds.Contains("split_dont_cut"), "grade preserves incomplete goals and irreversible safety findings");
+            Require(grade.rubric == "illustrative_v1_uncalibrated" && grade.availablePoints == 80 && grade.unscoredEconomyWeight == 20 &&
+                grade.economyPoints == -1 && !grade.economyMeasured, "missing economy metrics are explicitly unscored");
+            Require(grade.actionCount == runner.Body.Log.Count && grade.durationMs == 1000 && grade.missingMetrics.Contains("leftHandPathLengthM"), "grade reports measured action count and clock duration");
+            int count = runner.Body.Log.Count;
+            runner.Handle(CaseEvent.Finish());
+            foreach (var step in procedure.steps) foreach (var e in CaseRunner.PerfectEvents(step)) runner.Handle(e);
+            Require(endings == 1 && runner.Body.Log.Count == count && runner.Completed, "repeated finish and later events cannot resume or mutate a final attempt");
+            grade.missingMilestones[0] = "caller-mutated";
+            Require(!runner.Grade.missingMilestones.Contains("caller-mutated"), "Grade access returns an isolated final snapshot");
+            var perfect = new CaseRunner(procedure);
+            foreach (var step in procedure.steps) foreach (var e in CaseRunner.PerfectEvents(step)) perfect.Handle(e);
+            Require(perfect.Grade != null && perfect.Grade.complete && perfect.Grade.reason == "goals_reached" && perfect.Grade.earnedPoints == 80,
+                "normal completion uses the same deterministic grade");
+            count = perfect.Body.Log.Count;
+            perfect.Handle(CaseEvent.Surgery(Action("after-completion", "cut", "cecum", "scalpel")));
+            Require(perfect.Body.Log.Count == count, "normal completed attempt is frozen too");
         }
 
         static void VerifyBase(Procedure procedure)

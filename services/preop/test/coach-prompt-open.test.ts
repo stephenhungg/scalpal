@@ -1,3 +1,4 @@
+import { legacyAppendectomyCase } from "./legacy-appendectomy-fixture.js";
 import { describe, expect, it } from "vitest";
 import { buildCase } from "../src/case-builder.js";
 import { PROCEDURES_BY_ID } from "../src/catalog/procedures.js";
@@ -17,6 +18,6 @@ describe("coach prompt for open surgery", () => {
   });
 
   it("keeps the ordered port-based framing for laparoscopic cases", () => {
-    expect(buildSystemPrompt(kase)).toMatch(/Ports: .*\nOrdered steps\. The learner must complete them in this order:/);
+    expect(buildSystemPrompt(legacyAppendectomyCase())).toMatch(/Ports: .*\nOrdered steps\. The learner must complete them in this order:/);
   });
 });

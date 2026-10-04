@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Scalpal.Instruments;
 using UnityEngine;
 using UnityEngine.XR;
@@ -19,6 +20,7 @@ namespace Scalpal.Quest
         public bool externalSessionControls;
         public NativePresentation presentation;
         public bool IsReady { get; private set; }
+        public event Action ToolsReset;
         public event Action RetryRequested;
 
         Vector3[] toolPositions;
@@ -171,6 +173,22 @@ namespace Scalpal.Quest
             Debug.Log($"SCALPAL_NATIVE_EFFECT tool={record.instrumentId} target={record.targetId} action={record.action} outcome={record.outcome}");
         }
 
+        // Additive case kits preserve the reset poses of existing tools. Call after Awake.
+        public void RegisterAdditionalTools(InstrumentBehaviour[] additions)
+        {
+            var all = new List<InstrumentBehaviour>(tools ?? Array.Empty<InstrumentBehaviour>());
+            var positions = new List<Vector3>(toolPositions ?? Array.Empty<Vector3>());
+            var rotations = new List<Quaternion>(toolRotations ?? Array.Empty<Quaternion>());
+            var parents = new List<Transform>(toolParents ?? Array.Empty<Transform>());
+            foreach (var item in additions ?? Array.Empty<InstrumentBehaviour>())
+            {
+                if (!item || all.Contains(item)) continue;
+                all.Add(item); positions.Add(item.transform.position); rotations.Add(item.transform.rotation); parents.Add(item.transform.parent);
+                item.CaptureRestPose(); item.ActionApplied += Applied;
+            }
+            tools = all.ToArray(); toolPositions = positions.ToArray(); toolRotations = rotations.ToArray(); toolParents = parents.ToArray();
+        }
+
         public void ResetWorkbench()
         {
             ResetTools();
@@ -187,6 +205,7 @@ namespace Scalpal.Quest
         // A in a session resets only equipment: no case, attempt, target or coach reset.
         public void ResetTools()
         {
+            ToolsReset?.Invoke();
             foreach (var input in inputs ?? Array.Empty<XRInstrumentInput>())
                 if (input) input.GetComponent<InstrumentInteractor>()?.ReturnHeldToRest();
             for (int i = 0; i < tools.Length; i++)

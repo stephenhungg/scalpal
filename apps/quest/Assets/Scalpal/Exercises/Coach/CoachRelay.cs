@@ -89,6 +89,7 @@ namespace Scalpal.Exercises.Coach
     [Serializable]
     public class CoachSnapshotState
     {
+        public BodyGrade bodyGrade;
         public string sessionId;
         public string patientId;
         public string procedureId;
@@ -266,6 +267,7 @@ namespace Scalpal.Exercises.Coach
                 case CaseEventType.Touch: Enqueue("touch", structureId: e.id, instrumentId: e.instrumentId, stepId: stepId); break;
                 case CaseEventType.Identify: Enqueue("identify", structureId: e.id, stepId: stepId); break;
                 case CaseEventType.Confirm: Enqueue("confirm", stepId: stepId); break;
+                case CaseEventType.Finish: Enqueue("finish", stepId: stepId); break;
             }
         }
 

@@ -11,7 +11,7 @@
   <ItemGroup>
     <Compile Include="../../../apps/quest/Assets/Scalpal/Anatomy/Runtime/*.cs" />
     <Compile Include="../../../apps/quest/Assets/Scalpal/Anatomy/Editor/*.cs" />
-    <Compile Include="../../../apps/quest/Assets/Scalpal/Exercises/Data/ScalpalCaseData.cs" />
-    <Compile Include="../../../apps/quest/Assets/Scalpal/Exercises/Engine/CaseRunner.cs" />
+    <Compile Include="../../../apps/quest/Assets/Scalpal/Exercises/Data/*.cs" />
+    <Compile Include="../../../apps/quest/Assets/Scalpal/Exercises/Engine/*.cs" />
   </ItemGroup>
 </Project>

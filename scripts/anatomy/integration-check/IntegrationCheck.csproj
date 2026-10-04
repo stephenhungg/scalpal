@@ -8,7 +8,7 @@
     <Compile Include="../../../apps/quest/Assets/Scalpal/Anatomy/Runtime/AnatomyPart.cs" />
     <Compile Include="../../../apps/quest/Assets/Scalpal/Anatomy/Runtime/AnatomyController.cs" />
     <Compile Include="../../../apps/quest/Assets/Scalpal/Anatomy/Runtime/AnatomyExerciseBinding.cs" />
-    <Compile Include="../../../apps/quest/Assets/Scalpal/Exercises/Data/ScalpalCaseData.cs" />
-    <Compile Include="../../../apps/quest/Assets/Scalpal/Exercises/Engine/CaseRunner.cs" />
+    <Compile Include="../../../apps/quest/Assets/Scalpal/Exercises/Data/*.cs" />
+    <Compile Include="../../../apps/quest/Assets/Scalpal/Exercises/Engine/*.cs" />
   </ItemGroup>
 </Project>

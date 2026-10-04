@@ -83,6 +83,7 @@ namespace Scalpal.Quest
 
         bool HandleTouch(ContactBinding source, Collider callbackCollider, string partId, string instrumentId)
         {
+            if (exercise && exercise.Body != null) return false; // Open-body adapter submits measured verbs through this same binding.
             if (!CanScore() || exercise.Current?.check == null || exercise.Current.check.type == "place_ports" ||
                 !ValidTool(source.tool, true) || instrumentId != source.tool.instrumentId || !source.contact || !source.contact.isActiveAndEnabled ||
                 source.contact.GetComponentInParent<InstrumentBehaviour>() != source.tool) return false;

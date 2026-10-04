@@ -12,7 +12,7 @@ namespace Scalpal.Exercises.Data
         public double timeMs;
         public Vec3 position;
         public bool registered;
-        public float speedMps, forceProxy, distanceMm, lengthMm, angleDegrees, depthMm, durationMs, separationMm;
+        public float speedMps, forceProxy, distanceMm, lengthMm, angleDegrees, depthMm, durationMs, separationMm, bloodLostMl, poolMl, flowMlPerSecond;
         public BodyAction Copy() => (BodyAction)MemberwiseClone();
     }
 }

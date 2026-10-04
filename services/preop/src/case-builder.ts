@@ -1,3 +1,4 @@
+import { TOOL_VERBS } from "./open-body.js";
 import { ANATOMY_BY_ID } from "./catalog/anatomy.js";
 import { CASE_PLANS, CHECKLIST_LABELS, CONSIDERATION_NOTES, STEP_ROLES, fallbackPlan, presentationFor } from "./catalog/cases.js";
 import { INSTRUMENTS_BY_ID } from "./catalog/instruments.js";
@@ -105,7 +106,7 @@ export function buildCase(
   }
 
   const structureIds = [...new Set([...procedure.structures, ...brief.highlightStructures])];
-  const instrumentIds = [...new Set(procedure.ports.flatMap((p) => p.instrumentIds).concat(procedure.steps.map((s) => s.instrumentId)))];
+  const instrumentIds = procedure.openBody ? Object.keys(TOOL_VERBS).filter(id => INSTRUMENTS_BY_ID.has(id)) : [...new Set(procedure.ports.flatMap((p) => p.instrumentIds).concat(procedure.steps.map((s) => s.instrumentId)))];
   const age = brief.patient.age;
 
   return {

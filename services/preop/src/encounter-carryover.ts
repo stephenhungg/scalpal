@@ -59,6 +59,7 @@ export function buildCarryoverItems(kase: SurgicalCase, history: HistoryTopic[],
 // Authored teaching site, not a patient-specific incision plan. Unknown procedures fail visibly.
 export function procedureSite(procedureId: string): string {
   return ({
+    open_appendectomy: "Abdomen — open appendix incision / right lower quadrant",
     lap_appendectomy: "Abdomen — appendix / right lower quadrant",
     lap_cholecystectomy: "Abdomen — gallbladder / right upper quadrant",
     lap_sigmoid_colectomy: "Abdomen — sigmoid colon / left lower quadrant",

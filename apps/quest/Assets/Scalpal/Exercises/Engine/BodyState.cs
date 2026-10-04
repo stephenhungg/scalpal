@@ -43,7 +43,7 @@ namespace Scalpal.Exercises.Engine
             ["babcock"] = new[]{"grasp","retract"}, ["atraumatic_grasper"] = new[]{"grasp","retract"},
             ["hemostat"] = new[]{"clamp"}, ["right_angle_clamp"] = new[]{"clamp"}, ["suture_tie"] = new[]{"tie","place"},
             ["hook_cautery"] = new[]{"seal"}, ["vessel_sealer"] = new[]{"seal"},
-            ["suction_irrigator"] = new[]{"suction","inspect"}, ["decision"] = new[]{"decide"}, ["assistant"] = new[]{"close","tick"},
+            ["suction_irrigator"] = new[]{"suction","inspect"}, ["decision"] = new[]{"decide"}, ["assistant"] = new[]{"close","tick","fluid"},
         };
         static bool Finite(double v) => !double.IsNaN(v) && !double.IsInfinity(v);
         public static bool ValidBodyAction(BodyAction e)
@@ -51,7 +51,7 @@ namespace Scalpal.Exercises.Engine
             if (e == null || string.IsNullOrEmpty(e.actionId) || e.instrumentId == null || e.instrumentInstanceId == null || e.secondaryInstanceId == null ||
                 e.verb == null || e.tissueId == null || e.layer == null || e.choice == null || e.coordinateFrame != "registered_torso_m") return false;
             if (!Finite(e.position.x) || !Finite(e.position.y) || !Finite(e.position.z)) return false;
-            foreach (var v in new double[]{e.timeMs,e.speedMps,e.forceProxy,e.distanceMm,e.lengthMm,e.angleDegrees,e.depthMm,e.durationMs,e.separationMm})
+            foreach (var v in new double[]{e.timeMs,e.speedMps,e.forceProxy,e.distanceMm,e.lengthMm,e.angleDegrees,e.depthMm,e.durationMs,e.separationMm,e.bloodLostMl,e.poolMl,e.flowMlPerSecond})
                 if (!Finite(v) || v < 0) return false;
             return ToolVerbs.TryGetValue(e.instrumentId, out var verbs) && Array.IndexOf(verbs, e.verb) >= 0;
         }
@@ -64,7 +64,7 @@ namespace Scalpal.Exercises.Engine
             double dt = clock < 0 ? 0 : (e.timeMs - clock) / 1000;
             clock = e.timeMs;
             double lost = 0; int active = 0;
-            foreach (var t in Tissues) if (Get(t.id, "bleeding") > 0) { lost += dt * t.flowMlPerSecond; active++; }
+            foreach (var t in Tissues) if (Get(t.id, "bleeding") > 0) { if (Get(t.id,"fluidDriven") == 0) lost += dt * t.flowMlPerSecond; active++; }
             Set("", "bloodLostMl", Get("", "bloodLostMl") + lost);
             Set("", "poolMl", Get("", "poolMl") + lost);
             Set("", "activeBleedSeconds", Get("", "activeBleedSeconds") + (active > 0 ? dt : 0));
@@ -73,9 +73,14 @@ namespace Scalpal.Exercises.Engine
             if (!clamps.TryGetValue(tissue.id, out var clamp)) clamp = new Dictionary<string, float>();
             if (!ties.TryGetValue(tissue.id, out var tied)) tied = new List<float>();
             bool blocked = Tissues.Any(t => t.order >= 0 && (tissue.order < 0 || t.order < tissue.order) && Get(t.id, "opened") == 0);
-            if (blocked && e.verb != "decide" && e.verb != "tick" && e.verb != "close") outcomes.Add("not_exposed");
+            if (blocked && e.verb != "decide" && e.verb != "tick" && e.verb != "close" && e.verb != "fluid") outcomes.Add("not_exposed");
             else switch (e.verb)
             {
+                case "fluid":
+                    if (!tissue.perfused || e.bloodLostMl < Get(tissue.id,"measuredLossMl") || e.poolMl > e.bloodLostMl) { outcomes.Add("invalid_fluid"); break; }
+                    Set("","bloodLostMl",Get("","bloodLostMl") + e.bloodLostMl - Get(tissue.id,"measuredLossMl"));
+                    Set("","poolMl",Math.Max(0,Get("","poolMl") + e.poolMl - Get(tissue.id,"measuredPoolMl")));
+                    Put("measuredLossMl",e.bloodLostMl); Put("measuredPoolMl",e.poolMl); Put("measuredFlowMlPerSecond",e.flowMlPerSecond); Put("fluidDriven"); Put("bleeding",e.flowMlPerSecond>0?1:0); break;
                 case "mark":
                     Put("marked"); Put("markErrorMm", e.distanceMm); Put("markLengthMm", e.lengthMm); Put("markAngleDegrees", e.angleDegrees); break;
                 case "cut":
@@ -88,11 +93,12 @@ namespace Scalpal.Exercises.Engine
                     if (e.angleDegrees > 25) outcomes.Add("across_fibers");
                     if (tissue.tentable) { Put("tentedBeforeCut", Get(tissue.id, "tented")); if (Get(tissue.id, "tented") == 0) outcomes.Add("untented_cut"); }
                     var positions = clamp.Values.OrderBy(v => v).ToArray();
-                    bool between = positions.Length >= 2 && e.distanceMm > positions[0] && e.distanceMm < positions[positions.Length - 1];
+                    bool measured = e.choice != "longitudinal_unmeasured";
+                    bool between = measured && positions.Length >= 2 && e.distanceMm > positions[0] && e.distanceMm < positions[positions.Length - 1];
                     Put("cutBetweenClamps", between ? 1 : 0);
                     Put("cutPositionMm", e.distanceMm);
                     Put("tiedBothSides", tied.Any(p => p < e.distanceMm) && tied.Any(p => p > e.distanceMm) ? 1 : 0);
-                    bool proximal = tied.Any(p => p < e.distanceMm);
+                    bool proximal = measured && tied.Any(p => p < e.distanceMm);
                     Put("cutBetweenTieAndClamp", proximal && positions.Any(p => p > e.distanceMm) ? 1 : 0);
                     if (tissue.perfused && !between && !proximal && Get(tissue.id, "sealed") == 0) { Put("bleeding"); outcomes.Add("cut_unsecured"); }
                     if (tissue.hollow)
@@ -105,10 +111,12 @@ namespace Scalpal.Exercises.Engine
                     break;
                 case "clamp":
                     if (string.IsNullOrEmpty(e.instrumentInstanceId)) { outcomes.Add("missing_instance"); break; }
+                    if(e.choice == "longitudinal_unmeasured") { Put("bleeding",0); break; }
                     clamp[e.instrumentInstanceId] = e.distanceMm; clamps[tissue.id] = clamp;
                     Put("clampCount", clamp.Count); Put("bleeding", 0);
                     if (e.instrumentId == "right_angle_clamp") Put("crushed"); break;
                 case "tie":
+                    if(e.choice == "longitudinal_unmeasured") { Put("bleeding",0); break; }
                     if (!tied.Any(p => Math.Abs(p - e.distanceMm) < 1)) tied.Add(e.distanceMm);
                     ties[tissue.id] = tied; Put("tieCount", tied.Count); Put("tieDistanceMm", tied.Min()); Put("bleeding", 0); Put("leaking", 0);
                     if (Get(tissue.id, "divided") > 0)
@@ -123,7 +131,7 @@ namespace Scalpal.Exercises.Engine
                     if (e.depthMm >= 15) Put("delivered");
                     if (tissue.splittable && !string.IsNullOrEmpty(e.instrumentInstanceId) && !string.IsNullOrEmpty(e.secondaryInstanceId) && e.instrumentInstanceId != e.secondaryInstanceId && e.separationMm >= 15 && e.angleDegrees <= 25) { Put("opened"); Put("splitWidthMm", e.separationMm); }
                     if (e.speedMps > .1f || e.forceProxy > 1) outcomes.Add("rough_handling"); break;
-                case "suction": Set("", "poolMl", Math.Max(0, Get("", "poolMl") - e.durationMs * .005)); break;
+                case "suction": if (!Tissues.Any(t=>Get(t.id,"fluidDriven")>0)) Set("", "poolMl", Math.Max(0, Get("", "poolMl") - e.durationMs * .005)); break;
                 case "inspect": Put("inspectionMs", Math.Max(Get(tissue.id, "inspectionMs"), e.durationMs)); break;
                 case "decide": Put("decision_" + e.choice); break;
                 case "close": Put("closed"); break;

@@ -1,12 +1,27 @@
 import { describe, expect, it } from "vitest";
 import { buildCase, checklistFor, scorePreopCheck } from "../src/case-builder.js";
-import { CASE_PLANS } from "../src/catalog/cases.js";
+import { CASE_PLANS, fallbackPlan } from "../src/catalog/cases.js";
 import { PROCEDURES } from "../src/catalog/procedures.js";
 import { StepEngine, perfectEvents } from "../src/engine.js";
 import { validateCatalog } from "../src/validate.js";
 import { NOW, fixture } from "./helpers.js";
 
 describe("catalog integrity", () => {
+  it.each(["patient-demo-pediatric-asthma", "patient-demo-multi-source", "patient-demo-sparse"])("routes appendicitis patient %s to the open case", (id) => {
+    const kase = buildCase(fixture(id), "", NOW);
+    expect(kase.procedureId).toBe("open_appendectomy");
+    expect(kase.procedure.firstStep).toBe("mark_incision");
+    expect(kase.procedure.ports).toEqual([]);
+    expect(kase.procedure.openBody?.milestones).toHaveLength(10);
+    expect(kase.considerations.every(c => kase.procedure.steps.some(step => step.id === c.stepId))).toBe(true);
+    expect(kase.considerations.map(c => c.note).join(" ")).not.toMatch(/insufflat|trocar|pneumoperitoneum/i);
+  });
+  it("uses the open approach for appendicitis fallback while retaining the advanced lap catalog", () => {
+    expect(fallbackPlan(20).procedureId).toBe("open_appendectomy");
+    const advanced = PROCEDURES.find(p => p.id === "lap_appendectomy")!;
+    expect(advanced.ports.length).toBeGreaterThan(0);
+    expect(advanced.openBody).toBeUndefined();
+  });
   it("has no dangling anatomy, instrument, port, or step references", () => {
     expect(validateCatalog()).toEqual([]);
   });

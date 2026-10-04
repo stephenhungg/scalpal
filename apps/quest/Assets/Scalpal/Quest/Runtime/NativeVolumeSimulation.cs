@@ -25,12 +25,12 @@ namespace Scalpal.Quest
         public VolumetricTissue Wall {get;private set;}
         // Triangle points use the shared source atlas frame in meters, not patientFrame axes.
         public event Action<Vector3,Vector3,Vector3> BladeSwept;
-        public void Initialize(Transform sourceFrame,NativeWorkbench rig,Func<bool> canInteract)
+        public void Initialize(Transform sourceFrame,NativeWorkbench rig,Func<bool> canInteract,bool openBodyLayers=false)
         {
             if(!sourceFrame||!rig) return;
             if(Wall){Wall.SetVisible(false);if(Application.isPlaying)Destroy(Wall.gameObject);else DestroyImmediate(Wall.gameObject);}
             var wall=new GameObject("GenericAbdominalWall_Unscored");wall.transform.SetParent(sourceFrame,false);
-            Wall=wall.AddComponent<VolumetricTissue>();Wall.Initialize(TissueVolumeFactory.AbdominalWall(AppendixProjection(sourceFrame)));
+            Wall=wall.AddComponent<VolumetricTissue>();Wall.Initialize(openBodyLayers?TissueVolumeFactory.OpenAbdominalWall():TissueVolumeFactory.AbdominalWall(AppendixProjection(sourceFrame)));
             workbench=rig;ready=canInteract;blades.Clear();
             foreach(var tool in rig.tools??Array.Empty<InstrumentBehaviour>())
             {

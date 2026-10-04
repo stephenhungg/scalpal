@@ -1,5 +1,6 @@
 import { STEP_COACHING, STRUCTURE_FACTS } from "./catalog/coach-knowledge.js";
 import { INSTRUMENTS_BY_ID } from "./catalog/instruments.js";
+import type { BodyGrade } from "./open-body-grade.js";
 import { StepEngine, perfectEvents, type EngineEvent } from "./engine.js";
 import type { BodyAction, BodyPredicate, BodyState } from "./open-body.js";
 import type { ProcedureStep, Severity, StepAction, SurgicalCase } from "./types.js";
@@ -151,6 +152,7 @@ export interface CoachSnapshot {
   commands: CoachCommand[];
   openBody: boolean;
   bodyFacts: { key: string; value: number }[];
+  bodyGrade?: BodyGrade;
   achievedMilestones: string[];
   orderDeviations: string[];
   decisionPrompts: { id: string; prompt: string; choices: string[] }[];
@@ -351,6 +353,7 @@ export class CoachSession {
   // Entry point for headset input. eventId makes retries safe (a repeated clip touch must not count twice);
   // stepId is the step the headset's own CaseRunner was on, which is the authority for progression.
   receive(event: CoachEvent, meta: { eventId?: string; stepId?: string } = {}): EventOutcome {
+    if (event.type === "finish" && !this.engine.body) return { accepted: false, reason: "invalid: finish requires an open body case", alerts: [] };
     if (meta.eventId) {
       if (this.seenEventIds.has(meta.eventId)) return { accepted: false, reason: this.seenEventIds.get(meta.eventId) || "duplicate", alerts: [] };
       this.seenEventIds.set(meta.eventId, "");
@@ -413,6 +416,7 @@ export class CoachSession {
     if (event.type === "contact") return this.handleContact(event.instrumentId, event.structureId);
 
     if (this.engine.body) return this.handleBodyEvent(event);
+    if (event.type === "finish") return { accepted: false, reason: "invalid: finish requires an open body case", alerts: [] };
     const step = this.engine.current;
     if (!step) return { accepted: false, reason: "case_completed", alerts: [] };
     if (!this.trackingValid) {
@@ -471,6 +475,15 @@ export class CoachSession {
 
   // The body reducer is the only authority for consequences; the current milestone is advice.
   private handleBodyEvent(event: EngineEvent): EventOutcome {
+    if (this.engine.grade) return { accepted: event.type === "finish", reason: event.type === "finish" ? "" : "case_completed", alerts: [] };
+    if (event.type === "finish") {
+      this.engine.handle(event);
+      const missing = this.engine.grade!.missingMilestones.length;
+      this.lastEvent = `Attempt ended with ${missing} unmet milestones; recorded work preserved.`;
+      const alerts = [this.alert("case_complete", "normal", "Attempt ended. Review completed goals and remaining safety findings.", [], "")];
+      this.changed(alerts);
+      return { accepted: true, reason: "", alerts };
+    }
     if (!this.trackingValid) return { accepted: false, reason: "tracking_invalid", alerts: [] };
     if (event.type !== "surgery") return { accepted: false, reason: "invalid: body action required", alerts: [] };
     const body = this.engine.body!;
@@ -493,7 +506,7 @@ export class CoachSession {
         [m.structure], "", urgent ? `mistake.${m.id}` : ""));
     }
     const nowBleeding = new Map<string, number>();
-    for (const tissue of body.tissues) if (body.get(tissue.id, "bleeding") > 0) nowBleeding.set(tissue.id, tissue.flowMlPerSecond * 60);
+    for (const tissue of body.tissues) if (body.get(tissue.id, "bleeding") > 0) nowBleeding.set(tissue.id, (body.get(tissue.id,"fluidDriven") > 0 ? body.get(tissue.id,"measuredFlowMlPerSecond") : tissue.flowMlPerSecond) * 60);
     this.bloodLossMl = body.get("", "bloodLostMl");
     for (const [id] of nowBleeding) if (!this.bleeds.has(id))
       alerts.push(this.alert("bleeding", "urgent", bleedingLine(this.name(id)), [id], "", `bleeding.${id}`));
@@ -834,6 +847,7 @@ export class CoachSession {
       guidance,
       commands: [...this.commands],
       openBody: Boolean(this.engine.body),
+      ...(this.engine.grade ? { bodyGrade: this.engine.grade } : {}),
       bodyFacts: this.engine.body ? [...this.engine.body.facts].map(([key, value]) => ({ key, value })) : [],
       achievedMilestones: [...this.engine.completedMilestones],
       orderDeviations: [...this.engine.orderDeviations],
@@ -943,6 +957,8 @@ function emptyStepView(): CoachStepView {
 
 function describeOffTarget(event: EngineEvent, name: (id: string) => string, tool: (id: string) => string, port: (id: string) => string): string {
   switch (event.type) {
+    case "finish":
+      return "End-attempt is available for open-body cases only.";
     case "surgery":
       return `Applied ${event.evidence.verb} to ${name(event.evidence.tissueId).toLowerCase()}; no new milestone reached.`;
     case "touch":
@@ -961,7 +977,7 @@ function describeOffTarget(event: EngineEvent, name: (id: string) => string, too
 export function contextKey(s: CoachSnapshot): string {
   const parts = [
     s.status, s.step.id, s.step.progressText, s.timeline.length && s.timeline[s.timeline.length - 1], s.held, s.completedCount, s.mistakeCount, s.focusStructure.id, s.stuckLevel,
-    s.bodyFacts, s.achievedMilestones, s.orderDeviations, s.trackingValid, s.hintTier, s.desynced, s.bloodLossMl, s.activeBleeds.map((b) => b.structure.id).join(","), s.scene.summary, s.commands.map((c) => `${c.commandId}:${c.status}`).join(","),
+    s.bodyGrade, s.bodyFacts, s.achievedMilestones, s.orderDeviations, s.trackingValid, s.hintTier, s.desynced, s.bloodLossMl, s.activeBleeds.map((b) => b.structure.id).join(","), s.scene.summary, s.commands.map((c) => `${c.commandId}:${c.status}`).join(","),
   ];
   let h = 2166136261;
   for (const ch of JSON.stringify(parts)) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
@@ -1061,7 +1077,8 @@ export function describeBodyAction(a: BodyAction, outcomes: string[], name: (id:
 export function renderContext(s: CoachSnapshot): string {
   if (s.status === "completed") {
     return [
-      `[LIVE SURGERY STATE v${s.version}] ${s.procedureTitle} for ${s.patientLabel}: COMPLETE.`,
+      `[LIVE SURGERY STATE v${s.version}] ${s.procedureTitle} for ${s.patientLabel}: ${s.bodyGrade && !s.bodyGrade.complete ? "ATTEMPT ENDED WITH UNMET GOALS" : "COMPLETE"}.`,
+      ...(s.bodyGrade ? [`Illustrative uncalibrated grade: ${s.bodyGrade.earnedPoints}/${s.bodyGrade.availablePoints} measured-weight points. Economy weight 20 unscored; hand paths unavailable.`, `Met goals: ${s.bodyGrade.metMilestones.join(", ") || "none"}. Unmet goals: ${s.bodyGrade.missingMilestones.join(", ") || "none"}.`] : []),
       `Mistakes: ${s.mistakeCount} (${s.highSeverityMistakeCount} high severity). Hints used: ${s.hintsUsed}. Time: ${s.elapsedSeconds}s.`,
       ...(s.openBody ? [`Body facts: ${s.bodyFacts.map(f => `${f.key}=${f.value}`).join("; ")}.`, `Expected-order deviations: ${s.orderDeviations.join(", ") || "none"}.`] : []),
       s.completedSteps.map((c) => `${c.title} ${c.seconds}s${c.mistakes ? `, ${c.mistakes} mistake(s)` : ""}`).join("; "),

@@ -1,3 +1,4 @@
+import { gradeBody, type BodyGrade } from "./open-body-grade.js";
 import { BodyState, type BodyAction } from "./open-body.js";
 import { idealBodyActions } from "./open-body-fixtures.js";
 import type { Procedure, ProcedureStep, StepMistake } from "./types.js";
@@ -10,6 +11,7 @@ export type EngineEvent =
   | { type: "touch"; structureId: string; instrumentId: string }
   | { type: "identify"; structureId: string }
   | { type: "confirm" }
+  | { type: "finish" }
   | { type: "surgery"; evidence: BodyAction };
 
 export interface EngineResult {
@@ -26,7 +28,8 @@ export class StepEngine {
   readonly body: BodyState | null;
   readonly completedMilestones = new Set<string>();
   readonly orderDeviations: string[] = [];
-  private seenActions = new Set<string>();
+  private finalGrade: BodyGrade | null = null;
+  get grade(): BodyGrade | null { return this.finalGrade; }
   current: ProcedureStep | null;
   mistakes: StepMistake[] = [];
 
@@ -89,12 +92,22 @@ export class StepEngine {
   private handleBody(event: EngineEvent): EngineResult {
     const previous = this.current;
     const empty = { advanced: false, completed: this.completed, mistake: null, stepId: previous?.id ?? "" };
+    if (this.finalGrade) return empty;
+    if (event.type === "finish") {
+      this.finalGrade = gradeBody(this.procedure.openBody!, this.body!, this.mistakes, 'learner_finished');
+      this.current = null;
+      return {...empty, completed:true};
+    }
     if (event.type !== "surgery") return empty;
     const record = this.body!.apply(event.evidence);
     if (!record) return empty;
     const plan = this.procedure.openBody!;
     let mistake: StepMistake | null = null;
-    for (const rule of plan.guardrails) if ((!rule.tissueId || rule.tissueId === record.action.tissueId) && record.outcomes.includes(rule.outcome)) {
+    for (const rule of plan.guardrails) if ((!rule.tissueId || rule.tissueId === record.action.tissueId) && (!rule.verb || rule.verb === record.action.verb) &&
+      (!rule.outcome || record.outcomes.includes(rule.outcome)) && (!rule.eventPredicate || (() => {
+        const p=rule.eventPredicate, value=record.action[p.fact as keyof BodyAction];
+        return typeof value === "number" && (p.op === "gte" ? value >= p.value : p.op === "lte" ? value <= p.value : p.op === "eq" && value === p.value);
+      })())) {
       const detected: StepMistake = { id: rule.id, trigger: "wrong_order", structure: record.action.tissueId, severity: rule.severity, feedback: rule.feedback };
       this.mistakes.push(detected); mistake ??= detected;
     }
@@ -106,6 +119,7 @@ export class StepEngine {
     }
     // Live state can invalidate a formerly achieved milestone (e.g. a new bleed).
     this.current = this.procedure.steps.find(s => !satisfied.has(s.id)) ?? null;
+    if (!this.current) this.finalGrade = gradeBody(plan, this.body!, this.mistakes, 'goals_reached');
     return { advanced, completed: this.completed, mistake, stepId: previous?.id ?? "" };
   }
 

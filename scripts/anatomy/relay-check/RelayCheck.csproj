@@ -6,7 +6,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../../apps/quest/Assets/Scalpal/Exercises/Coach/CoachRelay.cs" />
-    <Compile Include="../../../apps/quest/Assets/Scalpal/Exercises/Engine/CaseRunner.cs" />
-    <Compile Include="../../../apps/quest/Assets/Scalpal/Exercises/Data/ScalpalCaseData.cs" />
+    <Compile Include="../../../apps/quest/Assets/Scalpal/Exercises/Engine/*.cs" />
+    <Compile Include="../../../apps/quest/Assets/Scalpal/Exercises/Data/*.cs" />
   </ItemGroup>
 </Project>

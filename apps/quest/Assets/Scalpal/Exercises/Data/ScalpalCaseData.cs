@@ -149,6 +149,7 @@ namespace Scalpal.Exercises.Data
         public bool critical;
         public bool tentable;
         public float flowMlPerSecond;
+        public string[] structureIds;
     }
 
     [Serializable]
@@ -170,6 +171,8 @@ namespace Scalpal.Exercises.Data
     [Serializable]
     public class BodyGuardrail
     {
+        public string verb;
+        public BodyPredicate eventPredicate;
         public string id;
         public string outcome;
         public string tissueId;

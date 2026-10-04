@@ -15,6 +15,7 @@ namespace Scalpal.Exercises.Engine
         Identify,
         Confirm,
         Surgery,
+        Finish,
     }
 
     public struct CaseEvent
@@ -29,6 +30,8 @@ namespace Scalpal.Exercises.Engine
         public static CaseEvent PlacePort(string portId) => new CaseEvent { type = CaseEventType.PlacePort, id = portId, instrumentId = "" };
         public static CaseEvent Touch(string structureId, string instrumentId) => new CaseEvent { type = CaseEventType.Touch, id = structureId, instrumentId = instrumentId };
         public static CaseEvent Identify(string structureId) => new CaseEvent { type = CaseEventType.Identify, id = structureId, instrumentId = "" };
+        public static CaseEvent Finish() => new CaseEvent { type = CaseEventType.Finish, id = "", instrumentId = "" };
+
         public static CaseEvent Confirm() => new CaseEvent { type = CaseEventType.Confirm, id = "", instrumentId = "" };
     }
 
@@ -49,6 +52,8 @@ namespace Scalpal.Exercises.Engine
         readonly HashSet<string> achieved = new HashSet<string>();
         readonly List<string> orderDeviations = new List<string>();
         public BodyState Body { get; }
+        BodyGrade grade;
+        public BodyGrade Grade => grade?.Copy();
         public IReadOnlyCollection<string> Achieved => achieved;
         public IReadOnlyCollection<string> CompletedMilestones => achieved;
         public IReadOnlyList<string> OrderDeviations => orderDeviations;
@@ -141,6 +146,15 @@ namespace Scalpal.Exercises.Engine
         {
             var previous = Current;
             var result = new CaseResult { completed = Completed, stepId = previous?.id ?? "" };
+            if (grade != null) return result;
+            if (e.type == CaseEventType.Finish)
+            {
+                grade = BodyGrader.Calculate(Procedure.openBody, Body, mistakes, "learner_finished");
+                Current = null;
+                result.completed = true;
+                CaseCompleted?.Invoke();
+                return result;
+            }
             if (e.type != CaseEventType.Surgery) return result;
             var record = Body.Apply(e.evidence);
             if (record == null) return result;
@@ -148,7 +162,9 @@ namespace Scalpal.Exercises.Engine
             foreach (var rule in plan.guardrails ?? Array.Empty<BodyGuardrail>())
             {
                 if ((!string.IsNullOrEmpty(rule.tissueId) && rule.tissueId != record.action.tissueId) ||
-                    Array.IndexOf(record.outcomes, rule.outcome) < 0) continue;
+                    (!string.IsNullOrEmpty(rule.verb) && rule.verb != record.action.verb) ||
+                    (!string.IsNullOrEmpty(rule.outcome) && Array.IndexOf(record.outcomes, rule.outcome) < 0) ||
+                    !EventPredicate(record.action,rule.eventPredicate)) continue;
                 var mistake = new StepMistake { id = rule.id, trigger = "wrong_order", structure = record.action.tissueId,
                     severity = rule.severity, feedback = rule.feedback };
                 mistakes.Add(mistake);
@@ -168,12 +184,27 @@ namespace Scalpal.Exercises.Engine
             }
             Current = (Procedure.steps ?? Array.Empty<ProcedureStep>()).FirstOrDefault(step => !satisfied.Contains(step.id));
             result.completed = Completed;
+            if (Completed) grade = BodyGrader.Calculate(plan, Body, mistakes, "goals_reached");
             if (Current != previous)
             {
                 if (Current != null) StepStarted?.Invoke(Current);
                 else CaseCompleted?.Invoke();
             }
             return result;
+        }
+
+        static bool EventPredicate(BodyAction action, BodyPredicate predicate)
+        {
+            // JsonUtility may materialize an omitted nested serializable class as its
+            // all-default instance. Treat only that empty representation as absent;
+            // partially authored or unknown predicates still fail closed.
+            if (predicate == null || (string.IsNullOrEmpty(predicate.tissueId) &&
+                string.IsNullOrEmpty(predicate.fact) && string.IsNullOrEmpty(predicate.op) && predicate.value == 0)) return true;
+            double value;
+            switch(predicate.fact){case "distanceMm":value=action.distanceMm;break;case "depthMm":value=action.depthMm;break;
+                case "lengthMm":value=action.lengthMm;break;case "angleDegrees":value=action.angleDegrees;break;case "speedMps":value=action.speedMps;break;
+                case "forceProxy":value=action.forceProxy;break;default:return false;}
+            return predicate.op=="gte"?value>=predicate.value:predicate.op=="lte"?value<=predicate.value:predicate.op=="eq"&&value==predicate.value;
         }
 
         bool IsSatisfied(ProcedureStep step)

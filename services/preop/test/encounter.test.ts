@@ -545,10 +545,10 @@ describe("office to operating room", () => {
     await req("POST", `/encounters/${id}/attending`);
     await req("POST", `/encounters/${id}/tools/record_assessment`, { diagnosis: "kidney stone", differential: ["appendicitis"], procedure: "ureteroscopy", urgency: "elective" });
     const card = (await req("GET", `/encounters/${id}/score`)).json.scorecard;
-    expect(card).toMatchObject({ procedureId: "lap_appendectomy", procedureChosenCorrectly: false, diagnosisResult: "incorrect" });
-    expect(card.feedback.join(" ")).toMatch(/needs is a laparoscopic appendectomy/);
+    expect(card).toMatchObject({ procedureId: "open_appendectomy", procedureChosenCorrectly: false, diagnosisResult: "incorrect" });
+    expect(card.feedback.join(" ")).toMatch(/needs is a[n]? open appendectomy/);
     const surgery = await req("POST", "/coach/sessions", { patientId: "patient-demo-multi-source", encounterId: id });
-    expect(surgery.json.snapshot.procedureId).toBe("lap_appendectomy");
+    expect(surgery.json.snapshot.procedureId).toBe("open_appendectomy");
     expect(surgery.json.systemPrompt).toMatch(/FROM THE PRE-OP OFFICE/);
     expect(surgery.json.systemPrompt).toMatch(/proposed "ureteroscopy"/);
     expect(surgery.json.systemPrompt).toMatch(/missed: .*allergies/);

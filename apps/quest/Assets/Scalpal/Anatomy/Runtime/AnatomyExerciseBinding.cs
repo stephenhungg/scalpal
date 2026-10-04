@@ -33,6 +33,7 @@ namespace Scalpal.Anatomy
         public SurgicalCase SelectedCase => selectedCase;
         public ProcedureStep Current => runner?.Current;
         public BodyState Body => runner?.Body;
+        public BodyGrade Grade => runner?.Grade;
         public bool Completed => runner != null && runner.Completed;
         public bool CanScore => isActiveAndEnabled && runner != null && anatomy != null &&
             anatomy == selectedAnatomy && anatomy.isActiveAndEnabled && anatomy.RegistrationValid && !anatomy.PreviewMode &&
@@ -112,6 +113,10 @@ namespace Scalpal.Anatomy
             var displayed = new HashSet<string>(required, StringComparer.Ordinal);
             foreach (var id in procedure.structures ?? Array.Empty<string>())
                 if (anatomy.TryGetPart(id, out _)) displayed.Add(id);
+            if(procedure.openBody?.version == 1)
+                foreach(var tissue in procedure.openBody.tissues ?? Array.Empty<TissueDefinition>())
+                    foreach(var id in tissue.structureIds != null && tissue.structureIds.Length > 0 ? tissue.structureIds : new[]{tissue.id})
+                        if(anatomy.TryGetPart(id,out _))displayed.Add(id);
             anatomy.ShowAllSystems();
             anatomy.SetExerciseParts(displayed);
             anatomy.SetPreviewRotation(false);
@@ -203,9 +208,12 @@ namespace Scalpal.Anatomy
             {
                 var evidence = input.evidence;
                 if (runner.Body == null || !BodyState.ValidBodyAction(evidence) || !evidence.registered ||
-                    Array.Find(runner.Body.Tissues, tissue => tissue.id == evidence.tissueId && tissue.layer == evidence.layer) == null ||
-                    (!instruments.Contains(evidence.instrumentId) && evidence.instrumentId != "assistant" && evidence.instrumentId != "decision"))
+                    Array.Find(runner.Body.Tissues, tissue => tissue.id == evidence.tissueId && tissue.layer == evidence.layer) == null)
                     return Reject("invalid surgical evidence, target, or instrument", out reason);
+            }
+            else if (input.type == CaseEventType.Finish)
+            {
+                if (runner.Body == null) return Reject("finish requires an open body case", out reason);
             }
             else if (input.type != CaseEventType.Confirm) return Reject("unknown input type", out reason);
             if (liveAttempt && string.IsNullOrEmpty(boundSessionId)) boundSessionId = coach.SessionId;

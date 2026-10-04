@@ -17,7 +17,11 @@ Consequence of this design: the 10-row table below is the *expected* open append
 
 ## Where It Stands (origin/main, audited)
 
-Appendectomy is the only procedure that runs, authored as laparoscopic in `services/preop/src/catalog/procedures.ts`. Every step completes on a trigger-activated tool tip touching a named mesh; ports are floating spheres; nothing is actually clipped, divided, ligated or removed. Real today: holding 15 mostly laparoscopic instruments, tip contact, grasp deformation of appendix/mesoappendix/artery, a layered abdominal-wall patch the blade can cut (now projected over the appendix field), and a vessel bleed that sealing stops and suction drains (unscored). Coach alerts and hint escalation exist server-side but never reach the Quest. `NativeCaseSession` is hardcoded to one patient and procedure (the handoff thread is fixing that). Duplicates to remove: two tip-contact scripts, two port builders, a leftover sandbox `TrainingPatch`, `CaseRunner.cs` copying `engine.ts`.
+`open_appendectomy` is catalog data over the shared body-state engine. Appendicitis patient plans and encounter decisions now select it; the laparoscopic catalog remains available as an advanced reference. Ten milestone predicates and event guardrails observe case-independent actions without blocking off-order actions. Both service and Unity engines retain structured history, bleeding, contamination, clamp/tie geometry, true-base decisions and incomplete-attempt review.
+
+The additive `Surgery/` runtime binds selected cases to tracked instruments, five teaching layers, actual atlas organ colliders, placed clamps/retractors, the existing vessel-fluid model, deterministic coach alerts/reflex clips and wound/audio feedback. The duplicated tip adapter and sandbox TrainingPatch were removed upstream in `5668231`; legacy tip scoring is disabled for an open-body attempt.
+
+**Not a complete physical open operation yet.** The actual native atlas audit requires approximately 163.2 mm of appendix travel above the wound while its existing cage is bounded to 18.1 mm. Two-retractor splitting and tenting produce measured semantic state and a teaching wound view; they are not yet coupled to a multi-handle wall solver. Landmark defaults and base-axis fallback are explicitly authored approximations. Physical AR/VR registration, tool feel, audio and a complete headset run remain unverified. See the runtime checkpoint below for exact verification and the owner interfaces still needed.
 
 ## Open Appendectomy Technique (source: StatPearls, Appendectomy, NBK580514, 2025)
 
@@ -70,7 +74,7 @@ Metrics: incision placement error, layers divided in order, step order, wrong-st
 
 ## Catalog Changes (`services/preop/src/catalog/procedures.ts`)
 
-Add `open_appendectomy` as the OR procedure for appendicitis cases (keep `lap_appendectomy` for the advanced mode). Add check types for the new mechanics (line placement, layer divided, split width, tented-then-cut, delivered, clamp-cut-tie order, tie distance, dwell) to the engine, `CaseRunner.cs` and the Unity DTO mirror, with tests. Recap note: laparoscopic is the modern default; open is valid and preferred when laparoscopy is unavailable.
+`open_appendectomy` is now the OR procedure for appendicitis case plans; `lap_appendectomy` remains in the catalog. The single `body_predicate` check evaluates the authored state goals through the existing engine and `CaseRunner.cs`; individual maneuvers do not add competing progression engines. Recap note: laparoscopic is the modern default; open is valid and preferred when laparoscopy is unavailable.
 
 ## Ownership
 
@@ -78,8 +82,27 @@ The surgery Codex thread owns open-surgery instruments, the step mechanics and c
 
 ## Open-Body Build Checkpoint — October 3
 
-Built: `open_appendectomy` now contains ten state-predicate milestones, event guardrails and the true-base decision as data. `engine.ts` and `CaseRunner` reduce the same case-independent tool verbs into persistent body facts and an immutable action history. Actions carry registered-torso coordinates, an active-practice monotonic clock, measured geometry and tool instance IDs; there is no step ID in physical evidence. All milestones are evaluated after every action, off-path harms remain effective, and a later bleed invalidates the live no-bleed predicate. Missing measurements do not satisfy threshold predicates. Two distinct retractors, two clamps and ties on both sides, a distal moved clamp, stump length and the base answer have explicit checks. Expected order is soft guidance and recorded separately.
+Built: `open_appendectomy` now contains ten state-predicate milestones, event guardrails and the true-base decision as data. `engine.ts` and `CaseRunner` reduce the same case-independent tool verbs into persistent body facts and an copied action history. Actions carry registered-torso coordinates, an active-practice monotonic clock, measured geometry and tool instance IDs; there is no step ID in physical evidence. All milestones are evaluated after every action, off-path harms remain effective, and a later bleed invalidates the live no-bleed predicate. Missing measurements do not satisfy threshold predicates. Two distinct retractors, two clamps and ties on both sides, a distal moved clamp, stump length and the base answer have explicit checks. Expected order is soft guidance and recorded separately.
 
 Component evidence: service suite244 passing / two live-provider skips and TypeScript typecheck; Unity batch65 synthetic body-state assertions; instrument build311 Editor assertions. The old scripted checks were removed. The catalog's older laparoscopic cases remain available while native open-body interaction/handoff integration is built. This checkpoint does not yet establish a physical tool-to-wound session, existing-vessel measurement exchange, AR registration, sound playback or complete OR run. The semantic reducer's authored bleeding rates and lumped tissue-level control are teaching approximations, not calibrated physiology.
 
 Instrument assets are now generated and included: marker, toothed forceps, Army-Navy-style retractors, Babcock, hemostats, right-angle clamp, Metzenbaum scissors and suture tie. Two physical prefab instances each of retractor/hemostat are provided by `Resources/OpenSurgeryInstruments`; scalpels/suction/cautery use the existing assets. Original model source stays in `OpenInstrumentModels.cs`; no downloaded model license is introduced.
+
+## Runtime Build Checkpoint — October 3
+
+Built in `apps/quest/Assets/Scalpal/Surgery/`:
+
+- Selected-case installation in either presentation mode; ten-instance original tool tray joins the existing15 tools and preserves equipment reset poses. Legacy tip scoring does not also score the open attempt.
+- Measured marking, finite blade strokes, forceps lift/release, paired retraction, actual organ contact, placed clamps/ties, true-base choices, inspection and explicit finish through the existing scored event path. Two distinct tools are required for paired actions. A second dummy case uses the same verbs. Base-less contact still causes injury but cannot fabricate longitudinal milestone measurements.
+- Five-layer teaching volume plus body-state-driven wound lips, measured marker line, original procedural blade/ratchet/suction audio, held-controller haptic requests, and a world-space decision/review panel. “Premark line (judge demo)” logs an assisted marker action; auto-close is recorded layer by layer only after all other live goals are met.
+- Existing vessel-fluid model snapshots carry cumulative blood loss, pool and flow into body state. Clamp/tie/seal stop flow; physical pool suction cannot erase blood loss. Off-path bowel cuts contaminate and unsecured vessel cuts bleed.
+- Existing coach alert polling delivers captions, hint escalation and reflex clips, with tracking/reset/old-step gates. The service receives structured facts; it cannot invent actions or complete an open milestone as a hint.
+- Explicit finish freezes an illustrative, uncalibrated grade and lists missing goals. Safety, decisions and tissue-respect weights total80 available points; economy's20 points are unscored because hand paths and a validated economy rubric are unavailable. No proficiency claim is made.
+
+Verification: preop270 passing / two provider skips and typecheck; Unity85 body-state checks and118 measured-adapter/real-fluid checks plus coach and actual scene binding audits. Original instrument validation311 checks remains the asset milestone. [Incision preview](../experiments/open-surgery-preview/incision.png) and [delivered appendix preview](../experiments/open-surgery-preview/delivered-appendix.png) are labeled synthetic virtual-camera component images.
+
+Pending: physically supported appendix mobilization/delivery (163.2 mm needed versus18.1 mm cage limit), coupled muscle split and peritoneal tent mechanics, reviewed base axes and actual registered ASIS/umbilicus inputs, headset AR/VR completion/performance/audio/haptic verification, and live provider/reflex playback. The handoff owner must update `NativeCaseSession.EventHandled` to report all open-body milestones/guardrails and distinguish incomplete finish from goal completion; its old one-event/one-step aggregate and warning narration remain separate from the correct local/service grade. Hash/sequence/resync and richer hand-path telemetry in [surgery state](surgery-state.md) are the subsequent approved work, not established by this checkpoint.
+
+The shell packaging gate currently has a stale exact-count assertion (10 offline cases versus11 with the retained advanced variant). Its owner must update that fixture; the separate surgery packaging method does not claim the shell gate passed.
+
+The standalone native coach HTTP exchange also passed168 assertions, including open-body injury, incomplete finish, lost-response retry and local/service grade parity. This uses the actual relay and an isolated service, without a live voice provider.

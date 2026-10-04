@@ -70,8 +70,8 @@ describe("structured office carryover", () => {
     expect(unitySafetyErrors(scored)).toEqual([]);
     expect(scored.scorecard).toMatchObject({
       patientId: "patient-demo-multi-source", patientName: "Priya Ramaswamy",
-      procedureId: "lap_appendectomy", procedureChosenCorrectly: false,
-      urgency: "urgent", site: "Abdomen — appendix / right lower quadrant",
+      procedureId: "open_appendectomy", procedureChosenCorrectly: false,
+      urgency: "urgent", site: "Abdomen — open appendix incision / right lower quadrant",
     });
     expect(scored.scorecard.carryoverItems.find((item: { type: string }) => item.type === "latex")).toMatchObject({ status: "found" });
     const coachResponse = await request("/coach/sessions", {
@@ -80,7 +80,7 @@ describe("structured office carryover", () => {
     expect(coachResponse.status).toBe(201);
     const coach = await coachResponse.json();
     expect(coach.snapshot).toMatchObject({
-      patientId: "patient-demo-multi-source", procedureId: "lap_appendectomy", mode: "virtual",
+      patientId: "patient-demo-multi-source", procedureId: "open_appendectomy", mode: "virtual",
     });
     expect(coach.systemPrompt).toContain("FROM THE PRE-OP OFFICE");
     expect(coach.systemPrompt).toContain('proposed "ureteroscopy"');

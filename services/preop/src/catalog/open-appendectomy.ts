@@ -5,7 +5,7 @@ const tissue=(id:string,order:number,extra:Partial<TissueDefinition>={}):TissueD
 export const OPEN_BODY:OpenBodyCase={version:1,fastPathPremarked:false,
  tissues:[tissue('skin',0),tissue('fat',1),tissue('fascia',2),tissue('muscle',3,{splittable:true,perfused:true,flowMlPerSecond:.3}),tissue('peritoneum',4,{tentable:true}),
  tissue('appendix',-1,{hollow:true}),tissue('mesoappendix',-1,{perfused:true,flowMlPerSecond:2}),tissue('appendicular_artery',-1,{perfused:true,flowMlPerSecond:2}),
- tissue('cecum',-1,{hollow:true,critical:true}),tissue('terminal_ileum',-1,{hollow:true,critical:true}),tissue('iliac_vessels',-1,{critical:true,perfused:true,flowMlPerSecond:8}),tissue('ureter',-1,{critical:true,hollow:true})],
+ tissue('cecum',-1,{hollow:true,critical:true}),tissue('terminal_ileum',-1,{hollow:true,critical:true}),tissue('iliac_vessels',-1,{critical:true,perfused:true,flowMlPerSecond:8,structureIds:['cardiovascular__common_iliac_artery_r','cardiovascular__common_iliac_vein_r']}),tissue('ureter',-1,{critical:true,hollow:true,structureIds:['right_ureter']})],
  milestones:[
  {id:'mark_incision',predicates:[p('skin','marked','eq',1),p('skin','markErrorMm','lte',20),p('skin','markLengthMm','gte',50),p('skin','markLengthMm','lte',80),p('skin','markAngleDegrees','lte',25)]},
  {id:'incise_skin',predicates:[p('skin','cutCoverage','gte',.8),p('skin','cutErrorMm','lte',5),p('skin','cutDepthMm','lte',14),p('fat','opened','eq',1)]},
@@ -18,6 +18,9 @@ export const OPEN_BODY:OpenBodyCase={version:1,fastPathPremarked:false,
  {id:'inspect_clean',predicates:[p('','activeBleeds','eq',0),p('','poolMl','lte',1),p('appendix','inspectionMs','gte',1000),p('mesoappendix','inspectionMs','gte',1000)]},
  {id:'close',predicates:[p('skin','closed','eq',1)]}],
  guardrails:[
+ {id:'off_mark',outcome:'',tissueId:'skin',verb:'cut',eventPredicate:p('','distanceMm','gte',5.001),severity:'moderate',feedback:'Follow the marked line. This cut is off target.'},
+ {id:'deep_skin_cut',outcome:'',tissueId:'skin',verb:'cut',eventPredicate:p('','depthMm','gte',14.001),severity:'high',feedback:'Too deep. Skin and fat only for this stroke.'},
+ {id:'mark_far',outcome:'',tissueId:'skin',verb:'mark',eventPredicate:p('','distanceMm','gte',20.001),severity:'moderate',feedback:'Recheck the hip and belly button landmarks.'},
  {id:'bowel_injury',outcome:'hollow_leak',tissueId:'',severity:'high',feedback:'Hollow tissue is leaking. Contamination is recorded.'},
  {id:'critical_injury',outcome:'critical_injury',tissueId:'',severity:'high',feedback:'Critical structure injured. Control bleeding and reassess.'},
  {id:'cut_before_control',outcome:'cut_unsecured',tissueId:'',severity:'high',feedback:'Active bleeding. Clamp, tie, or seal the injured vessel.'},

@@ -26,6 +26,20 @@ namespace Scalpal.Anatomy.Tissue
             return Grid(new Bounds(new Vector3(center.x,center.y,-.115287f),new Vector3(.16f,.10f,.015f)),8,5,
                 new[]{-.115287f,-.113287f,-.110287f,-.106287f,-.101287f,-.100287f},materials,new[]{0,1,1,1,2},true);
         }
+        // Explicit open-body teaching layers, in the registered wound frame (+Z inward).
+        // Parameters are authored approximations; the calibrated legacy coupon is unchanged.
+        public static TissueVolume OpenAbdominalWall()
+        {
+            var materials=new[] {
+                new VolumeMaterial{id="skin",youngPascals=100000,poissonRatio=.45f,densityKgPerCubicMeter=1000,color=new Color(.72f,.49f,.38f),measurementSource="authored open teaching layer; uncalibrated"},
+                new VolumeMaterial{id="fat",youngPascals=20000,poissonRatio=.45f,densityKgPerCubicMeter=900,color=new Color(.94f,.73f,.26f),measurementSource="authored open teaching layer; uncalibrated"},
+                new VolumeMaterial{id="fascia",youngPascals=400000,poissonRatio=.45f,densityKgPerCubicMeter=1000,color=new Color(.85f,.8f,.7f),measurementSource="authored open teaching layer; uncalibrated"},
+                new VolumeMaterial{id="muscle",youngPascals=60000,poissonRatio=.45f,densityKgPerCubicMeter=1050,color=new Color(.5f,.12f,.1f),measurementSource="authored open teaching layer; uncalibrated"},
+                new VolumeMaterial{id="peritoneum",youngPascals=6790000,poissonRatio=.45f,densityKgPerCubicMeter=1000,color=new Color(.73f,.58f,.57f),measurementSource="authored thickness; Kriener median modulus, no calibration"}
+            };
+            return Grid(new Bounds(new Vector3(0,0,.014f),new Vector3(.16f,.10f,.028f)),8,5,
+                new[]{0f,.002f,.014f,.019f,.027f,.028f},materials,new[]{0,1,2,3,4},true);
+        }
         static TissueVolume Grid(Bounds bounds,int nx,int ny,float[] depths,VolumeMaterial[] materials,int[] layer,bool pinPerimeter)
         {
             if(nx<1||ny<1||nx>32||ny>32||depths==null||depths.Length<2||depths.Length>16||layer.Length!=depths.Length-1||bounds.size.x<=0||bounds.size.y<=0)

@@ -567,6 +567,8 @@ function parseEvent(e: unknown): CoachEvent | string {
       return id("structureId") || { type: "identify", structureId: str("structureId") };
     case "confirm":
       return { type: "confirm" };
+    case "finish":
+      return { type: "finish" };
     case "surgery": {
       if (!ev.evidence || typeof ev.evidence !== "object" || Array.isArray(ev.evidence)) return "surgery needs evidence";
       const evidence = ev.evidence as unknown as BodyAction;

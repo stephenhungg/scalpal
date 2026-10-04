@@ -154,7 +154,7 @@ describe("FinchNode Connect admissions", () => {
 
   it("flags a patient whose connected sources belong to different people", async () => {
     const { json } = await call("GET", "/patients/u_test_mixed/case");
-    expect(json).toMatchObject({ scenarioId: "multi-source-overlap", procedureId: "lap_appendectomy" });
+    expect(json).toMatchObject({ scenarioId: "multi-source-overlap", procedureId: "open_appendectomy" });
     const brief = json.brief as { dataGaps: { code: string }[]; flags: { type: string; severity: string }[] };
     expect(brief.dataGaps.map((g) => g.code)).toContain("identity_mismatch");
     expect(brief.flags.find((f) => f.type === "incomplete_chart")?.severity).toBe("high");
