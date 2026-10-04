@@ -474,6 +474,9 @@ namespace Scalpal.EncounterOffice
         {
             // Picks are shown when made; the agent's echo of a [CLINICIAN] turn is not learner speech.
             if (source == "user" || string.IsNullOrWhiteSpace(text) || State == null) return;
+            // The voice reads delivery tags like [slow] or [wince]; they are direction, not words she says.
+            text = System.Text.RegularExpressions.Regex.Replace(text, @"\[[A-Za-z ]{2,24}\]", "").Replace("  ", " ").Trim();
+            if (text.Length == 0) return;
             Say(PatientSpeaker(), text);
             Enqueue("POST", EncounterContract.OfficePath(encounterId) + "/transcript", JsonUtility.ToJson(new TranscriptRequest { speaker = "patient", text = text }),
                 null, response => Debug.LogWarning("SCALPAL_OFFICE_TRANSCRIPT_MIRROR_FAILED status=" + response.code), false);
