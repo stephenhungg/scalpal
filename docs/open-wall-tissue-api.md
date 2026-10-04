@@ -8,6 +8,18 @@ The open appendectomy uses one case-independent teaching wall in both AR and VR.
 
 `TryMcBurney(rightAsisMeters, umbilicusMeters, out point)` interpolates one-third from explicit right-ASIS to umbilicus inputs. It does not infer or acquire those landmarks. The caller chooses the source frame and preserves its provenance.
 
+## Generic interaction properties and verbs
+
+`TissueInteractionProperties` is an immutable, case-independent value view: exact tissue ID, layer/order, cuttable/splittable/tentable capabilities, optional local 3D fiber axis, perfused/hollow/critical flags and provenance. It is not a second organ registry, JSON wire contract, injury state or bleeding clock. The existing `TissueDefinition` and body state remain the semantic authority. `OpenWallLayers.Layer.properties` exposes known wall geometry/capabilities; its consequence flags are nullable and **unknown until explicitly bound**, rather than claiming an unbound tissue cannot bleed, leak or cause harm.
+
+After initializing the open wall, the Surgery owner can project the five existing `TissueDefinition` values into these immutable profiles using the corresponding authored `OpenWallLayers` fibers, then call `TryBindLayerProperties(profiles, out reason)`. All five identities, layers/orders, mechanical capabilities and fiber axes must match the actual generated geometry. Complete perfused/hollow/critical flags and provenance are required. Binding copies the values atomically; missing, duplicate or conflicting profiles refuse without replacing an earlier binding. Retry retains metadata; reinitialization clears it for the next body. `TryGetLayerProperties(id, out properties)` can be called before practice, and `HasConsequenceProperties` distinguishes bound semantics from geometry-only metadata. Metadata access is not proof of exposure, registration or valid practice.
+
+`TryCutLayer(id, worldA, worldB, worldC, worldStrokeDirection, out fracture)` and `TrySplitLayer(id, worldA, worldB, worldC, out fracture)` are material-specific low-level mechanical fracture verbs. They change actual topology and emit the existing `LayerFractured` fact only when new faces break. Duplicate/unknown/degenerate/invalid-gate requests refuse. Cuts use a physical0.5mm tolerance; a wrong-layer muscle cut remains possible and is not converted into a split. The finite split plane follows the layer's splittable capability and fibers, within the wall separator's authored geometric tolerance. `TryMeasureLayerSplit(first, second, out millimeters)` measures two accepted material attachments across their common layer's fibers. Existing muscle-named APIs are compatibility wrappers over these generic methods.
+
+These fracture inputs are caller-derived swept surfaces, not proof that a tool acquired the material or that the body has exposed it. The Surgery consumer must use current material contacts and tool lifecycles when deriving those surfaces, preserve the single scored event route, and apply the existing body consequences. Mechanical `verb="split"` is not a new scored wire verb: the existing body schema uses paired `retract` evidence. Cut alignment measures stroke versus the fiber axis; paired retraction alignment measures spread versus the across-fiber axis. Do not interchange them.
+
+Generic properties accept arbitrary tissue IDs and local3D fibers, but this wall facade supports only its five actual materials. It does not fabricate bowel/vessel geometry or implement wall clamp/tie/seal/suction behavior. Those mechanisms remain with the existing actual vessel models and Surgery body/organ adapter. Unknown fiber angles remain NaN in mechanical output and signed lift/spread remains signed: `BodyAction` refuses nonfinite and negative measurements, so the adapter must preserve measurement validity and intentionally form compatible scored evidence, never serialize an unknown angle as zero or treat a request as achieved motion.
+
 ## Physical wall adapter
 
 Public methods on `NativeVolumeSimulation`:
@@ -31,7 +43,7 @@ The solver preserves its existing compliant finite patch, per-step travel limit,
 
 The surgery owner should bind these APIs in the existing `OpenBodyInteraction` path, keeping the current `CaseRunner`/coach as sole scoring authority:
 
-1. Replace duplicated depth arrays with `OpenWallLayers`; the old fat contact plane starts at 4 mm while the actual fat starts at 2 mm.
+1. Bind caller-owned generic properties as described above, then replace duplicated depth arrays with `OpenWallLayers`; the old fat contact plane starts at 4 mm while the actual fat starts at 2 mm.
 2. Acquire wall contact and a material handle from current geometry, keyed to each tool's lifecycle. Update requested positions, then read accepted measurements after the native solver update. Do not award tenting or split width from raw controller travel.
 3. Use two distinct muscle attachments for paired retraction. Derive a finite fiber-aligned split surface from actual contact. Preserve forceps-held peritoneum while nicking and use its signed accepted lift in the existing `BodyAction` measurement.
 4. Map layer fracture facts into the existing authored body outcomes without creating a second reducer or advancing a step directly. Body exposure, injury rules and finish/grade remain with the surgery engine.

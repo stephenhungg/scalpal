@@ -18,6 +18,7 @@ namespace Scalpal.Anatomy.Tissue
             public readonly float startDepthMeters, endDepthMeters;
             public readonly Vector3 fiberDirection;
             public readonly bool hasFibers, cuttable, splittable, tentable;
+            public readonly TissueInteractionProperties properties;
             public string provenance => Provenance;
             public float ThicknessMeters => endDepthMeters - startDepthMeters;
 
@@ -28,6 +29,9 @@ namespace Scalpal.Anatomy.Tissue
                 hasFibers = fibers; fiberDirection = fibers ? Vector3.right : Vector3.zero;
                 // Cutting muscle is physically possible; the body-state owner grades that injury.
                 cuttable = true; splittable = split; tentable = tent;
+                // Geometry owns mechanical capabilities; physiological flags require caller binding.
+                properties = new TissueInteractionProperties(id, id, index, cuttable, split, tent,
+                    null, null, null, fiberDirection, Provenance);
             }
         }
 

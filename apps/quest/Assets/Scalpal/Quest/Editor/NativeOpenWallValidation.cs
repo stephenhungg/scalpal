@@ -23,6 +23,9 @@ namespace Scalpal.Quest.Editor
         {
             checks = 0;
             ValidateDescriptors();
+            ValidateGenericProperties();
+            ValidateGenericVerbs(.8f);
+            ValidateGenericVerbs(1.2f);
             ValidateLayerGeometry();
             ValidateContactsAndFracture();
             ValidateActualMaterialHandles();
@@ -67,6 +70,101 @@ namespace Scalpal.Quest.Editor
             Assert(OpenWallLayers.TryMcBurney(asis, navel, out var point) && Near(point, asis + (navel - asis) / 3), "McBurney interpolation follows explicit same-frame landmarks");
             Assert(!Near(point, navel), "wound centre is not silently the umbilicus");
             Assert(!OpenWallLayers.TryMcBurney(asis, asis, out _) && !OpenWallLayers.TryMcBurney(new Vector3(float.NaN, 0, 0), navel, out _), "degenerate/absent landmarks rejected");
+        }
+
+        static TissueInteractionProperties[] Profiles(bool perfused, bool hollow, bool critical)
+        {
+            var profiles = new TissueInteractionProperties[OpenWallLayers.Count];
+            for (int i = 0; i < profiles.Length; i++)
+            {
+                var layer = OpenWallLayers.Get(i);
+                profiles[i] = new TissueInteractionProperties(layer.id, layer.id, i, layer.cuttable, layer.splittable,
+                    layer.tentable, perfused, hollow, critical, layer.fiberDirection, "synthetic caller-owned body properties");
+            }
+            return profiles;
+        }
+
+        static void ValidateGenericProperties()
+        {
+            var arbitrary = new TissueInteractionProperties("unrelated_material", "custom_layer", -1, true, true,
+                false, true, true, true, new Vector3(0, 3, 4), "synthetic arbitrary tissue");
+            Assert(arbitrary.IsValid && arbitrary.HasConsequenceProperties && arbitrary.perfused == true && arbitrary.hollow == true && arbitrary.critical == true,
+                "generic properties have no case or organ name assumptions");
+            Assert(Near(arbitrary.fiberDirection, new Vector3(0, .6f, .8f)), "generic tissue fibers normalized in its explicit local 3D frame");
+            Assert(arbitrary.TryFiberAngle(-arbitrary.fiberDirection, out var parallel) && Near(parallel, 0, .03f), "reverse generic fibers equivalent");
+            Assert(arbitrary.TryFiberAngle(Vector3.right, out var cross) && Near(cross, 90, .001f), "generic fiber angle is three dimensional");
+            Assert(!default(TissueInteractionProperties).IsValid && !default(TissueInteractionProperties).TryFiberAngle(Vector3.right, out _), "default properties are missing, not a valid safe tissue");
+            bool rejected = false;
+            try { _ = new TissueInteractionProperties("bad", "layer", 0, true, true, false, null, null, null, new Vector3(float.NaN, 0, 0), "synthetic"); }
+            catch (ArgumentException) { rejected = true; }
+            Assert(rejected, "nonfinite authored fiber is rejected");
+            using (var f = new WorldFixture(1))
+            {
+                var sim = f.simulation;
+                foreach (var id in Ids)
+                    Assert(sim.TryGetLayerProperties(id, out var mechanical) && mechanical.IsValid && !mechanical.HasConsequenceProperties &&
+                        mechanical.perfused == null && mechanical.hollow == null && mechanical.critical == null,
+                        "unbound " + id + " physiology remains unknown rather than default false");
+                Assert(!sim.TryGetLayerProperties("appendix", out _) && !sim.TryGetLayerProperties(null, out _), "wall metadata does not fabricate an organ registry");
+                var supplied = Profiles(true, false, true);
+                Assert(sim.TryBindLayerProperties(supplied, out var reason) && reason == "", "explicit complete compatible profiles bind");
+                supplied[0] = Profiles(false, true, false)[0];
+                Assert(sim.TryGetLayerProperties("skin", out var copied) && copied.perfused == true && copied.hollow == false && copied.critical == true,
+                    "binding copies immutable values instead of retaining caller array");
+                var duplicate = Profiles(false, true, false); duplicate[1] = duplicate[0];
+                Assert(!sim.TryBindLayerProperties(duplicate, out reason) && !string.IsNullOrWhiteSpace(reason), "duplicate material profiles refuse atomically");
+                var mismatch = Profiles(false, true, false);
+                mismatch[0] = new TissueInteractionProperties("skin", "other", 0, true, false, false, false, false, false, Vector3.zero, "synthetic");
+                Assert(!sim.TryBindLayerProperties(mismatch, out _), "semantic layer mismatch cannot overwrite geometry");
+                mismatch[0] = new TissueInteractionProperties("skin", "skin", 0, false, false, false, false, false, false, Vector3.zero, "synthetic");
+                Assert(!sim.TryBindLayerProperties(mismatch, out _), "conflicting cut capability cannot silently redefine the physical layer");
+                mismatch = Profiles(false, true, false);
+                mismatch[2] = new TissueInteractionProperties("fascia", "fascia", 2, true, false, false, false, false, false, Vector3.up, "synthetic");
+                Assert(!sim.TryBindLayerProperties(mismatch, out _), "conflicting fiber frame refuses");
+                Assert(!sim.TryBindLayerProperties(new TissueInteractionProperties[5], out _) && !sim.TryBindLayerProperties(null, out _), "missing profiles refuse");
+                Assert(sim.TryGetLayerProperties("skin", out copied) && copied.perfused == true && copied.hollow == false && copied.critical == true,
+                    "rejected bindings preserve the prior complete metadata");
+                sim.ResetTissues();
+                Assert(sim.TryGetLayerProperties("skin", out copied) && copied.HasConsequenceProperties, "retry retains owner-bound metadata while resetting physical damage");
+                f.ready = false;
+                Assert(sim.TryGetLayerProperties("skin", out copied) && copied.HasConsequenceProperties && !sim.TryContactLayer("skin", f.World(Vector3.zero), .001f, out _),
+                    "metadata access is not evidence of valid practice contact");
+            }
+        }
+
+        static void ValidateGenericVerbs(float scale)
+        {
+            using (var f = new WorldFixture(scale))
+            {
+                var sim = f.simulation; int events = 0;
+                sim.LayerFractured += _ => events++;
+                Vector3 a = new Vector3(0, -.025f, -.001f), b = new Vector3(0, .025f, -.001f), c = new Vector3(0, .025f, .003f);
+                Assert(!sim.TryCutLayer("unknown", f.World(a), f.World(b), f.World(c), f.simulation.Wall.transform.up, out _) &&
+                    !sim.TryCutLayer("skin", f.World(a), f.World(a), f.World(c), Vector3.up, out _), "unknown/degenerate generic cuts cannot fracture");
+                Assert(sim.TryCutLayer("skin", f.World(a), f.World(b), f.World(c), f.simulation.Wall.transform.up, out var cut) &&
+                    cut.layerId == "skin" && cut.verb == "cut" && cut.newlyBrokenFaces > 0 && float.IsNaN(cut.fiberAngleDegrees),
+                    "generic cut exposes actual material damage and leaves absent fiber angle unmeasured");
+                Assert(events == 1 && cut.topologyRevision == f.Volume.TopologyRevision && cut.newlyBrokenFaces == f.Volume.CutFacesForMaterial("skin"),
+                    "accepted generic cut fact matches actual topology rather than a case milestone");
+                for (int i = 1; i < Ids.Length; i++) Assert(f.Volume.CutFacesForMaterial(Ids[i]) == 0, "generic skin cut stays material-specific");
+                Assert(!sim.TryCutLayer("skin", f.World(a), f.World(b), f.World(c), Vector3.up, out _) && events == 1, "duplicate generic cut emits no fabricated damage");
+                var splitA = new Vector3(-.04f, 0, .018f); var splitB = new Vector3(.04f, 0, .018f); var splitC = new Vector3(.04f, 0, .028f);
+                Assert(!sim.TrySplitLayer("fascia", f.World(splitA), f.World(splitB), f.World(splitC), out _) &&
+                    !sim.TrySplitLayer("unknown", f.World(splitA), f.World(splitB), f.World(splitC), out _), "nonsplittable or absent material cannot split");
+                Assert(sim.TrySplitLayer("muscle", f.World(splitA), f.World(splitB), f.World(splitC), out var split) && split.verb == "split" && split.newlyBrokenFaces > 0,
+                    "generic material split uses capabilities and actual fracture");
+                Assert(events == 2 && !sim.TrySplitMuscle(f.World(splitA), f.World(splitB), f.World(splitC), out _) && events == 2,
+                    "old wrapper shares generic split topology and duplicate-event guard");
+                f.ready = false;
+                Assert(!sim.TryCutLayer("muscle", f.World(splitA), f.World(splitB), f.World(splitC), Vector3.right, out _) && events == 2, "invalid gate blocks generic physical verbs");
+            }
+            using (var f = new WorldFixture(scale))
+            {
+                var a = new Vector3(0, -.04f, .018f); var b = new Vector3(0, .04f, .018f); var c = new Vector3(0, .04f, .028f);
+                Assert(f.simulation.TryCutLayer("muscle", f.World(a), f.World(b), f.World(c), f.simulation.Wall.transform.up, out var wrongCut) &&
+                    wrongCut.verb == "cut" && wrongCut.fiberAngleDegrees > 89 && wrongCut.newlyBrokenFaces > 0,
+                    "across-fiber muscle blade damage is mechanically possible and distinct from splitting");
+            }
         }
 
         static void ValidateLayerGeometry()
@@ -315,6 +413,7 @@ namespace Scalpal.Quest.Editor
                 Assert(sim.TryMeasureLayerHandle(second, out var secondActual), "second retracted anchor remains material measurement");
                 float independentOpening = (Mathf.Abs(Vector3.Dot(firstActual.worldPosition - secondActual.worldPosition, wall.up)) -
                     Mathf.Abs(Vector3.Dot(firstBaseline.worldPosition - secondBaseline.worldPosition, wall.up))) * 1000;
+                Assert(sim.TryMeasureLayerSplit(first, second, out var genericOpening) && Near(genericOpening, independentOpening, .0001f), "generic split measurement uses accepted geometry and the layer fiber axis");
                 Assert(Near(opening, independentOpening, .0001f), "muscle opening is actual signed world separation rather than raw target distance");
                 Debug.Log($"SCALPAL_OPEN_WALL_MECHANICS_RANGE scale={scale:F1} requestedPeritoneumLiftMm={.005f * scale * 1000:F6} acceptedPeritoneumLiftMm={lifted.outwardLiftMillimeters:F6} requestedMuscleOpeningMm={.008f * scale * 1000:F6} acceptedMuscleOpeningMm={opening:F6} synthetic=true surgicalThresholdEstablished=false");
                 PositiveJacobians(f.Volume);

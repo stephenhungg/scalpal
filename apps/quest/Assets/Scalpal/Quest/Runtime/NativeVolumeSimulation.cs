@@ -21,6 +21,7 @@ namespace Scalpal.Quest
             public long stepAtAcquisition;
         }
         readonly Dictionary<int,LayerGrip> layerGrips=new Dictionary<int,LayerGrip>();
+        readonly Dictionary<string,TissueInteractionProperties> layerProperties=new Dictionary<string,TissueInteractionProperties>(StringComparer.Ordinal);
         int nextGripToken;
         bool openLayers;
         public struct LayerHandleMeasurement
@@ -55,7 +56,7 @@ namespace Scalpal.Quest
         {
             if(!sourceFrame||!rig) return;
             if(Wall){Wall.SetVisible(false);if(Application.isPlaying)Destroy(Wall.gameObject);else DestroyImmediate(Wall.gameObject);}
-            openLayers=openBodyLayers;
+            openLayers=openBodyLayers;layerProperties.Clear();
             var wall=new GameObject(openLayers?"OpenAbdominalWall_TeachingPhysics":"GenericAbdominalWall_Unscored");wall.transform.SetParent(sourceFrame,false);
             Wall=wall.AddComponent<VolumetricTissue>();Wall.Initialize(openBodyLayers?TissueVolumeFactory.OpenAbdominalWall():TissueVolumeFactory.AbdominalWall(AppendixProjection(sourceFrame)));
             workbench=rig;ready=canInteract;blades.Clear();
@@ -129,31 +130,86 @@ namespace Scalpal.Quest
         }
         public void ReleaseLayerHandle(int token)
         { layerGrips.Remove(token);Wall?.Volume.ReleaseMaterialHandle(token); }
-        // Signed increase in actual material separation across the authored +X fibers.
-        // A repeated token or raw requested controller travel cannot satisfy a split.
-        public bool TryMeasureMuscleSplit(int first,int second,out float increaseMillimeters)
+        // Metadata can be read before practice; it does not establish exposure or a valid registration.
+        public bool TryGetLayerProperties(string layerId,out TissueInteractionProperties properties)
+        {
+            properties=default;
+            if(!openLayers||!Wall||!OpenWallLayers.TryGet(layerId,out var layer))return false;
+            properties=layerProperties.TryGetValue(layerId,out var bound)?bound:layer.properties;return true;
+        }
+        // Copy all five caller-owned semantic profiles atomically. No organ registry or default physiology.
+        // A conflicting mechanical definition must be resolved by its owner instead of silently overriding the mesh.
+        public bool TryBindLayerProperties(IReadOnlyList<TissueInteractionProperties> supplied,out string reason)
+        {
+            reason="";
+            if(!openLayers||!Wall||supplied==null||supplied.Count!=OpenWallLayers.Count)
+            {reason="Five initialized wall-layer profiles are required";return false;}
+            var pending=new Dictionary<string,TissueInteractionProperties>(StringComparer.Ordinal);
+            foreach(var properties in supplied)
+            {
+                if(!properties.IsValid||!properties.HasConsequenceProperties||!OpenWallLayers.TryGet(properties.id,out var layer)||
+                    pending.ContainsKey(properties.id)||properties.layer!=layer.id||properties.order!=layer.index||
+                    properties.cuttable!=layer.cuttable||properties.splittable!=layer.splittable||properties.tentable!=layer.tentable||
+                    properties.hasFibers!=layer.hasFibers||layer.hasFibers&&Mathf.Abs(Vector3.Dot(properties.fiberDirection,layer.fiberDirection))<.9999f)
+                {reason="Tissue properties must be complete and match each physical wall layer";return false;}
+                pending.Add(properties.id,properties);
+            }
+            layerProperties.Clear();foreach(var pair in pending)layerProperties.Add(pair.Key,pair.Value);
+            return true;
+        }
+        // Signed increase across the layer's fibers, measured from two accepted material points.
+        public bool TryMeasureLayerSplit(int first,int second,out float increaseMillimeters)
         {
             increaseMillimeters=0;
             if(first==second||!TryMeasureLayerHandle(first,out var a)||!TryMeasureLayerHandle(second,out var b)||
-                a.layerId!="muscle"||b.layerId!="muscle"||!a.hasAcceptedStep||!b.hasAcceptedStep)return false;
-            Vector3 axis=Wall.transform.up;
+                a.layerId!=b.layerId||!TryGetLayerProperties(a.layerId,out var properties)||!properties.splittable||
+                !properties.hasFibers||!a.hasAcceptedStep||!b.hasAcceptedStep)return false;
+            Vector3 localAxis=Vector3.Cross(Vector3.forward,properties.fiberDirection);
+            if(localAxis.sqrMagnitude<1e-12f)return false;
+            Vector3 axis=Wall.transform.TransformDirection(localAxis.normalized);
             Vector3 initial=Wall.transform.TransformVector(layerGrips[first].baseline-layerGrips[second].baseline);
             increaseMillimeters=(Mathf.Abs(Vector3.Dot(a.worldPosition-b.worldPosition,axis))-Mathf.Abs(Vector3.Dot(initial,axis)))*1000;return true;
         }
-        // Caller supplies a finite material split surface (two triangles if needed).
-        // This is a mechanical separation, not a blade cut or an awarded milestone.
-        public bool TrySplitMuscle(Vector3 worldA,Vector3 worldB,Vector3 worldC,out LayerFracture fracture)
+        // Compatibility with the existing consumer; neither method awards muscle milestones.
+        public bool TryMeasureMuscleSplit(int first,int second,out float increaseMillimeters)
+        {
+            increaseMillimeters=0;
+            return layerGrips.TryGetValue(first,out var a)&&a.layer=="muscle"&&
+                layerGrips.TryGetValue(second,out var b)&&b.layer=="muscle"&&TryMeasureLayerSplit(first,second,out increaseMillimeters);
+        }
+        // Caller derives a finite material split surface from real paired tool contact/pull.
+        public bool TrySplitLayer(string layerId,Vector3 worldA,Vector3 worldB,Vector3 worldC,out LayerFracture fracture)
         {
             fracture=default;
-            if(!LayerReady(out float scale)||!TissueCage.Finite(worldA)||!TissueCage.Finite(worldB)||!TissueCage.Finite(worldC))return false;
+            if(!LayerReady(out float scale)||!TryGetLayerProperties(layerId,out var properties)||!properties.splittable||
+                !properties.hasFibers||!TissueCage.Finite(worldA)||!TissueCage.Finite(worldB)||!TissueCage.Finite(worldC))return false;
             Vector3 a=Wall.transform.InverseTransformPoint(worldA),b=Wall.transform.InverseTransformPoint(worldB),c=Wall.transform.InverseTransformPoint(worldC);
             Vector3 normal=Vector3.Cross(b-a,c-a);
-            // A split plane contains the fibers and the wall-depth axis; across-fiber planes refuse.
-            if(normal.sqrMagnitude<1e-12f||Mathf.Abs(Vector3.Dot(normal.normalized,Vector3.up))<Mathf.Cos(25*Mathf.Deg2Rad))return false;
-            int count=Wall.Volume.FractureMaterialSweep("muscle",a,b,c,.0005f/scale);
+            Vector3 across=Vector3.Cross(Vector3.forward,properties.fiberDirection).normalized;
+            // This wall separator supports planes along local fibers and wall depth, with authored geometric tolerance.
+            if(normal.sqrMagnitude<1e-12f||across.sqrMagnitude<1e-12f||Mathf.Abs(Vector3.Dot(normal.normalized,across))<Mathf.Cos(25*Mathf.Deg2Rad))return false;
+            return FractureLayer(layerId,"split",a,b,c,Vector3.Cross(Vector3.forward,normal),scale,out fracture);
+        }
+        public bool TrySplitMuscle(Vector3 worldA,Vector3 worldB,Vector3 worldC,out LayerFracture fracture)
+            =>TrySplitLayer("muscle",worldA,worldB,worldC,out fracture);
+        // Material-specific mechanical cut. Wrong-layer cutting is possible; cases own consequences.
+        // Stroke direction is supplied separately from the swept triangle's blade edge.
+        public bool TryCutLayer(string layerId,Vector3 worldA,Vector3 worldB,Vector3 worldC,Vector3 worldStrokeDirection,out LayerFracture fracture)
+        {
+            fracture=default;
+            if(!LayerReady(out float scale)||!TryGetLayerProperties(layerId,out var properties)||!properties.cuttable||
+                !TissueCage.Finite(worldA)||!TissueCage.Finite(worldB)||!TissueCage.Finite(worldC)||!TissueCage.Finite(worldStrokeDirection))return false;
+            Vector3 a=Wall.transform.InverseTransformPoint(worldA),b=Wall.transform.InverseTransformPoint(worldB),c=Wall.transform.InverseTransformPoint(worldC);
+            if(Vector3.Cross(b-a,c-a).sqrMagnitude<1e-12f)return false;
+            return FractureLayer(layerId,"cut",a,b,c,Wall.transform.InverseTransformVector(worldStrokeDirection),scale,out fracture);
+        }
+        bool FractureLayer(string layerId,string verb,Vector3 a,Vector3 b,Vector3 c,Vector3 stroke,float scale,out LayerFracture fracture)
+        {
+            fracture=default;
+            int count=Wall.Volume.FractureMaterialSweep(layerId,a,b,c,.0005f/scale);
             if(count==0)return false;
-            OpenWallLayers.TryFiberAngle("muscle",Vector3.Cross(Vector3.forward,normal),out float angle);
-            fracture=new LayerFracture{layerId="muscle",verb="split",newlyBrokenFaces=count,topologyRevision=Wall.Volume.TopologyRevision,fiberAngleDegrees=angle};
+            OpenWallLayers.TryFiberAngle(layerId,stroke,out float angle);
+            fracture=new LayerFracture{layerId=layerId,verb=verb,newlyBrokenFaces=count,topologyRevision=Wall.Volume.TopologyRevision,fiberAngleDegrees=angle};
             LayerFractured?.Invoke(fracture);return true;
         }
         // This remains a generic anterior teaching coupon, not a laparoscopic port/incision model.
