@@ -554,6 +554,35 @@ describe('motion jobs', () => {
     r.closeAll();
   });
 
+  test("a worker cannot heartbeat, complete or fail another worker's run", async () => {
+    await drainQueue();
+    const r = await sessionWithRoles();
+    const clip = await availableClip(r);
+    await r.operator.conn.reducers.requestMotionJob({
+      jobId: uid('job'),
+      inputArtifactId: clip,
+      extraArtifactIds: [],
+      configVersion: 'v1',
+    });
+    const claim = await worker(WORKER_TOKEN, '/v1/worker/claim', { leaseMs: 30_000 });
+    assert.equal(claim.status, 200);
+    const quality = { framesTotal: 1, framesValid: 1, invalidIntervals: 0 };
+    assert.equal((await worker(WORKER_TOKEN_2, claim.json.endpoints.heartbeat, {})).status, 409);
+    assert.equal(
+      (await worker(WORKER_TOKEN_2, claim.json.endpoints.complete, { outputArtifactIds: [], quality })).status,
+      409
+    );
+    assert.equal(
+      (await worker(WORKER_TOKEN_2, claim.json.endpoints.fail, { error: 'hijack', retryable: false })).status,
+      409
+    );
+    const job = jobsOf(r.operator, r.sessionId)[0];
+    assert.equal(job.status, 'running');
+    assert.equal(job.workerId, 'w1');
+    await worker(WORKER_TOKEN, claim.json.endpoints.fail, { error: 'test cleanup', retryable: false });
+    r.closeAll();
+  });
+
   test('concurrent claims hand a job to exactly one worker', async () => {
     await drainQueue();
     const r = await sessionWithRoles();
@@ -564,16 +593,14 @@ describe('motion jobs', () => {
       extraArtifactIds: [],
       configVersion: 'v1',
     });
-    const results = await Promise.all([
-      worker(WORKER_TOKEN, '/v1/worker/claim', { leaseMs: 30_000 }),
-      worker(WORKER_TOKEN_2, '/v1/worker/claim', { leaseMs: 30_000 }),
-      worker(WORKER_TOKEN, '/v1/worker/claim', { leaseMs: 30_000 }),
-    ]);
+    const tokens = [WORKER_TOKEN, WORKER_TOKEN_2, WORKER_TOKEN];
+    const results = await Promise.all(tokens.map(t => worker(t, '/v1/worker/claim', { leaseMs: 30_000 })));
     assert.equal(results.filter(x => x.status === 200).length, 1);
     assert.equal(results.filter(x => x.status === 204).length, 2);
     await drainQueue();
-    const claimed = results.find(x => x.status === 200)!;
-    await worker(WORKER_TOKEN, claimed.json.endpoints.fail, { error: 'test cleanup', retryable: false });
+    const winner = results.findIndex(x => x.status === 200);
+    // Only the claiming worker may report on the run.
+    await worker(tokens[winner], results[winner].json.endpoints.fail, { error: 'test cleanup', retryable: false });
     r.closeAll();
   });
 

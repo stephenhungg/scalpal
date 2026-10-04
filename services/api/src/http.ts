@@ -206,10 +206,29 @@ export function createApp(config: Config, rt: Realtime, storage: Storage) {
 
   const runParams = (c: Context) => ({ jobId: c.req.param('job')!, run: Number(c.req.param('run')) });
 
+  // A run belongs to the worker that claimed it. The run reducers take no
+  // worker argument, so ownership is enforced here from the cache: each
+  // (jobId, run) is claimed exactly once, and /claim answers only after the
+  // cache shows that claim, so a matching cached run names its true owner.
+  // Throws Unavailable (503) when realtime is down.
+  const refuseUnownedRun = (c: Context<WorkerVars>, jobId: string, run: number) => {
+    const job = [...rt.require().db.sessionMotionJobs.iter()].find(j => j.jobId === jobId);
+    if (!job) return c.json({ error: 'unknown job' }, 404);
+    if (job.status !== 'running' || job.run !== run) {
+      return c.json({ error: `stale run ${run}: job is ${job.status} on run ${job.run}` }, 409);
+    }
+    if (job.workerId !== c.get('workerId')) {
+      return c.json({ error: `stale run ${run}: claimed by another worker` }, 409);
+    }
+    return null;
+  };
+
   worker.post('/jobs/:job/runs/:run/heartbeat', async c => {
     const { jobId, run } = runParams(c);
     const body = (await c.req.json().catch(() => ({}))) as { progress?: number; stage?: string; leaseMs?: number };
     try {
+      const refused = refuseUnownedRun(c, jobId, run);
+      if (refused) return refused;
       await rt.require().reducers.heartbeatMotionJob({
         jobId,
         run,
@@ -235,6 +254,8 @@ export function createApp(config: Config, rt: Realtime, storage: Storage) {
     }
     const artifactId = `art_${randomUUID().replace(/-/g, '')}`;
     try {
+      const refused = refuseUnownedRun(c, jobId, run);
+      if (refused) return refused;
       const conn = rt.require();
       await conn.reducers.registerJobOutput({
         jobId,
@@ -266,6 +287,8 @@ export function createApp(config: Config, rt: Realtime, storage: Storage) {
       }
     }
     try {
+      const refused = refuseUnownedRun(c, jobId, run);
+      if (refused) return refused;
       const conn = rt.require();
       const artifacts = [...conn.db.sessionArtifacts.iter()];
       const outputs = [];
@@ -300,6 +323,8 @@ export function createApp(config: Config, rt: Realtime, storage: Storage) {
     const { jobId, run } = runParams(c);
     const body = (await c.req.json().catch(() => ({}))) as { error?: string; retryable?: boolean };
     try {
+      const refused = refuseUnownedRun(c, jobId, run);
+      if (refused) return refused;
       await rt.require().reducers.failMotionJob({
         jobId,
         run,
