@@ -74,7 +74,8 @@ namespace Scalpal.Quest
             && (!HasHandoff || HandoffRun.Current.sourceOffice == null || HandoffSourceMatches(out _));
         int generation, completedSteps, mistakes;
         float nextUi, nextContext;
-        string lastVoiceContextKey = "";
+        bool voiceContextForce = true;
+        float voiceContextBusyUntil;
         bool handoffVoiceAllowed;
 
         [Serializable] public class DevelopmentConfig
@@ -88,6 +89,7 @@ namespace Scalpal.Quest
             public CoachSnapshotState snapshot;
         }
         [Serializable] class ContextReply { public string context, contextKey; public CoachSnapshotState snapshot; }
+        [Serializable] class VoiceContextReply { public string sessionId, kind, text; public int version; }
 
         void Awake()
         {
@@ -254,7 +256,7 @@ namespace Scalpal.Quest
             {
                 Publish(); UpdateUi(); nextUi = Time.unscaledTime + 0.25f;
             }
-            if (voice.Connected && coach.Connected && Time.unscaledTime >= nextContext)
+            if (voice.Connected && coach.Connected && Time.unscaledTime >= voiceContextBusyUntil && Time.unscaledTime >= nextContext)
             { nextContext = Time.unscaledTime + 1; StartCoroutine(RefreshVoiceContext(generation, coach.SessionId)); }
         }
 
@@ -602,7 +604,7 @@ namespace Scalpal.Quest
         {
             if (handoffVoiceAllowed && CoachPrepared && !voice.Connected && voice.Status != "connecting") ConnectVoice();
         }
-        void ConnectVoice() { if (HasHandoff && !handoffVoiceAllowed) return; lastVoiceContextKey = ""; voice.ConfigureConversation(voicePrompt, voiceGreeting, voiceContext); voice.Connect(coachSessionId); }
+        void ConnectVoice() { if (HasHandoff && !handoffVoiceAllowed) return; voiceContextForce = true; voice.ConfigureConversation(voicePrompt, voiceGreeting, voiceContext); voice.Connect(coachSessionId); }
         void VoiceTool(QuestJarvisVoice.ToolRequest request)
         {
             voice.ResolveClientTool(request, "This action is unavailable in the native exercise", true);
@@ -612,19 +614,25 @@ namespace Scalpal.Quest
             // Transcripts stay in memory, never in logs or shared exercise event storage.
             if (source == "agent" && !string.IsNullOrWhiteSpace(text)) Message = text.Length > 180 ? text.Substring(0, 180) : text;
         }
+        // The server runs the laptop page's context feed (services/preop/src/jarvis/context-feed.js):
+        // a full state card on structural change or about every 10 s, one-line [STATE DELTA vN] between,
+        // nothing while unchanged. Contextual updates accumulate in the agent's conversation, so
+        // resending the whole card on every change floods it. A reconnected voice forces one full card.
         IEnumerator RefreshVoiceContext(int epoch, string sid)
         {
+            // One request at a time keeps deltas in the server's order; the bound outlives the 8 s timeout
+            // so a stopped coroutine cannot block later context.
+            voiceContextBusyUntil = Time.unscaledTime + 10;
             string json = null;
-            yield return Request("GET", "/coach/sessions/" + Uri.EscapeDataString(sid), null, value => json = value);
+            yield return Request("POST", "/coach/sessions/" + Uri.EscapeDataString(sid) + "/voice-context",
+                voiceContextForce ? "{\"force\":true}" : "{}", value => json = value);
+            voiceContextBusyUntil = 0;
             if (epoch != generation || coach.SessionId != sid) yield break;
-            ContextReply reply = null;
-            try { if (json != null) reply = JsonUtility.FromJson<ContextReply>(json); } catch (ArgumentException) { }
-            if (reply?.snapshot?.sessionId == sid && voice.Connected
-                && !string.IsNullOrEmpty(reply.contextKey) && reply.contextKey != lastVoiceContextKey)
-            {
-                lastVoiceContextKey = reply.contextKey;
-                voice.SendContext(reply.context);
-            }
+            VoiceContextReply reply = null;
+            try { if (json != null) reply = JsonUtility.FromJson<VoiceContextReply>(json); } catch (ArgumentException) { }
+            if (reply?.sessionId != sid || !voice.Connected) yield break;
+            voiceContextForce = false;
+            if ((reply.kind == "full" || reply.kind == "delta") && !string.IsNullOrEmpty(reply.text)) voice.SendContext(reply.text);
         }
 
         void Publish()
@@ -683,7 +691,7 @@ namespace Scalpal.Quest
 
             generation++; ResetHandoffRecovery();
             handoffVoiceAllowed = false; voice.Disconnect(); coachSessionId = "";
-            voicePrompt = voiceGreeting = voiceContext = lastVoiceContextKey = "";
+            voicePrompt = voiceGreeting = voiceContext = ""; voiceContextForce = true;
             CaptionFallbackAllowed = false;
             coach.Tracking(false); coach.UseSession("");
             exercise.explicitCoachSessionId = ""; exercise.requireCoachSynchronization = true;

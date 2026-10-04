@@ -78,7 +78,13 @@ namespace Scalpal.Voice
         volatile float playbackLevel;
         long playbackTimestamp;
         int lastAudioEventId = -1, interruptedThrough = -1;
+        // A local barge-in suppresses agent audio until a turn boundary. Boundaries: an identified
+        // provider interruption, a non-empty learner transcript, a new agent_response, or the talk
+        // control released (microphone muted) with no suppressed audio for InterruptionGraceSeconds.
+        // Without the last two, silence or empty ASR after a press left the agent mute until reconnect.
+        public const float InterruptionGraceSeconds = 2.5f;
         bool awaitingInterruption;
+        float lastSuppressedAudio;
         bool permissionPending, applicationFocused = true, applicationPaused;
         readonly HashSet<string> pendingTools = new HashSet<string>(StringComparer.Ordinal);
         readonly HashSet<string> seenTools = new HashSet<string>(StringComparer.Ordinal);
@@ -359,6 +365,7 @@ namespace Scalpal.Voice
                 catch (Exception exception) { Fail("Voice protocol failed (" + exception.GetType().Name + ")."); return; }
                 if (active != connection) return;
             }
+            ReleaseSilentInterruption(Time.realtimeSinceStartup);
             if (Connected) CaptureMicrophone();
             int buffered;
             lock (audioLock) buffered = outputSamples.Count;
@@ -384,7 +391,12 @@ namespace Scalpal.Voice
                     if (!Connected || message.audio_event == null) break;
                     lastAudioEventId = Math.Max(lastAudioEventId, message.audio_event.event_id);
                     if (awaitingInterruption)
-                    { interruptedThrough = Math.Max(interruptedThrough, message.audio_event.event_id); break; }
+                    {
+                        // Chunks after a press are the interrupted response's tail; their ids stay discarded.
+                        interruptedThrough = Math.Max(interruptedThrough, message.audio_event.event_id);
+                        lastSuppressedAudio = Time.realtimeSinceStartup;
+                        break;
+                    }
                     if (message.audio_event.event_id <= interruptedThrough) break;
                     var decoded = DecodePcm(Convert.FromBase64String(message.audio_event.audio_base_64));
                     lock (audioLock)
@@ -407,6 +419,9 @@ namespace Scalpal.Voice
                     Transcript?.Invoke("user", message.user_transcription_event?.user_transcript ?? "");
                     break;
                 case "agent_response":
+                    // A new agent turn is a server boundary: the server heard the (unmuted) held microphone
+                    // and moved on. Its audio ids follow the suppressed ones, which stay discarded.
+                    awaitingInterruption = false;
                     Transcript?.Invoke("agent", message.agent_response_event?.agent_response ?? "");
                     break;
                 case "client_tool_call":
@@ -480,6 +495,9 @@ namespace Scalpal.Voice
             SetMode("listening");
         }
 
+        // Barge-in is hold-to-talk only: CaptureMicrophone sends zero PCM while agent output is pending
+        // (EncodeMicrophonePcm(..., AgentOutputPending())), so the provider cannot hear the learner over
+        // the agent. A talk press must call this to stop playback before learner audio is sent.
         public void InterruptPlayback()
         {
             // A held talk action stops this response locally. VAD/user transcript supplies the server turn boundary.
@@ -487,9 +505,17 @@ namespace Scalpal.Voice
             {
                 interruptedThrough = Math.Max(interruptedThrough, lastAudioEventId);
                 awaitingInterruption = true;
+                lastSuppressedAudio = Time.realtimeSinceStartup;
             }
             if (localSpeech) StopLocalSpeech();
             ClearAudio(); SetMode("listening");
+        }
+
+        // Talk released without speech (or ASR returned nothing): once the interrupted response's tail
+        // has stopped arriving, the next agent reply must be audible. A held talk keeps suppression.
+        void ReleaseSilentInterruption(float now)
+        {
+            if (awaitingInterruption && MicrophoneMuted && now - lastSuppressedAudio >= InterruptionGraceSeconds) awaitingInterruption = false;
         }
 
         void CaptureMicrophone()

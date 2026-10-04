@@ -37,7 +37,11 @@ namespace Scalpal.Surgery.Editor
             VerifyOffPath(bundle, procedure);
             VerifyRetractionAndChoice(bundle, procedure);
             VerifyFluid(procedure);
-            Debug.Log("SCALPAL_OPEN_BODY_INTERACTION_VALIDATION_OK: " + checks + " synthetic actual-adapter and real-vessel snapshot checks; no headset test");
+            int fixtureChecks = checks;
+            // Actual native-scene atlas: mobilize, deliver, then measure the base on the moved anatomy.
+            checks += OpenBodyDeliveryValidation.Run();
+            Debug.Log("SCALPAL_OPEN_BODY_INTERACTION_VALIDATION_OK: " + checks + " checks (" + fixtureChecks + " synthetic actual-adapter and real-vessel snapshot, "
+                + (checks - fixtureChecks) + " actual-scene delivery); no headset test");
         }
         sealed class Fixture : IDisposable
         {
