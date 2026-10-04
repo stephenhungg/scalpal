@@ -6,7 +6,7 @@ namespace Scalpal.Anatomy.Tissue
 {
     // Local mechanics only. No exercise events. Contacts use current deformed display triangles,
     // 128 material-surface probes/body and 1 mm padding, not a claim of complete continuous collision.
-    public sealed class TissueContactSolver
+    public sealed class TissueContactSolver : IDisposable
     {
         public const int MaximumBodies = 3, MaximumProbes = 128;
         public const float ContactPaddingMeters = .001f, MaximumCorrectionMeters = .002f;
@@ -16,6 +16,7 @@ namespace Scalpal.Anatomy.Tissue
         public int ActiveBodies { get; private set; }
         public int AppliedPairs { get; private set; }
         public int RejectedPairs { get; private set; }
+        public int TriangleQueries { get; private set; }
         // Opt-in attachment mode reports excess beyond each authored probe allowance; default reports geometric overlap.
         public float MaximumResidualPenetrationMeters { get; private set; }
         public float MaximumExcessResidualMeters => MaximumResidualPenetrationMeters;
@@ -45,6 +46,8 @@ namespace Scalpal.Anatomy.Tissue
             public DeformableTissue tissue;
             public string id;
             public Vector3[] source, world;
+            public readonly Vector3[] queryPoints = new Vector3[MaximumProbes];
+            public TissueSurfaceBvh acceleration;
             public int[] triangles;
             public Probe[] probes;
             public float sourceGap, scale, sourcePadding, authoredOverlap;
@@ -57,7 +60,7 @@ namespace Scalpal.Anatomy.Tissue
 
         public void Initialize(IReadOnlyList<DeformableTissue> tissues,bool preserveRestOverlap=false)
         {
-            bodies.Clear(); reports.Clear(); SupportedBodies=0; PreservesAuthoredRestOverlap=preserveRestOverlap; MaximumAuthoredOverlapMeters=0; ResetStatistics();
+            Dispose(); reports.Clear(); SupportedBodies=0; PreservesAuthoredRestOverlap=preserveRestOverlap; MaximumAuthoredOverlapMeters=0; ResetStatistics();
             if(tissues==null || tissues.Count>MaximumBodies) {Status="Contact body count exceeds bounded solver";return;}
             var seen=new HashSet<DeformableTissue>();
             foreach(var tissue in tissues)
@@ -102,6 +105,7 @@ namespace Scalpal.Anatomy.Tissue
                     probes.Add(new Probe {vertex=-1,triangle=t,rest=(source[triangles[t]]+source[triangles[t+1]]+source[triangles[t+2]])/3});
                 }
                 body.probes=probes.ToArray();
+                body.acceleration=new TissueSurfaceBvh(source,triangles,MaximumProbes);
                 float vertexGap=0,edge=0;
                 foreach(var vertex in source)
                 {
@@ -173,7 +177,8 @@ namespace Scalpal.Anatomy.Tissue
             Status=ActiveBodies!=bodies.Count?"Some contact bodies inactive, hidden or in an unsupported transform":
                 RejectedPairs>0?"Sampled contact unresolved: pinned, capped or unsafe correction":"Sampled contact evaluated; unsampled intersections remain possible";
         }
-        void ResetStatistics(){ActiveBodies=AppliedPairs=RejectedPairs=0;MaximumResidualPenetrationMeters=MaximumSamplingGapMeters=0;MaximumAuthoredOverlapMeters=0;}
+        public void Dispose() { foreach(var body in bodies)body.acceleration?.Dispose(); bodies.Clear(); SupportedBodies=0; }
+        void ResetStatistics(){ActiveBodies=AppliedPairs=RejectedPairs=TriangleQueries=0;MaximumResidualPenetrationMeters=MaximumSamplingGapMeters=0;MaximumAuthoredOverlapMeters=0;}
         float Residual(Contact contact)=>Mathf.Max(0,contact.depth-(PreservesAuthoredRestOverlap?0:ContactPaddingMeters));
         // These fixed per-probe source-frame allowances preserve authored embedded attachments.
         // They are not inferred anatomical constraints and do not exempt an entire pair from contact.
@@ -188,9 +193,10 @@ namespace Scalpal.Anatomy.Tissue
             {
                 if(from==target||!from.ready||!target.ready)continue;
                 var allowances=new float[from.probes.Length];
+                QueryBatch(from,target);
                 for(int i=0;i<from.probes.Length;i++)
                 {
-                    if(!target.bounds.Contains(WorldProbe(from,from.probes[i]))||!QuerySurface(from,target,from.probes[i],out float penetration,out _,out _))continue;
+                    if(!target.bounds.Contains(WorldProbe(from,from.probes[i]))||!QuerySurface(target,i,out float penetration,out _,out _))continue;
                     from.authoredOverlap=Mathf.Max(from.authoredOverlap,Mathf.Max(0,penetration)/from.scale);
                     allowances[i]=Mathf.Max(0,penetration+ContactPaddingMeters)/from.scale;
                 }
@@ -214,7 +220,8 @@ namespace Scalpal.Anatomy.Tissue
                 if(!TissueCage.Finite(body.world[i])) return false;
                 if(i==0)body.bounds=new Bounds(body.world[i],Vector3.zero);else body.bounds.Encapsulate(body.world[i]);
             }
-            body.bounds.Expand(Mathf.Max(ContactPaddingMeters,body.sourcePadding*body.scale)*2);return true;
+            body.bounds.Expand(Mathf.Max(ContactPaddingMeters,body.sourcePadding*body.scale)*2);
+            body.acceleration.Refit(body.world);return true;
         }
         static Vector3 WorldProbe(Body body,Probe probe) => probe.vertex>=0?body.world[probe.vertex]:
             (body.world[body.triangles[probe.triangle]]+body.world[body.triangles[probe.triangle+1]]+body.world[body.triangles[probe.triangle+2]])/3;
@@ -225,35 +232,30 @@ namespace Scalpal.Anatomy.Tissue
         void ProbeAgainst(Body from,Body target,ref Contact deepest)
         {
             from.authoredAllowances.TryGetValue(target,out var allowances);
+            QueryBatch(from,target);
             for(int i=0;i<from.probes.Length;i++)
             {
                 var probe=from.probes[i];
-                if(!target.bounds.Contains(WorldProbe(from,probe))||!QuerySurface(from,target,probe,out float penetration,out var normal,out var rest))continue;
+                if(!target.bounds.Contains(WorldProbe(from,probe))||!QuerySurface(target,i,out float penetration,out var normal,out var rest))continue;
                 float padding=PreservesAuthoredRestOverlap?from.sourcePadding*from.scale:ContactPaddingMeters;
                 float depth=penetration+padding;
                 if(PreservesAuthoredRestOverlap&&allowances!=null)depth-=allowances[i]*from.scale;
                 if(depth>deepest.depth+(PreservesAuthoredRestOverlap?1e-6f:1e-7f))deepest=new Contact {a=from,b=target,restA=probe.rest,restB=rest,normal=normal,depth=depth};
             }
         }
-        static bool QuerySurface(Body from,Body target,Probe probe,out float penetration,out Vector3 normal,out Vector3 rest)
+        void QueryBatch(Body from,Body target)
         {
-            Vector3 point=WorldProbe(from,probe);float nearest=float.PositiveInfinity,signed=0;normal=rest=Vector3.zero;penetration=0;
-            for(int triangle=0;triangle<target.triangles.Length;triangle+=3)
-            {
-                int ia=target.triangles[triangle],ib=target.triangles[triangle+1],ic=target.triangles[triangle+2];
-                Vector3 a=target.world[ia],b=target.world[ib],c=target.world[ic];
-                if(!TryAreaNormal(Vector3.Cross(b-a,c-a),1e-20f,out var n))continue;
-                Vector3 closest=TissueVolume.ClosestTriangle(point,a,b,c);float distance=(point-closest).sqrMagnitude,dot=Vector3.Dot(point-closest,n);
-                if(distance>nearest+1e-12f || (Mathf.Abs(distance-nearest)<1e-12f&&dot<signed))continue;
-                Vector3 v0=b-a,v1=c-a,v2=closest-a;
-                float d00=Vector3.Dot(v0,v0),d01=Vector3.Dot(v0,v1),d11=Vector3.Dot(v1,v1),d20=Vector3.Dot(v2,v0),d21=Vector3.Dot(v2,v1),denom=d00*d11-d01*d01;
-                if(Mathf.Abs(denom)<1e-20f)continue;
-                float u=(d11*d20-d01*d21)/denom,v=(d00*d21-d01*d20)/denom;
-                nearest=distance;signed=dot;normal=n;rest=target.source[ia]*(1-u-v)+target.source[ib]*u+target.source[ic]*v;
-            }
-            if(float.IsInfinity(nearest))return false;
-            // Nearest outward normal approximates signed distance; this is not complete SDF/CCD.
-            penetration=(signed<0?1:-1)*Mathf.Sqrt(nearest);return true;
+            for(int i=0;i<from.probes.Length;i++)from.queryPoints[i]=WorldProbe(from,from.probes[i]);
+            target.acceleration.Query(from.queryPoints,from.probes.Length);
+            TriangleQueries+=target.acceleration.LastTriangleTests;
+        }
+        static bool QuerySurface(Body target,int query,out float penetration,out Vector3 normal,out Vector3 rest)
+        {
+            var hit=target.acceleration.Result(query);penetration=hit.penetration;normal=hit.normal;rest=Vector3.zero;
+            if(hit.triangle<0)return false;
+            int t=hit.triangle*3;
+            rest=target.source[target.triangles[t]]*hit.barycentric.x+target.source[target.triangles[t+1]]*hit.barycentric.y+target.source[target.triangles[t+2]]*hit.barycentric.z;
+            return true;
         }
         struct DirectedEdge { public int from,to,count; }
         // Only coherent simple planar vessel-end loops get a disclosed artificial contact cap.
