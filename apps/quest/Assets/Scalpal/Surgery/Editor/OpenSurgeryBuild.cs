@@ -19,7 +19,7 @@ namespace Scalpal.Surgery.Editor
         {
             OpenBodyValidation.Run(); OpenBodyInteractionValidation.Run(); OpenSurgeryCoachValidation.Run(); OpenBodyBloodValidation.Run(); MarkingGuideValidation.Run();
             OpenWoundAppearanceValidation.Run(); SurgicalOrganAppearanceValidation.Run(); SurgicalActionAppearanceValidation.Run();
-            SurgicalClosureAppearanceValidation.Run(); SurgicalWoundPersistenceValidation.Run();
+            SurgicalClosureAppearanceValidation.Run(); SurgicalWoundPersistenceValidation.Run(); OpenStepVisualsValidation.Run();
             var volume=TissueVolumeFactory.OpenAbdominalWall();
             if(volume.Materials.Length!=5 || string.Join(",",volume.Materials.Select(m=>m.id))!="skin,fat,fascia,muscle,peritoneum")throw new Exception("Open volume material identities missing");
             AuditScene();

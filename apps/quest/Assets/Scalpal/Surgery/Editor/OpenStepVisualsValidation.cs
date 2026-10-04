@@ -23,7 +23,7 @@ namespace Scalpal.Surgery.Editor
     {
         const float Dt = .02f;
         static int checks;
-        static string renders = "";
+        static string renders = "", pixels = "";
         static readonly MethodInfo AutoClose = typeof(OpenSurgerySession).GetMethod("AutoClose", BindingFlags.Instance | BindingFlags.NonPublic);
         static readonly MethodInfo HintLateUpdate = typeof(SurgeryTriggerHint).GetMethod("LateUpdate", BindingFlags.Instance | BindingFlags.NonPublic);
         static readonly MethodInfo LatchLateUpdate = typeof(SurgeryInstrumentLatch).GetMethod("LateUpdate", BindingFlags.Instance | BindingFlags.NonPublic);
@@ -35,7 +35,7 @@ namespace Scalpal.Surgery.Editor
         [MenuItem("Scalpal/Surgery/Validate Step Visuals")]
         public static void Run()
         {
-            checks = 0; renders = "";
+            checks = 0; renders = ""; pixels = "";
             if (!Application.isBatchMode && !EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
                 throw new InvalidOperationException("Open step visuals validation needs to open the native scene; save or discard scene changes first");
             var previous = EditorSceneManager.GetSceneManagerSetup();
@@ -47,7 +47,7 @@ namespace Scalpal.Surgery.Editor
                 var s = new Rig(session, adapter, tissue);
                 s.NewAttempt();
                 Walk(s);
-                Debug.Log($"SCALPAL_OPEN_STEP_VISUALS_OK: {checks} checks; renders={(renders == "" ? "skipped (no graphics device)" : renders)}; "
+                Debug.Log($"SCALPAL_OPEN_STEP_VISUALS_OK: {checks} checks; changedPixels={(pixels == "" ? "skipped (no graphics device)" : pixels)}; "
                     + "actual scene, synthetic tracked poses through the real interaction path, no headset test");
             }
             finally
@@ -156,20 +156,168 @@ namespace Scalpal.Surgery.Editor
             public SurgeryTissueTarget Target(string id) => input.Targets.Single(t => t.tissueId == id);
         }
 
+        static OpenWoundView Wound(Rig s) => s.adapter.Wound;
+        static SurgicalActionAppearance Actions(Rig s) => s.session.GetComponent<SurgicalActionAppearance>();
+        static SurgicalClosureAppearance Closure(Rig s) => s.session.GetComponent<SurgicalClosureAppearance>();
+        static float Width(Rig s, int layer) => Wound(s).LayerWidth(layer) * 1000;
+        static Renderer Organ(Rig s, string id) { s.session.anatomy.TryGetPart(id, out var part); return part ? part.GetComponent<Renderer>() : null; }
+        static float OrganDepthMm(Rig s, string id) => s.wound.InverseTransformPoint(Organ(s, id).bounds.center).z * 1000;
+        static bool WindowOpen() => Shader.GetGlobalFloat("_ScalpalWoundWindow") == 1 && Shader.GetGlobalVector("_ScalpalWoundOpening").w > 0;
+        static bool SlabDrawn(Rig s) { var r = s.volume.Wall.GetComponent<MeshRenderer>(); return r.enabled && !r.forceRenderingOff; }
+
+        // One expected-path step: the visual is absent before, the milestone completes through the real interaction
+        // path, the visual is present after, and (with a graphics device) the learner's view of the body changes.
+        static void Step(Rig s, string label, string milestone, Func<bool> visual, string what, Action act)
+        {
+            Require(!s.Achieved(milestone) && !visual(), $"{label}: before the step, no {what}");
+            var views = Views(s); var before = Render(s, views, null);
+            act();
+            Require(s.Achieved(milestone), $"{label}: {milestone} completes through the real interaction path");
+            Require(visual(), $"{label}: after the step, {what}");
+            var after = Render(s, views, label);
+            if (before != null)
+            {
+                int changed = Enumerable.Range(0, views.Length).Select(i => Changed(before[i], after[i])).Max();
+                pixels += (pixels == "" ? "" : " ") + label + "=" + changed;
+                Require(changed >= 400, $"{label}: the learner's view of the body changes ({changed} px)");
+            }
+        }
+
         static void Walk(Rig s)
         {
-            Render(s, "closed");
-            Mark(s); Require(s.Achieved("mark_incision"), "mark_incision"); s.Step(60); Render(s, "0_mark");
-            Blade(s, .0015f); Blade(s, .010f); Require(s.Achieved("incise_skin"), "incise_skin"); Render(s, "1_skin");
-            Blade(s, .0195f); Require(s.Achieved("open_fascia"), "open_fascia"); Render(s, "2_fascia");
-            Split(s); Require(s.Achieved("split_muscle"), "split_muscle"); Render(s, "3_muscle");
-            Peritoneum(s); Require(s.Achieved("open_peritoneum"), "open_peritoneum"); Render(s, "4_peritoneum");
-            Deliver(s); Require(s.Achieved("deliver_appendix"), "deliver_appendix"); Render(s, "5_delivered");
-            Mesoappendix(s); Require(s.Achieved("divide_mesoappendix"), "divide_mesoappendix"); Render(s, "6_mesoappendix");
-            Base(s); Require(s.Achieved("ligate_base"), "ligate_base"); Render(s, "7_base");
-            Clean(s); Require(s.Achieved("inspect_clean"), $"inspect_clean pool={s.Fact("", "poolMl")} bleeds={s.Fact("", "activeBleeds")} app={s.Fact("appendix", "inspectionMs")} meso={s.Fact("mesoappendix", "inspectionMs")}"); Render(s, "8_clean");
-            s.Step(150); Require(s.Achieved("close") && s.Fact("skin", "closed") == 1, "close"); Render(s, "9_closed");
-            s.NewAttempt(); Render(s, "retry");
+            var closed = Render(s, Views(s), "closed");
+            Require(!WindowOpen() && !Wound(s).RenderingWound && !SlabDrawn(s), "closed patient: intact skin, no wound, no wall slab");
+
+            Step(s, "0_mark", "mark_incision", () => s.adapter.Guide.Ink.enabled && s.adapter.Guide.Ink.positionCount >= 20, "violet ink line on the skin", () => { Mark(s); s.Step(60); });
+
+            Step(s, "1_skin", "incise_skin", () => WindowOpen() && Wound(s).IsLayerVisible(0) && Wound(s).IsLayerVisible(1) && Width(s, 0) > 0 && Width(s, 1) > 0 && Wound(s).IsLayerVisible(2) && Width(s, 2) == 0,
+                "a skin opening along the line with fat walls down to the closed aponeurosis", () => { Blade(s, .0015f); Blade(s, .010f); });
+            Require(!SlabDrawn(s) && s.volume.Wall.GetComponent<MeshCollider>().enabled, "1_skin: the flat physics slab is not drawn (its collider stays live)");
+            Require(!s.adapter.Guide.Ink.gameObject.activeInHierarchy, "1_skin: the ink has become the incision");
+
+            Step(s, "2_fascia", "open_fascia", () => Width(s, 2) > 0 && Wound(s).IsLayerVisible(3) && Width(s, 3) == 0,
+                "the white aponeurosis split along its fibers over red muscle", () => Blade(s, .0195f));
+
+            float skinBefore = Width(s, 0);
+            Step(s, "3_muscle", "split_muscle", () => Width(s, 3) > 0 && Wound(s).IsLayerVisible(4) && Width(s, 4) == 0,
+                "the muscle parted by the retractors over the closed peritoneum", () => Split(s));
+            Require(Width(s, 0) > skinBefore, $"3_muscle: the retracted wound widens ({skinBefore:F1} -> {Width(s, 0):F1} mm)");
+            s.Step(30);
+            Require(Width(s, 3) > 0, "3_muscle: the gap stays open while the latched retractors hold it");
+
+            Step(s, "4_peritoneum", "open_peritoneum", () => Width(s, 4) > 0 && Wound(s).RenderingCavity && Wound(s).BowelVisible, "the peritoneum opened over glistening bowel", () => Peritoneum(s));
+
+            var appendix = Organ(s, "appendix");
+            var block = new MaterialPropertyBlock(); appendix.GetPropertyBlock(block);
+            Require(block.GetColor("_BaseColor") == SurgicalOrganAppearance.Inflamed, "the appendix is drawn inflamed (swollen-red)");
+            Step(s, "5_delivered", "deliver_appendix", () => OrganDepthMm(s, "appendix") < 0 && OrganDepthMm(s, "cecum") < 0,
+                "the inflamed appendix and the caecum lifted above the wound", () => Deliver(s));
+
+            Step(s, "6_mesoappendix", "divide_mesoappendix", () => Actions(s).VisibleTieCount >= 2 && Actions(s).DivisionVisible("mesoappendix") && !Actions(s).OozeVisible,
+                "two ties on the mesoappendix vessels and the cut between them, ooze stopped", () => Mesoappendix(s));
+
+            Step(s, "7_base", "ligate_base", () => Actions(s).VisibleTieCount >= 3 && Actions(s).DivisionVisible("appendix"),
+                "a tie at the base, the stump, and the appendix detached and set aside", () => Base(s));
+
+            float wet = Wound(s).FieldWetness;
+            Require(wet > .3f && Wound(s).FieldBloodVisible, $"before cleaning there is blood in the field (wetness {wet:F2})");
+            Step(s, "8_clean", "inspect_clean", () => Wound(s).FieldWetness < .05f && !Wound(s).FieldBloodVisible && Actions(s).HighlightVisible("appendix") && Actions(s).HighlightVisible("mesoappendix"),
+                "a dry field with the stump and vessels highlighted", () => Clean(s));
+
+            Step(s, "9_closed", "close", () => !WindowOpen() && Closure(s).ClosureVisible && !Wound(s).RenderingWound && Organ(s, "cecum").forceRenderingOff && !Actions(s).HighlightVisible("appendix"),
+                "layers closed and the skin sutured over the returned bowel", () => CloseInLayers(s));
+
+            s.NewAttempt();
+            Require(!WindowOpen() && !Wound(s).RenderingWound && !SlabDrawn(s) && Enumerable.Range(0, 5).All(i => Width(s, i) == 0) && Wound(s).FieldWetness == 0
+                && !Closure(s).ClosureVisible && Actions(s).TieCount == 0 && Actions(s).DivisionCount == 0, "retry: intact skin, no wound, no slab, no ties, divisions or sutures");
+            Require(!Organ(s, "appendix").forceRenderingOff && OrganDepthMm(s, "appendix") > 100, "retry: the organs are back at rest, deep in the abdomen");
+            var retry = Render(s, Views(s), "retry");
+            if (closed != null)
+            {
+                int changed = Enumerable.Range(0, closed.Length).Select(i => Changed(closed[i], retry[i])).Max();
+                pixels += " retry=" + changed;
+                Require(changed < 400, $"retry: the learner sees the closed patient again ({changed} px differ from the first view)");
+            }
+        }
+        // Auto-close, one frame at a time: each layer closes in order and is drawn closed as it does.
+        static void CloseInLayers(Rig s)
+        {
+            string[] order = { "peritoneum", "muscle", "fascia", "fat", "skin" };
+            int next = 0;
+            for (int frame = 0; frame < 200 && next < order.Length; frame++)
+            {
+                s.Step();
+                while (next < order.Length && s.Fact(order[next], "closed") == 1)
+                {
+                    string layer = order[next];
+                    Require(order.Skip(next + 1).All(l => s.Fact(l, "closed") == 0), $"9_closed: {layer} closes before the layers above it");
+                    int index = Array.IndexOf(Wound(s).layerIds, layer);
+                    Require(Width(s, index) == 0, $"9_closed: the closed {layer} is drawn closed");
+                    if (layer == "peritoneum") Require(!Wound(s).RenderingCavity, "9_closed: the closed peritoneum hides the cavity and bowel");
+                    if (layer != "skin" && layer != "peritoneum") Require(Wound(s).IsLayerVisible(index), $"9_closed: the closed {layer} is the wound's floor");
+                    next++;
+                }
+            }
+            Require(next == order.Length, "9_closed: every layer closed");
+        }
+
+        // Learner views from the patient's right: standing (wide), close over the wound, leaning over it, and at the
+        // delivered organs. Camera poses are fixed before a step so before/after compare the same view.
+        static (string name, Vector3 eye, Vector3 target, float fov)[] Views(Rig s)
+        {
+            Vector3 organs = s.wound.position - s.wound.forward * .02f;
+            var a = s.input.Targets.FirstOrDefault(t => t.tissueId == "appendix" && t.HasBase); var m = s.input.Targets.FirstOrDefault(t => t.tissueId == "mesoappendix" && t.HasBase);
+            if (a && m && s.wound.InverseTransformPoint(a.basePoint.position).z < 0) organs = (a.basePoint.position + m.basePoint.position) * .5f;
+            return new[] {
+                ("learner", s.Eye, s.wound.position, 50f),
+                ("close", s.wound.position + Vector3.up * .22f - s.frame.right * .14f - s.frame.forward * .05f, s.wound.position, 40f),
+                ("over", s.wound.position + Vector3.up * .32f - s.frame.right * .06f, s.wound.position, 34f),
+                ("organs", organs + Vector3.up * .16f - s.frame.right * .09f + s.frame.forward * .03f, organs, 34f) };
+        }
+        // Renders the body as the learner sees it, without the tools (latched or parked) and the tool-tip hint, so a
+        // difference is the body's. Null without a graphics device (-nographics): pixel checks are then skipped.
+        static Color32[][] Render(Rig s, (string name, Vector3 eye, Vector3 target, float fov)[] views, string label)
+        {
+            if (SystemInfo.graphicsDeviceType == UnityEngine.Rendering.GraphicsDeviceType.Null) return null;
+            string folder = Environment.GetEnvironmentVariable("SCALPAL_STEP_RENDERS");
+            var hint = s.session.GetComponent<SurgeryTriggerHint>(); if (hint) hint.Hide();
+            var tools = s.session.workbench.tools.Where(t => t).SelectMany(t => t.GetComponentsInChildren<Renderer>(true)).Where(r => !r.forceRenderingOff).ToArray();
+            foreach (var r in tools) r.forceRenderingOff = true;
+            var result = new Color32[views.Length][];
+            try
+            {
+                for (int i = 0; i < views.Length; i++)
+                {
+                    var go = new GameObject("OpenStepVisualsCamera"); var camera = go.AddComponent<Camera>();
+                    camera.transform.position = views[i].eye; camera.transform.LookAt(views[i].target, Vector3.up);
+                    camera.fieldOfView = views[i].fov; camera.nearClipPlane = .01f; camera.clearFlags = CameraClearFlags.SolidColor; camera.backgroundColor = Color.black;
+                    var target = new RenderTexture(960, 720, 24) { antiAliasing = 4 }; camera.targetTexture = target;
+                    var previous = RenderTexture.active; Texture2D image = null;
+                    try
+                    {
+                        camera.Render(); RenderTexture.active = target;
+                        image = new Texture2D(960, 720, TextureFormat.RGB24, false); image.ReadPixels(new Rect(0, 0, 960, 720), 0, 0); image.Apply();
+                        if (label != null && !string.IsNullOrEmpty(folder)) File.WriteAllBytes(Path.Combine(folder, "step_" + label + "_" + views[i].name + ".png"), image.EncodeToPNG());
+                        result[i] = image.GetPixels32();
+                    }
+                    finally
+                    {
+                        RenderTexture.active = previous; camera.targetTexture = null;
+                        if (image) UnityEngine.Object.DestroyImmediate(image);
+                        target.Release(); UnityEngine.Object.DestroyImmediate(target); UnityEngine.Object.DestroyImmediate(go);
+                    }
+                }
+            }
+            finally { foreach (var r in tools) if (r) r.forceRenderingOff = false; }
+            if (label != null) renders += (renders == "" ? "" : ",") + label;
+            return result;
+        }
+        static int Changed(Color32[] a, Color32[] b)
+        {
+            int count = 0;
+            for (int i = 0; i < a.Length; i++)
+                if (Mathf.Max(Mathf.Abs(a[i].r - b[i].r), Mathf.Abs(a[i].g - b[i].g), Mathf.Abs(a[i].b - b[i].b)) > 24) count++;
+            return count;
         }
 
         // Step 0: the marker along the dotted guide on the visible skin.
@@ -219,7 +367,7 @@ namespace Scalpal.Surgery.Editor
             var forceps = s.Tool("toothed_forceps"); s.Hold(forceps);
             Vector3 grip = new Vector3(.01f, 0, .027f); s.PlaceLocal(forceps, grip); s.Step(6);
             for (int i = 1; i <= 15; i++) { s.PlaceLocal(forceps, grip - Vector3.forward * (i * .001f)); s.Step(); }
-            s.Step(10); Render(s,"4_tent_before_nick");
+            s.Step(10); Render(s, Views(s), "4_tent_before_nick");
             var held = s.records.Last(r => r.action.verb == "grasp" && r.action.tissueId == "peritoneum");
             Vector3 membrane = s.wound.InverseTransformPoint(s.frame.TransformPoint(new Vector3(held.action.position.x, held.action.position.y, held.action.position.z)));
             Require(s.volume.TryContactLayer("peritoneum", s.wound.TransformPoint(new Vector3(membrane.x - .008f, 0, membrane.z)), .008f, out var surface), "lifted membrane reachable");
@@ -255,8 +403,10 @@ namespace Scalpal.Surgery.Editor
         static void Mesoappendix(Rig s)
         {
             Commit(s, s.Tool("hemostat", 0), "mesoappendix", 5, "clamp");
-            Commit(s, s.Tool("hemostat", 1), "mesoappendix", 15, "clamp"); Render(s,"6_clamped_before_cut");
-            Cut(s, s.Tool("metzenbaum_scissors"), "mesoappendix", 10); Render(s,"6_divided_before_ties");
+            Commit(s, s.Tool("hemostat", 1), "mesoappendix", 15, "clamp"); Render(s, Views(s), "6_clamped_before_cut");
+            Require(!Actions(s).DivisionVisible("mesoappendix") && Actions(s).VisibleTieCount == 0 && !Actions(s).OozeVisible, "6_mesoappendix: clamped, nothing divided or tied yet");
+            Cut(s, s.Tool("metzenbaum_scissors"), "mesoappendix", 10); Render(s, Views(s), "6_divided_before_ties");
+            Require(Actions(s).DivisionVisible("mesoappendix") && Actions(s).OozeVisible, "6_mesoappendix: the cut between the clamps oozes until it is tied");
             Commit(s, s.Tool("suture_tie"), "mesoappendix", 5, "tie");
             Commit(s, s.Tool("suture_tie"), "mesoappendix", 15, "tie");
         }
@@ -264,7 +414,7 @@ namespace Scalpal.Surgery.Editor
         {
             Require(s.input.Choose("appendix", "true_base"), "true base decision accepted");
             Commit(s, s.Tool("right_angle_clamp"), "appendix", 3, "clamp");
-            Commit(s, s.Tool("suture_tie"), "appendix", 3, "tie"); Render(s,"7_ligated_before_cut");
+            Commit(s, s.Tool("suture_tie"), "appendix", 3, "tie"); Render(s, Views(s), "7_ligated_before_cut");
             Commit(s, s.Tool("right_angle_clamp"), "appendix", 8, "clamp");
             Cut(s, s.Tool("metzenbaum_scissors"), "appendix", 4);
         }
@@ -328,35 +478,5 @@ namespace Scalpal.Surgery.Editor
             return false;
         }
 
-        // Learner-eye renders at the patient's right side (wide) and over the wound (close).
-        static Color32[] Render(Rig s, string name)
-        {
-            if (SystemInfo.graphicsDeviceType == UnityEngine.Rendering.GraphicsDeviceType.Null) return null;
-            string folder = Environment.GetEnvironmentVariable("SCALPAL_STEP_RENDERS");
-            Color32[] close = null;
-            foreach (var (view, eye, fov) in new[] { ("learner", s.Eye, 50f), ("close", s.wound.position + Vector3.up * .22f - s.frame.right * .14f - s.frame.forward * .05f, 40f) })
-            {
-                var go = new GameObject("OpenStepVisualsCamera"); var camera = go.AddComponent<Camera>();
-                camera.transform.position = eye; camera.transform.LookAt(s.wound.position, Vector3.up);
-                camera.fieldOfView = fov; camera.nearClipPlane = .01f; camera.clearFlags = CameraClearFlags.SolidColor; camera.backgroundColor = Color.black;
-                var target = new RenderTexture(960, 720, 24) { antiAliasing = 4 }; camera.targetTexture = target;
-                var previous = RenderTexture.active; Texture2D image = null;
-                try
-                {
-                    camera.Render(); RenderTexture.active = target;
-                    image = new Texture2D(960, 720, TextureFormat.RGB24, false); image.ReadPixels(new Rect(0, 0, 960, 720), 0, 0); image.Apply();
-                    if (!string.IsNullOrEmpty(folder)) File.WriteAllBytes(Path.Combine(folder, "step_" + name + "_" + view + ".png"), image.EncodeToPNG());
-                    if (view == "close") close = image.GetPixels32();
-                }
-                finally
-                {
-                    RenderTexture.active = previous; camera.targetTexture = null;
-                    if (image) UnityEngine.Object.DestroyImmediate(image);
-                    target.Release(); UnityEngine.Object.DestroyImmediate(target); UnityEngine.Object.DestroyImmediate(go);
-                }
-            }
-            renders += (renders == "" ? "" : ",") + name;
-            return close;
-        }
     }
 }
