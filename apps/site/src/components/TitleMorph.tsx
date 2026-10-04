@@ -12,17 +12,17 @@ const MORPH = 800; // ms, mark dithers into the text
 const CELL = 3; // dither cell, CSS px
 const PAD = 40; // canvas bleed around the heading, CSS px
 
-export function TitleMorph({ text, onDone }: { text: string; onDone: () => void }) {
+export function TitleMorph({ text, onDone, instant = false }: { text: string; onDone: () => void; instant?: boolean }) {
   const h1 = useRef<HTMLHeadingElement>(null);
   const textRef = useRef<HTMLSpanElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [done, setDone] = useState(false);
+  const [done, setDone] = useState(instant);
   const doneRef = useRef(onDone);
   doneRef.current = onDone;
 
   useEffect(() => {
     const heading = h1.current, span = textRef.current, canvas = canvasRef.current;
-    if (!heading || !span || !canvas) return;
+    if (!heading || !span || !canvas || instant) return;
     let raf = 0;
     let cancelled = false;
     const finish = () => {
@@ -143,7 +143,7 @@ export function TitleMorph({ text, onDone }: { text: string; onDone: () => void 
       cancelled = true;
       cancelAnimationFrame(raf);
     };
-  }, [text]);
+  }, [text, instant]);
 
   return (
     <h1 ref={h1} className="display relative">

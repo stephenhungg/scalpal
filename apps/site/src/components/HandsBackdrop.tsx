@@ -7,7 +7,7 @@ import { AdamLayer } from "./AdamLayer";
 export function HandsBackdrop() {
   return (
     <div aria-hidden className="pointer-events-none fixed inset-0 z-0">
-      <AdamLayer introSpeed={60} holdAfterTouch shiftY={0.12} />
+      <AdamLayer holdAfterTouch startTouched shiftY={0.12} />
       <div className="absolute inset-0 bg-black/80" />
     </div>
   );

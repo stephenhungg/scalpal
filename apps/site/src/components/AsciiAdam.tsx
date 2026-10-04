@@ -255,9 +255,9 @@ const CLOSED = 6.8 // arms fully at their touching pose
 // once held, the arms breathe: a slow bob (out of phase) and a slight ease apart and back
 const BREATH = { period: 3.4, bob: 0.006, part: 0.007, easeIn: 1.2 }
 
-type Props = { playing?: boolean; time?: number; onTouch?: () => void; introSpeed?: number; holdAfterTouch?: boolean; shiftY?: number }
+type Props = { playing?: boolean; time?: number; onTouch?: () => void; introSpeed?: number; holdAfterTouch?: boolean; shiftY?: number; startTouched?: boolean }
 
-export function AsciiAdam({ playing = true, time, onTouch, introSpeed = 1, holdAfterTouch = false, shiftY = 0 }: Props) {
+export function AsciiAdam({ playing = true, time, onTouch, introSpeed = 1, holdAfterTouch = false, shiftY = 0, startTouched = false }: Props) {
   const ref = useRef<HTMLCanvasElement>(null)
   const playingRef = useRef(playing)
   const onTouchRef = useRef(onTouch)
@@ -384,8 +384,9 @@ export function AsciiAdam({ playing = true, time, onTouch, introSpeed = 1, holdA
       const ro = new ResizeObserver(resize)
       ro.observe(canvas)
 
-      let clock = 0
-      let touched = false
+      // startTouched: open already at the touching pose (no reach, no onTouch)
+      let clock = startTouched ? CLOSED : 0
+      let touched = startTouched
       let held = 0 // seconds since the hands settled together
       let last = performance.now()
       let drawn = false

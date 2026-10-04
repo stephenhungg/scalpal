@@ -10,7 +10,7 @@ export const WORD_DURATION = 0.5;
 export const WORD_EASE = [0.215, 0.61, 0.355, 1] as const;
 export const FIRST_WORD_DELAY = 0.2;
 
-export function BlurWords({ text, start = 0, className = "" }: { text: string; start?: number; className?: string }) {
+export function BlurWords({ text, start = 0, className = "", instant = false }: { text: string; start?: number; className?: string; instant?: boolean }) {
   const words = text.split(" ");
   return (
     <span className={className}>
@@ -18,7 +18,7 @@ export function BlurWords({ text, start = 0, className = "" }: { text: string; s
         <span key={i}>
           <motion.span
             className="inline-block"
-            initial={{ opacity: 0.001, filter: "blur(5px)" }}
+            initial={instant ? false : { opacity: 0.001, filter: "blur(5px)" }}
             animate={{ opacity: 1, filter: "blur(0px)" }}
             transition={{ duration: WORD_DURATION, ease: WORD_EASE, delay: FIRST_WORD_DELAY + (start + i) * WORD_STAGGER }}
           >
