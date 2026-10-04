@@ -10,6 +10,7 @@ import { explainStructure, runTool } from "./coach-tools.js";
 import type { Frame, FrameMark, SceneVision } from "./scene-vision.js";
 import type { FrameDetector } from "./frame-detector.js";
 import { ReflexAudio } from "./reflex.js";
+import { openBodySimulation, restampForBody } from "./open-body-sim.js";
 import { NO_REALTIME, type RealtimeBridge, type RealtimeSink } from "./realtime-bridge.js";
 import { buildSystemPrompt, firstMessage } from "./coach-prompt.js";
 import { createContextFeed, type ContextFeed } from "./jarvis/context-feed.js";
@@ -462,16 +463,18 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
     const { kind } = await body(c);
     let events: CoachEvent[] = [];
     const stepResults: ReturnType<CoachSession["handle"]>[] = [];
-    switch (kind) {
+    const open = typeof kind === "string" ? openBodySimulation(s, kind) : null;
+    if (open) events = open;
+    else switch (kind) {
       case "correct_action": {
-        const e = s.nextCorrectEvent();
+        const e = restampForBody(s, s.nextCorrectEvent());
         events = e ? [e] : [];
         break;
       }
       case "complete_step": {
         const stepId = s.engine.current?.id;
         for (let i = 0; i < 20 && stepId && s.engine.current?.id === stepId; i++) {
-          const e = s.nextCorrectEvent();
+          const e = restampForBody(s, s.nextCorrectEvent());
           if (!e) break;
           stepResults.push(s.handle(e));
         }

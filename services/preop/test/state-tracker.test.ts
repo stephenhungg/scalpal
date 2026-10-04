@@ -73,3 +73,22 @@ describe("uncontrolled bleeding", () => {
     expect(s.snapshot().timeline.map((t) => t.text).join(" ")).toMatch(/uncontrolled for 31 s/);
   });
 });
+
+describe("laptop sim buttons on open surgery", () => {
+  it("drive the real body reducer through guardrails, bleeding and every milestone", async () => {
+    const { createApp } = await import("../src/app.js");
+    const { fixtureClient } = await import("./helpers.js");
+    const app = createApp({ client: fixtureClient(), now: () => NOW, coachTickMs: 0 });
+    const req = async (route: string, body: unknown) => (await (await app.request(route, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })).json()) as Record<string, any>;
+    const sid = (await req("/coach/sessions", { patientId: "patient-demo-multi-source" })).sessionId;
+    const sim = (kind: string) => req(`/coach/sessions/${sid}/simulate`, { kind });
+    expect((await sim("look_at_danger")).alerts.map((a: any) => a.kind)).toContain("danger_focus");
+    for (let i = 0; i < 3; i++) await sim("complete_step");
+    const cut = await sim("mistake"); // blade on muscle at split_muscle
+    expect(cut.alerts.map((a: any) => a.kind)).toEqual(expect.arrayContaining(["mistake", "bleeding"]));
+    expect((await sim("stop_bleed")).alerts.map((a: any) => a.kind)).toContain("bleeding_controlled");
+    let last: Record<string, any> = {};
+    for (let i = 0; i < 12 && last.snapshot?.status !== "completed"; i++) last = await sim("complete_step");
+    expect(last.snapshot.status).toBe("completed");
+  });
+});
