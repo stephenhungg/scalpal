@@ -6,7 +6,7 @@ Updated October 3, 2026 from the user's explicit direction: support a real recli
 
 ## Shared Core
 
-Use one registration/presentation boundary, with a common patient/anatomy root, organ IDs, tool IDs, authored exercise rules, Jarvis action validation and attempt state. A mode chooses the source of the patient transform and background; it does not create another voice agent or duplicate the exercise engine.
+Use one registration/presentation boundary, with a common patient/anatomy root, organ IDs, tool IDs, authored exercise rules, Scalpal action validation and attempt state. A mode chooses the source of the patient transform and background; it does not create another voice agent or duplicate the exercise engine.
 
 | Concern | Mixed reality | Full VR |
 | --- | --- | --- |
@@ -37,7 +37,7 @@ The prepared CC0 room and mannequin are available in `Assets/Scalpal/Environment
 
 The native workbench supplies the XR rig and shared tool prefabs for an authored patch test. Next integrate a selected anatomy/case assembly. Validate that the anatomy source frame fits the mannequin/table; Matthew's Z-Anatomy layers and separate HRA detail models are not automatically interchangeable. Existing authored seam cutting remains a practice-patch effect rather than arbitrary organ slicing.
 
-At a mode transition, release held tools, invalidate the previous patient fit and rebind the same exercise to the new patient root before accepting another action. Record the presentation mode in session context for the companion and Jarvis; field names and migration are proposed until agreed with Nathan and Matthew.
+At a mode transition, release held tools, invalidate the previous patient fit and rebind the same exercise to the new patient root before accepting another action. Record the presentation mode in session context for the companion and Scalpal; field names and migration are proposed until agreed with Nathan and Matthew.
 
 ## Recording and Robotics
 
@@ -45,4 +45,4 @@ Raw passthrough contains the physical room, hands and participant, not virtual o
 
 ## Next Bounded Checks
 
-First make the existing tools usable in the native XR rig inside the virtual room. Separately validate an accepted real table surface and visible body-fit markers on the actual reclining participant. Only connect the two-mode selector after both use the same registration/action validity gate. Then rehearse the same authored exercise with Jarvis in each mode. Headset frame time, body alignment error, stereo rendering and registration recovery remain unmeasured for this new scene.
+First make the existing tools usable in the native XR rig inside the virtual room. Separately validate an accepted real table surface and visible body-fit markers on the actual reclining participant. Only connect the two-mode selector after both use the same registration/action validity gate. Then rehearse the same authored exercise with Scalpal in each mode. Headset frame time, body alignment error, stereo rendering and registration recovery remain unmeasured for this new scene.

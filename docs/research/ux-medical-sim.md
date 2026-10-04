@@ -1,6 +1,6 @@
 # Scalpal: UX and learning-design research for the VR med-sim flow
 
-Date: 2026-10-03. Scope: the full Scalpal loop on Quest 3S (pick a patient, VR clinic history and exam with orders, present to the "Jarvis" attending, laparoscopic OR with voice coaching, robot-hand replay, recap).
+Date: 2026-10-03. Scope: the full Scalpal loop on Quest 3S (pick a patient, VR clinic history and exam with orders, present to the "Scalpal" attending, laparoscopic OR with voice coaching, robot-hand replay, recap).
 
 Labels used below:
 - **[S]** means the point is directly supported by the cited source.
@@ -119,10 +119,10 @@ Caveats:
 - **[I]** Time pressure: use a soft clock rather than a hard fail.
   - Clinic target is about 6–8 minutes, shorter than an OSCE because this is a demo.
   - At about 75% of the budget, deliver an in-world cue (the patient says "it's getting worse", or a nurse knocks).
-  - At 100%, Jarvis prompts "ready to present?" Never hard-fail.
+  - At 100%, Scalpal prompts "ready to present?" Never hard-fail.
 - **[I]** Hints, escalating in 3 tiers, and each one used is logged on the scorecard:
   - patient-voiced nudge;
-  - Jarvis Socratic question;
+  - Scalpal Socratic question;
   - explicit suggestion.
 
 ---
@@ -154,7 +154,7 @@ Caveats:
     - https://hamming.ai/resources/voice-ai-latency-whats-fast-whats-slow-how-to-fix-it
 - **[I] Targets for Scalpal**
   - First audible patient response under 1.0 s after end of speech is good. Under 1.5 s is acceptable. Above 2.5 s, play a filler.
-  - Jarvis can be slower (up to about 2 s) because an attending "thinking" is socially plausible.
+  - Scalpal can be slower (up to about 2 s) because an attending "thinking" is socially plausible.
   - Stream TTS sentence by sentence.
 
 ### Showing "thinking": use behaviour, not icons
@@ -187,7 +187,7 @@ Caveats:
   - Earcon when the turn is committed.
 
 ### Barge-in
-- **[I]** Allow the learner to interrupt the patient and Jarvis.
+- **[I]** Allow the learner to interrupt the patient and Scalpal.
   - On press, or on VAD speech of 300 ms or more, cut TTS within about 200 ms. This fixes the wind-down latency failure from the CHI paper.
   - Ignore backchannels ("ok", "mm-hm").
 - **[I]** Do not allow barge-in on safety-critical OR coaching lines, or replay them after the interruption.
@@ -206,7 +206,7 @@ Caveats:
   - https://developers.meta.com/horizon/resources/vrc-quest-accessibility-2/
 - **[I] Patterns**
   - Show the learner's ASR text immediately (partials, greyed), then the patient reply.
-  - Label every caption with the speaker's name and colour (Patient / Jarvis / Coach).
+  - Label every caption with the speaker's name and colour (Patient / Scalpal / Coach).
   - Keep a scrollable transcript on a wrist or clipboard panel. It doubles as the source for the presentation and debrief.
 
 ### Recovering from misrecognition
@@ -230,10 +230,10 @@ Caveats:
 ### Switching roles (patient / attending / coach)
 - **[I]** One role per room or scene, if possible:
   - Patient exists only in the clinic.
-  - Jarvis is a distinct avatar or voice in the clinic doorway or a "presentation" space.
+  - Scalpal is a distinct avatar or voice in the clinic doorway or a "presentation" space.
   - Coach exists only in the OR.
-- **[I]** Give each role its own voice timbre, caption colour, name tag and spatial audio position. Patient audio comes from the patient's mouth. Jarvis is diegetic, not a narrator voice in your head.
-- **[I]** Make handoffs explicit with a scene transition ("Jarvis walks in: 'Okay, present your patient.'").
+- **[I]** Give each role its own voice timbre, caption colour, name tag and spatial audio position. Patient audio comes from the patient's mouth. Scalpal is diegetic, not a narrator voice in your head.
+- **[I]** Make handoffs explicit with a scene transition ("Scalpal walks in: 'Okay, present your patient.'").
 - **[I]** Address the active role only. The talk button routes to whoever is "in focus" (gaze or proximity), and the speaking role's name pulses.
 - **[I]** Never let two LLM roles speak at once.
 
@@ -263,8 +263,8 @@ Caveats:
 ### Recommendation for Scalpal [I]
 Let the learner commit to their own diagnosis and plan. Do not silently correct it. Then branch with consequences, but always end in the correct OR so the demo loop finishes.
 
-1. Jarvis records exactly what the learner said: diagnosis, differential, procedure, urgency. The scorecard grades it then and there; correct gets green, wrong gets red.
-2. **If the plan is wrong**, Jarvis uses an advocacy-inquiry line, for example: "I heard you say gastroenteritis and outpatient follow-up. I'm worried because of the RLQ rebound and WBC of 15. What made you lean away from appendicitis?" The learner gets **one chance to revise**, which is logged as "revised after prompt".
+1. Scalpal records exactly what the learner said: diagnosis, differential, procedure, urgency. The scorecard grades it then and there; correct gets green, wrong gets red.
+2. **If the plan is wrong**, Scalpal uses an advocacy-inquiry line, for example: "I heard you say gastroenteritis and outpatient follow-up. I'm worried because of the RLQ rebound and WBC of 15. What made you lean away from appendicitis?" The learner gets **one chance to revise**, which is logged as "revised after prompt".
 3. **If the plan is still wrong**, show a short consequence beat: a time-skip card ("6 hours later… perforated, septic") with vitals worsening. Then: "The surgical team takes the case — you'll scrub in." The learner proceeds to the correct procedure with a "case escalated" flag. The debrief treats the miss as the main learning point.
 4. Never send the learner into the *wrong* surgery. There's no authored content for it, and it teaches a false procedure. Spend the consequence on the patient outcome instead.
 5. For urgency (for example, choosing elective colectomy for perforated diverticulitis), use the same pattern with a shorter consequence card.
@@ -380,7 +380,7 @@ This keeps productive failure (commit, feel the consequence, reflect) without a 
 
 ### Scorecard design [I]
 - **Two separate scores**, never blended into one number:
-  - **Clinical Reasoning** (clinic + Jarvis).
+  - **Clinical Reasoning** (clinic + Scalpal).
   - **Procedural Skill** (OR).
   - Wrong diagnosis followed by good surgery should read clearly as "great hands, missed diagnosis."
 - **Clinical Reasoning section**
@@ -397,10 +397,10 @@ This keeps productive failure (commit, feel the consequence, reflect) without a 
   - Errors (by type).
   - Decision-point answers.
 - **Recap flow (PEARLS-lite, about 60–90 s)**
-  1. Jarvis asks one Reaction question by voice ("How did that feel?"). Don't score it.
+  1. Scalpal asks one Reaction question by voice ("How did that feel?"). Don't score it.
   2. One self-assessment question ("One thing you'd do differently?").
   3. Then reveal the scorecard.
-  4. Jarvis gives at most 2 strengths and 2 deltas using advocacy-inquiry phrasing, generated by the LLM from the **deterministic** event log so it can't hallucinate events.
+  4. Scalpal gives at most 2 strengths and 2 deltas using advocacy-inquiry phrasing, generated by the LLM from the **deterministic** event log so it can't hallucinate events.
   5. End with "one take-away" and the robot replay highlight.
 - **[I]** Use the robot-hand replay as the "description" phase for the OR: scrub to error timestamps, marked on the timeline.
 
@@ -426,7 +426,7 @@ This keeps productive failure (commit, feel the consequence, reflect) without a 
 | Patient pick + prebrief card | 30 s | 10 s (preselect "Appendicitis — Maya, 24") |
 | Clinic history (voice) | 3–4 min | 60–90 s (3–4 key questions; chips available) |
 | Exam + orders | 1–2 min | 30 s (one-tap "focused abdominal exam" + "CBC, CT") |
-| Present to Jarvis | 1 min | 30 s |
+| Present to Scalpal | 1 min | 30 s |
 | Scorecard (reasoning) | 30 s | 15 s |
 | OR onboarding | 60–90 s | 20 s (skip if done) |
 | Surgery | 4–6 min | 90 s (2–3 key steps + 1 decision point; remaining steps auto-complete) |

@@ -89,7 +89,7 @@ describe("encounter page flow", () => {
     expect(h.el("flow-error-text")!.textContent).toMatch(/unreachable/);
   });
 
-  it("never connects Jarvis when the attending handoff fails", async () => {
+  it("never connects Scalpal when the attending handoff fails", async () => {
     const h = harness();
     await h.flow.start("multi-source-overlap");
     h.faults.push({ method: "POST", path: /\/attending$/, result: serverError(409, "invalid_phase") });
@@ -99,7 +99,7 @@ describe("encounter page flow", () => {
     expect(await h.flow.retry()).toBe(true);
     expect(h.started).toHaveLength(2);
     expect(h.started[1]).toMatchObject({ agentId: "agent-jarvis" });
-    expect(h.promptOf(1)).toMatch(/You are Jarvis, the attending surgeon/);
+    expect(h.promptOf(1)).toMatch(/You are Scalpal, the attending surgeon/);
   });
 
   it("refuses to connect a voice when the server returns no prompt", async () => {

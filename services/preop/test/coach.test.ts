@@ -206,7 +206,7 @@ describe("coach routes", () => {
     expect(created.status).toBe(201);
     const sid = created.json.sessionId as string;
     expect(created.json.systemPrompt).toMatch(/Laparoscopic cholecystectomy/);
-    expect(created.json.firstMessage).toMatch(/Jarvis here/);
+    expect(created.json.firstMessage).toMatch(/Scalpal here/);
 
     const ev = await call("POST", `/coach/sessions/${sid}/events`, { event: { type: "place_port", portId: "umbilical" } });
     expect(ev.json.alerts[0].kind).toBe("step_complete");
@@ -271,7 +271,7 @@ describe("coach routes", () => {
     expect((await call("GET", "/coach/sessions/coach-doesnotexist")).status).toBe(404);
   });
 
-  it("explains how to configure Jarvis when no agent is set", async () => {
+  it("explains how to configure Scalpal when no agent is set", async () => {
     expect((await call("GET", "/jarvis/connection")).status).toBe(503);
     const page = await app.request("/jarvis");
     expect(page.status).toBe(200);
@@ -425,7 +425,7 @@ describe("headset authority and retries", () => {
     expect(r.snapshot.completedCount).toBe(0);
   });
 
-  it("flags a headset that is behind and tells Jarvis to trust it", async () => {
+  it("flags a headset that is behind and tells Scalpal to trust it", async () => {
     const sid = await start();
     await post(`/coach/sessions/${sid}/simulate`, { kind: "complete_step" });
     await post(`/coach/sessions/${sid}/simulate`, { kind: "complete_step" });
@@ -462,7 +462,7 @@ describe("bleeding and checkpoints", () => {
     expect(keys.some((k) => k === "bleeding.cystic_artery")).toBe(false);
   });
 
-  it("checkpoints each completed step with mistakes, hints, and blood loss for Jarvis to refer back to", () => {
+  it("checkpoints each completed step with mistakes, hints, and blood loss for Scalpal to refer back to", () => {
     const s = theo();
     s.handle(s.nextCorrectEvent()!); // umbilical access
     s.handle({ type: "touch", structureId: "urinary_bladder", instrumentId: "trocar_5mm" }); // mistake on ports step

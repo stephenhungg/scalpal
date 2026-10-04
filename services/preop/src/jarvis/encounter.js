@@ -1,5 +1,5 @@
 // Pre-op encounter on the laptop page: 1-on-1 patient interview (the patient agent, in that patient's
-// own voice), then a case presentation to Jarvis as attending, then the scorecard. All facts and scoring
+// own voice), then a case presentation to Scalpal as attending, then the scorecard. All facts and scoring
 // live on the server; this file only connects voices and renders what the server returns.
 //
 // Failures are shown with a Retry button and never skip ahead: only "this patient has no authored
@@ -83,7 +83,7 @@ export function createEncounterFlow({
     if (conn.json.role !== role || !conn.json.prompt || !conn.json.firstMessage) {
       return fail(`The service did not return the ${role} prompt, so the voice was not connected.`, () => connect(encounterId, role));
     }
-    const speakerLabel = role === "patient" ? enc.speakerName.split(" ")[0] : "Jarvis";
+    const speakerLabel = role === "patient" ? enc.speakerName.split(" ")[0] : "Scalpal";
     const tools = role === "patient" ? toolsFor(encounterId, ["answer", "examine", "order_test"]) : toolsFor(encounterId, ["get_encounter_summary", "record_assessment"]);
     try {
       await getMicrophone();

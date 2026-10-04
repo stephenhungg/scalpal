@@ -1,6 +1,6 @@
 # Unity Instrument Runtime
 
-This package is a functional virtual-tool prototype for Unity 6000.0.66f2. It is separate from Matthew's feature branch and does not change his exercise state machine or Jarvis service. All fifteen prefab IDs match Matthew's current catalog, including `scalpel`, added upstream at `a629fdf`.
+This package is a functional virtual-tool prototype for Unity 6000.0.66f2. It is separate from Matthew's feature branch and does not change his exercise state machine or Scalpal service. All fifteen prefab IDs match Matthew's current catalog, including `scalpel`, added upstream at `a629fdf`.
 
 ## Build and Open
 
@@ -55,7 +55,7 @@ Subscribe to `InstrumentBehaviour.ActionApplied` for a structured `InstrumentAct
 - the Unity-world interaction point in meters;
 - `unityMonotonicSeconds`, from `Time.realtimeSinceStartupAsDouble`.
 
-These events report a simulated scene effect, not an automatically completed surgery step or score. The exercise owner must validate instrument/target/step and current attempt before feeding an accepted event to Matthew's runner, Jarvis context, or Nathan's shared session state. Session/attempt/exercise versions are deliberately not guessed in this standalone package.
+These events report a simulated scene effect, not an automatically completed surgery step or score. The exercise owner must validate instrument/target/step and current attempt before feeding an accepted event to Matthew's runner, Scalpal context, or Nathan's shared session state. Session/attempt/exercise versions are deliberately not guessed in this standalone package.
 
 The timestamp uses the Unity monotonic clock. It is not a camera acquisition timestamp or synchronized video time; capture integration must record the clock relationship and uncertainty separately.
 

@@ -4,15 +4,15 @@ Decided by Matthew on October 4, 2026 after a Q&A with the team's coding agents.
 
 ## The Run
 
-**Launch → explore patients → patient interview (office) → interview scorecard → operating room (AR or VR): Jarvis briefing and surgery flythrough → surgery → recap (success or death) → robot hand replay.**
+**Launch → explore patients → patient interview (office) → interview scorecard → operating room (AR or VR): Scalpal briefing and surgery flythrough → surgery → recap (success or death) → robot hand replay.**
 
-1. **Office: patient interview.** A 1:1 conversation with the patient voice, then rounds of four "what do you do next?" choices (tap or say it). Jarvis is not present. Spec: [office interview](office-interview.md).
+1. **Office: patient interview.** A 1:1 conversation with the patient voice, then rounds of four "what do you do next?" choices (tap or say it). Scalpal is not present. Spec: [office interview](office-interview.md).
 2. **Interview scorecard.** On screen only, per round: your pick, the best pick, why.
 3. **Operating room entry.**
-   - Jarvis connects for the first time and runs the Time-Out.
+   - Scalpal connects for the first time and runs the Time-Out.
    - He breaks down the surgery over a short Blender flythrough: a transparent body with the organs in place, then a motion zoom into each step of the procedure.
    - Then the case starts.
-4. **Surgery.** Full freedom (below). Jarvis coaches live.
+4. **Surgery.** Full freedom (below). Scalpal coaches live.
 5. **End.** The case ends when the goals are reached or the patient dies. The recap shows what happened and why.
 6. **Robot replay.** The recorded controller motion drives the simulated robot hand.
 
@@ -48,7 +48,7 @@ Decided by Matthew on October 4, 2026 after a Q&A with the team's coding agents.
   - Bleed rate grows with incision size and the vessel or region injured.
   - Loss drives heart rate, blood pressure, then SpO2 and breathing, following ATLS hemorrhage classes.
   - The timing is **accelerated for the demo**: a large uncontrolled bleed turns dangerous in about 30 to 90 s.
-- **Death:** crossing the death threshold (critical blood loss or a catastrophic region) flatlines the monitor. Jarvis reacts and the case ends as failed.
+- **Death:** crossing the death threshold (critical blood loss or a catastrophic region) flatlines the monitor. Scalpal reacts and the case ends as failed.
 - **Honesty rule:**
   - The volunteer's real vitals never react to the virtual surgery.
   - Displays show "baseline (measured)" plus "simulated change". Simulated values are never presented as the volunteer's.
@@ -76,9 +76,9 @@ The coach service replays the log through the same reducer. From it the tracker 
 
 Spec: [surgery state](surgery-state.md).
 
-### Jarvis
+### Scalpal
 
-Jarvis is the only AI that talks. He is fed by side analyzers that do not talk:
+Scalpal is the only AI that talks. He is fed by side analyzers that do not talk:
 
 ```
 Unity events ──► state tracker ──────────┐
@@ -95,10 +95,10 @@ POV screenshots ──► vision side-agent ───┘
   - an uncontrolled bleed past 30 s;
   - a cutting tool on a critical structure.
 
-  Each one plays a pre-recorded clip immediately; Jarvis then explains.
+  Each one plays a pre-recorded clip immediately; Scalpal then explains.
 - **Stall detector:** no progress for a while escalates hints (about 15, 25, 40 and 60 s, ending with an offer to demonstrate).
 - **Vision side-agent:** screenshots of the learner's view, summarized for context and on request ("what am I looking at?"). Vision supports the state but never decides it.
-- **Questions:** Jarvis answers any question about the procedure from the state ("which step am I on", "am I holding the right tool", "why is the pressure dropping"). He never claims progress the state does not show.
+- **Questions:** Scalpal answers any question about the procedure from the state ("which step am I on", "am I holding the right tool", "why is the pressure dropping"). He never claims progress the state does not show.
 
 ### AR mode
 
@@ -110,12 +110,12 @@ POV screenshots ──► vision side-agent ───┘
 ### VR mode
 
 - A virtual operating room with the layered virtual patient on the table.
-- Same tools, state tracking, vitals model and Jarvis as AR.
+- Same tools, state tracking, vitals model and Scalpal as AR.
 
 ## Dashboard (localhost, logs only)
 
 The companion on the demo laptop shows **logs only**, live through SpacetimeDB:
-- Jarvis transcript and alerts;
+- Scalpal transcript and alerts;
 - state tracker events and the step checklist;
 - vitals (measured baseline and simulated change);
 - blood loss and active bleeds;
@@ -138,14 +138,14 @@ The companion on the demo laptop shows **logs only**, live through SpacetimeDB:
 | Piece | Owner | Status |
 | --- | --- | --- |
 | Unity: layered body, physics, coarse regions, checklist UI, pointing bounding boxes, flythrough, AR body fit, tool tray, vitals board, event log with `seq` and tick | Stephen (and his surgery Codex thread) | Partly built (open-wall layers, open appendectomy, tick); rest to build |
-| Office interview runtime, patient content, Jarvis, analyzers (state tracker, anomaly rules, stall hints, vision), alarm clips | Matthew | Office and most analyzers built; region anomalies and vitals-driven alarms to build |
+| Office interview runtime, patient content, Scalpal, analyzers (state tracker, anomaly rules, stall hints, vision), alarm clips | Matthew | Office and most analyzers built; region anomalies and vitals-driven alarms to build |
 | Vitals model (blood volume, accelerated deltas, death threshold) and Presage service | Silas (`services/vitals`), consumed by Matthew's coach | Presage scaffold, quota guard and physiology model on main; blood-loss coupling to build |
 | SpacetimeDB routing and the logs dashboard | Nathan, with Silas on companion UI | Companion and vitals panel live; per-log views to extend |
 | Robot hand from controller motion | Matthew (robotics session) | Controller capture and sim replay in progress |
 
 ## What This Replaces
 
-- The attending phase and any Jarvis role in the office.
+- The attending phase and any Scalpal role in the office.
 - Passthrough or hand-camera video as robot input (now VR controller motion only).
 - Live POV video on the web dashboard.
 - Step-gated surgery (the procedure is guidance; the body is a sandbox).

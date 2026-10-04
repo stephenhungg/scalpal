@@ -2,7 +2,7 @@
 // browser (test/camera-rig.test.ts).
 //
 // The rig only observes by default. It acts as the headset (posts tracking/focus/touch events into the
-// live coach session and acks Jarvis's highlight commands as "applied") only while actsAsHeadset() is
+// live coach session and acks Scalpal's highlight commands as "applied") only while actsAsHeadset() is
 // true. Otherwise a camera tab left open during a real Quest run would ack commands the headset never
 // rendered and pause scoring when the webcam loses the body.
 

@@ -157,7 +157,7 @@ His chart has almost nothing in it. **He is the only source.**
 
 ---
 
-## 2. CLINICIAN KEY (never given to the patient agent; for Jarvis and authors)
+## 2. CLINICIAN KEY (never given to the patient agent; for Scalpal and authors)
 
 ### 2.1 Case summary
 
@@ -249,7 +249,7 @@ Although phlegmon or abscess alone can be managed non-operatively in stable pati
 2. **The penicillin allergy is absent from the chart** (allergies `[]`). This is intentional and is the critical teaching point. Note that FinchNode returns an *empty array*, which is ambiguous between "none recorded" and "none known." The `chartNotes` text in cases.ts ("medications, allergies, and history are unknown") handles this correctly.
 3. **Day of week.** The authored onset is "two days ago, **Wednesday** morning," which makes the encounter day Friday. The real calendar date when this was written (2026-10-03) is a **Saturday**. If the patient agent is ever given the real date, it may contradict itself. Recommend the agent use relative days only, or drop the weekday from the authored text.
 4. **Last meal vs onset.** He ate a breakfast sandwich Thursday at 07:00 during an active illness that started Wednesday. This is plausible ("forced it down"), and the dossier explains it. No conflict with "haven't eaten since yesterday morning."
-5. **Clinically off: rubric wording on penicillin.** The critical-item rationale says the penicillin allergy "changes the antibiotic for an infected abdomen." That is true (no pip-tazo), but Jarvis should not penalize ceftriaxone plus metronidazole. Under the 2022 practice parameter, a cephalosporin is acceptable for a remote non-anaphylactic penicillin history. Consider a sentence in the rubric to avoid teaching "penicillin allergy means no beta-lactams." **Resolved 2026-10-03:** the rationale now steers away from piperacillin-tazobactam and states that ceftriaxone with metronidazole is appropriate.
-6. **Clinically: phlegmon on CT.** Phlegmon without abscess is often managed non-operatively in stable patients. The case justifies emergency surgery through **generalized peritonitis plus sepsis**, which is correct. Jarvis should anchor the urgency to the peritonitis and sepsis, not to the phlegmon.
+5. **Clinically off: rubric wording on penicillin.** The critical-item rationale says the penicillin allergy "changes the antibiotic for an infected abdomen." That is true (no pip-tazo), but Scalpal should not penalize ceftriaxone plus metronidazole. Under the 2022 practice parameter, a cephalosporin is acceptable for a remote non-anaphylactic penicillin history. Consider a sentence in the rubric to avoid teaching "penicillin allergy means no beta-lactams." **Resolved 2026-10-03:** the rationale now steers away from piperacillin-tazobactam and states that ceftriaxone with metronidazole is appropriate.
+6. **Clinically: phlegmon on CT.** Phlegmon without abscess is often managed non-operatively in stable patients. The case justifies emergency surgery through **generalized peritonitis plus sepsis**, which is correct. Scalpal should anchor the urgency to the peritonitis and sepsis, not to the phlegmon.
 7. **cases.ts matches encounters.ts**: 2 days, diffuse, guarding, 38.9 C, HR 118. The "suspected perforated appendicitis" indication is consistent with the CT. Age (30 on 2026-10-03) and sex match the chart.
 8. The procedure keywords include "washout," which is good. `open_appendectomy` doesn't model a washout or irrigation step beyond `irrigate` (hemostasis role). That fits.

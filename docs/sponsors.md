@@ -1,6 +1,6 @@
 # MHacks Sponsor Alignment and Submission Context
 
-> Scope update: Solana, wallets, payouts, and monetary completion rewards are removed. Nathan owns the companion website + SpacetimeDB/routing lane; Matthew continues Jarvis. This earlier proposal contains superseded reward/challenge references. Read [current direction](current-direction.md) and [Nathan's implementation plan](nathan-plan.md) first.
+> Scope update: Solana, wallets, payouts, and monetary completion rewards are removed. Nathan owns the companion website + SpacetimeDB/routing lane; Matthew continues Scalpal. This earlier proposal contains superseded reward/challenge references. Read [current direction](current-direction.md) and [Nathan's implementation plan](nathan-plan.md) first.
 
 Snapshot: October 3, 2026. Event categories below were read from the live [MHacks 2026 Devpost](https://mhacks-2026.devpost.com/) and official linked resources. Availability and requirements can change; verify before submitting.
 
@@ -14,7 +14,7 @@ Use technologies because they support that flow. ElevenLabs, Gemini API, and Sol
 
 | Sponsor/category | Confirmed listed prize | Proposed Scalpal integration | What would demonstrate meaningful use |
 |---|---|---|---|
-| ElevenLabs sponsor award | Three months of Scale per team member | Jarvis spoken conversation and app actions | Working voice selection, guidance, and an actual scene action |
+| ElevenLabs sponsor award | Three months of Scale per team member | Scalpal spoken conversation and app actions | Working voice selection, guidance, and an actual scene action |
 | MLH Best Use of ElevenLabs | Wireless earbuds | Same voice integration | Demonstrate the implemented experience; do not confuse this with the subscription award |
 | MLH Best Use of Gemini API | Swag kits | State-grounded coach reasoning and tool selection | Actual Gemini API calls grounded in supported exercise state and reviewed content |
 | MLH Best Use of Solana | SenseCAP Card Tracker | Funded challenge, contribution acceptance receipt, unique Devnet payout | Show onchain state and a confirmed authorized reward transaction |
@@ -34,7 +34,7 @@ Primary resources: [Current Devpost prize list](https://mhacks-2026.devpost.com/
 |---|---|---|
 | Fetch AI / ASI:One | Mandatory ACP interoperability, Agentverse registration, ASI:One discoverability, and completion of the primary workflow entirely inside ASI:One; public runnable repo and 3–5-minute video | A headset-first exercise with a generic voice agent does not satisfy the ASI:One workflow requirement |
 | FinchNode | Working API integration with synthetic demo health records that helps patients, clinicians, or care teams | A surgical theme or generic anatomy model alone is insufficient |
-| Relay | A working agent inside the Relay app using text, calls, or video | Jarvis running only in Quest is not a Relay integration |
+| Relay | A working agent inside the Relay app using text, calls, or video | Scalpal running only in Quest is not a Relay integration |
 | Photon | Spectrum integration that connects an agent to iMessage | A Quest voice interface is not an iMessage agent |
 | FREE-WILi | Actual use of its hardware | The Quest alone is a different hardware product |
 | Notability | Use Notability Pro during the hackathon, identify it in tools, explain usage, and include at least two screenshots | Merely mentioning the brand or producing Markdown notes does not establish eligibility |

@@ -21,7 +21,7 @@ import { createContextFeed, type ContextFeed } from "./jarvis/context-feed.js";
 import type { EncounterVoices } from "./encounter-routes.js";
 import type { Action, SurgicalCase } from "./types.js";
 
-// Live coach API. Unity (or the SpacetimeDB bridge) posts exercise events here; the Jarvis voice
+// Live coach API. Unity (or the SpacetimeDB bridge) posts exercise events here; the Scalpal voice
 // page reads state, hints, and alerts from it. Sessions live in memory: fine for one demo laptop,
 // and the event contract is what moves to SpacetimeDB later.
 
@@ -37,8 +37,8 @@ export interface CoachRouteOptions {
   bridge?: RealtimeBridge | null; // the live connection, for /realtime status and join
   encounters?: EncounterVoices; // live encounters, so /jarvis/connection can bind a voice to one
   encounterFor?: (id: string) => { kase: SurgicalCase; carryover(): string } | null;
-  patientStatus?: (patientId: string) => string; // authored patient_status.md for Jarvis's OR context
-  vision?: SceneVision | null; // Jarvis's eyes; null when no vision model is configured
+  patientStatus?: (patientId: string) => string; // authored patient_status.md for Scalpal's OR context
+  vision?: SceneVision | null; // Scalpal's eyes; null when no vision model is configured
   watchMs?: number; // minimum gap between background scene summaries (0 disables watching)
   detector?: FrameDetector | null; // real-camera instrument and hand boxes (services/vision); null when not running
   // Baseline vitals for a case from the patient's chart (VR, and AR until the Presage baseline is captured).
@@ -189,12 +189,12 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
     );
   });
 
-  // The headset adopts the newest live session (the laptop Jarvis page creates it). Single-room demo
+  // The headset adopts the newest live session (the laptop Scalpal page creates it). Single-room demo
   // shortcut; SpacetimeDB session membership replaces it.
   app.get("/coach/current", (c) => {
     const patientId = c.req.query("patientId") ?? "";
     const latest = [...sessions.values()].reverse().find((s) => !patientId || s.kase.patientId === patientId || s.kase.scenarioId === patientId);
-    if (!latest) return bad(c, 404, "no_live_session", "No live coach session yet. Start one from the Jarvis page.", [{ id: "choose_patient", label: "Choose a patient", method: "GET", route: "/patients" }]);
+    if (!latest) return bad(c, 404, "no_live_session", "No live coach session yet. Start one from the Scalpal page.", [{ id: "choose_patient", label: "Choose a patient", method: "GET", route: "/patients" }]);
     return c.json({ sessionId: latest.id, patientId: latest.kase.patientId, procedureId: latest.kase.procedureId, actions: coachActions(latest.id) });
   });
 
@@ -226,7 +226,7 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
 
   // Recap has no conversational agent, client prompt override, or surgery tools.
   // Canonical routes resolve only ids bound at session creation; recap request
-  // bodies cannot select another coach or override what Jarvis says.
+  // bodies cannot select another coach or override what Scalpal says.
   const reactionQuestion = "How did that feel?";
   const selfAssessmentQuestion = "What is one thing you would do differently?";
   const recapSession = (c: Context) => {
@@ -246,12 +246,12 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
   const recapAudio = async (c: Context) => {
     const s = recapSession(c);
     if (!s) return missing(c);
-    if (!reflex?.configured) return bad(c, 503, "recap_voice_unconfigured", "Jarvis speech is unavailable. Use the reflection panel.", []);
+    if (!reflex?.configured) return bad(c, 503, "recap_voice_unconfigured", "Scalpal speech is unavailable. Use the reflection panel.", []);
     try {
       const audio = await reflex.render(reactionQuestion);
       return c.body(new Uint8Array(audio), 200, { "Content-Type": "audio/mpeg", "Cache-Control": "no-store" });
     } catch {
-      return bad(c, 503, "recap_voice_failed", "Jarvis speech is unavailable. Use the reflection panel.", []);
+      return bad(c, 503, "recap_voice_failed", "Scalpal speech is unavailable. Use the reflection panel.", []);
     }
   };
   app.post("/coach/runs/:runId/recap", recapMetadata);
@@ -356,7 +356,7 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
     return c.json({ stored: true, marks: frame.marks.length, watching: due, actions: coachActions(s.id) });
   });
 
-  // One implementation of Jarvis's client tools for every voice client (laptop page, Quest native voice).
+  // One implementation of Scalpal's client tools for every voice client (laptop page, Quest native voice).
   app.post("/coach/sessions/:sid/tools/:name", async (c) => {
     const s = getSession(c);
     if (!s) return missing(c);
@@ -375,7 +375,7 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
       ackWaitMs: options.toolAckWaitMs,
       realtime: options.realtime,
     });
-    if (result == null) return bad(c, 404, "unknown_tool", `No Jarvis tool named "${c.req.param("name")}".`, coachActions(s.id));
+    if (result == null) return bad(c, 404, "unknown_tool", `No Scalpal tool named "${c.req.param("name")}".`, coachActions(s.id));
     return c.json({ result, actions: coachActions(s.id) });
   });
 
@@ -531,7 +531,7 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
     return c.json({ baseline, condition: s.snapshot().condition, actions: coachActions(s.id) });
   });
 
-  // Demo driver: lets the laptop exercise Jarvis before the headset is wired in.
+  // Demo driver: lets the laptop exercise Scalpal before the headset is wired in.
   app.post("/coach/sessions/:sid/simulate", async (c) => {
     const s = getSession(c);
     if (!s) return missing(c);
@@ -661,8 +661,11 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
     }
   });
 
-  // Jarvis voice page (laptop browser) and its ElevenLabs connection details.
+  // Scalpal voice page (laptop browser) and its ElevenLabs connection details.
   app.get("/jarvis", (c) => c.html(readFileSync(new URL("./jarvis/index.html", import.meta.url), "utf8")));
+  // The coach is called Scalpal now; /jarvis paths stay so existing headset builds keep working.
+  app.get("/scalpal", (c) => c.redirect("/jarvis"));
+  app.get("/scalpal/camera", (c) => c.redirect("/jarvis/camera"));
   // Camera test rig: a webcam or iPhone (Continuity Camera) stands in for the Quest camera.
   app.get("/jarvis/camera", (c) => c.html(readFileSync(new URL("./jarvis/camera.html", import.meta.url), "utf8")));
   for (const file of ["app.js", "arbiter.js", "context-feed.js", "interview.js", "encounter.js", "camera.js", "camera-rig.js", "body-map.js"]) {
@@ -672,8 +675,8 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
   }
 
   // A connection is minted only for something live, and the prompt comes from the server:
-  //   ?sessionId=coach-...   Jarvis coaching that surgery session (prompt = the session's system prompt)
-  //   ?encounterId=enc-...   the patient agent during the interview, Jarvis as attending afterwards
+  //   ?sessionId=coach-...   Scalpal coaching that surgery session (prompt = the session's system prompt)
+  //   ?encounterId=enc-...   the patient agent during the interview, Scalpal as attending afterwards
   // Legacy calls without an id (the Quest client: none, or ?agent=patient) still work, but only while a
   // matching coach session or encounter phase is live; they carry no prompt.
   app.get("/jarvis/connection", async (c) => {

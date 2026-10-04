@@ -183,7 +183,7 @@ describe.each(PATIENTS)("office interview: %s", (patientId) => {
 });
 
 describe("carryover into the operating room", () => {
-  it("all-correct interview carries the 100/100 result and patient status into Jarvis", async () => {
+  it("all-correct interview carries the 100/100 result and patient status into Scalpal", async () => {
     const { id, r } = await run("patient-demo-multi-source", byGrade("correct"));
     const s = await r.req("POST", "/coach/sessions", { patientId: "patient-demo-multi-source", encounterId: id });
     expect(s.status).toBe(201);
@@ -194,7 +194,7 @@ describe("carryover into the operating room", () => {
     expect(unitySafetyErrors(s.json).filter((e) => !e.startsWith("$.runId"))).toEqual([]);
   });
 
-  it.each(PATIENTS)("wrong-plan interview tells Jarvis the case still needs the real procedure (%s)", async (patientId) => {
+  it.each(PATIENTS)("wrong-plan interview tells Scalpal the case still needs the real procedure (%s)", async (patientId) => {
     const r = rig();
     // Every round correct except the plan round.
     const iv = interviewOf(patientId);

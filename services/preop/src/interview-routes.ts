@@ -10,7 +10,7 @@ import { NO_REALTIME, type RealtimeSink } from "./realtime-bridge.js";
 import type { Action, SurgicalCase } from "./types.js";
 
 // The pre-op office: a 1:1 interview with the patient voice, driven by committed rounds of four
-// clinician moves. Jarvis takes no part here. The scored interview carries into the operating room through
+// clinician moves. Scalpal takes no part here. The scored interview carries into the operating room through
 // POST /coach/sessions {encounterId: <interviewId>}.
 
 export interface InterviewRouteOptions {

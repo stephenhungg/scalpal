@@ -2,7 +2,7 @@
   "$schema": "https://mintlify.com/docs.json",
   "theme": "mint",
   "name": "Scalpal",
-  "description": "A mixed reality operating room experience guided by Jarvis.",
+  "description": "A mixed reality operating room experience guided by Scalpal.",
   "colors": {
     "primary": "#2f9e2d",
     "light": "#8ef08a",

@@ -1,6 +1,6 @@
 import type { SurgicalCase } from "./types.js";
 
-// Jarvis's spoken breakdown over the pre-surgery flythrough (docs/operation-flow.md, "Operating room
+// Scalpal's spoken breakdown over the pre-surgery flythrough (docs/operation-flow.md, "Operating room
 // entry"). One line per beat, keyed by the same step ids the briefing atlas uses
 // (apps/quest/Assets/Scalpal/Briefing/Resources/briefing_parts.json), pre-rendered as reflex clips so
 // the headset plays each beat's voice the moment the camera arrives, with no model in the loop.
@@ -33,6 +33,6 @@ export function briefingLines(kase: SurgicalCase): BriefingLine[] {
   return [
     { key: "brief.intro", stepId: "", title: p.title, text: intro },
     ...p.steps.map((s) => ({ key: `brief.${s.id}`, stepId: s.id, title: s.title, text: authored[s.id] ?? `${s.title}. ${s.instruction}` })),
-    { key: "brief.outro", stepId: "", title: "Begin", text: "That's the whole case. The checklist stays top left, but your hands decide. Let's begin." },
+    { key: "brief.outro", stepId: "", title: "Begin", text: "That's the plan. Time-out first, then the case is yours. The checklist stays top left, but your hands decide." },
   ];
 }

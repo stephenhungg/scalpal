@@ -1,7 +1,7 @@
 import "../src/env.js";
 import { EXAM_MANEUVERS, HISTORY_TOPICS, TESTS } from "../src/catalog/encounters.js";
 
-// Creates or updates the Jarvis ElevenLabs agent and its client tools from code, so the agent config is
+// Creates or updates the Scalpal ElevenLabs agent and its client tools from code, so the agent config is
 // reproducible. The per-case system prompt and first message are sent by the /jarvis page at session
 // start (overrides), so this only sets the base agent, LLM, voice, and tool definitions.
 //
@@ -58,14 +58,14 @@ const TOOLS = [
   },
 ];
 
-// Jarvis's eyes: the latest point-of-view frame, described by a vision model with the scene's labels.
+// Scalpal's eyes: the latest point-of-view frame, described by a vision model with the scene's labels.
 TOOLS.push({
   name: "look_at_scene",
   description: "Look at the learner's current point of view (camera frame plus labeled objects) and describe what is there and how to approach it. Use for 'what am I looking at', 'where is it', or 'how do I approach this'.",
   parameters: { type: "object", properties: { question: str("The learner's question, in their words.") }, required: [] },
 } as (typeof TOOLS)[number]);
 
-// Jarvis as attending during the case presentation, after the patient interview.
+// Scalpal as attending during the case presentation, after the patient interview.
 const ATTENDING_TOOLS = [
   {
     name: "get_encounter_summary",
@@ -111,7 +111,7 @@ const PATIENT_TOOLS = [
 const PATIENT_BASE_PROMPT = "You are a patient in a surgical teaching simulation. Your character and instructions are supplied when the session starts.";
 
 const BASE_PROMPT =
-  "You are Jarvis, a real-time surgical coach in the Scalpal mixed-reality simulator. The full case prompt is supplied when each session starts. Keep replies to one or two spoken sentences.";
+  "You are Scalpal, a real-time surgical coach in the Scalpal mixed-reality simulator. The full case prompt is supplied when each session starts. Keep replies to one or two spoken sentences.";
 
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   const res = await fetch(`${API}${path}`, {
@@ -163,11 +163,11 @@ async function upsertAgent(envName: string, agent: object, label: string) {
 async function main() {
   const toolIds = await upsertTools([...TOOLS, ...ATTENDING_TOOLS]);
   const agent = {
-    name: "Scalpal Jarvis",
+    name: "Scalpal Coach",
     tags: ["scalpal"],
     conversation_config: {
       agent: {
-        first_message: "Jarvis here.",
+        first_message: "Scalpal here.",
         language: "en",
         prompt: { prompt: BASE_PROMPT, llm: LLM, temperature: 0.3, tool_ids: toolIds, ...(REASONING ? { reasoning_effort: REASONING } : {}) },
       },
@@ -178,7 +178,7 @@ async function main() {
     },
   };
 
-  await upsertAgent("ELEVENLABS_AGENT_ID", agent, "Jarvis agent");
+  await upsertAgent("ELEVENLABS_AGENT_ID", agent, "Scalpal agent");
 
   // The patient agent: its voice changes per patient, so the TTS voice is overridable per session.
   const patientToolIds = await upsertTools(PATIENT_TOOLS);

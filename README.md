@@ -8,9 +8,9 @@ Scalpal is an MHacks project for Meta Quest 3S. The learner launches the app, br
 
 The long-term thesis is that human learning can supply useful robot demonstrations. The proposed demo proves a smaller chain: **one guided exercise → feedback → one video-derived movement sequence → one simulated robot replay.** Replay is not autonomous robot learning.
 
-**Latest direction: Solana and monetary completion rewards are removed. Nathan owns the companion website + SpacetimeDB/routing lane; Matthew continues to own Jarvis.** Read [current direction](docs/current-direction.md) and the [system integration map](docs/system-integration.md) first. They supersede older payout work and the prior blanket wait instruction for this assigned lane.
+**Latest direction: Solana and monetary completion rewards are removed. Nathan owns the companion website + SpacetimeDB/routing lane; Matthew continues to own Scalpal.** Read [current direction](docs/current-direction.md) and the [system integration map](docs/system-integration.md) first. They supersede older payout work and the prior blanket wait instruction for this assigned lane.
 
-The backend uses [SpacetimeDB for shared state plus private file storage for video](docs/data-and-realtime.md). Main now includes the native session, full anatomy sources, Jarvis service, companion/realtime/gateway and video-motion processor. Physical end-to-end verification is pending. Live headset video and motion processing still need capture/worker adapters. The integration map records exact source snapshots and routing gaps.
+The backend uses [SpacetimeDB for shared state plus private file storage for video](docs/data-and-realtime.md). Main now includes the native session, full anatomy sources, Scalpal service, companion/realtime/gateway and video-motion processor. Physical end-to-end verification is pending. Live headset video and motion processing still need capture/worker adapters. The integration map records exact source snapshots and routing gaps.
 
 ## Start Here
 

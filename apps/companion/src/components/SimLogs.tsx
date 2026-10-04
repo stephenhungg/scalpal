@@ -4,7 +4,7 @@ import { SIM_LOG_KINDS, compactVitals, parseData, toneOfLog, type SimLogKind } f
 import { useNow, type SessionData } from '../data/live';
 import { Empty, Panel } from './ui';
 
-// Operating-room log from the coach (sim_log): state tracker events, Jarvis alerts, vitals samples,
+// Operating-room log from the coach (sim_log): state tracker events, Scalpal alerts, vitals samples,
 // checklist changes and the case outcome. Newest first; the latest vitals sample stays pinned on top.
 
 const LABEL: Record<SimLogKind, string> = {
@@ -65,7 +65,7 @@ export default function SimLogs({ data }: { data: SessionData }) {
         ))}
       </div>
       {rows.length === 0 ? (
-        <Empty>No operating-room logs yet. They stream in once Jarvis is coaching a case in this session.</Empty>
+        <Empty>No operating-room logs yet. They stream in once Scalpal is coaching a case in this session.</Empty>
       ) : shown.length === 0 ? (
         <Empty>Every kind is filtered out.</Empty>
       ) : (

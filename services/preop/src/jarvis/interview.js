@@ -1,7 +1,7 @@
 // The pre-op office on the laptop page: a 1:1 interview with the patient voice, driven by committed
 // rounds of four clinician moves. The learner taps a choice or holds the button and says it; the server
 // transcribes, matches and grades. The patient voice only hears the picks (its mic is muted) and replies in
-// character. Jarvis is not in this flow; the scorecard is on screen only.
+// character. Scalpal is not in this flow; the scorecard is on screen only.
 
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 export const cleanLine = (text) => String(text ?? "").replace(/\[[a-z ]{2,24}\]\s*/gi, "").replace(/\s{2,}/g, " ").trim();

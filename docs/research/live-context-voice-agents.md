@@ -1,6 +1,6 @@
 # Keeping a Realtime Voice Agent Caught Up With Live State
 
-Research snapshot: October 3, 2026, for Jarvis (ElevenLabs Agents, Claude Sonnet 5.5, deterministic coach engine). **Doc** marks a claim from a primary source fetched for this note; **inference** marks our recommendation.
+Research snapshot: October 3, 2026, for Scalpal (ElevenLabs Agents, Claude Sonnet 5.5, deterministic coach engine). **Doc** marks a claim from a primary source fetched for this note; **inference** marks our recommendation.
 
 ## What real deployments do
 
@@ -30,9 +30,9 @@ The shared pattern: state changes mutate context silently; coach-initiated speec
 
 Implemented in `services/preop/src/coach.ts`, `reflex.ts`, and `jarvis/arbiter.js`:
 
-1. **Reflex warnings, no LLM.** High-severity mistakes and tracking loss are `warning` alerts with a `reflexKey`. Their lines are pre-rendered with ElevenLabs TTS in Jarvis's voice and cached on disk. The page ducks the agent, plays the clip, then sends `[JARVIS SAID ...]` as a contextual update so the agent knows what was said and does not repeat it. Measured in the browser on October 3: 4 ms from alert to clip playing (one sample), versus 1.4 to 3.2 s for an LLM text turn.
+1. **Reflex warnings, no LLM.** High-severity mistakes and tracking loss are `warning` alerts with a `reflexKey`. Their lines are pre-rendered with ElevenLabs TTS in Scalpal's voice and cached on disk. The page ducks the agent, plays the clip, then sends `[JARVIS SAID ...]` as a contextual update so the agent knows what was said and does not repeat it. Measured in the browser on October 3: 4 ms from alert to clip playing (one sample), versus 1.4 to 3.2 s for an LLM text turn.
 2. **Arbiter with cockpit tiers.** Warnings preempt and clear queued cautions. Cautions are coalesced by type, cooled down per type, spaced (6 s, 2.5 s for milestones and mistakes), wait for the agent to finish (`agent_response_complete` when present, otherwise a settle delay after speaking) and for the learner to be quiet (VAD score, transcripts). Before speaking, each caution is re-validated against the newest state and dropped if its step has passed. Advisories stay silent.
-3. **Versioned, diff-gated context.** Context updates go out only when a meaningful field changes (step, progress, mistakes, focus, coaching level, tracking, commands), debounced 300 ms. Every `[SIM EVENT]` carries its state version and step, and the prompt tells Jarvis the newest `[LIVE SURGERY STATE vN]` wins and stale events are ignored.
+3. **Versioned, diff-gated context.** Context updates go out only when a meaningful field changes (step, progress, mistakes, focus, coaching level, tracking, commands), debounced 300 ms. Every `[SIM EVENT]` carries its state version and step, and the prompt tells Scalpal the newest `[LIVE SURGERY STATE vN]` wins and stale events are ignored.
 4. **Latency trace.** The page shows p50/p95 for server-to-page, warning-to-clip, caution queue wait, LLM first text, and agent speaking start, plus arbiter counters and context usage.
 
 ## Not done yet (ranked)

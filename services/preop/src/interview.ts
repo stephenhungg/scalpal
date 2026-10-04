@@ -195,7 +195,7 @@ export class InterviewSession {
     };
   }
 
-  // What Jarvis learns about the office, for the operating room prompt.
+  // What Scalpal learns about the office, for the operating room prompt.
   carryover(): string {
     if (this.phase !== "scored") return "";
     const card = this.score();

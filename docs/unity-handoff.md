@@ -45,7 +45,7 @@ Source models from [Z-Anatomy](https://github.com/Z-Anatomy/Models-of-human-anat
 
 ## What already works without any of this
 
-The service, risk rules, eight patient cases, step engine, pre-op scoring, and offline bundle are built and tested. That includes 105 TypeScript tests, a live run against the FinchNode API, and a .NET compile of Exercises, the anatomy runtime, the Jarvis relay, and the Experience layer that plays every case through the C# engine. Until the atlas covers a structure, a debug sphere with an `AnatomyPart` (`stableId` = catalog id) and a collider stands in for it.
+The service, risk rules, eight patient cases, step engine, pre-op scoring, and offline bundle are built and tested. That includes 105 TypeScript tests, a live run against the FinchNode API, and a .NET compile of Exercises, the anatomy runtime, the Scalpal relay, and the Experience layer that plays every case through the C# engine. Until the atlas covers a structure, a debug sphere with an `AnatomyPart` (`stableId` = catalog id) and a collider stands in for it.
 
 ## Scene wiring (Matthew's Experience layer)
 

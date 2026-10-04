@@ -149,7 +149,7 @@ export function createArbiter(options = {}) {
   };
 }
 
-// Only these fields change what Jarvis should know; timers ticking do not.
+// Only these fields change what Scalpal should know; timers ticking do not.
 export function semanticKey(snapshot) {
   if (!snapshot) return "";
   return JSON.stringify([

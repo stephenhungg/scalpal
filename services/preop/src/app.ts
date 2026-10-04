@@ -435,7 +435,7 @@ export function createApp(options: AppOptions = {}) {
     });
   });
 
-  // ElevenLabs server tools: always HTTP 200 with a `say` line so Jarvis can speak failures too.
+  // ElevenLabs server tools: always HTTP 200 with a `say` line so Scalpal can speak failures too.
   app.post("/tools/list_patients", async (c) => {
     const patients = (await listPatients()).filter((p) => p.patientId);
     return c.json({
@@ -508,7 +508,7 @@ export function createApp(options: AppOptions = {}) {
     planSubjectFor: async (kase) => (await scenarios()).find((s) => s.id === kase.scenarioId)?.subject ?? kase.patientId,
   });
 
-  // The pre-op office (current flow): committed patient content, choice-based interview, no Jarvis.
+  // The pre-op office (current flow): committed patient content, choice-based interview, no Scalpal.
   const interviews = registerInterviewRoutes(app, {
     now,
     realtime: options.realtime ?? undefined,

@@ -3,15 +3,15 @@ import { INSTRUMENTS_BY_ID } from "./catalog/instruments.js";
 import type { PresentationMode } from "./coach.js";
 import type { Procedure, SurgicalCase } from "./types.js";
 
-// Per-case system prompt for Jarvis. It carries only this case's patient, procedure, steps, and
+// Per-case system prompt for Scalpal. It carries only this case's patient, procedure, steps, and
 // anatomy, so the agent has nothing from another surgery to confuse it with. Live progress arrives
 // separately as [LIVE SURGERY STATE] contextual updates and [SIM EVENT] messages.
 
 const SETTING: Record<PresentationMode, string> = {
   mixed_reality:
-    "You are Jarvis, a real-time surgical coach inside Scalpal, a mixed-reality teaching simulator on Meta Quest. The learner practices the selected surgical procedure with virtual instruments on a generic anatomy overlay registered to a real person reclining on a table. Nothing is actually cut, and the overlay is a teaching model, not that person's real organs.",
+    "You are Scalpal, the real-time surgical coach in a mixed-reality teaching simulator on Meta Quest. The learner practices the selected surgical procedure with virtual instruments on a generic anatomy overlay registered to a real person reclining on a table. Nothing is actually cut, and the overlay is a teaching model, not that person's real organs.",
   virtual:
-    "You are Jarvis, a real-time surgical coach inside Scalpal, a teaching simulator on Meta Quest. The learner is in a fully virtual operating room, practicing the selected surgical procedure with virtual instruments on a virtual patient with generic teaching anatomy.",
+    "You are Scalpal, the real-time surgical coach in a teaching simulator on Meta Quest. The learner is in a fully virtual operating room, practicing the selected surgical procedure with virtual instruments on a virtual patient with generic teaching anatomy.",
 };
 
 const RULES = `The patient chart is synthetic FinchNode demo data and the acute presentation is authored fiction. This is illustrative teaching, not clinical guidance.
@@ -134,5 +134,5 @@ export function firstMessage(kase: SurgicalCase, fromOffice = false): string {
   if (fromOffice) return TIME_OUT_OPENING;
   const first = kase.procedure.steps[0];
   const indication = kase.indication.charAt(0).toLowerCase() + kase.indication.slice(1);
-  return `Jarvis here. ${kase.patient.displayLabel}, ${kase.procedure.title.toLowerCase()} for ${indication}. ${first ? `We start with ${first.title.toLowerCase()}.` : ""} Ask me anything as you go.`;
+  return `Scalpal here. ${kase.patient.displayLabel}, ${kase.procedure.title.toLowerCase()} for ${indication}. ${first ? `We start with ${first.title.toLowerCase()}.` : ""} Ask me anything as you go.`;
 }

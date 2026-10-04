@@ -6,7 +6,7 @@ import type { FlagType, PreopBrief, SurgicalCase } from "../types.js";
 
 // A sentence about the chart is appended to the presentation only when the actual record supports
 // it: sandbox patients can connect fewer sources or different data than the demo record the plan was
-// written against, and the presentation feeds Jarvis's prompt.
+// written against, and the presentation feeds Scalpal's prompt.
 export interface ChartNote {
   text: string;
   whenFlags?: FlagType[];

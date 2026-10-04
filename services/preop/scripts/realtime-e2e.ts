@@ -1,4 +1,4 @@
-// End-to-end check of Jarvis on the shared SpacetimeDB session, with three real identities:
+// End-to-end check of Scalpal on the shared SpacetimeDB session, with three real identities:
 //   operator (the companion), coach (this service, via HTTP), headset (a simulated Quest).
 // Prereqs: `spacetime start`, the module published as `scalpal`, and this service running with
 // SPACETIMEDB_URI=ws://127.0.0.1:3000 (npm run dev). Then: npm run realtime:e2e
@@ -46,7 +46,7 @@ async function main() {
   // 1. Operator creates the session and reads the invite codes.
   const operator = await connect("operator", [tables.mySessions, tables.sessionInvites, tables.sessionEncounters, tables.sessionEncounterEvents, tables.sessionCoachMessages, tables.sessionCoachStatus, tables.sessionCommands]);
   const sessionId = `ses_e2e_${Date.now().toString(36)}`;
-  await operator.reducers.createSession({ sessionId, label: "Jarvis e2e", exerciseId: "lap_appendectomy", exerciseVersion: "1", displayName: "Operator" });
+  await operator.reducers.createSession({ sessionId, label: "Scalpal e2e", exerciseId: "lap_appendectomy", exerciseVersion: "1", displayName: "Operator" });
   let invites: { role: string; code: string }[] = [];
   for (let i = 0; i < 100 && invites.length < 4; i++) {
     invites = [...operator.db.sessionInvites.iter()].filter((x) => x.sessionId === sessionId).map((x) => ({ role: x.role, code: x.code }));
@@ -104,11 +104,11 @@ async function main() {
   operator.db.sessionCoachMessages.onInsert((_c, row) => console.log(`${ms()} [live] coach_message ${row.speaker}: ${row.text.slice(0, 70)}`));
   operator.db.sessionCommands.onUpdate((_c, _old, row) => console.log(`${ms()} [live] command ${row.action}(${row.targetId}) -> ${row.status}`));
 
-  // 2. Jarvis (this service) joins as coach.
+  // 2. Scalpal (this service) joins as coach.
   const joined = await http("POST", "/realtime/join", { code: code("coach") });
   check(joined.sessionId === sessionId, "coach service joined the session with the coach invite code");
 
-  // 3. Simulated headset joins, publishes state, and resolves Jarvis's commands.
+  // 3. Simulated headset joins, publishes state, and resolves Scalpal's commands.
   const headset = await connect("headset", [tables.mySessions, tables.sessionCommands, tables.sessionExerciseState]);
   await headset.reducers.joinSession({ code: code("headset"), displayName: "Quest" });
   await wait(200);
@@ -137,12 +137,12 @@ async function main() {
   });
   console.log(`${ms()} coach scored the encounter: ${scored.result.slice(0, 60)}`);
 
-  // 5. Surgery: Jarvis highlights through the shared session; the headset applies it.
+  // 5. Surgery: Scalpal highlights through the shared session; the headset applies it.
   const coach = await http("POST", "/coach/sessions", { patientId: "patient-demo-multi-source", mode: "mixed_reality" });
   await http("POST", `/coach/sessions/${coach.sessionId}/voice-status`, { status: "speaking" });
   await http("POST", `/coach/sessions/${coach.sessionId}/transcript`, { speaker: "coach", text: "Follow the taeniae down to the appendix base." });
   const lit = await http("POST", `/coach/sessions/${coach.sessionId}/tools/highlight_structure`, { structure: "cecum" });
-  console.log(`${ms()} Jarvis tool result: ${lit.result}`);
+  console.log(`${ms()} Scalpal tool result: ${lit.result}`);
   await wait(500);
 
   // 6. Verify from the operator's point of view.
@@ -156,8 +156,8 @@ async function main() {
   check(["history", "exam", "test", "transcript", "assessment"].every((k) => events.some((e) => e.kind === k)), `encounter events cover history, exam, test, transcript, assessment (${events.length} rows)`);
   check(messages.some((m) => m.speaker === "patient") && messages.some((m) => m.speaker === "learner") && messages.some((m) => m.speaker === "coach") && messages.some((m) => m.speaker === "system"), "coach transcript has learner, patient, coach, and system lines");
   check(status?.status === "speaking", "voice status mirrored");
-  check(commands.some((c) => c.action === "highlightStructure" && c.targetId === "cecum" && c.status === "applied"), "Jarvis highlight went through the shared session and the headset applied it");
-  check(lit.result === "Highlighted the cecum in the headset.", "Jarvis only claimed the highlight after the headset's resolution");
+  check(commands.some((c) => c.action === "highlightStructure" && c.targetId === "cecum" && c.status === "applied"), "Scalpal highlight went through the shared session and the headset applied it");
+  check(lit.result === "Highlighted the cecum in the headset.", "Scalpal only claimed the highlight after the headset's resolution");
 
   operator.disconnect();
   headset.disconnect();

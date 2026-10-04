@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-// Pre-rendered warning audio in Jarvis's voice. Safety warnings bypass the LLM: the page plays the clip
+// Pre-rendered warning audio in Scalpal's voice. Safety warnings bypass the LLM: the page plays the clip
 // immediately (tens of ms) instead of waiting seconds for a generated turn. Clips are rendered once per
 // (voice, model, text) with ElevenLabs TTS and cached on disk, so restarts and repeat demos cost nothing.
 

@@ -1,5 +1,5 @@
 // Creates a shared SpacetimeDB session for a demo, prints every role's invite code, and joins this
-// coach service (Jarvis) to it. Prereqs: SpacetimeDB running with the module published, and the coach
+// coach service (Scalpal) to it. Prereqs: SpacetimeDB running with the module published, and the coach
 // service running with SPACETIMEDB_URI. Run: npm run demo:session
 import { DbConnection, tables } from "../src/module_bindings/index.js";
 
@@ -34,7 +34,7 @@ Session ${sessionId}
   operator (companion, you)  ${code("operator")}
   headset  (Quest)           ${code("headset")}
   viewer   (judges)          ${code("viewer")}
-  coach    (Jarvis)          ${code("coach")}  ${joined.sessionId === sessionId ? "joined" : `NOT joined: ${joined.error?.message ?? res.status}`}
+  coach    (Scalpal)          ${code("coach")}  ${joined.sessionId === sessionId ? "joined" : `NOT joined: ${joined.error?.message ?? res.status}`}
 `);
 conn.disconnect();
 process.exit(joined.sessionId === sessionId ? 0 : 1);

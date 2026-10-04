@@ -146,7 +146,7 @@ Synthetic patient. Illustrative teaching content, not clinical guidance.
 
 ---
 
-## 2. CLINICIAN KEY (never given to the patient agent; for Jarvis and authors)
+## 2. CLINICIAN KEY (never given to the patient agent; for Scalpal and authors)
 
 ### Case summary
 
@@ -198,7 +198,7 @@ Dolores Marchetti is a 63-year-old retired baker with type 2 diabetes (metformin
 
 > "Mrs. Marchetti is a 63-year-old woman with diabetes and hypertension. She has had three CT-confirmed episodes of left lower quadrant diverticulitis in eighteen months. The last, in June, was complicated by a small pericolic abscess treated with antibiotics and no drain. Colonoscopy in August excluded cancer, which mattered because her father had colon cancer. She's quiescent now: afebrile, normal vitals, mild deep left lower quadrant tenderness, no mass or peritonitis. She has no bleeding, change in stool caliber or urinary symptoms suggesting a fistula. CBC and CRP are normal. CT shows the abscess has resolved and there's no fistula. Diagnosis: recurrent sigmoid diverticulitis complicated by a resolved abscess. I considered cancer, fistula, IBD, ischemic and infectious colitis. The colonoscopy, CT and history argue against them. Her chart needed reconciling. The uncoded blood pressure pill is hydrochlorothiazide 25, her potassium is 3.4, and the charted creatinine was cancelled. Today's creatinine is 0.9. She stopped simvastatin months ago. Her amoxicillin allergy was hives, so no aminopenicillins, but cefazolin and metronidazole are fine. Plan: elective laparoscopic sigmoid colectomy with primary anastomosis. Mechanical and oral antibiotic bowel prep, replete potassium, hold the thiazide and metformin on the day of surgery, continue metoprolol, check an A1c, and consent and mark for a possible diverting stoma."
 
-### Socratic probes Jarvis can use (for common misses)
+### Socratic probes Scalpal can use (for common misses)
 
 - Missed medication reconciliation: "Her chart says 'blood pressure pill, 1 daily.' What is it, and why would it matter before bowel prep?"
 - Missed the BMP: "What do we know about her kidney function from the chart? What's she taking that makes that matter?"
@@ -245,8 +245,8 @@ Dolores Marchetti is a 63-year-old retired baker with type 2 diabetes (metformin
   - Weight 168 lb = 76.2 kg matches 76 kg.
   - BP 142 systolic only (diastolic missing) fits 144/82.
   - HR 72 (undated) fits 70. Hb 13.2 fits 13.0. Urine protein negative is consistent.
-- **Unit trap:** chart glucose is 6.1 mmol/L (about 110 mg/dL) and the encounter BMP glucose is 128 mg/dL. These are different days and not contradictory, but Jarvis should not compare raw numbers.
-- **Chart has no diverticular disease at all.** No problem-list entry, CT, admission or colonoscopy. The last chart visit (2026-05-12) predates the June episode. The whole surgical history rests on the patient's report and `cases.ts`. That's fine for the scenario, but Jarvis must not claim "the chart shows three CT-confirmed episodes."
+- **Unit trap:** chart glucose is 6.1 mmol/L (about 110 mg/dL) and the encounter BMP glucose is 128 mg/dL. These are different days and not contradictory, but Scalpal should not compare raw numbers.
+- **Chart has no diverticular disease at all.** No problem-list entry, CT, admission or colonoscopy. The last chart visit (2026-05-12) predates the June episode. The whole surgical history rests on the patient's report and `cases.ts`. That's fine for the scenario, but Scalpal must not claim "the chart shows three CT-confirmed episodes."
 - **Leak-filter conflict:** authored `past_medical` contains "And the diverticulitis." The planned output filter (`experience-ux.md` §3, `ux-medical-sim.md`) regenerates on "diverticulitis," and the patient prompt forbids naming any condition. Either the filter must allow authored history text, or the line should read "the pouch infections." As written, it also hands the learner the diagnosis keyword `["diverticul"]` (the partial diagnosis) for free.
 - **No A1c anywhere:** a diabetic patient going for elective colectomy has no A1c on the chart, and `TESTS` has no A1c option. Suggest adding `hba1c` to `TESTS` or noting it in `testNotes`.
 - **Clinical content check:**

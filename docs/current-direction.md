@@ -4,7 +4,7 @@
 
 **Final vision (October 4, 2026, Matthew): [operation flow](operation-flow.md).** It takes precedence over everything below and in older documents.
 
-**Launch → explore patients → 1:1 patient interview with choice rounds (no Jarvis) → interview scorecard → operating room in AR (real reclining person, Presage baseline vitals) or VR (layered virtual patient): Jarvis Time-Out, surgery breakdown and flythrough → free-form surgery with a step checklist, simulated vitals from blood loss, and possible patient death → recap → robot hand replay from VR controller motion.**
+**Launch → explore patients → 1:1 patient interview with choice rounds (no Scalpal) → interview scorecard → operating room in AR (real reclining person, Presage baseline vitals) or VR (layered virtual patient): Scalpal Time-Out, surgery breakdown and flythrough → free-form surgery with a step checklist, simulated vitals from blood loss, and possible patient death → recap → robot hand replay from VR controller motion.**
 
 The office spec is [office interview](office-interview.md). Live state and coach context are in [surgery state](surgery-state.md). The dashboard is localhost and shows logs only, with no live POV on the web. Robot input is VR controller motion only; there is no hand camera or passthrough video.
 
@@ -33,7 +33,7 @@ Solana, wallets, onchain challenge programs, Devnet payouts, and money for compl
 
 AI guides people through mixed-reality learning and practice. Recorded passthrough video can supply estimated hand movements that are mapped onto a simulated robot hand for replay. The longer-term hypothesis is that useful demonstrations could support robot learning. Replay does not itself demonstrate a learned autonomous policy.
 
-The working experience is the [latest experience flow](#latest-experience-flow) above. The earlier sequence (discuss an exercise with Jarvis → rotating anatomy preview → fit anatomy to a real reclining participant → practice → replay) is superseded.
+The working experience is the [latest experience flow](#latest-experience-flow) above. The earlier sequence (discuss an exercise with Scalpal → rotating anatomy preview → fit anatomy to a real reclining participant → practice → replay) is superseded.
 
 ## Latest Body Overlay Direction
 
@@ -49,11 +49,11 @@ A static CC0 room/patient preview is prepared in `apps/quest/Assets/Scalpal/Envi
 
 ## Work Status
 
-The user previously asked to wait for Nathan's plan, then requested storage/realtime planning and explicitly assigned the updated implementation lane: **Nathan owns the companion website plus SpacetimeDB and routing; Matthew continues to own Jarvis**. See [Nathan's implementation plan](nathan-plan.md) and [data/storage design](data-and-realtime.md). The earlier blanket wait does not block this assigned lane. The active team implementations are consolidated on main; the [integration map](system-integration.md) identifies their source snapshots and missing connections. The work-order documents describe their assigned target, not a complete deployment. The exact shared exercise, robot model, and other unresolved decisions remain open. No GitHub identity mapping for Nathan is assumed.
+The user previously asked to wait for Nathan's plan, then requested storage/realtime planning and explicitly assigned the updated implementation lane: **Nathan owns the companion website plus SpacetimeDB and routing; Matthew continues to own Scalpal**. See [Nathan's implementation plan](nathan-plan.md) and [data/storage design](data-and-realtime.md). The earlier blanket wait does not block this assigned lane. The active team implementations are consolidated on main; the [integration map](system-integration.md) identifies their source snapshots and missing connections. The work-order documents describe their assigned target, not a complete deployment. The exact shared exercise, robot model, and other unresolved decisions remain open. No GitHub identity mapping for Nathan is assumed.
 
 The companion website is a live observer view, not another voice agent. It combines shared session/coach/processing state with a separately transported composited headset video feed. The existing Mac mirror is a proposed video source to validate, not the final companion website or a verified network stream.
 
-The repo contains an openable Unity project at `apps/quest`, committed scenes/assets/packages/settings and the [instrument kit](../assets/instruments/README.md). The [hardware test](native-workbench.md) records deployment/tracking evidence and the user-confirmed tool-motion correction. Main now assembles Matthew's case/coach/anatomy, Nathan's shared-state adapter and a native transport for Matthew's existing Jarvis agent. Local service exchanges and synthetic Unity checks are verified; the full physical session and native voice remain unverified. Earlier camera/bottle results concern a separate experiment. Silas's merged processor supports right or left Shadow hands and kinematic MuJoCo replay. Video capture and real-person anatomy fit remain unresolved; the gateway worker/trajectory adapter is now implemented, with physical clip validation still required; see the [integration map](system-integration.md).
+The repo contains an openable Unity project at `apps/quest`, committed scenes/assets/packages/settings and the [instrument kit](../assets/instruments/README.md). The [hardware test](native-workbench.md) records deployment/tracking evidence and the user-confirmed tool-motion correction. Main now assembles Matthew's case/coach/anatomy, Nathan's shared-state adapter and a native transport for Matthew's existing Scalpal agent. Local service exchanges and synthetic Unity checks are verified; the full physical session and native voice remain unverified. Earlier camera/bottle results concern a separate experiment. Silas's merged processor supports right or left Shadow hands and kinematic MuJoCo replay. Video capture and real-person anatomy fit remain unresolved; the gateway worker/trajectory adapter is now implemented, with physical clip validation still required; see the [integration map](system-integration.md).
 
 ## Reusable Anatomy Direction
 

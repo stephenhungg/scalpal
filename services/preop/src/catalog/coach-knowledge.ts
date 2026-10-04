@@ -1,4 +1,4 @@
-// Coaching knowledge for Jarvis, keyed by the same anatomy, procedure, and step ids as the render catalogs.
+// Coaching knowledge for Scalpal, keyed by the same anatomy, procedure, and step ids as the render catalogs.
 // This stays server-side (it feeds the voice agent's prompt and live hints) so Unity DTOs are unchanged.
 // Facts follow standard anatomy and laparoscopic teaching references. Illustrative, not clinical guidance.
 

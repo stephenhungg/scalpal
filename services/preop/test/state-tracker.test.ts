@@ -15,7 +15,7 @@ function session() {
 }
 
 describe("state tracker feed", () => {
-  it("tracks tools in hand and gives Jarvis a timed, plain-language recent history", () => {
+  it("tracks tools in hand and gives Scalpal a timed, plain-language recent history", () => {
     const { s, advance } = session();
     s.receive({ type: "instrument", instrumentId: "scalpel", hand: "right", held: true });
     advance(3);

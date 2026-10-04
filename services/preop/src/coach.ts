@@ -10,7 +10,7 @@ import type { ProcedureStep, Severity, StepAction, SurgicalCase } from "./types.
 
 // Live coaching state for one surgery attempt. Wraps the reference StepEngine (same semantics as
 // CaseRunner.cs) and adds what a coach needs: time on step, off-target attempts, wrong instruments,
-// what the learner is looking at, tracking validity, and escalating hints. Everything Jarvis says
+// what the learner is looking at, tracking validity, and escalating hints. Everything Scalpal says
 // about progress comes from this state, never from the model's own guess.
 
 export type CoachEvent =
@@ -66,7 +66,7 @@ export interface LoggedAlert extends CoachAlert {
   simEvent: string; // exact text to send as a user message when this alert becomes an LLM turn
 }
 
-// A completed step, kept so Jarvis can refer back ("you nicked the ileum two steps ago").
+// A completed step, kept so Scalpal can refer back ("you nicked the ileum two steps ago").
 export interface StepCheckpoint {
   stepId: string;
   title: string;
@@ -222,7 +222,7 @@ export class CoachSession {
   private focus = "";
   private trackingValid = true;
   private lastEvent = "Session started.";
-  // Rolling plain-language log of what physically happened, so Jarvis knows the recent sequence.
+  // Rolling plain-language log of what physically happened, so Scalpal knows the recent sequence.
   private timeline: { atMs: number; text: string }[] = [];
   private held = new Map<"left" | "right", string>(); // hand -> instrument id
   private touching = new Map<string, string>(); // instrument id -> structure its tip last touched
@@ -397,7 +397,7 @@ export class CoachSession {
 
   // The headset's CaseRunner owns progression. If it is exactly one step ahead (the event that completed our
   // current step was lost), catch up that one step. A larger jump, a step behind, or a step we do not know is
-  // flagged as a desync so Jarvis trusts the headset; skipped steps are never synthesized as completed,
+  // flagged as a desync so Scalpal trusts the headset; skipped steps are never synthesized as completed,
   // otherwise one event with a late stepId would award the whole procedure with a perfect record.
   private reconcile(headsetStepId: string) {
     this.headsetStepId = headsetStepId;
@@ -519,7 +519,7 @@ export class CoachSession {
     if (!isBodyTelemetry(event.evidence)) this.inputCount++;
     const record = body.log.at(-1)!;
     const alerts: CoachAlert[] = [];
-    // Assistant ticks and fluid snapshots are telemetry, not learner actions: keep them out of the history Jarvis reads.
+    // Assistant ticks and fluid snapshots are telemetry, not learner actions: keep them out of the history Scalpal reads.
     if (!isBodyTelemetry(event.evidence)) this.note(describeBodyAction(event.evidence, record.outcomes, (id) => this.name(id), (id) => this.instrumentName(id)));
     for (const m of this.engine.mistakes.slice(mistakeCount)) {
       this.mistakes.push({ stepId: previous?.id ?? "", mistakeId: m.id, severity: m.severity, structure: m.structure, feedback: m.feedback, at: this.clock().toISOString() });
@@ -600,7 +600,7 @@ export class CoachSession {
     return { accepted: true, reason: "", alerts: [] };
   }
 
-  // A tool tip touching tissue. It never scores; it tells Jarvis where the tool is, and warns once per
+  // A tool tip touching tissue. It never scores; it tells Scalpal where the tool is, and warns once per
   // critical structure in open surgery before anything is cut.
   private handleContact(instrumentId: string, structureId: string): EventOutcome {
     this.touching.set(instrumentId, structureId);
@@ -824,7 +824,7 @@ export class CoachSession {
     }
   }
 
-  // Unity (or the SpacetimeDB bridge) acks scene commands; Jarvis only claims what was applied.
+  // Unity (or the SpacetimeDB bridge) acks scene commands; Scalpal only claims what was applied.
   requestCommand(action: CoachCommand["action"], targetId: string): CoachCommand | { error: string } {
     if (action === "highlight" && !this.kase.anatomy.some((a) => a.id === targetId)) {
       return { error: `${targetId} is not part of this case's anatomy.` };
@@ -1105,7 +1105,7 @@ function describeOffTarget(event: EngineEvent, name: (id: string) => string, too
   }
 }
 
-// Changes only when something Jarvis should know changes; ticking timers do not. Clients send the
+// Changes only when something Scalpal should know changes; ticking timers do not. Clients send the
 // context to the agent only when this key differs from the last one they sent.
 export function contextKey(s: CoachSnapshot): string {
   const parts = [
@@ -1278,7 +1278,7 @@ export function renderContext(s: CoachSnapshot): string {
   lines.push(`Time on step ${s.secondsOnStep}s, ${s.secondsSinceProgress}s since progress, ${s.offTargetAttempts} off-target attempts. Coaching level: ${s.stuckLabel} (hint tier ${s.hintTier}).`);
   const recent = s.recentMistakes.filter((m) => m.stepId === st.id);
   if (recent.length) lines.push(`Mistakes this step: ${recent.map((m) => m.feedback).join(" ")}`);
-  // Hints go through get_hint so the tier escalates; this line only tells Jarvis where coaching stands.
+  // Hints go through get_hint so the tier escalates; this line only tells Scalpal where coaching stands.
   lines.push(`Coaching: hint tier ${s.hintTier} of ${s.openBody ? 4 : 3} used on this step. If the learner asks what to do, call get_hint.`);
   if (st.nextTitle) lines.push(`After this: ${st.nextTitle}.`);
   return lines.join("\n");

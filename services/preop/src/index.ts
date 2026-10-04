@@ -12,7 +12,7 @@ realtime?.start();
 // Vercel and other Hono hosts pick up the default export.
 export default createApp({
   realtime,
-  // Jarvis's eyes (ANTHROPIC_API_KEY): the look_at_scene tool and the background scene watcher.
+  // Scalpal's eyes (ANTHROPIC_API_KEY): the look_at_scene tool and the background scene watcher.
   vision: sceneVisionFromEnv(process.env),
   watchMs: Number(process.env.JARVIS_WATCH_MS ?? 4000),
   // Real-camera instrument and hand boxes from services/vision (VISION_DETECT_URL, e.g. http://127.0.0.1:8792).

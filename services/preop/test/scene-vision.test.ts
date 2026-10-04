@@ -29,7 +29,7 @@ function rig(vision: SceneVision | null, watchMs = 4000, detector: FrameDetector
 const marks = [{ label: "Cecum", id: "cecum", source: "scene", box: { x: 0.1, y: 0.7, w: 0.2, h: 0.2 } }, { label: "scissors", id: "lap_scissors", source: "detector", box: { x: 0.6, y: 0.4, w: 0.1, h: 0.2 } }];
 
 describe("scene vision", () => {
-  it("watches frames at most every interval and puts the summary in Jarvis's context", async () => {
+  it("watches frames at most every interval and puts the summary in Scalpal's context", async () => {
     const { calls, vision } = fakeVision();
     const { req, advance } = rig(vision);
     const sid = (await req("POST", "/coach/sessions", { patientId: "patient-demo-pediatric-asthma" })).json.sessionId;
@@ -60,7 +60,7 @@ describe("scene vision", () => {
     expect(await look()).toMatch(/can't see your view/);
   });
 
-  it("adds fresh detector boxes for the case's instruments to what Jarvis looks at", async () => {
+  it("adds fresh detector boxes for the case's instruments to what Scalpal looks at", async () => {
     const { calls, vision } = fakeVision();
     const asked: string[][] = [];
     const detector: FrameDetector = {

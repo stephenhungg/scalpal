@@ -150,7 +150,7 @@ Synthetic patient. Illustrative teaching content, not clinical guidance.
 
 ---
 
-## 2. CLINICIAN KEY (never given to the patient agent; for Jarvis and authors)
+## 2. CLINICIAN KEY (never given to the patient agent; for Scalpal and authors)
 
 ### Case summary
 
@@ -198,7 +198,7 @@ Ingrid Solano is a 68-year-old retired bookkeeper with hypertension (lisinopril)
 
 > "Mrs. Solano is a 68-year-old woman with hypertension and hyperlipidemia. About four weeks ago she was admitted to Quillhaven for three days with mild gallstone pancreatitis: epigastric pain boring to the back, with vomiting, no ICU stay. That admission isn't in our chart because the Quillhaven source failed to sync, so the history comes from her. She reports an MRCP before discharge showed no retained duct stone. She's been completely asymptomatic for three weeks, with no fever, jaundice, dark urine or pale stools. She drinks only a few glasses of wine a year, and her sister had gallstones. Medications are lisinopril and atorvastatin, plus aspirin she started on her own, which isn't on any list. Her penicillin allergy is a remote mild rash, so cefazolin is fine. Today she's afebrile with normal vitals and a soft, nontender abdomen without jaundice. Lipase, LFTs, calcium and CBC are normal. Ultrasound shows multiple small gallstones and sludge, a normal wall and a 5 mm duct. My diagnosis is resolved mild gallstone pancreatitis. I considered alcohol, hypercalcemia, triglycerides, drugs (she's on lisinopril) and a pancreatic neoplasm. Stones are the clear cause, but I'd get the outside MRCP report and a lipid panel. Plan: laparoscopic cholecystectomy, scheduled within the next couple of weeks because recurrence risk is high, with no ERCP needed. Decide on the aspirin, hold lisinopril the morning of surgery, and request the Quillhaven records."
 
-### Socratic probes Jarvis can use (for common misses)
+### Socratic probes Scalpal can use (for common misses)
 
 - Missed past medical: "Her chart only shows blood pressure and cholesterol. Where did the pancreatitis history come from, and what did you need to know about that admission?"
 - Didn't ask about alcohol: "Gallstones are one common cause of pancreatitis. What's the other big one, and did you rule it out?"
@@ -240,7 +240,7 @@ Ingrid Solano is a 68-year-old retired bookkeeper with hypertension (lisinopril)
 - **Diagnosis leak by design:** the authored `chief_complaint` ("the gallstones gave me pancreatitis") contains both keyword groups that score the full diagnosis (`["pancreatitis"]` + `["gallstone",...]`). A learner who parrots the opener gets full diagnosis credit. This also conflicts with the patient prompt rule "Never name or guess any diagnosis or medical condition" and with the planned leak filter. That's realistic for a referred patient, but the scoring should require something beyond the patient's words (for example "resolved," "mild," or "interval cholecystectomy"), or the chief complaint should say "the hospital said it was my pancreas, from stones." **Resolved 2026-10-03:** the opener and `chief_complaint` now say "my pancreas" and "stones" in lay terms, so parroting them scores no diagnosis (tested). `past_medical` still names the pancreatitis, which the learner earns by asking.
 - **Clinically arguable authored content:**
   - The aspirin critical item says "Low-dose aspirin is usually continued for a laparoscopic cholecystectomy." For self-started primary-prevention aspirin at 68, USPSTF 2022 advises against initiation and POISE-2 shows no perioperative benefit. Stopping 7 days before surgery is at least as defensible. Suggest rewording to "the team must know about it and decide whether to continue it; it has no indication."
-  - `urgency: "elective"` and `cases.ts` "Interval cholecystectomy" follow standard labels. But ACG 2024 and PONCHO favor same-admission surgery, so Jarvis should treat "schedule in a few months" as a miss. The `expected.onset` "why" already says this.
+  - `urgency: "elective"` and `cases.ts` "Interval cholecystectomy" follow standard labels. But ACG 2024 and PONCHO favor same-admission surgery, so Scalpal should treat "schedule in a few months" as a miss. The `expected.onset` "why" already says this.
   - The differential includes "hypertriglyceridemia," but no triglyceride value exists on the chart and the `TESTS` list has no lipid panel, so the learner cannot exclude it in-sim.
   - The "drug-induced" differential is real here: she takes lisinopril (an ACE inhibitor, a reported cause). That's worth stating in the teaching text.
 - **Chart has A1c 5.9% (2026-02-10)**, a prediabetic range, not mentioned in the authored history. It's consistent with encounter glucose 102. Not a contradiction. The dossier has the patient know only "my sugar was creeping up."

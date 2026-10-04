@@ -7,7 +7,7 @@ Updated October 3, 2026. This is the recommended UX for the [latest experience f
 1. **The learner never moves artificially; scenes come to them.** No artificial locomotion and no camera motion. Every VR transition is a fade and the learner is spawned facing the focal point. In AR mode the OR is passthrough: the real room, a real participant on a table, virtual anatomy registered onto them. In VR mode it is the virtual OR.
 2. **One click to content.** No upfront controls tutorial. Teach each mechanic the first time it is needed.
 3. **The LLM talks; the engine decides.** Exam findings, test results, scoring and step progression come only from authored deterministic state. Voice agents never invent clinical facts or scene effects.
-4. **One voice role at a time, one per space.** Patient in the office, Jarvis as the attending in the office, Jarvis as the coach in the OR. Never two agents speaking at once.
+4. **One voice role at a time, one per space.** Patient in the office, Scalpal as the attending in the office, Scalpal as the coach in the OR. Never two agents speaking at once.
 5. **Commit, consequence, reflect.** The learner may be wrong, sees the result, and the run still finishes in the correct surgery.
 6. **Two separate scores.** Clinical reasoning (office) and procedural skill (OR) are never blended.
 7. **Short by default, deep on request.** Full run about 13–18 minutes; the judge fast path is about 5–6 minutes and samples every stage.
@@ -78,18 +78,18 @@ The transition uses a stereo geometry fade, not a compositor layer, and unloads/
 
 **Exam and orders.** Exam maneuvers are picked from a short in-world list near the patient (no deep menus); findings render from encounter state. Orders return after a short, believable delay. Every maneuver and order carries a tier: Critical, Reasonable, Neutral, Unnecessary (Full Code pattern), so "order everything" shows up on the scorecard.
 
-**Time.** A soft clock, about 6–8 minutes. At ~75%, an in-world cue (the patient says it's getting worse, a nurse knocks). At 100%, Jarvis asks "Ready to present?" Never a hard fail.
+**Time.** A soft clock, about 6–8 minutes. At ~75%, an in-world cue (the patient says it's getting worse, a nurse knocks). At 100%, Scalpal asks "Ready to present?" Never a hard fail.
 
-**Hints, three tiers, each logged:** patient nudge → Jarvis Socratic question → explicit suggestion.
+**Hints, three tiers, each logged:** patient nudge → Scalpal Socratic question → explicit suggestion.
 
-**Presenting.** Jarvis enters (distinct avatar, voice, caption color, spatial position) with an explicit handoff line: "Okay, present your patient." The patient connection closes first; pending patient replies are discarded. The learner states diagnosis, differential, procedure and urgency.
+**Presenting.** Scalpal enters (distinct avatar, voice, caption color, spatial position) with an explicit handoff line: "Okay, present your patient." The patient connection closes first; pending patient replies are discarded. The learner states diagnosis, differential, procedure and urgency.
 
 ## 4. Diagnosis → Surgery Handoff
 
 Recommended (resolves the open decision in [decisions](decisions.md) unless Stephen chooses otherwise):
 
-1. Jarvis records exactly what the learner said and the reasoning scorecard grades it.
-2. **If the plan is wrong,** Jarvis challenges once, stating an observation and then asking for the learner's reasoning: "I heard gastroenteritis. I'm worried about the right lower quadrant rebound and a white count of 14. What made you lean away from appendicitis?" The learner may revise once (logged as "revised after prompt").
+1. Scalpal records exactly what the learner said and the reasoning scorecard grades it.
+2. **If the plan is wrong,** Scalpal challenges once, stating an observation and then asking for the learner's reasoning: "I heard gastroenteritis. I'm worried about the right lower quadrant rebound and a white count of 14. What made you lean away from appendicitis?" The learner may revise once (logged as "revised after prompt").
 3. **If it is still wrong,** a short consequence card ("6 hours later: perforated, febrile") with worsening vitals, then "The surgical team takes the case. You'll scrub in." The run continues to the **correct** procedure, flagged "case escalated".
 4. The learner never operates on the wrong procedure: there is no authored content for it and it would teach a false operation.
 
@@ -117,12 +117,12 @@ A world-locked panel (or a robot hand on the OR table) plays the derived Shadow-
 
 PEARLS-lite, about 60–90 s:
 
-1. Jarvis asks one reaction question by voice ("How did that feel?"), unscored.
+1. Scalpal asks one reaction question by voice ("How did that feel?"), unscored.
 2. One self-assessment question ("One thing you'd do differently?").
 3. Reveal the two scorecards:
    - **Clinical reasoning:** critical history items asked, missed questions listed, critical exam maneuvers done, orders by tier, diagnosis, whether the differential included the must-not-miss items, procedure and urgency, hints used, time.
    - **Procedural skill:** steps completed in order, time per step versus benchmark, path length, errors by type, decision-point answers.
-4. Jarvis gives at most two strengths and two improvements, generated from the deterministic event log so it cannot invent events.
+4. Scalpal gives at most two strengths and two improvements, generated from the deterministic event log so it cannot invent events.
 5. One take-away line, then **Choose another patient** (back to explore) or **Retry surgery**.
 
 ## Judge Fast Path
@@ -134,7 +134,7 @@ A "Demo mode" toggle preselects the best-tuned case, shows suggested-question ch
 | Pick patient | 30 s | 10 s (preselected) |
 | History | 3–4 min | 60–90 s (3–4 key questions, chips) |
 | Exam and orders | 1–2 min | 30 s |
-| Present to Jarvis | 1 min | 30 s |
+| Present to Scalpal | 1 min | 30 s |
 | Reasoning scorecard | 30 s | 15 s |
 | OR onboarding | 60–90 s | 20 s (skipped if done) |
 | Surgery | 4–6 min | 90 s (2–3 key steps + 1 decision point) |
@@ -157,7 +157,7 @@ Audited main `440069f28dd10b77e1c9d3e3cd6b928dee154f70`, then synchronized the r
 
 The world-locked brand glass panel implements replay → unscored reaction → self-assessment → separate scorecards. **Missing run data displays “No result for this run”; sample scores require explicit demo selection.** `diagnosisAvailable` and `surgery.available` distinguish unavailable assessments from zero scores. The procedural card consumes the actual surgery engine’s finalized `BodyGrade`: exact points out of its current 80 available points, explicitly labeled illustrative and uncalibrated. Early finish can leave goals incomplete; missing milestones remain visible. Hints and path economy are unavailable when unmeasured, and individual decision correctness is not invented from aggregate results.
 
-Jarvis's one reaction question is now rendered by the server for the canonical handoff run ID mapped during native coach creation or recovery and played through the existing local-speech API. Client prompt overrides are not an enforcement boundary. This implementation provides one spoken question and written self-assessment; it does not record or conduct a free conversation about the response. At most two strengths and two improvements come deterministically from logged facts. Voice failure leaves the questions on screen.
+Scalpal's one reaction question is now rendered by the server for the canonical handoff run ID mapped during native coach creation or recovery and played through the existing local-speech API. Client prompt overrides are not an enforcement boundary. This implementation provides one spoken question and written self-assessment; it does not record or conduct a free conversation about the response. At most two strengths and two improvements come deterministically from logged facts. Voice failure leaves the questions on screen.
 
 A bundled 20-second **synthetic Shadow-hand sample** remains a visibly labeled video fallback, independently of actual job state. A recording must carry a matching capture-provenance manifest before the gateway labels it learner, rehearsal or sample; missing provenance stays unknown. Durable result files contain artifact IDs rather than expiring grants. Players resolve fresh authorized URLs, bind video by artifact identity, and preserve position on error/expiry refresh. Polling backs off and stops when processing ends. Error timestamps seek only when their time is known and the event/capture clocks match with an explicit verified mapping. Open-body events use the pausing `active_interaction` clock; a wall-clock recording offset alone is insufficient. Late snapshot-only facts have unknown timestamps and cannot be scrubbed.
 

@@ -673,7 +673,7 @@ describe("7. laptop sim buttons on an open-body session", () => {
 });
 
 // ---------------------------------------------------------------------------------------------------
-describe("8. Jarvis context", () => {
+describe("8. Scalpal context", () => {
   it("has the vitals line, injuries, the current milestone's unmet facts, and only achieved milestones", async () => {
     const r = rig();
     const { sid } = await r.create(PRIYA);
@@ -710,7 +710,7 @@ describe("8. Jarvis context", () => {
     expect(item.done && item.current).toBe(false);
   });
 
-  it("FIXED (low): headset 1 Hz ticks flood the timeline Jarvis sees", async () => {
+  it("FIXED (low): headset 1 Hz ticks flood the timeline Scalpal sees", async () => {
     // Repro: 10 headset ticks while bleeding. Each tick is a 'surgery' event handled like a learner action:
     // inputCount++, and the timeline / lastEvent get "Assistant: tick on the skin." every second, pushing the
     // real actions out of the 8-line "Recent" context within 8 s of bleeding.

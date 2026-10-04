@@ -1,5 +1,5 @@
-// Jarvis voice page. State arrives from the coach over SSE; the arbiter decides what is spoken and when.
-// Warnings play a pre-rendered clip in Jarvis's voice (no LLM in the loop); cautions become queued LLM
+// Scalpal voice page. State arrives from the coach over SSE; the arbiter decides what is spoken and when.
+// Warnings play a pre-rendered clip in Scalpal's voice (no LLM in the loop); cautions become queued LLM
 // turns; the agent's background context is updated only when something meaningful changes.
 import { Conversation } from "https://esm.sh/@elevenlabs/client@1.26.0";
 import { createArbiter, percentile, semanticKey } from "/jarvis/arbiter.js";
@@ -93,7 +93,7 @@ function stateTag() {
   return snapshot ? `v${snapshot.version} step ${snapshot.stepNumber}/${snapshot.stepCount} "${snapshot.step.title}"` : "";
 }
 
-// Mirror what Jarvis and the learner actually said, and the voice status, into the shared session.
+// Mirror what Scalpal and the learner actually said, and the voice status, into the shared session.
 function mirrorTranscript(speaker, text) {
   if (sid && text) api("POST", `/coach/sessions/${sid}/transcript`, { speaker, text }).catch(() => {});
 }
@@ -268,7 +268,7 @@ async function startVoice() {
 }
 
 // Pick a patient: the 1:1 patient interview first when the patient has one, otherwise straight to surgery.
-// Jarvis is not part of the interview; he connects in the operating room.
+// Scalpal is not part of the interview; he connects in the operating room.
 const encounter = createInterviewFlow({
   api,
   log,
@@ -292,7 +292,7 @@ async function startSurgery(encounterId = "") {
   // The scored office encounter carries into the operating room prompt.
   const created = await api("POST", "/coach/sessions", { patientId, mode: $("presentation").value, ...(encounterId ? { encounterId } : {}) });
   if (!created.ok) { log("event", created.json.error?.message ?? "Could not start.", "urgent"); $("start").disabled = false; return; }
-  log("event", "Surgery: Jarvis is coaching. Use the simulator or the headset.");
+  log("event", "Surgery: Scalpal is coaching. Use the simulator or the headset.");
   sid = created.json.sessionId;
   arbiter = createArbiter();
   traces.length = 0;

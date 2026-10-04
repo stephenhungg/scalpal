@@ -797,7 +797,7 @@ export const setAttemptResult = spacetimedb.reducer(
 );
 
 // ---------------------------------------------------------------------------
-// Coach (Jarvis) transcript and status
+// Coach (Scalpal) transcript and status
 // ---------------------------------------------------------------------------
 
 export const postCoachMessage = spacetimedb.reducer(
@@ -831,7 +831,7 @@ export const setCoachStatus = spacetimedb.reducer(
 );
 
 // ---------------------------------------------------------------------------
-// Pre-op encounter (Jarvis lane)
+// Pre-op encounter (Scalpal lane)
 // ---------------------------------------------------------------------------
 
 function encounterFor(ctx: Ctx, encounterId: string) {

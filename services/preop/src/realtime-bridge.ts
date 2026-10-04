@@ -3,8 +3,8 @@ import { DbConnection, tables } from "./module_bindings/index.js";
 import type { EncounterLogEntry, EncounterSession, Scorecard } from "./encounter.js";
 import type { InterviewScorecard, InterviewSession } from "./interview.js";
 
-// Jarvis's connection to the shared SpacetimeDB session (Nathan's module), as the `coach` role.
-// Everything Jarvis does is mirrored there live, so the companion, the headset, and anyone else
+// Scalpal's connection to the shared SpacetimeDB session (Nathan's module), as the `coach` role.
+// Everything Scalpal does is mirrored there live, so the companion, the headset, and anyone else
 // subscribed see it as it happens: transcript lines, voice status, the pre-op encounter (every
 // question, exam, test, phase, and the scorecard), and highlight commands to the headset.
 // The HTTP coach API keeps working when no session is bound.
@@ -141,7 +141,7 @@ export class RealtimeBridge implements RealtimeSink {
     if (!conn || !this.ready) throw new Error("realtime database not connected");
     // The same identity can already coach older sessions; bind to the membership this join created.
     const before = new Set([...conn.db.myMemberships.iter()].filter((x) => x.role === "coach").map((x) => x.sessionId));
-    await conn.reducers.joinSession({ code: code.trim().toUpperCase(), displayName: "Jarvis" });
+    await conn.reducers.joinSession({ code: code.trim().toUpperCase(), displayName: "Scalpal" });
     for (let i = 0; i < 100; i++) {
       const m = [...conn.db.myMemberships.iter()].find((x) => x.role === "coach" && !before.has(x.sessionId));
       if (m) {

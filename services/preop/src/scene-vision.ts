@@ -1,11 +1,11 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { CoachSnapshot } from "./coach.js";
 
-// Jarvis's eyes. A point-of-view frame (the laptop camera rig, or the Quest composite of passthrough plus
+// Scalpal's eyes. A point-of-view frame (the laptop camera rig, or the Quest composite of passthrough plus
 // virtual overlay) goes to a fast vision model together with labeled boxes the scene already knows and
 // the live coach state. Two uses:
 //   look:  the learner asks "what am I looking at / how do I approach this"; answer from the frame.
-//   watch: every few seconds, a one-line summary of the view goes into Jarvis's context before he's asked.
+//   watch: every few seconds, a one-line summary of the view goes into Scalpal's context before he's asked.
 // The labeled boxes come from the scene graph or a detector and are trusted over the model's own guesses:
 // general vision models are weak at naming anatomy, so the model describes and reasons, it does not
 // identify.
@@ -59,7 +59,7 @@ function stateLine(s: CoachSnapshot): string {
     .join("\n");
 }
 
-const LOOK_SYSTEM = `You are the eyes of Jarvis, a surgical coach in a teaching simulator. The image is the learner's point of view: a camera view, possibly with virtual anatomy and instruments drawn over it. The labeled objects list comes from the simulator and an object detector; trust those labels and positions over your own identification, and never name an anatomical structure that is not in that list. The simulator state says what the learner should be doing, not what is in the image: never say they are holding or using an instrument unless the labeled objects or the image plainly show it; if what they hold differs from the instrument this step needs, say so. Answer the learner's question in at most 50 words of plain spoken English, using left, right, top, bottom, and nearby landmarks so they can find things. If the image does not show what they need, say what to move or look at instead. If the image plainly does not show a body, a surgical field, or the overlay the labels describe, say you cannot see the field clearly and what to point the camera at; do not describe structures from the labels alone. No lists or markdown.`;
+const LOOK_SYSTEM = `You are the eyes of Scalpal, a surgical coach in a teaching simulator. The image is the learner's point of view: a camera view, possibly with virtual anatomy and instruments drawn over it. The labeled objects list comes from the simulator and an object detector; trust those labels and positions over your own identification, and never name an anatomical structure that is not in that list. The simulator state says what the learner should be doing, not what is in the image: never say they are holding or using an instrument unless the labeled objects or the image plainly show it; if what they hold differs from the instrument this step needs, say so. Answer the learner's question in at most 50 words of plain spoken English, using left, right, top, bottom, and nearby landmarks so they can find things. If the image does not show what they need, say what to move or look at instead. If the image plainly does not show a body, a surgical field, or the overlay the labels describe, say you cannot see the field clearly and what to point the camera at; do not describe structures from the labels alone. No lists or markdown.`;
 
 const WATCH_SYSTEM = `You summarize a surgical training simulator's point-of-view frame for a voice coach who cannot see it. Using the labeled objects list (trusted) and the image, write one sentence of at most 25 words: what is in view and any problem a coach should know (target out of frame, hand blocking the view, wrong area, instrument far from the target, a different instrument than the step needs). The simulator state is what should happen, not what is visible. Never name anatomy that is not in the list. No preamble.`;
 

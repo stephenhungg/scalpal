@@ -2,7 +2,7 @@
 
 > **Scope notice:** the current product flow is the [latest experience flow](current-direction.md#latest-experience-flow): launch → explore patients → diagnosis office → full-VR surgery → required robot replay. Mixed reality with a real participant, conversational selection and the rotating preview are off the main path. Where this document disagrees, current direction wins.
 
-> Current scope: full VR throughout, one Jarvis coach/attending plus the voice patient, live companion state/media and video-derived robot replay. Solana and monetary rewards are removed. Read the [system integration map](system-integration.md) for actual implementation status.
+> Current scope: full VR throughout, one Scalpal coach/attending plus the voice patient, live companion state/media and video-derived robot replay. Solana and monetary rewards are removed. Read the [system integration map](system-integration.md) for actual implementation status.
 
 Updated October 3, 2026. This is the current product direction for an MHacks demo, not a validated medical product or robotics dataset business.
 
@@ -49,7 +49,7 @@ The long-term potential customer is a lab seeking useful demonstrations for a de
 
 ## The Experience
 
-The learner browses synthetic FinchNode patients, diagnoses the chosen patient in a full-VR doctor's office through a voice conversation with the patient and a presentation to the Jarvis attending, then performs the surgery that diagnosis calls for in a full-VR operating room. Structured feedback and the required robot replay finish the session. See the [demo flow](demo-flow.md).
+The learner browses synthetic FinchNode patients, diagnoses the chosen patient in a full-VR doctor's office through a voice conversation with the patient and a presentation to the Scalpal attending, then performs the surgery that diagnosis calls for in a full-VR operating room. Structured feedback and the required robot replay finish the session. See the [demo flow](demo-flow.md).
 
 The headset is the immersive client; the companion website supports observers/results, with a separate composited stream and external video-processing worker. The learner should see meaningful activity and honest progress, rather than internal model names or controller jargon.
 

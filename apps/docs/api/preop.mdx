@@ -12,7 +12,7 @@ Every response carries `actions` (`{id, label, method, route}`), and every route
 | GET | `/` | `ServiceIndex`: entry actions |
 | GET | `/patients` | `PatientList`: every scenario with procedure, urgency and status |
 | GET | `/patients/:id/case` | `SurgicalCase`: everything to render one case |
-| GET | `/patients/:id/brief` | `PreopBrief`: flags, chart lines, gaps and a Jarvis line |
+| GET | `/patients/:id/brief` | `PreopBrief`: flags, chart lines, gaps and a Scalpal line |
 | POST | `/patients/:id/preop-check` | `PreopCheckResult`. Body: `{"selected": ["bleeding"]}` |
 | GET | `/procedures`, `/procedures/:id` | Procedures |
 | GET | `/anatomy`, `/instruments` | Catalogs |
@@ -23,9 +23,9 @@ Every response carries `actions` (`{id, label, method, route}`), and every route
 
 `:id` takes a FinchNode subject (`patient-demo-polypharmacy`) or a scenario id (`polypharmacy-senior`).
 
-## Jarvis tools
+## Scalpal tools
 
-ElevenLabs webhook tools, all `POST` with a JSON body. Each returns 200 with a `say` field, even on failure, so Jarvis always has something true to say.
+ElevenLabs webhook tools, all `POST` with a JSON body. Each returns 200 with a `say` field, even on failure, so Scalpal always has something true to say.
 
 | Tool | Route | Body |
 | --- | --- | --- |

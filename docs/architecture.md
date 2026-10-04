@@ -6,7 +6,7 @@ Updated October 3, 2026. Use the [system integration map](system-integration.md)
 
 ## Shared Native Runtime
 
-Scalpal has one Unity application. The main flow is full VR around an authored virtual patient/table; the earlier mixed-reality presentation over a real reclining participant remains in the repository off the main path. Both presentations use the same anatomy identities, tools, authored exercise rules, Jarvis and session flow. A mode changes the background and patient-fit source. It does not instantiate another coach, scorer or storage system.
+Scalpal has one Unity application. The main flow is full VR around an authored virtual patient/table; the earlier mixed-reality presentation over a real reclining participant remains in the repository off the main path. Both presentations use the same anatomy identities, tools, authored exercise rules, Scalpal and session flow. A mode changes the background and patient-fit source. It does not instantiate another coach, scorer or storage system.
 
 | Layer | Owns | Runs where |
 | --- | --- | --- |
@@ -24,7 +24,7 @@ Main currently contains tool/runtime and room/patient components. Team feature b
 
 Keep rendering, tracking, physics and immediate validity gates local. A network round trip must not decide whether the next anatomy frame can render or a dropped controller remains held.
 
-The first proposed integration keeps Unity's authored runner responsible for accepted local steps and publishes its confirmed state to SpacetimeDB. Jarvis requests allowed actions and consumes confirmed context; Nathan routes and persists coordination rather than introducing another scoring engine. Matthew currently runs local and server engines, so this authority choice still needs to be implemented consistently. See the concrete divergence risks in the map.
+The first proposed integration keeps Unity's authored runner responsible for accepted local steps and publishes its confirmed state to SpacetimeDB. Scalpal requests allowed actions and consumes confirmed context; Nathan routes and persists coordination rather than introducing another scoring engine. Matthew currently runs local and server engines, so this authority choice still needs to be implemented consistently. See the concrete divergence risks in the map.
 
 One action follows: tracked input or bounded voice request → validate session/attempt, scene, registration, target and step → apply/reject → publish actual outcome → acknowledge → update coach/observer. Raw contact for focus, an applied visual effect and a scored transition are separate events. Use one scored adapter with retry identity and deduplication.
 

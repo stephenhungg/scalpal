@@ -68,7 +68,7 @@ Two saved low-light images missed a visible shaker bottle in host inference. Lat
 - Patient-specific internal anatomy, surgical-tool tip tracking, contact forces, tissue physics, or clinical accuracy.
 - Permitted camera clip recording/export with synchronized virtual scene state.
 - Video-derived hand reconstruction, articulated robot-hand retargeting, replay, or learned robot policies.
-- Jarvis voice tools, actual Blender selection assets, a complete exercise, backend validation, wallet pairing, or rewards.
+- Scalpal voice tools, actual Blender selection assets, a complete exercise, backend validation, wallet pairing, or rewards.
 - Quantitative stereo alignment under head/object movement, total latency, sustained render performance, and complete focus/pause/resume behavior.
 
 The supplied 80-class detector does not identify surgical instrument categories and does not output body or hand joint poses. A bottle detector is infrastructure evidence; it is not a torso tracker or motion-capture system.

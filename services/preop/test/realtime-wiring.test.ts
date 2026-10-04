@@ -60,7 +60,7 @@ describe("realtime wiring", () => {
     expect((await req(app, "GET", "/realtime")).json).toMatchObject({ connected: true, sessionId: "ses_test" });
   });
 
-  it("routes Jarvis highlights through the shared session when the headset is there", async () => {
+  it("routes Scalpal highlights through the shared session when the headset is there", async () => {
     const { sink } = recorder({ status: "applied", reason: "" });
     const app = createApp({ client: fixtureClient(), now: () => NOW, coachTickMs: 0, realtime: sink as unknown as RealtimeBridge });
     const sid = (await req(app, "POST", "/coach/sessions", { patientId: "patient-demo-pediatric-asthma" })).json.sessionId;

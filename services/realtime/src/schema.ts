@@ -163,7 +163,7 @@ export const exerciseEvent = table(
   }
 );
 
-/** What Jarvis (and the learner) actually said, as emitted by the coach. */
+/** What Scalpal (and the learner) actually said, as emitted by the coach. */
 export const coachMessage = table(
   { name: 'coach_message' },
   {
@@ -195,7 +195,7 @@ export const coachStatus = table(
 
 /**
  * A requested app action. The coach/operator inserts it as 'pending'; the
- * headset validates and resolves it. Jarvis should only announce success after
+ * headset validates and resolves it. Scalpal should only announce success after
  * the status becomes 'applied'.
  */
 export const command = table(
@@ -404,7 +404,7 @@ export const sweepTimer = table(
 );
 
 // ---------------------------------------------------------------------------
-// Pre-op encounter (Matthew's Jarvis lane): patient interview, case
+// Pre-op encounter (Matthew's Scalpal lane): patient interview, case
 // presentation to the attending, and the deterministic scorecard.
 // ---------------------------------------------------------------------------
 
@@ -455,7 +455,7 @@ export const encounterEvent = table(
 
 /**
  * One line of the operating-room log, posted by the coach: what the state
- * tracker saw, Jarvis alerts, vitals samples, checklist changes and the case
+ * tracker saw, Scalpal alerts, vitals samples, checklist changes and the case
  * outcome. Capped per session (oldest rows are dropped first).
  */
 export const simLog = table(

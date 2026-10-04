@@ -105,7 +105,7 @@ export function validateCatalog(): string[] {
     if (!notes.length) err(`flag type "${type}" has no consideration notes`);
   }
 
-  // Jarvis coaching: every structure has facts and every step has coaching, with no orphans.
+  // Scalpal coaching: every structure has facts and every step has coaching, with no orphans.
   for (const a of ANATOMY) if (!STRUCTURE_FACTS[a.id]) err(`anatomy "${a.id}" has no coach facts`);
   for (const id of Object.keys(STRUCTURE_FACTS)) if (!ANATOMY_BY_ID.has(id)) err(`coach facts for unknown anatomy "${id}"`);
   for (const p of PROCEDURES) {

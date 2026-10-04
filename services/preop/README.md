@@ -31,7 +31,7 @@ Verified Oct 3: a patient consented on the hosted page (`u_115958ef4e58c641`, re
 | GET | `/` | `ServiceIndex`: entry actions |
 | GET | `/patients` | `PatientList`: every FinchNode scenario, with procedure, urgency, status |
 | GET | `/patients/:id/case` | `SurgicalCase`: everything to render one case (see below) |
-| GET | `/patients/:id/brief` | `PreopBrief`: flags, chart panel lines, gaps, Jarvis line |
+| GET | `/patients/:id/brief` | `PreopBrief`: flags, chart panel lines, gaps, Scalpal line |
 | POST | `/patients/:id/preop-check` | `PreopCheckResult`: body `{"selected": ["bleeding", ...]}` |
 | GET | `/procedures`, `/procedures/:id` | `ProcedureList`, `Procedure` |
 | GET | `/anatomy`, `/instruments` | `AnatomyList`, `InstrumentList` |
@@ -55,7 +55,7 @@ Verified Oct 3: a patient consented on the hosted page (`u_115958ef4e58c641`, re
 ### What a `SurgicalCase` contains
 
 - `patient`, `bodyScale` (children scale port positions down), `urgency`, `indication`, `presentation`
-- `brief`: risk `flags` (each with `severity`, `spoken`, `detail`, `structures` to highlight, `evidence`), `chart` lines for the floating chart panel, `dataGaps`, and `say` for Jarvis
+- `brief`: risk `flags` (each with `severity`, `spoken`, `detail`, `structures` to highlight, `evidence`), `chart` lines for the floating chart panel, `dataGaps`, and `say` for Scalpal
 - `procedure`: `ports` with torso-frame positions, ordered `steps` (action, instrument, target structures, ports, success check, mistakes with feedback, hints, `next`)
 - `considerations`: chart risks pinned to specific steps (anticoagulation on the liver-bed dissection, contrast allergy at the critical view)
 - `checklistOptions`: the pre-op safety check, real risks mixed with at least two distractors
@@ -83,7 +83,7 @@ Conventions the scene must follow:
 - **Anatomy meshes** are named `anat_<id>` (`AnatomyUnityNames`), one separately addressable object per structure. Highlight `brief.highlightStructures` and the current step's `targets`.
 - **Instrument prefabs** are named `inst_<id>` (`InstrumentPrefabs`).
 - **Torso frame:** meters, origin at the umbilicus on the skin. Local `+Z` toward the head, `+Y` out of the abdomen, so `+X` is the participant's left. Registration owns the torso root's transform; ports are its children at `TorsoFrame.PortLocalPosition(port, case.bodyScale)`.
-- **Mistakes:** when an instrument collider touches a structure, call `runner.Handle(CaseEvent.Touch(structureId, instrumentId))`. Wrong-structure touches come back as mistakes with feedback text for Jarvis to say.
+- **Mistakes:** when an instrument collider touches a structure, call `runner.Handle(CaseEvent.Touch(structureId, instrumentId))`. Wrong-structure touches come back as mistakes with feedback text for Scalpal to say.
 
 ### Quest networking
 
@@ -91,9 +91,9 @@ Conventions the scene must follow:
 - Android blocks cleartext HTTP unless Player Settings → Other Settings → **Allow downloads over HTTP** is enabled for development builds. That is a global Unity setting (Stephen owns ProjectSettings); otherwise use an HTTPS deployment.
 - If the service is unreachable, the client answers from the bundled JSON, so the demo still runs end to end.
 
-## ElevenLabs (Jarvis) server tools
+## ElevenLabs (Scalpal) server tools
 
-Create each as a **webhook (server) tool**, method POST, JSON body, pointed at the deployed service URL. Every tool returns HTTP 200 with a `say` field, including failures, so Jarvis can always speak a result.
+Create each as a **webhook (server) tool**, method POST, JSON body, pointed at the deployed service URL. Every tool returns HTTP 200 with a `say` field, including failures, so Scalpal can always speak a result.
 
 | Tool | URL | Body | Use |
 | --- | --- | --- | --- |
@@ -104,7 +104,7 @@ Create each as a **webhook (server) tool**, method POST, JSON body, pointed at t
 
 Suggested system prompt fragment: *"Only state patient facts returned by tools. Never invent medications, labs, or allergies. If a tool reports a gap, say it is unknown."*
 
-## Jarvis live coach
+## Scalpal live coach
 
 Real-time voice coach on top of the same catalogs. See [docs/jarvis-handoff.md](../../docs/jarvis-handoff.md) for the Unity, Blender, and SpacetimeDB side.
 

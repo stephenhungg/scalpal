@@ -2,7 +2,7 @@ import type { CoachEvent, CoachSession } from "./coach.js";
 import { bodyAction, type BodyAction } from "./open-body.js";
 
 // Laptop demo driver for open-body cases: the same sim buttons as the laparoscopic flow, expressed as
-// measured body actions and tracker events, so Jarvis can be exercised without the headset. Each button
+// measured body actions and tracker events, so Scalpal can be exercised without the headset. Each button
 // does something real in the body reducer; none of it bypasses the coach's normal event path.
 
 // A wrong way to do each expected milestone, chosen so the matching guardrail fires.

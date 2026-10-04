@@ -140,7 +140,7 @@ Synthetic patient. Illustrative teaching content, not clinical guidance.
 
 ---
 
-## 2. CLINICIAN KEY (never given to the patient agent; for Jarvis and authors)
+## 2. CLINICIAN KEY (never given to the patient agent; for Scalpal and authors)
 
 ### Case summary
 
@@ -193,7 +193,7 @@ Sam Ortiz is a 61-year-old retired bus driver and former 30-pack-year smoker (qu
 
 > "Mr. Ortiz is a 61-year-old retired bus driver, a former 30-pack-year smoker, with hypertension and hyperlipidemia. I confirmed his identity in person because he shared only medications and allergies, so his history, labs and vitals came from him and from today. He has had five or six episodes of postprandial right upper quadrant pain over six months, the last two weeks ago. Each was steady and 7 out of 10, sometimes radiated to the right shoulder, was triggered by fatty meals, came with nausea, and resolved within one to two hours. He has had no fever, jaundice, dark urine or pale stools. Today his vitals are normal and his abdomen is soft with a negative Murphy sign. CBC, CRP, BMP, LFTs and lipase are normal. Ultrasound shows multiple gallstones with a 3 mm wall, no pericholecystic fluid and a 4 mm duct. This is symptomatic cholelithiasis, or biliary colic. Cholecystitis, a duct stone and pancreatitis are unlikely given the timing, exam and labs. Given his smoking history I asked about exertional symptoms and he has none, but I'd get an ECG. Meds are lisinopril and atorvastatin only. His penicillin allergy is a remote rash, so cefazolin is fine. Plan: elective laparoscopic cholecystectomy. Hold lisinopril the morning of surgery and confirm identity at the time out."
 
-### Socratic probes Jarvis can use (for common misses)
+### Socratic probes Scalpal can use (for common misses)
 
 - Missed identity confirmation or past medical: "What does his chart tell you about who he is and what he has? How did you handle that?"
 - Didn't order BMP or LFTs: "There are no labs on his chart. What would you want before an elective operation, given his medications?"
@@ -231,6 +231,6 @@ Sam Ortiz is a 61-year-old retired bus driver and former 30-pack-year smoker (qu
 - **Chart vs encounter, consistent:** lisinopril 10 mg daily (authored 2026-02-10) and atorvastatin 20 mg at bedtime (2026-01-22) match hypertension and hyperlipidemia. Penicillin "rash," `criticality: low`, recorded 2015-08-20, matches "rash in the army." The scenario envelope `categories: ["medications","allergies"]` matches the `not_shared_*` gap logic.
 - **Gap: no authored `medications` topic.** `answer("medications")` returns "From your records: lisinopril 10 MG Oral Tablet; atorvastatin 20 MG Oral Tablet." The `expected` item says "Confirm the shared list is complete and current, including anything over the counter." The patient can't answer the "anything else?" part without the dossier. Recommend authoring `medications`, for example: "Lisinopril in the morning and atorvastatin at night. Nothing else, maybe an ibuprofen once a month."
 - **Bug: `menstrual_pregnancy` for a male with no shared sex.** Sam has no authored `menstrual_pregnancy`. The engine's "does not apply" fallback checks `this.kase.patient.sex.startsWith("m")`, but for this chart `kase.patient.sex` is `""` (demographics not shared). So the tool returns "You honestly don't know or don't remember this," and a male patient would say he doesn't remember his periods. Fix by authoring the topic or by using `persona.sex` in the fallback.
-- **Jarvis label:** the attending prompt's demographics read `kase.patient.displayLabel`, which for this chart is "Unnamed patient (limited chart)" (from `brief.ts`). That's correct and intended, but Jarvis will call him "Sam" from `persona.patientName`.
+- **Scalpal label:** the attending prompt's demographics read `kase.patient.displayLabel`, which for this chart is "Unnamed patient (limited chart)" (from `brief.ts`). That's correct and intended, but Scalpal will call him "Sam" from `persona.patientName`.
 - **Chart quirk:** the shared lisinopril `MedicationRequest` references `Encounter/consent-partial-demo-encounter-1`, which is unreadable under this consent. That's harmless, but a client that resolves references will hit a 403.
 - **Clinical content check:** sound. One suggestion: with about 30 pack-years, hypertension, hyperlipidemia and age 61, "cardiac ischemia" is in the differential, but there is no ECG in `TESTS`. Consider adding `ecg` so the learner can act on the concern the case invites.

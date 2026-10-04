@@ -57,13 +57,13 @@ Legend:
 
 [R] Treat the handoff as a short **"To theatre" pre-op stage**. It is narrated as the WHO **Time-Out** and an INACSL-style **prebrief**, so the learner experiences the mode switch as clinical procedure, not a loading screen.
 
-1. The attending (Jarvis) closes the scorecard. On the wrong-plan branch, he shows the consequence card in VR first.
+1. The attending (Scalpal) closes the scorecard. On the wrong-plan branch, he shows the consequence card in VR first.
 2. A **Theatre card** offers **Volunteer patient (AR)** or **Virtual OR (VR)**. AR is the default only when the operator's preflight is all green: volunteer ready, consent given, permissions granted, pose service healthy.
 3. Fade to black, then a world-locked title card.
 4. The scene branches:
    - **VR**: fade in to the virtual OR.
    - **AR**: a deliberate 1 s fade from black to passthrough, with the title card held as a stable anchor. Then guided participant positioning, a 3-stage registration progress display, and a fit confirmation.
-5. Both paths converge on the same **Time-Out card**, where coach Jarvis connects (the third voice role). The learner confirms patient, procedure, site and the office-found risks.
+5. Both paths converge on the same **Time-Out card**, where coach Scalpal connects (the third voice role). The learner confirms patient, procedure, site and the office-found risks.
 6. "Recording hands" begins, then step 1.
 
 Office scoring and VR scene loading run in parallel with the operator settling the volunteer, so the AR path adds about 30–45 s, not minutes.
@@ -132,7 +132,7 @@ Office scoring and VR scene loading run in parallel with the operator settling t
 - [S18] INACSL **Debriefing** (2025) allows debriefing facilitated by a "technology-supported system", which supports the in-app recap.
 - [R] The handoff doubles as the OR prebrief:
   - The Theatre card states the modality (real volunteer vs virtual).
-  - The roles are learner as surgeon, Jarvis as coach and the volunteer as patient body.
+  - The roles are learner as surgeon, Scalpal as coach and the volunteer as patient body.
   - The logistics are hands-only recording.
   - The psychological safety line goes on the Time-Out card: "Mistakes are expected; this is practice." 
 
@@ -212,7 +212,7 @@ Times are *derived* targets. "L" is the learner in the headset, "O" is the opera
 
 | # | Beat | Mode | Time | On screen (exact copy) | Voice (exact copy) | L does | O does | P does |
 |---|---|---|---|---|---|---|---|---|
-| H0 | Scorecard | VR office | 20–30 s | Scorecard panel: "Clinical reasoning 82/100 · B". Lists found and missed. Footer: "Next: To theatre" | Attending Jarvis speaks `scorecard.spoken` | Reads, then presses **To theatre** | On cue "Attending phase started" (companion), walks P to the table, explains, gets verbal consent | Lies face-up, arms at sides, fitted top, shoulders to hips visible |
+| H0 | Scorecard | VR office | 20–30 s | Scorecard panel: "Clinical reasoning 82/100 · B". Lists found and missed. Footer: "Next: To theatre" | Attending Scalpal speaks `scorecard.spoken` | Reads, then presses **To theatre** | On cue "Attending phase started" (companion), walks P to the table, explains, gets verbal consent | Lies face-up, arms at sides, fitted top, shoulders to hips visible |
 | H0b | *Wrong-plan branch only* (`procedureChosenCorrectly=false` or `diagnosisResult` not `correct`) | VR office | 8–10 s | Consequence card, full-width, dim room: "6 hours later". Vitals tick: "HR 118 · T 38.9 °C · BP 98/60". Then: "Perforated appendix. The surgical team takes the case." Then: "You'll scrub in for the laparoscopic appendectomy." Tag: "Case escalated" | Attending: "The patient needs a laparoscopic appendectomy. You'll scrub in with me." | Reads, presses **Continue** (no skip on the first viewing) | – | – |
 | H1 | Theatre card (mode choice) | VR office | 5–10 s | Title: "To theatre · Priya Ramaswamy, 40". Subline: "Laparoscopic appendectomy · Urgent". Buttons: **Volunteer patient (AR)** with "Recommended" chip and "Virtual organs on a real person lying down", and **Virtual OR (VR)** with "Virtual patient and operating room". AR-disabled reason line if needed | Attending: "Your choice: operate on our volunteer, or in the virtual theatre." | Points and selects | Can override on the companion | Lies still |
 | H2 | Fade out and load | Black | 0.4 s fade + load | World-locked compositor title card: "Pre-op · Priya Ramaswamy, 40 · Laparoscopic appendectomy · Urgent". Phase stepper: Explore ✓ Office ✓ **OR** Replay Recap | Attending connection **closes before the fade** (no voice in transit). A soft "door" sound cue | Waits | – | – |
@@ -226,7 +226,7 @@ Times are *derived* targets. "L" is the learner in the headset, "O" is the opera
 | A4 | Fit preview and confirm | AR | 3–8 s | Four cyan markers at shoulders and hips, then the organ overview fades in at 0.5 s. Quality chip: "Fit: Good" (green check) or "Fit: Check alignment" (amber triangle), never colour-only. Prompt: "Do the organs sit inside the torso? **B: Looks right** · **A: Realign**". Footer: "Generic teaching anatomy, not this person's organs." | – | Leans left and right to check stability; presses B | Confirms P is comfortable | Still |
 | → T1 | | | | | | | | |
 | **Shared** | | | | | | | | |
-| T1 | Coach connects + Time-Out | Both | 20–40 s | Time-Out card (whiteboard on the OR wall in VR; world-locked panel beside the torso in AR): "TIME-OUT". Rows to confirm: **Patient**: Priya Ramaswamy, 40 · **Procedure**: Laparoscopic appendectomy · **Site**: Right lower quadrant · **Anticipated risks**: chips from office findings (e.g. "Penicillin allergy (you asked)", "On apixaban (you missed this)") · **Antibiotic prophylaxis given?** · **Imaging displayed?** Each row: tap or say "Confirmed" | Coach Jarvis, a new connection with the same voice and the coach role: "Scrubbed in with you. Time-out: confirm patient, procedure and site." After the last row: "Good. Let's begin." | Confirms rows by voice or ray | (AR) checks P is ready | Still |
+| T1 | Coach connects + Time-Out | Both | 20–40 s | Time-Out card (whiteboard on the OR wall in VR; world-locked panel beside the torso in AR): "TIME-OUT". Rows to confirm: **Patient**: Priya Ramaswamy, 40 · **Procedure**: Laparoscopic appendectomy · **Site**: Right lower quadrant · **Anticipated risks**: chips from office findings (e.g. "Penicillin allergy (you asked)", "On apixaban (you missed this)") · **Antibiotic prophylaxis given?** · **Imaging displayed?** Each row: tap or say "Confirmed" | Coach Scalpal, a new connection with the same voice and the coach role: "Scrubbed in with you. Time-out: confirm patient, procedure and site." After the last row: "Good. Let's begin." | Confirms rows by voice or ray | (AR) checks P is ready | Still |
 | T2 | Prep / Recording | Both | 2 s | "Recording hands" red dot indicator, persistent until the case ends. Small print: "Camera records your hands for the robot replay. Nothing else is saved." (AR adds: "The volunteer's image is not stored.") | – | – | – | – |
 | T3 | OR onboarding (first run only) → step 1 | Both | 20–90 s | Existing OR onboarding, then step 1 on the step list | Coach step line, under 12 words | Practises | – | Still |
 
@@ -240,12 +240,12 @@ Totals (derived):
 | Role | Lives in | Connects | Disconnects |
 | --- | --- | --- | --- |
 | Patient | Office interview | `ConnectEncounter` after `POST /encounters` | At `POST /encounters/:id/attending`. Already implemented: pending replies are invalidated. |
-| Attending Jarvis | Office presentation, scorecard, consequence, Theatre card | After `/attending` | **When the learner presses a mode button on the Theatre card**, before the fade. `voice.Disconnect()` bumps the generation so stale tool calls die. |
+| Attending Scalpal | Office presentation, scorecard, consequence, Theatre card | After `/attending` | **When the learner presses a mode button on the Theatre card**, before the fade. `voice.Disconnect()` bumps the generation so stale tool calls die. |
 | (no agent) | Fade, passthrough reveal, positioning, registration | – | System lines are pre-recorded clips or on-screen only. Agents must not narrate a state machine they do not control. Keeps latency and failure out of the critical path. |
-| Coach Jarvis | OR, from Time-Out | `POST /coach/sessions {patientId, mode, encounterId}`, then `voice.Connect(sid)` once T1 opens (after `RegistrationReady` in AR) | Recap |
+| Coach Scalpal | OR, from Time-Out | `POST /coach/sessions {patientId, mode, encounterId}`, then `voice.Connect(sid)` once T1 opens (after `RegistrationReady` in AR) | Recap |
 
 Continuity cue:
-- Attending and coach use the **same Jarvis voice and caption colour**, so it reads as one person scrubbing in.
+- Attending and coach use the **same Scalpal voice and caption colour**, so it reads as one person scrubbing in.
 - The coach's first line references the office ("Scrubbed in with you"), and the server already supplies the office context via `carryover()`.
 - The patient never speaks in the OR. In AR the real volunteer is the "patient". [R] Never put an AI patient voice on a real person.
 
@@ -315,7 +315,7 @@ Rules:
 | patientId, encounterId | `NativeEncounterSession` (`StartPatient`, `POST /encounters`) | `NativeCaseSession` | OR uses `const PatientId`. **Make it an instance field set from the ticket.** The office picker must accept the explore subject ID. |
 | procedureId/title, procedureChosenCorrectly, diagnosisResult, criticalMissed/Found | Server `Scorecard` (`encounter.ts`), via `GET /encounters/:id/score` | Theatre and consequence card; Time-Out | Unity `EncounterScore` **drops these fields**. Add them to `EncounterData.cs`. OR `const ProcedureId` must come from the scorecard, and the OR must reject procedures with no scene (cholecystectomy, colectomy) with an explicit message. |
 | urgency, bodyScale, considerations, checklistOptions | `GET /patients/:id/case` (`app.ts`, `SurgicalCase`) | Title card, Time-Out rows, VR mannequin scale | `bodyScale` applies **only in VR**. In AR the fit scale wins and `bodyScale` is ignored. |
-| risksFound / risksMissed | `GET /encounters/:id/score` → `scorecard.carryoverItems` (`encounter-carryover.ts`): each `{flagId, type, severity, label, detail, status: found/missed/chart_only, historyTopics, testIds, stepIds}`. Jarvis's coach prompt reads the same items. | Time-Out risk chips, pinned step considerations | Unity `EncounterScore` DTO must add `carryoverItems`. |
+| risksFound / risksMissed | `GET /encounters/:id/score` → `scorecard.carryoverItems` (`encounter-carryover.ts`): each `{flagId, type, severity, label, detail, status: found/missed/chart_only, historyTopics, testIds, stepIds}`. Scalpal's coach prompt reads the same items. | Time-Out risk chips, pinned step considerations | Unity `EncounterScore` DTO must add `carryoverItems`. |
 | Office context into coach | `POST /coach/sessions {encounterId}` → `carryover()` → `systemPrompt` (`coach-routes.ts`) | `QuestJarvisVoice.ConfigureConversation` | `NativeCaseSession.CreateRequest` has no `encounterId`. **Add it.** With it, the response `firstMessage` is the Time-Out line ("Scrubbed in with you. Time-out: confirm patient, procedure and site.") and `/jarvis/connection?sessionId=` keeps the office context. |
 | presentationMode | Theatre card choice → `NativePresentation.passthrough` | `POST /coach/sessions {mode}`; `RegistrationReady` gate; Spacetime snapshot | `NativePresentation.passthrough` defaults to `true`. It must be **set from the ticket before `Apply()`**. |
 | Time-Out answers | Time-Out card → `POST /patients/:id/preop-check {selected}` | `ScalpalPreopService.PreopChecked` → recap | Wiring into `NativeCaseSession` is absent. |

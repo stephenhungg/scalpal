@@ -203,7 +203,7 @@ async function main() {
   const noStreamVitals = simRows().slice(preTick).filter((a) => a.row.kind === "vitals").length;
   check(noStreamVitals >= 2, `vitals keep sampling during 5 s of bleeding with no SSE client attached (${noStreamVitals} vitals rows)`);
 
-  // Attach an SSE client the way the laptop Jarvis page does; the ticker starts with the first stream.
+  // Attach an SSE client the way the laptop Scalpal page does; the ticker starts with the first stream.
   const ac = new AbortController();
   const stream = fetch(`${PREOP}/coach/sessions/${sid}/stream`, { signal: ac.signal })
     .then(async (res) => {

@@ -5,7 +5,7 @@ import type { CoachSession } from "./coach.js";
 import type { RealtimeSink } from "./realtime-bridge.js";
 import type { SurgicalCase } from "./types.js";
 
-// Jarvis's client tools, implemented once on the server. Any voice client (the laptop page, the native
+// Scalpal's client tools, implemented once on the server. Any voice client (the laptop page, the native
 // Quest voice transport) forwards a tool call to POST /coach/sessions/:id/tools/:name and speaks the
 // returned text, so every client gets the same hints, highlights, and anatomy facts.
 

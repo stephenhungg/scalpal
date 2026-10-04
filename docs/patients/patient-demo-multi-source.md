@@ -163,7 +163,7 @@ Plausible questions outside the authored topics. All answers are neutral and mus
 
 ---
 
-## 2. CLINICIAN KEY (never given to the patient agent; for Jarvis and authors)
+## 2. CLINICIAN KEY (never given to the patient agent; for Scalpal and authors)
 
 ### 2.1 Case summary
 

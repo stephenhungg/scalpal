@@ -218,12 +218,12 @@ describe("patient facts come only from tools", () => {
     expect(s.summary().toLowerCase()).not.toContain("unremarkable");
   });
 
-  it("keeps Jarvis a listening attending who intervenes only on errors, never a second patient voice", () => {
-    // Product rule: the patient is a separate agent the learner interviews. Jarvis hears the presentation
+  it("keeps Scalpal a listening attending who intervenes only on errors, never a second patient voice", () => {
+    // Product rule: the patient is a separate agent the learner interviews. Scalpal hears the presentation
     // and challenges only what is wrong or missing, so a good presentation is not turned into a quiz.
     for (const e of ENCOUNTERS) {
       const prompt = attendingPrompt(encounterFor(e.planSubject));
-      expect(prompt).toMatch(/You are Jarvis, the attending surgeon/);
+      expect(prompt).toMatch(/You are Scalpal, the attending surgeon/);
       expect(prompt).toMatch(/never speak for the patient/);
       expect(prompt).toMatch(/let them present without interrupting/);
       expect(prompt).toMatch(/Do not run a checklist/);
@@ -572,7 +572,7 @@ describe("office to operating room", () => {
     return { status: res.status, json: (await res.json()) as Record<string, any> };
   };
 
-  it("loads the right surgery after a wrong plan and tells Jarvis what was missed", async () => {
+  it("loads the right surgery after a wrong plan and tells Scalpal what was missed", async () => {
     const id = (await req("POST", "/encounters", { patientId: "patient-demo-multi-source" })).json.encounterId;
     await req("POST", `/encounters/${id}/tools/answer`, { topic: "onset" });
     await req("POST", `/encounters/${id}/attending`);
@@ -599,7 +599,7 @@ describe("office to operating room", () => {
     expect(surgery.json.firstMessage).toBe("Scrubbed in with you. Time-out: confirm patient, procedure and site.");
     expect(surgery.json.systemPrompt).toMatch(/did not elicit: Anemia/);
     const plain = await req("POST", "/coach/sessions", { patientId: "patient-demo-multi-source" });
-    expect(plain.json.firstMessage).toMatch(/^Jarvis here/);
+    expect(plain.json.firstMessage).toMatch(/^Scalpal here/);
   });
 
   it("ignores an encounter that belongs to a different patient or is not scored", async () => {

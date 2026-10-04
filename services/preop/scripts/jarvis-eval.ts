@@ -6,7 +6,7 @@ import { bodyAction, type BodyAction } from "../src/open-body.js";
 import { PatientCondition } from "../src/patient-condition.js";
 import { NOW, fixtureClient } from "../test/helpers.js";
 
-// ElevenLabs native evaluation suite for Jarvis (surgery coach and attending) and the patient agent.
+// ElevenLabs native evaluation suite for Scalpal (surgery coach and attending) and the patient agent.
 //
 //   npm run jarvis:eval                       # upsert every scalpal- test, run them 3x, print a table
 //   npm run jarvis:eval -- --repeat 1         # cheaper smoke run
