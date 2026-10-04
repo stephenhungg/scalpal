@@ -24,9 +24,9 @@ namespace Scalpal.Surgery
             public OrganMobilization mobile;
             public readonly OpenSurgeryStroke stroke = new OpenSurgeryStroke();
             public readonly List<Vector3> marker = new List<Vector3>();
-            public Vector3 previous, anchor, contact, rawSurface, handleOffset;
+            public Vector3 previous, anchor, contact, rawSurface, handleOffset, speedOrigin;
             public bool active, previousValid, committed, grasping, ownsHandle;
-            public float strokeSent, dwell, sinceSent, speed;
+            public float strokeSent, dwell, sinceSent, speed, speedClock;
             public BodyAction lastTentMeasurement;
         }
         static readonly string[] WallIds = { "skin", "fat", "fascia", "muscle", "peritoneum" };
@@ -284,7 +284,7 @@ namespace Scalpal.Surgery
             }
             if (!state.grasping)
             {
-                state.grasping = true; state.anchor = point;
+                state.grasping = true; state.anchor = point; state.speedOrigin = point; state.speedClock = 0;
                 if (state.target)
                 {
                     var group = mobility.Find(candidate => !candidate.Held && candidate.Contains(state.target.transform));
@@ -320,9 +320,12 @@ namespace Scalpal.Surgery
                 }
                 else measuredPoint = state.target.transform.TransformPoint(state.rawSurface);
             }
+            state.speedClock += seconds;
             if (state.sinceSent < .1f) return;
             var action = Action(state.tool.instrumentId, state.instance, BodyState.ToolVerbs[state.tool.instrumentId][0], tissue, measuredPoint);
-            action.speedMps = state.speed;
+            // Net hand travel over at least 100 ms, so per-frame tracking jitter cancels instead of reading as speed.
+            action.speedMps = Vector3.Distance(point, state.speedOrigin) / Mathf.Max(state.speedClock, .1f);
+            state.speedOrigin = point; state.speedClock = 0;
             action.depthMm = tissue.tentable ? Mathf.Max(0, -Vector3.Dot(measuredPoint - state.anchor, wound.forward)) * 1000
                 : Mathf.Max(0, -wound.InverseTransformPoint(measuredPoint).z) * 1000;
             if (tissue.tentable) action.depthMm = Mathf.Max(action.depthMm, CurrentTentLift(tissue.id));

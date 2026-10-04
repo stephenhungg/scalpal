@@ -18,6 +18,8 @@ namespace Scalpal.Exercises.Engine
         // Clamps/ties control an injury at or proximal to it (smaller distance from the base); a seal
         // controls only its own point. Unmeasured occluders cannot control a measured injury.
         public const double HemostasisToleranceMm = 3;
+        // One rough-handling outcome per tool instance and tissue in this window, however often a held tool reports.
+        public const double RoughHandlingCooldownMs = 3000;
         struct Injury { public double positionMm; public bool measured; }
         readonly Dictionary<string, double> facts = new Dictionary<string, double>();
         readonly List<BodyRecord> log = new List<BodyRecord>();
@@ -28,6 +30,7 @@ namespace Scalpal.Exercises.Engine
         readonly Dictionary<string, int> looseControls = new Dictionary<string, int>(); // Unmeasured ties and seals.
         readonly Dictionary<string, List<double>> seals = new Dictionary<string, List<double>>();
         readonly Dictionary<string, List<Injury>> injuries = new Dictionary<string, List<Injury>>();
+        readonly Dictionary<string, double> roughAt = new Dictionary<string, double>();
         double clock = -1;
         public TissueDefinition[] Tissues { get; }
         public IReadOnlyList<BodyRecord> Log => log;
@@ -163,7 +166,12 @@ namespace Scalpal.Exercises.Engine
                     Put("liftMm", e.depthMm); if (tissue.tentable) Put("tented", e.depthMm >= 8 ? 1 : 0);
                     if (e.depthMm >= 15) Put("delivered");
                     if (tissue.splittable && !string.IsNullOrEmpty(e.instrumentInstanceId) && !string.IsNullOrEmpty(e.secondaryInstanceId) && e.instrumentInstanceId != e.secondaryInstanceId && e.separationMm >= 15 && e.angleDegrees <= 25) { Put("opened"); Put("splitWidthMm", e.separationMm); }
-                    if (e.speedMps > .1f || e.forceProxy > 1) outcomes.Add("rough_handling"); break;
+                    if (e.speedMps > .1 || e.forceProxy > 1)
+                    {
+                        string key = e.instrumentInstanceId + "|" + tissue.id;
+                        if (!roughAt.TryGetValue(key, out var last) || e.timeMs - last >= RoughHandlingCooldownMs) { roughAt[key] = e.timeMs; outcomes.Add("rough_handling"); }
+                    }
+                    break;
                 case "suction": if (!Tissues.Any(t=>Get(t.id,"fluidDriven")>0)) Set("", "poolMl", Math.Max(0, Get("", "poolMl") - e.durationMs * .005)); break;
                 case "inspect": Put("inspectionMs", Math.Max(Get(tissue.id, "inspectionMs"), e.durationMs)); break;
                 case "decide": Put("decision_" + e.choice); break;

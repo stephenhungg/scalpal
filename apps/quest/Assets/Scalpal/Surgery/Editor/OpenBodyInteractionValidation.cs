@@ -36,6 +36,7 @@ namespace Scalpal.Surgery.Editor
             VerifyDeformedReferences();
             VerifyOffPath(bundle, procedure);
             VerifyRetractionAndChoice(bundle, procedure);
+            VerifyRoughHandling(bundle, procedure);
             VerifyFluid(procedure);
             int fixtureChecks = checks;
             // Actual native-scene atlas: mobilize, deliver, then measure the base on the moved anatomy.
@@ -337,6 +338,24 @@ namespace Scalpal.Surgery.Editor
                     "authored choice follows the existing scored event path");
                 f.anatomy.SetRegistrationValid(false);
                 Require(!f.input.Choose("appendix","appendix_tip"), "invalid registration blocks decision submission");
+            }
+        }
+        static void VerifyRoughHandling(ScalpalBundle bundle, Procedure procedure)
+        {
+            using (var f = new Fixture(bundle, procedure, "toothed_forceps"))
+            {
+                f.Expose(procedure, 4);
+                var mistakes = new List<string>(); f.binding.MistakeMade += (_, mistake) => mistakes.Add(mistake.id);
+                f.Move(0, new Vector3(.02f, 0, .027f)); for (int i = 0; i < 3; i++) f.input.Simulate(.02f);
+                // Slow 10 mm/s lift with +/-1.5 mm frame-to-frame jitter: about 0.15 m/s instantaneous.
+                for (int i = 1; i <= 50; i++) { f.Move(0, new Vector3(.02f + (i % 2 == 0 ? .0015f : -.0015f), 0, .027f - i * .0002f)); f.input.Simulate(.02f); }
+                int lifts = f.submitted.Count(r => r.action.verb == "grasp");
+                Require(lifts >= 8 && !f.submitted.Any(r => r.outcomes.Contains("rough_handling")), "slow but noisy lift is not rough handling");
+                // Sustained 150 mm/s lift reported every 100 ms is one rough-handling mistake, not one per report.
+                for (int i = 1; i <= 30; i++) { f.Move(0, new Vector3(.02f, 0, .017f - i * .003f)); f.input.Simulate(.02f); }
+                Require(f.submitted.Count(r => r.action.verb == "grasp") >= lifts + 5 &&
+                    f.submitted.Count(r => r.outcomes.Contains("rough_handling")) == 1 &&
+                    mistakes.Count(id => id == "rough_handling") == 1, "one fast lift yields exactly one rough-handling mistake");
             }
         }
         static void VerifyFluid(Procedure procedure)

@@ -41,6 +41,8 @@ export function validBodyAction(e: BodyAction): boolean {
 // Clamps/ties control an injury at or proximal to it (smaller distance from the base); a seal
 // controls only its own point. Unmeasured occluders cannot control a measured injury.
 export const HEMOSTASIS_TOLERANCE_MM = 3;
+// One rough-handling outcome per tool instance and tissue in this window, however often a held tool reports.
+export const ROUGH_HANDLING_COOLDOWN_MS = 3000;
 interface Injury { positionMm: number; measured: boolean; }
 export class BodyState {
   readonly facts = new Map<string, number>();
@@ -52,6 +54,7 @@ export class BodyState {
   private looseControls = new Map<string, number>(); // Unmeasured ties and seals.
   private seals = new Map<string, number[]>();
   private injuries = new Map<string, Injury[]>();
+  private roughAt = new Map<string, number>();
   private clock = -1;
   constructor(readonly tissues: TissueDefinition[]) { for(const t of tissues)if(t.splittable)this.set(t.id,'bladeUsed',0); }
   get(tissueId: string, fact: string) { return this.facts.get(`${tissueId}:${fact}`) ?? 0; }
@@ -146,7 +149,9 @@ export class BodyState {
         put('liftMm',e.depthMm);if(t.tentable)put('tented',e.depthMm>=8?1:0);
         if(e.depthMm>=15)put('delivered');
         if(t.splittable&&e.instrumentInstanceId&&e.secondaryInstanceId&&e.instrumentInstanceId!==e.secondaryInstanceId&&e.separationMm>=15&&e.angleDegrees<=25){put('opened');put('splitWidthMm',e.separationMm);}
-        if(e.speedMps>.1||e.forceProxy>1)outcomes.push('rough_handling');break;
+        if(e.speedMps>.1||e.forceProxy>1){const key=`${e.instrumentInstanceId}|${t.id}`,last=this.roughAt.get(key);
+          if(last===undefined||e.timeMs-last>=ROUGH_HANDLING_COOLDOWN_MS){this.roughAt.set(key,e.timeMs);outcomes.push('rough_handling');}}
+        break;
       case 'suction':if(!this.tissues.some(t=>this.get(t.id,'fluidDriven')>0))this.set('','poolMl',Math.max(0,this.get('','poolMl')-e.durationMs*.005));break;
       case 'inspect':put('inspectionMs',Math.max(this.get(t.id,'inspectionMs'),e.durationMs));break;
       case 'decide':put(`decision_${e.choice}`);break;
