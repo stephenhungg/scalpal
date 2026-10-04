@@ -107,6 +107,28 @@ def cmd_gateway_worker(args: argparse.Namespace) -> None:
     run_worker(args.gateway, token, lease_ms=args.lease_ms, mirrored=args.mirrored, once=args.once, hand=args.hand)
 
 
+def cmd_live(args: argparse.Namespace) -> None:
+    from .live import run_live
+
+    if args.record and not args.consented:
+        raise SystemExit("--record saves hand joints computed from camera images; pass --consented once the participant agreed")
+    stats = run_live(args.port, args.hand, record=Path(args.record) if args.record else None, show=not args.headless, max_frames=args.frames, timeout_s=args.timeout)
+    if args.headless:
+        print(json.dumps({k: v for k, v in stats.items() if k not in ("last_qpos", "joint_names")}))
+
+
+def cmd_send(args: argparse.Namespace) -> None:
+    from .live import run_sender
+
+    run_sender(args.source, args.host, args.port, mirrored=args.mirrored, loop=not args.once)
+
+
+def cmd_import_episode(args: argparse.Namespace) -> None:
+    from .live import import_episode
+
+    import_episode(Path(args.episode), args.hand, Path(args.out) if args.out else None, render=not args.no_render)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="scalpal-motion", description=__doc__)
     sub = parser.add_subparsers(required=True)
@@ -156,6 +178,31 @@ def main() -> None:
     p.add_argument("--mirrored", action="store_true", help="treat clips as mirrored (selfie/webcam test footage)")
     p.add_argument("--once", action="store_true", help="handle at most one job, then exit")
     p.set_defaults(func=cmd_gateway_worker)
+
+    p = sub.add_parser("live", help="mirror the headset's MediaPipe joint stream on the Shadow hand in real time")
+    p.add_argument("--port", type=int, default=9123)
+    p.add_argument("--hand", choices=["Right", "Left"], default="Right")
+    p.add_argument("--record", default=None, help="also save received frames.jsonl to this folder")
+    p.add_argument("--consented", action="store_true", help="required with --record")
+    p.add_argument("--headless", action="store_true", help="no window; print stats (checks)")
+    p.add_argument("--frames", type=int, default=None, help="headless: stop after this many datagrams")
+    p.add_argument("--timeout", type=float, default=None, help="headless: stop after this many seconds")
+    p.set_defaults(func=cmd_live)
+
+    p = sub.add_parser("send", help="stand-in headset: MediaPipe on a clip or webcam, streamed like the Quest app")
+    p.add_argument("source", help="video path, or a webcam index such as 0")
+    p.add_argument("--host", default="127.0.0.1")
+    p.add_argument("--port", type=int, default=9123)
+    p.add_argument("--mirrored", action="store_true", help="selfie/webcam image")
+    p.add_argument("--once", action="store_true", help="play a clip once instead of looping")
+    p.set_defaults(func=cmd_send)
+
+    p = sub.add_parser("import-episode", help="headset episode (frames.jsonl) -> robot motion.json (+ replay.mp4)")
+    p.add_argument("episode", help="episode folder or frames.jsonl")
+    p.add_argument("--hand", choices=["Right", "Left"], default="Right")
+    p.add_argument("--out", default=None, help="default: <episode>/robot")
+    p.add_argument("--no-render", action="store_true")
+    p.set_defaults(func=cmd_import_episode)
 
     args = parser.parse_args()
     if getattr(args, "video", None) and args.func is cmd_run and args.out is None:

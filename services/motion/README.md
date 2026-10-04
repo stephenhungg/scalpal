@@ -34,6 +34,24 @@ uv run scalpal-motion run clip.mp4 --hand Right --smooth 0.3
 
 `run` writes `hand_track.json`, `motion.json`, and `replay.mp4` (H.264, plays in browsers when ffmpeg is installed) (source clip with landmarks next to the robot). Inputs are assumed unmirrored, like Quest passthrough. Pass `--mirrored` for selfie footage, since MediaPipe's handedness label assumes a mirrored image. Smoothing is off by default. With `--smooth`, the low-pass filter resets after every tracking gap. `out/` and `models/` are gitignored. Keep participant clips outside the repo.
 
+## Live Headset Mirror (MediaPipe joints from the Quest)
+
+The Quest hand module (`apps/quest/Assets/Scalpal/Hands`) runs MediaPipe's hand models on the headset and streams one `scalpal.hand_joints.v1` JSON datagram per camera frame over UDP. Three commands use that stream:
+
+```sh
+uv run scalpal-motion live                       # window: headset joints | Shadow hand mirroring them
+uv run scalpal-motion live --record out/ep1 --consented   # also save the received frames.jsonl
+uv run scalpal-motion send clip.mp4              # stand-in headset: MediaPipe on a clip (or webcam index 0) -> same datagrams
+uv run scalpal-motion import-episode path/to/episode     # headset or recorded frames.jsonl -> robot/motion.json + replay.mp4
+```
+
+Measured on an M2 MacBook with `send` streaming dex-retargeting's 20 s public sample clip (MIT):
+- **`live`:** 29.6 frames/s, 400 of 400 frames retargeted, and bone-length scales calibrated from the first 20 frames.
+- **`import-episode`:** 400 of 400 valid frames, with a median retargeting vector error of 6.3 mm.
+- **Cost per frame:** retargeting about 10 ms, MediaPipe on 720p frames about 57 ms.
+
+Like the offline pipeline, only finger motion transfers; the wrist stays fixed. Frames with non-finite or collapsed joints are skipped and the robot holds its last pose, because dex-retargeting's optimizer never returns on NaN input. These joints are computed from camera images, so `--record` requires `--consented`.
+
 ## Nathan's Gateway (integration path)
 
 Nathan's gateway (`nathan/companion-realtime`, `packages/contracts/worker-api.md`) is pull-based. This worker implements it:
