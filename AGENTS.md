@@ -12,8 +12,8 @@ Read `README.md`, `docs/current-direction.md` and `docs/system-integration.md` f
 
 User direction takes precedence over older proposals. In particular:
 
-- Support mixed reality with a real reclining participant and generic teaching anatomy, plus a full-VR virtual patient/operating room. Share the coach/tool/exercise core. A static room preview does not prove body registration or a native VR app. See `docs/environment-modes.md`.
-- Selection is conversational, with a rotating 3D anatomy preview during selection.
+- Build the latest experience flow in `docs/current-direction.md#latest-experience-flow`: launch → Enter → explore the FinchNode patients → full-VR diagnosis office (voice patient plus Jarvis attending) → the diagnosis decides the surgery → full-VR operating room with a virtual patient → required robot replay → recap. See `docs/demo-flow.md` and `docs/experience-ux.md`.
+- The whole run is full VR. Mixed reality with a real reclining participant, body registration, conversational case selection and the rotating anatomy preview are superseded and off the main path; keep that code but do not build on it or require it. Share one coach/tool/exercise core.
 - The robotics input proposal is recorded passthrough video, not Meta SDK hand-joint telemetry.
 - First demonstrate video-derived hand motion retargeting and replay in simulation. Do not describe replay as a learned autonomous policy.
 - Preserve both education and robotics goals. Do not silently replace the project with a pure analytics dashboard or robotics-only collector.

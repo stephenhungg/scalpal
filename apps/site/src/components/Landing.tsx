@@ -13,7 +13,8 @@ const TITLE = "Scalpal.";
 const LEDE = "Practice surgery in mixed reality with a voice coach, and turn every rep into motion a robot hand can replay.";
 
 // Loader: only the hands are on screen until the fingertips touch, then the page launches
-// (nav, word blur-in, button).
+// (nav, word blur-in, button). If the hands cannot render (no WebGL2, failed images), launch
+// immediately so the page never stays black.
 export function Landing() {
   const [launched, setLaunched] = useState(false);
 
@@ -22,7 +23,7 @@ export function Landing() {
   return (
     <main className="relative h-dvh overflow-hidden">
       <div className="absolute inset-0 z-0">
-        <AdamLayer onTouch={launch} introSpeed={3.3} />
+        <AdamLayer onTouch={launch} onUnavailable={launch} introSpeed={3.3} />
       </div>
       {/* Once the page launches, dim the hands so the bright glyphs don't fight the text. */}
       <motion.div

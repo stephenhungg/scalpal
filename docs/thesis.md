@@ -1,6 +1,8 @@
 # Thesis and Product Scope
 
-> Current scope: two shared-core MR/full-VR presentations, one Jarvis coach, live companion state/media and video-derived robot replay. Solana and monetary rewards are removed. Read the [system integration map](system-integration.md) for actual implementation status.
+> **Scope notice:** the current product flow is the [latest experience flow](current-direction.md#latest-experience-flow): launch → explore patients → diagnosis office → full-VR surgery → required robot replay. Mixed reality with a real participant, conversational selection and the rotating preview are off the main path. Where this document disagrees, current direction wins.
+
+> Current scope: full VR throughout, one Jarvis coach/attending plus the voice patient, live companion state/media and video-derived robot replay. Solana and monetary rewards are removed. Read the [system integration map](system-integration.md) for actual implementation status.
 
 Updated October 3, 2026. This is the current product direction for an MHacks demo, not a validated medical product or robotics dataset business.
 
@@ -8,14 +10,14 @@ Updated October 3, 2026. This is the current product direction for an MHacks dem
 
 **Human learning can become the engine for robot learning.**
 
-Practicing a skill and collecting robot demonstrations are often separate activities. Scalpal proposes connecting them: AI helps a person practice a supported task in mixed reality, and a permitted recording of that session supplies motion examples that can be mapped onto a simulated robot.
+Practicing a skill and collecting robot demonstrations are often separate activities. Scalpal proposes connecting them: AI helps a person practice a supported task in VR, and a permitted recording of that session supplies motion examples that can be mapped onto a simulated robot.
 
 The two sides must both remain present:
 
 1. **Human learning:** Accessible conversation, spatial anatomy visualization, structured practice, and feedback.
 2. **Robot demonstrations:** Reconstruction and retargeting of a task-relevant movement sequence, with quality checks before treating it as a useful contribution.
 
-Surgery is the initial educational setting. A real reclining person gives the scene a physical reference, while anatomy and tools are virtual. The anatomy represents a generic teaching model. Surface video does not reveal that participant's actual internal organs.
+Surgery is the initial educational setting. The patient, anatomy and tools are virtual, in a full-VR doctor's office and operating room. The anatomy represents a generic teaching model. (The earlier real-reclining-person MR setup is off the main path.)
 
 ## Immediate Demo Claim
 
@@ -41,13 +43,13 @@ No sponsor has committed to buying or funding a lab dataset. No robot-learning i
 
 ## Who Uses It
 
-The first proposed learner is a medical student or curious novice practicing anatomy and supported simulated decisions or movements. The first physical participant is a consenting teammate reclining on a table. The operator helps fit and recover the demo. Judges or spectators follow the headset mirror on the laptop.
+The first proposed learner is a medical student or curious novice practicing anatomy and supported simulated decisions or movements. No real participant reclines on a table; the patient is virtual. The operator helps start and recover the demo. Judges or spectators follow the headset mirror on the laptop.
 
 The long-term potential customer is a lab seeking useful demonstrations for a defined task. No such customer commitment is established; a hackathon prize sponsor is not automatically a dataset customer.
 
 ## The Experience
 
-Conversation replaces a swipe-based surgery catalog. During selection, Jarvis can present and manipulate a rotating 3D anatomy model so the learner understands the target before committing. Practice begins only after the chosen model is fitted to the participant and alignment is accepted. Structured feedback and robot replay status finish the session. Full VR provides an alternate authored room/patient presentation using the same core.
+The learner browses synthetic FinchNode patients, diagnoses the chosen patient in a full-VR doctor's office through a voice conversation with the patient and a presentation to the Jarvis attending, then performs the surgery that diagnosis calls for in a full-VR operating room. Structured feedback and the required robot replay finish the session. See the [demo flow](demo-flow.md).
 
 The headset is the immersive client; the companion website supports observers/results, with a separate composited stream and external video-processing worker. The learner should see meaningful activity and honest progress, rather than internal model names or controller jargon.
 
@@ -55,11 +57,11 @@ The headset is the immersive client; the companion website supports observers/re
 
 The initial slice supports one exercise and one simulated robot hand. It uses pretrained models and custom registration/retargeting logic. Model fine-tuning requires a measured recognition problem; training from scratch is not the starting point. Live robot teleoperation is optional later work, since the latest input direction is recording a video and processing it for replay.
 
-The demo uses virtual tools, not an actual procedure on the participant. It has no promised tissue deformation, force feedback, patient-specific anatomical accuracy, real robot operation, or autonomous surgical execution. No wallet, payment or completion-reward flow exists.
+The demo uses virtual tools on a virtual patient, not an actual procedure on anyone. It has no promised tissue deformation, force feedback, patient-specific anatomical accuracy, real robot operation, or autonomous surgical execution. No wallet, payment or completion-reward flow exists.
 
 ## What Success Looks Like
 
-The full journey completes repeatedly on the physical Quest. The preview corresponds to the chosen exercise; the anatomy stays acceptably fitted when tracking is valid; uncertainty blocks assessment; the coach responds to actual exercise state; the replay shows video-derived movement on the selected robot hand; and the companion reflects the same confirmed attempt with separate learning and motion quality outcomes.
+The full journey completes repeatedly on the physical Quest. The diagnosis leads to the matching surgery; invalid tracking blocks assessment; the coach responds to actual exercise state; the replay shows video-derived movement on the selected robot hand; and the companion reflects the same confirmed attempt with separate learning and motion quality outcomes.
 
 Evidence must identify failures as well as successes. The immediate robotics evidence is motion reconstruction and replay. The later robot-learning evidence would be autonomous task success on unseen initial conditions, evaluated separately from replay.
 
