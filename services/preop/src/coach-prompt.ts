@@ -108,7 +108,7 @@ ${flags}
 Chart gaps:
 ${gaps}
 
-${patientStatus ? `PATIENT STATUS (authored clinical summary of this patient; use it for context, the live state still decides what happened)\n${patientStatus}\n\n` : ""}${preop ? `FROM THE PRE-OP OFFICE\n${preop}\nYou opened with the surgical time-out. Once the learner confirms the patient, procedure, and site, name the chart risks above as anticipated risks in one sentence, say "Good. Let's begin.", and give step 1.\n\n` : ""}PROCEDURE: ${p.title} (${p.approach})
+${patientStatus ? `PATIENT STATUS (authored clinical summary of this patient; use it for context, the live state still decides what happened)\n${patientStatus}\n\n` : ""}${preop ? `FROM THE PRE-OP OFFICE\n${preop}\nYou already read the surgical time-out aloud (patient, procedure, site, the main risks) and practice has started. Do not ask the learner to confirm anything. Bring up the risks they missed in the office only when they matter during the operation.\n\n` : ""}PROCEDURE: ${p.title} (${p.approach})
 ${p.summary}
 ${p.openBody ? openBodyRules(p.openBody) : `Ports: ${p.ports.map((x) => `${x.label} (${x.sizeMm} mm)`).join("; ")}.\nOrdered steps. The learner must complete them in this order:`}
 ${steps}
@@ -118,7 +118,20 @@ ${anatomy}`;
 }
 
 // After the office, the coach opens with the WHO surgical Time-Out (docs/office-to-or-handoff.md, beat T1).
-export const TIME_OUT_OPENING = "Scrubbed in with you. Time-out: confirm patient, procedure and site.";
+const SITE: Record<string, string> = {
+  open_appendectomy: "right lower quadrant",
+  lap_appendectomy: "right lower quadrant",
+  lap_cholecystectomy: "right upper quadrant",
+  lap_sigmoid_colectomy: "left lower quadrant",
+};
+
+// The whole time-out spoken in one line, so practice can start without waiting for a spoken confirmation.
+export function timeOutOpening(kase: SurgicalCase): string {
+  const risks = kase.brief.flags.filter((f) => f.severity === "high").map((f) => f.title.toLowerCase()).slice(0, 2);
+  const site = SITE[kase.procedureId];
+  const first = kase.procedure.steps[0];
+  return `Scrubbed in with you. Time-out: ${kase.patient.name || "our patient"}, ${kase.procedure.title.toLowerCase()}${site ? `, ${site}` : ""}.${risks.length ? ` Watch for ${risks.join(" and ")}.` : ""}${first ? ` Let's begin: ${first.title.toLowerCase()}.` : " Let's begin."}`;
+}
 
 // Open surgery is free-form: the expected path coaches, the body state decides what happened.
 function openBodyRules(body: NonNullable<Procedure["openBody"]>): string {
@@ -133,7 +146,7 @@ Expected path:`;
 }
 
 export function firstMessage(kase: SurgicalCase, fromOffice = false): string {
-  if (fromOffice) return TIME_OUT_OPENING;
+  if (fromOffice) return timeOutOpening(kase);
   const first = kase.procedure.steps[0];
   const indication = kase.indication.charAt(0).toLowerCase() + kase.indication.slice(1);
   return `Scalpal here. ${kase.patient.displayLabel}, ${kase.procedure.title.toLowerCase()} for ${indication}. ${first ? `We start with ${first.title.toLowerCase()}.` : ""} Ask me anything as you go.`;

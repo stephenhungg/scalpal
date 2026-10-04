@@ -596,7 +596,8 @@ describe("office to operating room", () => {
     const byType = Object.fromEntries(card.carryoverItems.map((i: { type: string; status: string }) => [i.type, i.status]));
     expect(byType).toMatchObject({ latex: "found", anemia: "missed" });
     const surgery = await req("POST", "/coach/sessions", { patientId: "patient-demo-multi-source", encounterId: id });
-    expect(surgery.json.firstMessage).toBe("Scrubbed in with you. Time-out: confirm patient, procedure and site.");
+    expect(surgery.json.firstMessage).toMatch(/^Scrubbed in with you\. Time-out: Priya Ramaswamy, open appendectomy, right lower quadrant\..* Let.s begin: mark mcburney incision\.$/);
+    expect(surgery.json.firstMessage).not.toMatch(/confirm/i);
     expect(surgery.json.systemPrompt).toMatch(/did not elicit: Anemia/);
     const plain = await req("POST", "/coach/sessions", { patientId: "patient-demo-multi-source" });
     expect(plain.json.firstMessage).toMatch(/^Scalpal here/);
