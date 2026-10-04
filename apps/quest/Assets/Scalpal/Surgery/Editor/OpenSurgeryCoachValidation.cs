@@ -78,6 +78,10 @@ namespace Scalpal.Surgery.Editor
                 OpenSurgeryCoach.Enqueue(paced, new CoachAlertDto { kind = "wrong_tool", say = "tool", tier = "caution" });
                 Assert(paced.Count == 2 && paced.Peek().say == "hint 5", "repeated cautions collapse to the newest of each kind");
                 Assert(OpenSurgeryCoach.CautionGapSeconds >= 10, "cautions leave a quiet gap of at least 10 s between them");
+                Assert(OpenSurgeryCoach.Fresh(100, 100 + OpenSurgeryCoach.StaleSeconds) && !OpenSurgeryCoach.Fresh(100, 100 + OpenSurgeryCoach.StaleSeconds + .1f),
+                    "a queued line expires once it has waited longer than the stale limit");
+                Assert(!OpenSurgeryCoach.Relevant(new CoachAlertDto { kind = "stuck", stepId = "mark", say = "Follow the line.", tier = "caution" }, "incise_skin", true, false),
+                    "a queued hint for a finished step is no longer relevant");
                 Debug.Log("SCALPAL_OPEN_SURGERY_COACH_VALIDATION_OK synthetic relay serialization, gating, stale captions, reset and reflex URL checks; no audio hardware test");
             }
             finally { UnityEngine.Object.DestroyImmediate(fixture); }
