@@ -1,16 +1,100 @@
 import { describe, expect, it } from "vitest";
 import { createApp } from "../src/app.js";
 import { buildCase } from "../src/case-builder.js";
-import { ENCOUNTERS, ENCOUNTERS_BY_PLAN } from "../src/catalog/encounters.js";
-import { EncounterSession } from "../src/encounter.js";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { CASE_PLANS } from "../src/catalog/cases.js";
+import { ENCOUNTER_EXCLUSIONS, ENCOUNTERS, ENCOUNTERS_BY_PLAN, type Encounter } from "../src/catalog/encounters.js";
+import { DEFAULT_PATIENT_VOICES, EncounterSession, demographicsMatch } from "../src/encounter.js";
 import { attendingPrompt, patientPrompt } from "../src/encounter-prompt.js";
+import { FinchNodeError } from "../src/finchnode.js";
+import type { HealthRecord, Scenario } from "../src/types.js";
 import { validateCatalog } from "../src/validate.js";
 import { NOW, fixture, fixtureClient } from "./helpers.js";
 
 const encounterFor = (subject: string) => new EncounterSession("enc-test", buildCase(fixture(subject), "", NOW), ENCOUNTERS_BY_PLAN.get(subject)!, () => NOW);
+const SCENARIOS = (JSON.parse(readFileSync(join(import.meta.dirname, "fixtures", "scenarios.json"), "utf8")) as { data: Scenario[] }).data;
+
+// The assessment a learner would give after reading the answer key: one keyword per group.
+const perfectAssessment = (e: Encounter) => ({
+  diagnosis: e.diagnosis.keywords.map((g) => g[0]).join(" "),
+  differential: e.differential.slice(0, 3).map((d) => d.keywords[0]!),
+  procedure: e.procedureKeywords.map((g) => g[0]).join(" "),
+  urgency: e.urgency,
+});
+const elicitAll = (s: EncounterSession) => {
+  for (const item of [...s.encounter.critical, ...s.encounter.expected]) {
+    if (item.kind === "history") s.answer(item.id);
+    else if (item.kind === "exam") s.examine(item.id);
+    else s.orderTest(item.id);
+  }
+};
 
 describe("encounter catalog", () => {
   it("validates", () => expect(validateCatalog()).toEqual([]));
+
+  it("covers every case plan subject that has a procedure, or documents why not", () => {
+    for (const [subject, plan] of Object.entries(CASE_PLANS)) {
+      if (!plan.procedureId) continue;
+      expect(ENCOUNTERS_BY_PLAN.has(subject) || Boolean(ENCOUNTER_EXCLUSIONS[subject]), subject).toBe(true);
+    }
+  });
+
+  it("covers every FinchNode scenario subject that yields a buildable case", async () => {
+    const client = fixtureClient();
+    for (const scenario of SCENARIOS) {
+      if (!scenario.subject) continue;
+      let record: HealthRecord;
+      try {
+        record = await client.getRecord(scenario.subject);
+      } catch (err) {
+        expect(err).toBeInstanceOf(FinchNodeError);
+        expect(ENCOUNTER_EXCLUSIONS[scenario.subject], scenario.subject).toBeTruthy();
+        continue;
+      }
+      const kase = buildCase(record, scenario.id, NOW, scenario.subject);
+      expect(kase.procedureId, scenario.subject).toBeTruthy();
+      const encounter = ENCOUNTERS_BY_PLAN.get(scenario.subject);
+      expect(encounter, scenario.subject).toBeDefined();
+      expect(demographicsMatch(encounter!, kase), scenario.subject).toBe(true);
+    }
+  });
+
+  it("keeps every authored chart fact consistent with the FinchNode chart", () => {
+    for (const e of ENCOUNTERS) {
+      const kase = buildCase(fixture(e.planSubject), "", NOW);
+      const chart = (section: string) => kase.brief.chart.filter((l) => l.section === section).map((l) => l.text.toLowerCase());
+      // Every charted allergy substance appears in an authored allergy answer.
+      if (e.history.allergies) {
+        for (const line of chart("Allergies")) {
+          const aliases: Record<string, string> = { sulfonamide: "sulfa", contrast: "dye", media: "dye" };
+          const words = line.replace(/^allergy to /, "").replace(/ allergy/, "").replace(/\s*\(.*\)$/, "").split(" ").filter((w) => w.length > 3).map((w) => aliases[w] ?? w);
+          const said = e.history.allergies.toLowerCase();
+          expect(words.some((w) => said.includes(w)), `${e.planSubject} ${line}`).toBe(true);
+        }
+      }
+      // Every charted active drug appears in an authored medication answer (the uncoded pill by its reconciled name).
+      if (e.history.medications) {
+        const aliases: Record<string, string> = { acetaminophen: "tylenol", cholecalciferol: "vitamin d", levothyroxine: "thyroid", pressure: "hydrochlorothiazide" };
+        const said = e.history.medications.toLowerCase();
+        for (const line of chart("Medications")) {
+          const words = line.split(/[^a-z]+/).filter((w) => w.length > 4).map((w) => aliases[w] ?? w);
+          expect(words.some((w) => said.includes(w)), `${e.planSubject} ${line}`).toBe(true);
+        }
+      }
+    }
+  });
+
+  it("uses distinct voices for every adult patient except where documented", () => {
+    const byVoice = new Map<string, string[]>();
+    for (const e of ENCOUNTERS) {
+      const id = DEFAULT_PATIENT_VOICES[e.persona.voiceKey];
+      byVoice.set(id, [...(byVoice.get(id) ?? []), e.planSubject]);
+    }
+    const shared = [...byVoice.values()].filter((v) => v.length > 1);
+    // Six female speakers share five premade female voices: Dolores reuses Matilda, who voices Theo's mother.
+    expect(shared).toEqual([["patient-demo-pediatric-asthma", "patient-demo-messy-coding"]]);
+  });
 });
 
 describe("patient facts come only from tools", () => {
@@ -90,6 +174,33 @@ describe("patient facts come only from tools", () => {
 });
 
 describe("scoring", () => {
+  it.each(ENCOUNTERS.map((e) => [e.planSubject]))("scores a perfect run of %s at 100", (subject) => {
+    const s = encounterFor(subject);
+    elicitAll(s);
+    s.recordAssessment(perfectAssessment(s.encounter));
+    const card = s.score();
+    expect(card.criticalMissed).toEqual([]);
+    expect(card.diagnosisResult).toBe("correct");
+    expect(card.total).toBe(100);
+  });
+
+  it("names the patient's own procedure when the plan is missed", () => {
+    const s = encounterFor("patient-demo-polypharmacy");
+    s.recordAssessment({ diagnosis: "gallstones", differential: [], procedure: "watch and wait", urgency: "urgent" });
+    const card = s.score();
+    expect(card.diagnosisResult).toBe("partial");
+    expect(card.sections.find((x) => x.id === "plan")!.missed).toEqual(["laparoscopic cholecystectomy"]);
+    expect(card.feedback[0]).toMatch(/^Must fix: you did not cover medications\. .*apixaban/);
+  });
+
+  it("does not give elective credit to an emergency plan for colic", () => {
+    const s = encounterFor("patient-demo-001");
+    s.recordAssessment({ diagnosis: "acute cholecystitis", differential: [], procedure: "cholecystectomy", urgency: "emergency" });
+    const card = s.score();
+    expect(card.diagnosisResult).toBe("incorrect");
+    expect(card.feedback.join(" ")).toMatch(/Timing: this case is elective/);
+  });
+
   it("rewards a complete, correct encounter", () => {
     const s = encounterFor("patient-demo-multi-source");
     const e = s.encounter;
@@ -216,8 +327,33 @@ describe("encounter routes", () => {
   });
 
   it("uses the parent voice for a child and reports patients without an interview", async () => {
-    expect((await req("POST", "/encounters", { patientId: "patient-demo-pediatric-asthma" })).json).toMatchObject({ speaker: "parent", speakerName: "Laura Abernathy", patientName: "Theo Abernathy" });
-    expect((await req("POST", "/encounters", { patientId: "patient-demo-polypharmacy" })).json.error.code).toBe("no_encounter");
+    expect((await req("POST", "/encounters", { patientId: "patient-demo-pediatric-asthma" })).json).toMatchObject({ speaker: "parent", speakerName: "Laura Abernathy", patientName: "Theo Abernathy", voiceId: DEFAULT_PATIENT_VOICES.parent_female });
+    // A FinchNode subject with no authored plan still gets a fallback case, but no interview.
+    const client = fixtureClient();
+    const original = client.getRecord;
+    client.getRecord = async (subject) => (subject === "patient-demo-new" ? { ...(await original("patient-demo-001")), id: subject } : original(subject));
+    const res = await createApp({ client, now: () => NOW, coachTickMs: 0 }).request("/encounters", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ patientId: "patient-demo-new" }) });
+    expect(res.status).toBe(404);
+    expect((await res.json()).error.code).toBe("no_encounter");
+  });
+
+  it("starts an authored interview for every encounter patient", async () => {
+    for (const e of ENCOUNTERS) {
+      const created = await req("POST", "/encounters", { patientId: e.planSubject });
+      expect(created.status, e.planSubject).toBe(201);
+      expect(created.json).toMatchObject({ speaker: e.persona.speaker, speakerName: e.persona.name, patientName: e.persona.patientName, voiceId: DEFAULT_PATIENT_VOICES[e.persona.voiceKey] });
+      expect(created.json.patientFirstMessage).toBe(e.persona.opener);
+    }
+  });
+
+  it("starts the interview for the sandbox subject that mirrors each scenario", async () => {
+    const sandbox = createApp({ client: fixtureClient({ sandbox: true }), now: () => NOW, coachTickMs: 0 });
+    for (const e of ENCOUNTERS) {
+      const scenario = SCENARIOS.find((s) => s.subject === e.planSubject)!;
+      const subject = `u_test_${scenario.id.replace(/-/g, "_")}`;
+      const res = await sandbox.request("/encounters", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ patientId: subject }) });
+      expect(res.status, subject).toBe(201);
+    }
   });
 
   it("rejects invalid tools and payloads without recording an action", async () => {
@@ -282,7 +418,7 @@ describe("encounter routes", () => {
     const start = async () => (await girls.request("/encounters", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ patientId: "patient-demo-pediatric-asthma" }) })).status;
     try {
       expect(await start()).toBe(409); // authored as a boy
-      Object.assign(theo.persona, { patientSex: "female" });
+      Object.assign(theo.persona, { sex: "female" });
       expect(await start()).toBe(201); // same parent_female voice, authored girl
     } finally {
       Object.assign(theo.persona, original);
@@ -303,6 +439,41 @@ describe("encounter routes", () => {
       expect(res.status).toBe(409);
       expect((await res.json()).error.code).toBe("synthetic" in changes ? "synthetic_only" : "demographics_mismatch");
     }
+  });
+
+  // Starts an encounter for `subject` after rewriting its record's demographics.
+  const withDemographics = async (subject: string, demographics: Record<string, unknown> | undefined) => {
+    const client = fixtureClient();
+    const original = client.getRecord;
+    client.getRecord = async (s) => {
+      const record = await original(s);
+      const data = { ...record.data } as Record<string, unknown>;
+      if (demographics) data.demographics = { ...(record.data.demographics ?? {}), ...demographics };
+      else delete data.demographics;
+      return { ...record, data } as HealthRecord;
+    };
+    const res = await createApp({ client, now: () => NOW, coachTickMs: 0 }).request("/encounters", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ patientId: subject }) });
+    return { status: res.status, code: res.status === 201 ? "" : ((await res.json()) as any).error.code };
+  };
+
+  it("checks the sick patient's sex, not the speaking parent's voice", async () => {
+    const theo = ENCOUNTERS_BY_PLAN.get("patient-demo-pediatric-asthma")!.persona;
+    expect(theo).toMatchObject({ speaker: "parent", sex: "male", voiceKey: "parent_female" });
+    expect(await withDemographics("patient-demo-pediatric-asthma", { gender: "male" })).toEqual({ status: 201, code: "" });
+    expect(await withDemographics("patient-demo-pediatric-asthma", { gender: "female" })).toEqual({ status: 409, code: "demographics_mismatch" });
+    // An adult woman with a female voice is still checked against her own chart.
+    expect(await withDemographics("patient-demo-polypharmacy", { gender: "male" })).toEqual({ status: 409, code: "demographics_mismatch" });
+    // A named persona never attaches to a chart that lost its demographics.
+    expect(await withDemographics("patient-demo-messy-coding", undefined)).toEqual({ status: 409, code: "demographics_mismatch" });
+  });
+
+  it("attaches the unnamed-chart persona only while the chart really has no demographics", async () => {
+    expect(ENCOUNTERS.filter((e) => e.persona.chartDemographics).map((e) => e.planSubject)).toEqual(["patient-demo-consent-partial"]);
+    expect(await withDemographics("patient-demo-consent-partial", undefined)).toEqual({ status: 201, code: "" });
+    const sam = ENCOUNTERS_BY_PLAN.get("patient-demo-consent-partial")!.persona;
+    // Even demographics that agree with the persona are refused: the persona was authored for an unshared chart.
+    expect(await withDemographics("patient-demo-consent-partial", { name: sam.patientName, birthDate: "1965-01-15", gender: sam.sex })).toEqual({ status: 409, code: "demographics_mismatch" });
+    expect(await withDemographics("patient-demo-consent-partial", { gender: "male" })).toEqual({ status: 409, code: "demographics_mismatch" });
   });
 });
 

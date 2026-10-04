@@ -62,6 +62,8 @@ describe("encounter page flow", () => {
 
   it("goes straight to surgery only when the patient has no authored interview", async () => {
     const h = harness();
+    // Every buildable demo patient now has an interview, so the server's no_encounter answer is injected.
+    h.faults.push({ method: "POST", path: /^\/encounters$/, result: serverError(404, "no_encounter") });
     expect(await h.flow.start("patient-demo-polypharmacy")).toBe("none");
     expect(h.started).toHaveLength(0);
     expect(h.el("flow-error")!.hidden).toBe(true);
