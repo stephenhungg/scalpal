@@ -129,7 +129,7 @@ namespace Scalpal.Surgery.Editor
 
                 SetProperty(native, "Phase", "Confirmed");
                 var timeOut = Call("swap_instrument", "{\"instrument\":\"scalpel\"}");
-                Assert(timeOut.is_error && timeOut.result.Contains("Time-Out") && !rightGrip.HeldInstrument, "during the Time-Out the swap fails with a reason: " + timeOut.result);
+                Assert(timeOut.is_error && timeOut.result.Contains("not practicing yet") && !rightGrip.HeldInstrument, "before practice starts the swap fails with a reason: " + timeOut.result);
                 SetProperty(native, "Phase", "Practicing");
 
                 leftGrip.SetTrackedPose(Vector3.zero, Quaternion.identity, false, clock);
