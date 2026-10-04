@@ -174,7 +174,7 @@ export class EncounterSession {
     const results = this.tests.map((t) => `${labelOf(t)}: ${this.encounter.tests[t]?.result ?? "not available"}`);
     const findings = [...this.exams.keys()].map((m) => `${labelOf(m)}: ${this.encounter.exam[m]?.finding ?? "unremarkable"}`);
     return [
-      `Patient: ${this.encounter.persona.patientName}, ${this.kase.patient.displayLabel}.`,
+      `Patient: ${this.kase.patient.displayLabel}${this.encounter.persona.speaker === "parent" ? `, history given by ${this.encounter.persona.name}` : ""}.`,
       `History the learner asked about: ${hx.join(", ") || "nothing yet"}.`,
       `Exam performed: ${ex.join(", ") || "none"}.`,
       `Findings: ${findings.join(" ") || "none"}`,
