@@ -192,16 +192,26 @@ namespace Scalpal.Quest
                 candidate.procedure == null || candidate.brief == null || !candidate.brief.synthetic ||
                 (candidate.status != "ready" && candidate.status != "needs_review"))
             { candidate = null; Message = "Case service unavailable or case/assets mismatch. Left menu: retry connection"; yield break; }
+            if (HasHandoff && HandoffRun.Current.skipped)
+            {
+                // Skip to surgery: no interview to recheck. The live case is the source; its chart flags are the risks.
+                var ticket = HandoffRun.Current;
+                if (candidate.patientId != ticket.patientId || candidate.procedureId != ticket.procedureId || candidate.procedure?.id != ticket.procedureId)
+                { candidate = null; Message = "The case changed after you skipped to surgery. Return to explore."; yield break; }
+                HandoffVerified = true; ticket.verifiedCase = candidate; ticket.scorecard.carryoverItems = EncounterContract.ChartRisks(candidate.brief);
+                reviewed = true; Phase = "Confirmed"; preview.gameObject.SetActive(false);
+                Message = "Complete the theatre Time-Out before practice"; yield break;
+            }
             if (HasHandoff)
             {
                 busy = true;
                 string stateJson = null, scoreJson = null;
-                var path = "/encounters/" + Uri.EscapeDataString(HandoffRun.Current.encounterId);
+                var path = EncounterContract.OfficePath(HandoffRun.Current.encounterId);
                 yield return Request("GET", path, null, value => stateJson = value);
                 yield return Request("GET", path + "/score", null, value => scoreJson = value);
                 if (epoch != generation) yield break;
                 EncounterReply stateReply = null, scoreReply = null;
-                try { if (stateJson != null) stateReply = JsonUtility.FromJson<EncounterReply>(stateJson); if (scoreJson != null) scoreReply = JsonUtility.FromJson<EncounterReply>(scoreJson); } catch (ArgumentException) { }
+                try { stateReply = EncounterContract.ReadOffice(stateJson, HandoffRun.Current.encounterId); scoreReply = EncounterContract.ReadOffice(scoreJson, HandoffRun.Current.encounterId); } catch (ArgumentException) { }
                 busy = false;
                 if (!EncounterSurgeryBinding.Validate(HandoffRun.Current.sourceOffice, candidate, stateReply, scoreReply, out var refusal)
                     || !HandoffRun.Verify(HandoffRun.Current, stateReply?.state, scoreReply?.scorecard, candidate, out refusal))
@@ -296,6 +306,8 @@ namespace Scalpal.Quest
             var ticket = HandoffRun.Current;
             reason = "Waiting for the committed scored office encounter in the paired session.";
             if (ticket?.sourceOffice == null || !realtime || !realtime.Paired || realtime.SessionId != ticket.sourceOffice.sharedSessionId) return false;
+            // A skipped run has no encounter row; the office's paired session is its provenance.
+            if (ticket.skipped) { reason = ""; return true; }
             if (!realtime.TryGetEncounterBinding(ticket.encounterId, out var session, out var attempt, out var patient, out var phase)
                 || !HandoffRun.SourceBindingMatches(ticket, session, attempt, patient, phase)) return false;
             reason = ""; return true;
@@ -372,7 +384,7 @@ namespace Scalpal.Quest
                 string caseJson = null, encounterJson = null, scoreJson = null;
                 yield return Request("GET", "/patients/" + Uri.EscapeDataString(SelectedPatientId ?? "") + "/case", null, value => caseJson = value);
                 if (epoch != generation) yield break;
-                string encounterPath = "/encounters/" + Uri.EscapeDataString(OfficeHandoff.encounterId ?? "");
+                string encounterPath = EncounterContract.OfficePath(OfficeHandoff.encounterId);
                 yield return Request("GET", encounterPath, null, value => encounterJson = value);
                 if (epoch != generation) yield break;
                 yield return Request("GET", encounterPath + "/score", null, value => scoreJson = value);
@@ -381,8 +393,8 @@ namespace Scalpal.Quest
                 try
                 {
                     if (caseJson != null) liveCase = JsonUtility.FromJson<SurgicalCase>(caseJson);
-                    if (encounterJson != null) liveEncounter = JsonUtility.FromJson<EncounterReply>(encounterJson);
-                    if (scoreJson != null) liveScore = JsonUtility.FromJson<EncounterReply>(scoreJson);
+                    liveEncounter = EncounterContract.ReadOffice(encounterJson, OfficeHandoff.encounterId);
+                    liveScore = EncounterContract.ReadOffice(scoreJson, OfficeHandoff.encounterId);
                 }
                 catch (ArgumentException) { }
                 if (!EncounterSurgeryBinding.Validate(OfficeHandoff, liveCase, liveEncounter, liveScore, out var bindingReason))
@@ -394,7 +406,7 @@ namespace Scalpal.Quest
             if (!SharedMatches || !RegistrationReady)
             { busy = false; Message = "Shared attempt or body fit changed while verifying; confirm and retry"; yield break; }
             long responseCode = 0;
-            yield return Request("POST", "/coach/sessions", JsonUtility.ToJson(CoachRequest()), value => json = value, code => responseCode = code);
+            yield return Request("POST", "/coach/sessions", CoachRequestJson(), value => json = value, code => responseCode = code);
             if (epoch != generation) yield break;
             if (!SharedMatches || !RegistrationReady) { busy = false; Message = "Shared attempt or body fit changed while loading; confirm and retry"; yield break; }
             Created created = null;
@@ -414,6 +426,11 @@ namespace Scalpal.Quest
             BeginReviewedPractice();
         }
 
+        [Serializable] public class SkippedCreateRequest { public string patientId, mode, runId; }
+        // POST /coach/sessions body. A skipped run sends no encounterId at all: there is no interview to carry over.
+        public string CoachRequestJson() => HandoffRun.Current?.skipped == true
+            ? JsonUtility.ToJson(new SkippedCreateRequest { patientId = SelectedPatientId, mode = PresentationMode, runId = HandoffRun.Current.runId })
+            : JsonUtility.ToJson(CoachRequest());
         public CreateRequest CoachRequest() => new CreateRequest { patientId = SelectedPatientId, mode = PresentationMode, encounterId = HandoffRun.Current?.encounterId ?? OfficeHandoff?.encounterId, runId = HandoffRun.Current?.runId };
         public bool PrepareTimeOut()
         {

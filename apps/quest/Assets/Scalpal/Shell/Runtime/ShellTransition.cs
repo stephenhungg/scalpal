@@ -15,7 +15,8 @@ namespace Scalpal.Shell
         public sealed class SelectedPatient
         {
             public readonly string patientId, serviceUrl;
-            public SelectedPatient(string id, string url) { patientId=id; serviceUrl=url; }
+            public readonly bool skipToSurgery; // "Skip to surgery": no interview, straight to the Theatre card
+            public SelectedPatient(string id, string url, bool skip = false) { patientId=id; serviceUrl=url; skipToSurgery=skip; }
         }
         static ShellTransition instance;
         static SelectedPatient selected;
@@ -53,18 +54,18 @@ namespace Scalpal.Shell
         }
         public static bool TryConsumeSelection(out SelectedPatient value)
         { value=selected; selected=null; return value!=null && EncounterContract.ValidPatientId(value.patientId); }
-        public static bool TryStageSelection(string patientId,string serviceUrl)
+        public static bool TryStageSelection(string patientId,string serviceUrl,bool skipToSurgery=false)
         {
             if (Busy || !EncounterContract.ValidPatientId(patientId)) return false;
             if (!Uri.TryCreate(serviceUrl,UriKind.Absolute,out var uri) || (uri.Scheme!="http" && uri.Scheme!="https")) return false;
-            selected=new SelectedPatient(patientId,serviceUrl.TrimEnd('/')); return true;
+            selected=new SelectedPatient(patientId,serviceUrl.TrimEnd('/'),skipToSurgery); return true;
         }
-        public bool BeginOffice(string patientId,string title,string serviceUrl)
+        public bool BeginOffice(string patientId,string title,string serviceUrl,bool skipToSurgery=false)
         {
             if (Busy || !EncounterContract.ValidPatientId(patientId)) return false;
             if (!Uri.TryCreate(serviceUrl,UriKind.Absolute,out var uri) || (uri.Scheme!="http" && uri.Scheme!="https")) return false;
             if (!Application.CanStreamedLevelBeLoaded("DiagnosisOffice")) { LastError="Diagnosis office is missing from this build."; return false; }
-            if (!TryStageSelection(patientId,serviceUrl)) return false;
+            if (!TryStageSelection(patientId,serviceUrl,skipToSurgery)) return false;
             // This route deliberately starts after tracking/readiness, rather than from office Start.
             // Clear an abandoned legacy office selection so its Start cannot create a second encounter.
             EncounterOfficeRoute.TakePatient(out _,out _);
@@ -78,7 +79,7 @@ namespace Scalpal.Shell
             // Runs after Start's private endpoint config read, preserving the explicit Explore service choice.
             office.baseUrl=handoff.serviceUrl;
             if (office.SelectedPatientId==handoff.patientId && (office.Busy || office.State!=null)) return;
-            office.StartPatient(handoff.patientId);
+            office.StartPatient(handoff.patientId,handoff.skipToSurgery);
         }
         public IEnumerator Load(string scene,string title,Action afterLoad=null,float revealSeconds=.4f)
         {

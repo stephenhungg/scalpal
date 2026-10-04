@@ -21,6 +21,7 @@ namespace Scalpal.Shell
         public bool Exploring { get; private set; }
         public bool Transitioning { get; private set; }
         public ShellButton BeginButton { get; private set; }
+        public ShellButton SkipButton { get; private set; }
         Transform launch, explore, cards, detail, filters, paging;
         public int Page { get; private set; }
         public int PageCount => Mathf.Max(1,Mathf.CeilToInt(Model.VisiblePatients().Length/12f));
@@ -238,7 +239,7 @@ namespace Scalpal.Shell
         }
         void RenderDetail()
         {
-            RefreshBanner();ShellView.Clear(detail);BeginButton=null;retryButton=null;renderedRetry=null;
+            RefreshBanner();ShellView.Clear(detail);BeginButton=null;SkipButton=null;retryButton=null;renderedRetry=null;
             var selected=Model.Selected;if(selected==null)return;
             var panel=ShellView.Panel(detail,"SelectedChart",new Vector3(1.472f,-.035f,-.45f),new Vector2(.70f,.72f));
             ShellView.Text(panel,Model.Name(selected),new Vector3(-.263f,.325f,-.008f),.037f,.526f,TextAnchor.UpperLeft,ScalpalTextRole.Title);
@@ -258,7 +259,12 @@ namespace Scalpal.Shell
             ShellView.Text(panel,EncounterOfficePanel.Wrap(reason,38),new Vector3(-.263f,-.16f,-.008f),.026f,.526f);
             if(selected.status=="retry"||!string.IsNullOrEmpty(Model.DetailError))
                 retryButton=ShellView.Button(panel,"Try again",new Vector3(0,-.265f,-.012f),new Vector2(.49f,.07f),Retry,retrying.Length==0&&RetryRemaining<=0);
-            else BeginButton=ShellView.Button(panel,"Begin encounter",new Vector3(0,-.265f,-.012f),new Vector2(.49f,.07f),()=>Begin(),CanBegin,true);
+            else
+            {
+                // Begin stays the primary action; Skip to surgery (ghost) goes to the Theatre card without the interview.
+                BeginButton=ShellView.Button(panel,"Begin encounter",new Vector3(-.105f,-.265f,-.012f),new Vector2(.28f,.07f),()=>Begin(),CanBegin,true);
+                SkipButton=ShellView.Button(panel,"Skip to surgery",new Vector3(.155f,-.265f,-.012f),new Vector2(.20f,.07f),()=>Begin(true),CanBegin,false,true);
+            }
             panel.localRotation=Quaternion.Euler(0,60,0);panel.localScale=Vector3.one*1.4f;
             foreach(var fit in panel.GetComponentsInChildren<ScalpalTextFit>()) { fit.maximumWidth*=1.4f;fit.maximumHeight*=1.4f;fit.Fit(); }
             Readable(panel);
@@ -269,11 +275,12 @@ namespace Scalpal.Shell
             retrying=Model.SelectedPatientId;notice="Retrying chart…";RenderDetail();
             if(Model.Selected.status=="retry")service.LoadCase(retrying);else {retrying="";Select(Model.SelectedPatientId);}
         }
-        public bool Begin()
+        public bool Begin(bool skipToSurgery=false)
         {
             if(!CanBegin||Transitioning)return false;
             var row=Model.Selected;string title="Office · "+Model.Name(row)+", "+(Model.SelectedBrief.patient != null && Model.SelectedBrief.patient.age>=0?Model.SelectedBrief.patient.age.ToString():"age unknown")+"\n"+Short(Model.Complaint(row),90);
-            Transitioning=ShellTransition.Ensure().BeginOffice(row.patientId,title,service.BaseUrl);
+            if(skipToSurgery)title="Skip to surgery · "+Model.Name(row);
+            Transitioning=ShellTransition.Ensure().BeginOffice(row.patientId,title,service.BaseUrl,skipToSurgery);
             if(!Transitioning) { notice=ShellTransition.LastError??"Unable to begin. Refresh and try again.";RenderDetail(); }
             return Transitioning;
         }

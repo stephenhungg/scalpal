@@ -65,6 +65,7 @@ namespace Scalpal.Recap
         public static string Clinical(RunResult r)
         {
             var s = r.diagnosis;
+            if (r.diagnosisSkipped) return "CLINICAL REASONING\n\nSkipped\nYou went straight to surgery; the diagnosis office was not scored.";
             if (!r.diagnosisAvailable || s == null) return "CLINICAL REASONING\n\nNot available\nThe encounter has not supplied its scorecard.";
             var b = new StringBuilder("CLINICAL REASONING\n" + (r.isSample ? "SAMPLE · not your run\n" : "") + (r.demo?.enabled == true ? "DEMO-ASSISTED RUN\n" : "") + s.total + " / " + s.max + "  ·  " + s.grade + "\n");
             foreach (var section in s.sections ?? Array.Empty<ScoreSection>()) b.AppendLine(section.label + "  " + section.score + "/" + section.max);

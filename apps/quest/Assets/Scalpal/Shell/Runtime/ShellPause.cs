@@ -24,6 +24,8 @@ namespace Scalpal.Shell
         bool officeWasEnabled, menuTransition, officeAligned;
         string transitionFailure;
         bool failureCanResume;
+        // Office: voice on/off is chosen here (the room has no control panel); it applies on Resume.
+        bool officeVoiceCaptured, voiceOnResume, confirmingSkip;
         readonly List<XRInputSubsystem> inputs = new List<XRInputSubsystem>();
         readonly List<XRInputSubsystem> subscribed = new List<XRInputSubsystem>();
         public static ShellPause Ensure()
@@ -87,14 +89,18 @@ namespace Scalpal.Shell
         {
             officeRig = FindFirstObjectByType<EncounterOfficeRig>();
             if (officeRig) { officeWasEnabled = officeRig.enabled; officeRig.enabled = false; }
-            var session = FindFirstObjectByType<NativeEncounterSession>(); if (session) session.StopVoice();
+            var session = FindFirstObjectByType<NativeEncounterSession>();
+            if (session) { if (!officeVoiceCaptured) { voiceOnResume = session.VoiceEnabled; officeVoiceCaptured = true; } session.StopVoice(); }
         }
         public void Resume()
         {
             // Focus/headset return alone never resumes. A deliberate menu action is required.
             if (!IsPaused || !focused || suspended || !wasPresent || (!string.IsNullOrEmpty(transitionFailure) && !failureCanResume)) return;
             transitionFailure=null;
-            IsPaused = false; confirming = false; Time.timeScale = savedScale; AudioListener.pause=savedAudioPause;
+            IsPaused = false; confirming = confirmingSkip = false; Time.timeScale = savedScale; AudioListener.pause=savedAudioPause;
+            var office = FindFirstObjectByType<NativeEncounterSession>();
+            if (office && officeVoiceCaptured && voiceOnResume && office.State?.phase == "interview") office.ToggleVoice();
+            officeVoiceCaptured = false;
             if (panel) { Discard(panel.gameObject); panel = null; }
             if (pauseInput) { pauseInput.Release(); pauseInput.enabled = false; }
             if (officeRig) officeRig.enabled = officeWasEnabled;
@@ -130,11 +136,26 @@ namespace Scalpal.Shell
                 ShellView.Button(panel,"Resume",new Vector3(0,.05f,-.014f),new Vector2(.66f,.075f),Resume,true,true);
                 ShellView.Button(panel,ShellTransition.Busy?"Back after loading":"Back to explore",new Vector3(0,-.06f,-.014f),new Vector2(.66f,.075f),()=>{confirming=true;BuildMenu();},!ShellTransition.Busy);
                 ShellView.Button(panel,"Recenter",new Vector3(0,-.17f,-.014f),new Vector2(.66f,.075f),Recenter);
+                var office = FindFirstObjectByType<NativeEncounterSession>();
+                if (office && office.State != null && office.State.phase == "interview")
+                {
+                    ShellView.Button(panel,voiceOnResume?"Voice on · select for off":"Voice off · select for on",new Vector3(-.17f,-.28f,-.014f),new Vector2(.32f,.075f),()=>{voiceOnResume=!voiceOnResume;BuildMenu();});
+                    ShellView.Button(panel,confirmingSkip?"Confirm skip":"Skip to surgery",new Vector3(.17f,-.28f,-.014f),new Vector2(.32f,.075f),SkipToSurgery,!ShellTransition.Busy,false,true);
+                }
             }
             pauseInput.head = head; pauseInput.origin = officeRig ? officeRig.origin : hubInput ? hubInput.origin : head.transform.parent;
             pauseInput.allowedRoot = panel; pauseInput.content = null; pauseInput.enabled = true; pauseInput.Release(); PlaceMenu(head);
         }
         static void Discard(GameObject value) { if (Application.isPlaying) Destroy(value); else DestroyImmediate(value); }
+        // Office pause: "Skip to surgery" asks once, then leaves the interview for the Theatre card.
+        public void SkipToSurgery()
+        {
+            var office = FindFirstObjectByType<NativeEncounterSession>();
+            if (!office || office.State?.phase != "interview") return;
+            if (!confirmingSkip) { confirmingSkip = true; BuildMenu(); return; }
+            voiceOnResume = false; Resume();
+            office.SkipToSurgery();
+        }
         void PlaceMenu(Camera head)
         {
             if (!panel || !head) return;

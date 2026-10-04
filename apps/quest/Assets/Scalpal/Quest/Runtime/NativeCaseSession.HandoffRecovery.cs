@@ -42,7 +42,7 @@ namespace Scalpal.Quest
         IEnumerator RecoverLocalCoach(int epoch)
         {
             string json = null;
-            yield return Request("POST", "/coach/sessions", JsonUtility.ToJson(CoachRequest()), value => json = value);
+            yield return Request("POST", "/coach/sessions", CoachRequestJson(), value => json = value);
             if (epoch != generation || !localCaptionAttempt || !Practicing || !RegistrationReady) yield break;
             Created created = null;
             try { if (json != null) created = JsonUtility.FromJson<Created>(json); } catch (ArgumentException) { }
