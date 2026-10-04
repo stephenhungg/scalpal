@@ -9,6 +9,7 @@ namespace UnityEngine
     {
         public string name { get; set; }
         public static T Instantiate<T>(T original) where T : Object => original;
+        public static T FindFirstObjectByType<T>() where T : Object => null;
         public static void Destroy(Object obj) { }
     }
 
@@ -28,6 +29,7 @@ namespace UnityEngine
         public GameObject(string name) { }
         public Transform transform => null;
         public bool activeInHierarchy => true;
+        public SceneManagement.Scene scene => default;
         public void SetActive(bool value) { }
         public bool activeSelf => true;
         public T GetComponent<T>() => default;
@@ -78,10 +80,12 @@ namespace UnityEngine
     public class Shader : Object
     {
         public static int PropertyToID(string name) => name.GetHashCode();
+        public static Shader Find(string name) => null;
     }
 
     public class Material : Object
     {
+        public Material(Shader shader) { }
         public bool HasProperty(int nameID) => false;
         public bool IsKeywordEnabled(string keyword) => false;
     }
@@ -257,7 +261,7 @@ namespace UnityEditor
 
     public static class Selection
     {
-        public static UnityEngine.GameObject activeGameObject => null;
+        public static UnityEngine.GameObject activeGameObject { get; set; }
     }
 }
 

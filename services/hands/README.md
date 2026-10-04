@@ -50,8 +50,9 @@ uv run python reference.py path/to/hand-photo.jpg --golden tests/golden.json
 ## Setting it up in a Quest project
 
 1. The project needs `com.unity.ai.inference` and `com.meta.xr.mrutilitykit` (85+). The camera baseline in `experiments/quest-camera-baseline` already has both. `Editor/ScalpalHandsDefine.cs` then turns on `SCALPAL_HANDS`. Without those packages the module compiles to nothing.
-2. Add a `PassthroughCameraAccess` and a `BlazeHandTracker`, then assign the two models and `hand_anchors.csv` from `Models/`.
-3. Add `HandSkeletonView` with an unlit or emissive material, `HandStreamer` with the Mac's LAN IP (Player Settings: Internet Access Require), and `HandEpisodeRecorder` behind a consent prompt.
-4. On the Mac: `cd services/motion && uv run scalpal-motion live`.
+2. Run **Scalpal > Hands > Set Up Live Hands In Scene**. It finds or adds the `PassthroughCameraAccess`, then adds `BlazeHandTracker`, `HandSkeletonView`, `HandStreamer`, and `HandEpisodeRecorder` with models, anchors, and references wired. It also creates an unlit joint material and enables the Android internet permission.
+3. Set `HandStreamer.host` to the Mac's LAN IP.
+4. To record demo clips without UI, tick `HandEpisodeRecorder` → **Operator Confirmed Consent** (only after the participant agrees) and **Record On Start**. Each app launch then records one episode under `files/scalpal-hands/`.
+5. On the Mac: `cd services/motion && uv run scalpal-motion live`. Pull recordings with `adb pull /sdcard/Android/data/<package>/files/scalpal-hands` and import them with `uv run scalpal-motion import-episode <episode>`.
 
 Joints computed from camera images are Meta Device User Data: show them in-app freely, and record or export them only with participant consent.

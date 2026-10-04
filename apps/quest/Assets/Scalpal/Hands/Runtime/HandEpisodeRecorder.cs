@@ -44,6 +44,11 @@ namespace Scalpal.Hands
         [Tooltip("0 records joints only. 2 saves every second frame as JPEG.")]
         [SerializeField] int jpegEveryFrames = 0;
         [Range(50, 95)] [SerializeField] int jpegQuality = 85;
+        [Tooltip("Tick only after the participant agreed out loud to recording their hand joints this session.")]
+        [SerializeField] bool operatorConfirmedConsent;
+        [Tooltip("Start an episode when the app starts (needs the consent box above). For recording demo clips.")]
+        [SerializeField] bool recordOnStart;
+        [SerializeField] string startLabel = "instrument_transfer";
 
         StreamWriter writer;
         string episodeDir;
@@ -95,6 +100,12 @@ namespace Scalpal.Hands
             writer?.Flush();
             writer?.Dispose();
             writer = null;
+        }
+
+        void Start()
+        {
+            if (operatorConfirmedConsent) SetParticipantConsent(true);
+            if (recordOnStart) StartEpisode(startLabel);
         }
 
         void OnDisable() => StopEpisode();

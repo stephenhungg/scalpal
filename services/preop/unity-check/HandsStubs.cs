@@ -252,6 +252,11 @@ namespace UnityEditor
 
     public static class PlayerSettings
     {
+        public static class Android
+        {
+            public static bool forceInternetPermission { get; set; }
+        }
+
         public static string GetScriptingDefineSymbols(Build.NamedBuildTarget target) => "";
         public static void SetScriptingDefineSymbols(Build.NamedBuildTarget target, string defines) { }
     }
@@ -279,5 +284,56 @@ namespace UnityEditor.PackageManager
     public static class Events
     {
         public static event Action<PackageRegistrationEventArgs> registeredPackages { add { } remove { } }
+    }
+}
+
+namespace UnityEngine.SceneManagement
+{
+    public struct Scene { }
+}
+
+namespace UnityEngine
+{
+}
+
+namespace UnityEditor
+{
+    public class SerializedProperty
+    {
+        public UnityEngine.Object objectReferenceValue { get; set; }
+    }
+
+    public class SerializedObject
+    {
+        public SerializedObject(UnityEngine.Object target) { }
+        public SerializedProperty FindProperty(string propertyPath) => null;
+        public bool ApplyModifiedProperties() => true;
+    }
+
+    public static class Undo
+    {
+        public static void RegisterCreatedObjectUndo(UnityEngine.Object objectToUndo, string name) { }
+        public static T AddComponent<T>(UnityEngine.GameObject gameObject) where T : UnityEngine.Component => null;
+    }
+
+    public static class AssetDatabase
+    {
+        public static T LoadAssetAtPath<T>(string assetPath) where T : UnityEngine.Object => null;
+        public static bool IsValidFolder(string path) => true;
+        public static string CreateFolder(string parentFolder, string newFolderName) => "";
+        public static void CreateAsset(UnityEngine.Object asset, string path) { }
+    }
+
+    public static class EditorUtility
+    {
+        public static bool DisplayDialog(string title, string message, string ok) => true;
+    }
+}
+
+namespace UnityEditor.SceneManagement
+{
+    public static class EditorSceneManager
+    {
+        public static bool MarkSceneDirty(UnityEngine.SceneManagement.Scene scene) => true;
     }
 }
