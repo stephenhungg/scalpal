@@ -1,6 +1,6 @@
 "use client";
 
-// From MatthewKim323/adam (src/components/AsciiAdam.tsx), unchanged apart from this header, both arms set to white, the onTouch / introSpeed / holdAfterTouch (with breathing) / shiftY props, and pointer reach turned off (glyph scramble kept).
+// From MatthewKim323/adam (src/components/AsciiAdam.tsx), unchanged apart from this header, both arms set to white, the onTouch / introSpeed / holdAfterTouch (with breathing) / shiftY / startTouched props, a livelier spark, and pointer reach turned off (glyph scramble kept).
 import { useEffect, useRef } from 'react'
 
 /*
@@ -12,7 +12,7 @@ import { useEffect, useRef } from 'react'
 // dim -> bright; the last entry is the inverted "?" tile
 const RAMP = [' ', '.', ':', '-', '+', '*', '%', '#', '@', 'TILE']
 const LOOP = 9.55 // seconds from apart to touching (and holding); then it plays back in reverse
-const ASPECT = 3696 / 2304 // design frame, covered onto the canvas
+export const ASPECT = 3696 / 2304 // design frame, covered onto the canvas
 const CELL = 21 / 2304 // cell size as a fraction of the covered frame's height
 
 const vert = /* glsl */ `#version 300 es
@@ -93,11 +93,17 @@ void main() {
   float glow = smoothstep(5.0, 6.6, t);
   vec2 d = p - u_spark;
   float ang = atan(d.y, d.x);
-  float rays = 0.6 + 0.4 * pow(abs(sin(ang * 3.0 + 0.4)), 6.0);
-  float flick = 0.85 + 0.15 * sin(t * 23.0 + hash(cell) * 6.28);
-  float core = exp(-dist * dist / 0.0012);
-  float halo = exp(-dist / 0.075) * rays;
-  float spark = glow * flick * (core * 1.4 + halo * 1.4);
+  // Scalpal site: a livelier spark (same size as the original) on the free-running clock, so it keeps moving
+  // while the hands hold: pulsing core, two counter-rotating ray sets, and crackle cells
+  float tw = u_wall;
+  float beat = 0.85 + 0.15 * sin(tw * 2.2) + 0.06 * sin(tw * 5.3);
+  float rays = 0.55 + 0.45 * pow(abs(sin(ang * 4.0 + tw * 0.9)), 5.0)
+             + 0.35 * pow(abs(sin(ang * 7.0 - tw * 1.7)), 9.0);
+  float flick = 0.8 + 0.2 * sin(tw * 21.0 + hash(cell) * 6.28);
+  float core = exp(-dist * dist / (0.0014 * beat));
+  float halo = exp(-dist / (0.07 * beat)) * rays;
+  float crackle = step(hash(cell + floor(tw * 14.0) * 0.37), 0.24 * exp(-dist / 0.045));
+  float spark = glow * flick * (core * 1.6 + halo * 1.5 + crackle * 1.3);
   col += mix(vec3(0.95, 0.3, 0.08), vec3(1.0, 0.86, 0.22), clamp(core * 1.6, 0.0, 1.0)) * spark;
   a = max(a, clamp(spark, 0.0, 1.0));
 
@@ -193,7 +199,7 @@ function texture(gl: WebGL2RenderingContext, src: TexImageSource, unit: number, 
 }
 
 // scene layout in design units (x 0..ASPECT, y 0..1 top-down)
-const SCENE = {
+export const SCENE = {
   leftWidth: 1.15,
   rightWidth: 1.4,
   leftA: [0.052, 0.634, -0.18],
