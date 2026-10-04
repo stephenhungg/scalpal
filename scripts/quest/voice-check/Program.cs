@@ -30,7 +30,13 @@ static class Program
         const string json = "{\"client_tool_call\":{\"parameters\":{\"note\":\"brace } and quote \\\"\",\"nested\":{\"x\":1}}}}";
         var parameters = (string)extractor.Invoke(null, new object[] { json, "parameters" });
         Check(parameters.StartsWith("{\"note\"") && parameters.EndsWith("{\"x\":1}}"), "preserve nested/escaped tool parameters");
-        Console.WriteLine("voice-check passed: audio-format negotiation, signed PCM encoding/decoding/downmix, malformed PCM and nested tool parameters.");
+        Check(QuestJarvisVoice.ValidEncounterId("enc-abcdef123456"), "authored encounter identity");
+        Check(!QuestJarvisVoice.ValidEncounterId("coach-abcdef123456"), "coach identity cannot enter encounter route");
+        Check(!QuestJarvisVoice.ValidEncounterId("enc-../../coach"), "reject route traversal");
+        Check(!QuestJarvisVoice.ValidEncounterId("enc-ABCDEF"), "reject noncanonical encounter identity");
+        Check(!QuestJarvisVoice.ValidEncounterId("enc-abc"), "reject truncated encounter identity");
+        Check(!QuestJarvisVoice.ValidEncounterId("enc-" + new string('a', 41)), "bounded encounter identity");
+        Console.WriteLine("voice-check passed: audio-format negotiation, signed PCM encoding/decoding/downmix, malformed PCM, nested tool parameters and encounter identity boundaries.");
         return 0;
     }
 }

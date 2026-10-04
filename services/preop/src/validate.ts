@@ -1,6 +1,7 @@
 import { ANATOMY, ANATOMY_BY_ID } from "./catalog/anatomy.js";
 import { CASE_PLANS, CONSIDERATION_NOTES, STEP_ROLES } from "./catalog/cases.js";
 import { STEP_COACHING, STRUCTURE_FACTS } from "./catalog/coach-knowledge.js";
+import { ENCOUNTERS, EXAM_MANEUVERS, HISTORY_TOPICS, TESTS } from "./catalog/encounters.js";
 import { INSTRUMENTS, INSTRUMENTS_BY_ID } from "./catalog/instruments.js";
 import { PROCEDURES, PROCEDURES_BY_ID } from "./catalog/procedures.js";
 
@@ -115,5 +116,20 @@ export function validateCatalog(): string[] {
     for (const id of Object.keys(coaching)) if (!p.steps.some((s) => s.id === id)) err(`${p.id}: coaching for unknown step "${id}"`);
   }
   for (const id of Object.keys(STEP_COACHING)) if (!PROCEDURES_BY_ID.has(id)) err(`coaching for unknown procedure "${id}"`);
+
+  // Pre-op encounters: each attaches to an authored case plan and its rubric only references real items.
+  for (const e of ENCOUNTERS) {
+    const at = (m: string) => err(`encounter ${e.planSubject}: ${m}`);
+    if (!CASE_PLANS[e.planSubject]) at("no case plan with that subject");
+    if (!e.diagnosis.keywords.length || e.diagnosis.keywords.some((g) => !g.length)) at("diagnosis needs keyword groups");
+    if (!e.procedureKeywords.length) at("needs procedure keywords");
+    if (e.differential.length < 3) at("differential needs at least three items");
+    for (const item of [...e.critical, ...e.expected]) {
+      const known = item.kind === "history" ? HISTORY_TOPICS : item.kind === "exam" ? EXAM_MANEUVERS : TESTS;
+      if (!(known as readonly string[]).includes(item.id)) at(`rubric item ${item.kind} "${item.id}" is unknown`);
+      if (item.kind === "exam" && !e.exam[item.id]) at(`rubric expects exam "${item.id}" but no finding is authored`);
+      if (item.kind === "test" && !e.tests[item.id]) at(`rubric expects test "${item.id}" but no result is authored`);
+    }
+  }
   return errors;
 }

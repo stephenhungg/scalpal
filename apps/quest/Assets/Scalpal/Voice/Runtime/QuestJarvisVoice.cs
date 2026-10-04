@@ -42,6 +42,8 @@ namespace Scalpal.Voice
         AudioClip microphoneClip, playbackClip;
         string microphoneDevice, patientId = "", prompt = "", firstMessage = "", initialContext = "";
         string lastContext = "";
+        bool encounterMode;
+        string encounterRole = "patient", encounterVoiceId = "";
         int microphoneCursor, microphoneRate, microphoneChunk;
         float microphoneStarted, lastCapture, connectionStarted;
         bool microphoneReady;
@@ -81,9 +83,32 @@ namespace Scalpal.Voice
             initialContext = context ?? "";
         }
 
+        // Reuse the native transport for the service's separate patient/attending roles.
+        public void ConfigureEncounterConversation(string systemPrompt, string greeting, string voiceId, string role)
+        {
+            if (role != "patient" && role != "attending") throw new ArgumentException("Unknown encounter voice role.", nameof(role));
+            ConfigureConversation(systemPrompt, greeting);
+            encounterRole = role;
+            encounterVoiceId = voiceId ?? "";
+        }
+
+        public void ConnectEncounter(string encounterId, string selectedPatientId)
+        {
+            Disconnect();
+            encounterMode = true;
+            if (!isActiveAndEnabled || !ValidEncounterId(encounterId) || string.IsNullOrEmpty(selectedPatientId))
+            { Fail("A valid encounter and patient are required."); return; }
+            CoachSessionId = encounterId;
+            patientId = selectedPatientId;
+            LastError = "";
+            SetStatus("connecting");
+            StartCoroutine(Begin(generation));
+        }
+
         public void Connect(string coachSessionId)
         {
             Disconnect();
+            encounterMode = false;
             if (!isActiveAndEnabled || !ValidSessionId(coachSessionId)) { Fail("A valid coach session is required."); return; }
             CoachSessionId = coachSessionId;
             LastError = "";
@@ -117,12 +142,15 @@ namespace Scalpal.Voice
             Reply state = null;
             yield return Http("GET", SessionPath, null, r => state = r);
             if (epoch != generation) yield break;
-            if (state == null || !state.ok || state.snapshot == null || state.snapshot.sessionId != CoachSessionId)
-            { Fail("Cannot load the selected coach session."); yield break; }
-            patientId = state.snapshot.patientId ?? "";
+            if (state == null || !state.ok || (encounterMode
+                ? state.state == null || state.state.encounterId != CoachSessionId || state.state.patientId != patientId ||
+                    (encounterRole == "patient" ? state.state.phase != "interview" : state.state.phase != "attending")
+                : state.snapshot == null || state.snapshot.sessionId != CoachSessionId))
+            { Fail("Cannot load the selected conversation state and role."); yield break; }
+            if (!encounterMode) patientId = state.snapshot.patientId ?? "";
             if (!string.IsNullOrEmpty(state.context)) initialContext = state.context;
             Reply connection = null;
-            yield return Http("GET", "/jarvis/connection", null, r => connection = r);
+            yield return Http("GET", encounterMode && encounterRole == "patient" ? "/jarvis/connection?agent=patient" : "/jarvis/connection", null, r => connection = r);
             if (epoch != generation) yield break;
             if (connection == null || !connection.ok)
             {
@@ -137,8 +165,11 @@ namespace Scalpal.Voice
             { Fail("Voice service did not return a supported ElevenLabs WebSocket connection."); yield break; }
             var initiation = new Initiation
             {
-                conversation_config_override = new Overrides { agent = new AgentOverride { prompt = new Prompt { prompt = prompt }, first_message = firstMessage } },
-                dynamic_variables = new DynamicVariables { coach_session_id = CoachSessionId, session_id = CoachSessionId, patient_id = patientId, mode = state.snapshot.mode ?? "", context = initialContext }
+                conversation_config_override = new Overrides { agent = new AgentOverride { prompt = new Prompt { prompt = prompt }, first_message = firstMessage },
+                    tts = encounterMode && !string.IsNullOrEmpty(encounterVoiceId) ? new TtsOverride { voice_id = encounterVoiceId } : null },
+                dynamic_variables = new DynamicVariables { coach_session_id = encounterMode ? "" : CoachSessionId,
+                    encounter_id = encounterMode ? CoachSessionId : "", session_id = CoachSessionId, patient_id = patientId,
+                    mode = encounterMode ? encounterRole : state.snapshot.mode ?? "", context = initialContext }
             };
             // Leave existing agent defaults intact if no per-case override was supplied.
             string initJson = string.IsNullOrEmpty(prompt)
@@ -355,6 +386,11 @@ namespace Scalpal.Voice
 
         IEnumerator ExecuteTool(ToolCall tool, int epoch, string rawParameters)
         {
+            if (encounterMode)
+            {
+                yield return ExecuteExternalTool(tool, epoch, rawParameters);
+                yield break;
+            }
             switch (tool.tool_name)
             {
                 case "get_surgery_state":
@@ -374,6 +410,13 @@ namespace Scalpal.Voice
                         error ? "Coach service could not complete this tool request." : reply.result, error);
                     yield break;
                 default:
+                    yield return ExecuteExternalTool(tool, epoch, rawParameters);
+                    yield break;
+            }
+        }
+
+        IEnumerator ExecuteExternalTool(ToolCall tool, int epoch, string rawParameters)
+        {
                     var external = new ToolRequest { ToolCallId = tool.tool_call_id, ToolName = tool.tool_name, ParametersJson = rawParameters, ConnectionGeneration = epoch };
                     if (ClientToolRequested != null)
                     {
@@ -383,11 +426,9 @@ namespace Scalpal.Voice
                         if (epoch == generation && pendingTools.Contains(tool.tool_call_id)) ResolveClientTool(external, "Headset did not acknowledge the supported action in time.", true);
                     }
                     else ResolveClientTool(external, "This client tool is not supported by the headset.", true);
-                    yield break;
-            }
         }
 
-        string SessionPath => "/coach/sessions/" + Uri.EscapeDataString(CoachSessionId);
+        string SessionPath => (encounterMode ? "/encounters/" : "/coach/sessions/") + Uri.EscapeDataString(CoachSessionId);
 
         IEnumerator Http(string method, string path, string body, Action<Reply> complete)
         {
@@ -492,6 +533,12 @@ namespace Scalpal.Voice
             for (int i = 6; i < id.Length; i++) if (!(id[i] >= 'a' && id[i] <= 'z') && !(id[i] >= '0' && id[i] <= '9')) return false;
             return true;
         }
+        public static bool ValidEncounterId(string id)
+        {
+            if (id == null || !id.StartsWith("enc-", StringComparison.Ordinal) || id.Length < 10 || id.Length > 44) return false;
+            for (int i = 4; i < id.Length; i++) if (!(id[i] >= 'a' && id[i] <= 'z') && !(id[i] >= '0' && id[i] <= '9')) return false;
+            return true;
+        }
         static string ExtractObject(string json, string property)
         {
             int name = json.IndexOf("\"" + property + "\"", StringComparison.Ordinal);
@@ -519,17 +566,19 @@ namespace Scalpal.Voice
         [Serializable, UnityEngine.Scripting.Preserve] sealed class AgentEvent { public string agent_response; }
         [Serializable, UnityEngine.Scripting.Preserve] sealed class ToolCall { public string tool_name, tool_call_id; public bool expects_response; public ToolParameters parameters; }
         [Serializable, UnityEngine.Scripting.Preserve] sealed class ToolParameters { public string structure; public string[] selected; }
-        [Serializable, UnityEngine.Scripting.Preserve] sealed class Reply { public bool ok; public string signedUrl, agentId, mode, context, result; public Snapshot snapshot; public ServiceError error; }
+        [Serializable, UnityEngine.Scripting.Preserve] sealed class Reply { public bool ok; public string signedUrl, agentId, mode, context, result; public Snapshot snapshot; public EncounterState state; public ServiceError error; }
+        [Serializable, UnityEngine.Scripting.Preserve] sealed class EncounterState { public string encounterId, patientId, phase; }
         [Serializable, UnityEngine.Scripting.Preserve] sealed class ServiceError { public string code; }
         [Serializable, UnityEngine.Scripting.Preserve] sealed class Snapshot { public string sessionId, patientId, mode; }
         [Serializable, UnityEngine.Scripting.Preserve] sealed class AudioInput { public string user_audio_chunk; }
         [Serializable, UnityEngine.Scripting.Preserve] sealed class Pong { public string type = "pong"; public int event_id; }
         [Serializable, UnityEngine.Scripting.Preserve] sealed class TextMessage { public string type, text; }
         [Serializable, UnityEngine.Scripting.Preserve] sealed class ToolResult { public string type = "client_tool_result", tool_call_id, result; public bool is_error; }
-        [Serializable, UnityEngine.Scripting.Preserve] sealed class DynamicVariables { public string coach_session_id, session_id, patient_id, mode, context; }
+        [Serializable, UnityEngine.Scripting.Preserve] sealed class DynamicVariables { public string coach_session_id, encounter_id, session_id, patient_id, mode, context; }
         [Serializable, UnityEngine.Scripting.Preserve] sealed class BasicInitiation { public string type = "conversation_initiation_client_data"; public DynamicVariables dynamic_variables; }
         [Serializable, UnityEngine.Scripting.Preserve] sealed class Initiation { public string type = "conversation_initiation_client_data"; public Overrides conversation_config_override; public DynamicVariables dynamic_variables; }
-        [Serializable, UnityEngine.Scripting.Preserve] sealed class Overrides { public AgentOverride agent; }
+        [Serializable, UnityEngine.Scripting.Preserve] sealed class Overrides { public AgentOverride agent; public TtsOverride tts; }
+        [Serializable, UnityEngine.Scripting.Preserve] sealed class TtsOverride { public string voice_id; }
         [Serializable, UnityEngine.Scripting.Preserve] sealed class AgentOverride { public Prompt prompt; public string first_message; }
         [Serializable, UnityEngine.Scripting.Preserve] sealed class Prompt { public string prompt; }
     }

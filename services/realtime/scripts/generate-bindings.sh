@@ -14,6 +14,8 @@ gen() {
 
 gen typescript "$root/apps/companion/src/module_bindings"
 gen typescript "$root/services/api/src/module_bindings"
+# Jarvis coach bridge (services/preop): transcript, status, encounters, commands.
+gen typescript "$root/services/preop/src/module_bindings"
 # Unity: Stephen copies or references this folder from apps/quest.
 gen csharp "$here/bindings/csharp"
 echo "bindings generated"

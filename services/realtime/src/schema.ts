@@ -403,6 +403,52 @@ export const sweepTimer = table(
   }
 );
 
+// ---------------------------------------------------------------------------
+// Pre-op encounter (Matthew's Jarvis lane): patient interview, case
+// presentation to the attending, and the deterministic scorecard.
+// ---------------------------------------------------------------------------
+
+/** One pre-op encounter per attempt: who the learner interviewed and how it scored. */
+export const encounter = table(
+  { name: 'encounter' },
+  {
+    encounterId: t.string().primaryKey(),
+    sessionId: t.string().index('btree'),
+    attemptId: t.string(),
+    patientId: t.string(),
+    patientName: t.string(),
+    /** 'patient' | 'parent' */
+    speaker: t.string(),
+    speakerName: t.string(),
+    /** 'interview' | 'attending' | 'scored' */
+    phase: t.string(),
+    scoreTotal: t.option(t.u32()),
+    grade: t.option(t.string()),
+    /** Full scorecard as JSON, written once at scoring. */
+    scorecardJson: t.option(t.string()),
+    startedAt: t.timestamp(),
+    updatedAt: t.timestamp(),
+  }
+);
+
+/** What the learner elicited, examined, ordered, and said, in order. */
+export const encounterEvent = table(
+  { name: 'encounter_event' },
+  {
+    eventId: t.u64().primaryKey().autoInc(),
+    sessionId: t.string().index('btree'),
+    encounterId: t.string(),
+    /** 'history' | 'exam' | 'test' | 'assessment' | 'transcript' */
+    kind: t.string(),
+    /** Topic, maneuver, or test id; '' for transcript lines. */
+    itemId: t.string(),
+    /** For transcript lines: 'learner' | 'patient' | 'coach'. */
+    speaker: t.option(t.string()),
+    text: t.string(),
+    at: t.timestamp(),
+  }
+);
+
 const spacetimedb = schema({
   serviceIdentity,
   connection,
@@ -423,6 +469,8 @@ const spacetimedb = schema({
   mediaSource,
   rtcSignal,
   sweepTimer,
+  encounter,
+  encounterEvent,
 });
 
 export default spacetimedb;

@@ -154,7 +154,10 @@ Reviewed `packages/contracts/realtime-v1.md` on `nathan/companion-realtime` (9bd
 
 Until this is agreed, the HTTP coach routes stay as the working path.
 
-## Blocker for Stephen: HTTP from the headset
+## Resolved: HTTP from the headset
+
+Resolved for the session build: `NativeSessionBuild` sets `InsecureHttpOption.DevelopmentOnly`. The workbench-only build still uses `NotAllowed`, which is fine because it does not talk to the coach. Original note kept below for context.
+
 
 `codex/native-quest-workbench` (a895dab) sets `PlayerSettings.insecureHttpOption = InsecureHttpOption.NotAllowed` in `NativeQuestBuild.cs`. The coach and pre-op service run as plain HTTP on the Mac (`http://<mac-lan-ip>:8787`), so on the Quest every `CoachRelay` and `ScalpalPreopService` request would be refused: no events reach Jarvis, no highlights reach the headset, and cases load only from the offline bundle.
 
@@ -229,3 +232,22 @@ IEnumerator RunTool(QuestJarvisVoice.ToolRequest request, int epoch, string sid)
 Download all clips at session start from `GET /jarvis/reflex/:id` (load with `UnityWebRequestMultimedia.GetAudioClip(url, AudioType.MPEG)`), so a warning plays with no network wait. The browser page's `services/preop/src/jarvis/arbiter.js` is the reference implementation of these rules, with tests in `test/arbiter.test.ts`.
 
 **4. Demo patient.** `NativeCaseSession.PatientId` is hardcoded to `patient-demo-multi-source`. The real-data demo patient is sandbox Priya, `u_115958ef4e58c641` (needs `FINCHNODE_API_KEY` on the service). Make it configurable next to `coachBaseUrl` and keep the demo id as the fallback.
+
+
+## Shared session: Jarvis on SpacetimeDB
+
+Jarvis joins the shared SpacetimeDB session as the `coach` role (`services/preop/src/realtime-bridge.ts`) and writes everything live:
+
+| What | Where in SpacetimeDB |
+| --- | --- |
+| Pre-op encounter: patient, phase (`interview` -> `attending` -> `scored`), score, full scorecard JSON | `encounter` (view `session_encounters`) |
+| Every question topic, exam, test, transcript line, and the final assessment | `encounter_event` (view `session_encounter_events`) |
+| What the learner, patient, Jarvis, and the simulator said (including instant warning clips) | `coach_message` (speakers `learner`, `patient`, `coach`, `system`) |
+| Jarvis's voice status | `coach_status` |
+| Jarvis highlights during surgery | `command` via `requestCommand(highlightStructure)`, resolved by the headset; Jarvis only says "highlighted" after `applied` |
+
+The module changes are additive (two tables, four reducers for coach or operator, two views, `patient` speaker). Bindings are regenerated for the companion, gateway, Unity C# (`services/realtime/bindings/csharp`), and the coach service.
+
+**Run it locally:** `spacetime start`, then in `services/realtime` run `npm run publish:local`. Start the coach service with `SPACETIMEDB_URI=ws://127.0.0.1:3000` and join a session with its coach invite code (`POST /realtime/join {"code": "..."}` or `SPACETIMEDB_COACH_INVITE`). `npm run realtime:e2e` in `services/preop` checks the whole path with three identities (operator, coach, simulated headset). Measured October 4 locally: all checks pass; highlight round trip (Jarvis -> SpacetimeDB -> headset applied -> Jarvis) about 50 ms.
+
+**For Nathan:** the companion can show the encounter and scorecard from `session_encounters` / `session_encounter_events` with no new plumbing; the coach panel already shows `coach_message` and now includes patient lines. **For Stephen:** recopy `services/realtime/bindings/csharp` into `apps/quest/Assets/Scalpal/Realtime/Generated` only if the headset needs the encounter tables; nothing in the headset path requires it.
