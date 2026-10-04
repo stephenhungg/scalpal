@@ -132,10 +132,10 @@ Still needed:
 
 | Piece | Where | Notes |
 | --- | --- | --- |
-| Website | https://scalpal-companion.vercel.app | Vercel project `scalpal-companion` (Nathan's account), built from `apps/companion` |
+| Website | https://dashboard.scalpal.tech (also https://scalpal-companion.vercel.app) | Vercel project `scalpal-companion` (Nathan's account), built from `apps/companion`. `scalpal.tech` DNS is on Silas's Vercel account. Deploy a local build from a folder outside git: the Hobby plan blocks deploys whose latest commit is a teammate's |
 | Realtime database | SpacetimeDB maincloud, database `scalpal` | Published from `services/realtime` with Nathan's SpacetimeDB login |
 | Gateway | https://scalpal-gateway.fly.dev (Fly app `scalpal-gateway`, region `ord`) | One always-on machine; secrets in Fly, `fly.toml` in `services/api` |
-| Artifact storage | Cloudflare R2 bucket `scalpal-artifacts` | Private; CORS allows the website origin and localhost dev ports |
+| Artifact storage | Cloudflare R2 bucket `scalpal-artifacts` | Private; CORS allows both website origins and localhost dev ports |
 | Video relay | Cloudflare Realtime TURN | Short-lived credentials minted per viewer by the gateway |
 
 Verified against the live URLs with headless Chromium, both peers forced onto the TURN relay: session creation, invite join, live video via the relay, the synthetic headset script, a headset-applied action, browser upload to R2 with gateway verification, synthetic processing, a synced replay, source stop, the phone layout, and ending the session. The real Quest mirror, Matthew's Scalpal and Silas's worker are not yet connected.
