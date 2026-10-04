@@ -101,6 +101,17 @@ namespace Scalpal.Anatomy.Tissue
             previous = strain; HasHistory = true; prepared = false;
         }
 
+        // Physical stress at the last accepted state, not the next trial potential.
+        // Read-only: force measurements must not advance material time/history.
+        public TissueTensor CommittedStress(VolumeMaterial material)
+        {
+            ValidateMaterial(material);
+            var result = material.SecondPiola(previous) * EquilibriumFraction;
+            for (int i = 0; i < BranchCount; i++)
+                result += material.SecondPiola(previous - viscous[i]) * fractions[i];
+            return result;
+        }
+
         public void Reset()
         {
             previous = default;

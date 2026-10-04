@@ -78,3 +78,10 @@ Finite blade triangles also intersect the currently rendered artery mesh to open
 Latest synthetic checks passed volume18,172, volume runtime2,220, material/history866 and vessel arithmetic221/runtime261 assertions, plus the existing body/input/case/attempt/coach checks. Contact2,102 assertions cover source inspection, artificial caps, rest attachments, fit transforms and additional penetration. New Android deployment, physical cutting/contact/bleeding/frame time and measured coupon fits remain unverified. See the [full goal checklist](physics-implementation-plan.md); none of these component checks establish complete surgical realism.
 
 Reusable source-unit lesson: imported mesh-local coordinates are not automatically meters. The actual anatomy FBX uses a100× import transform; mechanics, topology tolerances and material-point coordinates now explicitly convert to meters. Area normals also use explicit finite magnitude normalization: Unity’s general `Vector3.normalized` cutoff incorrectly zeroed valid submillimeter vessel-cap normals. Both failures have geometry regressions.
+
+
+## Material Force Calibration Interface
+
+The connected volume now exposes finite prescribed boundary targets on constructor-pinned original nodes and read-only accepted material nodal forces in newtons. Cut fans retain grip identity, rejected steps preserve previous forces/history, and retry clears targets/cache. This adds laboratory coupon capability to the actual solver, without changing the runtime wall’s authored fixed attachments. Numerical velocity damping is excluded from the reported material force. See [the force/source-summary experiment](research/solver-calibration-experiment.md).
+
+The Unity gate passed5,468 new force-coupon assertions and the actual skin-summary replay/refinement benchmark. Three distinct passive spectra satisfy the published sparse summaries, so the benchmark does not identify one measured viscosity or qualify a runtime skin material. Abdominal fat source coefficients are pinned separately; their printed bulk units and missing support data remain explicit. Physical interaction/performance and calibrated specimens remain unfinished.

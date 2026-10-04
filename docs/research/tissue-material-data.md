@@ -1,6 +1,6 @@
 # Human abdominal tissue material data
 
-Research checked 2026-10-04. This is a source inventory and proposed calibration method. No material has been calibrated in the Unity solver by this research, and no physical headset or clinical validation ran. Published measurements are offline references; source condition, tissue site and loading mode must travel with every parameter.
+Research checked 2026-10-04. This is a source inventory plus a completed [force/source-summary experiment](solver-calibration-experiment.md). No runtime material has a validated measured specimen calibration, and no physical headset or clinical validation ran. Published measurements are offline references; source condition, tissue site and loading mode must travel with every parameter.
 
 ## Available numeric evidence
 
@@ -27,7 +27,7 @@ Source discrepancy: CSV `A2/rangeMean` is degree 4; main Table 4 labels degree 5
 
 [Primary article, DOI 10.1038/s41598-026-42371-9](https://www.nature.com/articles/s41598-026-42371-9), [PMC full text](https://pmc.ncbi.nlm.nih.gov/articles/PMC13096531/). CC BY 4.0. Explants mainly from abdominal surgery; hypodermis removed, epidermis/dermis retained. All mechanical testing around 21°C; tensile speed 10 mm/min.
 
-At held 18% strain for approximately two minutes, relaxation modulus decreases from 36.5 ± 0.5 kPa at the start to 25.0 ± 0.5 kPa at 30 s. Total reported relaxation is 39 ± 3%. Tensile initial modulus is 28.0 ± 0.5 kPa; tangent modulus at 18% is 88.4 ± 0.5 kPa. At 10% strain, dynamic moduli are `E′ = 11.4 ± 0.5, E″ = 2.2 ± 0.5 kPa` at 0.01 Hz and `E′ = 14.7 ± 0.5, E″ = 3 ± 2 kPa` at 1 Hz.
+At held 18% strain for approximately two minutes, relaxation modulus decreases from 36.5 ± 0.5 kPa at the start to 25.0 ± 0.5 kPa at 30 s. Total reported relaxation is 39 ± 3%. Tensile initial modulus is 28.0 ± 0.5 kPa; reported tangent modulus at maximum deformation is 88.4 ± 0.5 kPa (the corresponding tensile strain is not assigned from the separate 18% relaxation protocol). At 10% strain, dynamic moduli are `E′ = 11.4 ± 0.5, E″ = 2.2 ± 0.5 kPa` at 0.01 Hz and `E′ = 14.7 ± 0.5, E″ = 3 ± 2 kPa` at 1 Hz.
 
 No numeric time-series file verified. Two relaxation points do not uniquely determine an equilibrium modulus and relaxation time. These are an explant's test-condition results, not a universal skin constant or a fat-inclusive indentation modulus.
 
@@ -80,7 +80,7 @@ Raw data are available on request, not an identified open download. The 6.79 MPa
 
 [Hollister et al., Shear Viscoelastic Properties of Human Orbital Fat, Zenodo DOI 10.5281/zenodo.10836108](https://zenodo.org/records/10836108). Repository metadata specifies CC BY 4.0, raw stress relaxation at 37°C, `Stress relaxation.xlsx` (413,205 bytes) and MATLAB analysis `prony_st_rel.m` (5,369 bytes). [Numeric-file endpoint](https://zenodo.org/api/records/10836108/files/Stress%20relaxation.xlsx/content). Not downloaded or assigned to an abdominal material: orbital fat in shear is a distinct tissue/site/loading mode.
 
-Further primary lead: [Fontanella et al. 2022, abdominal SAT/VAT in severe obesity, DOI 10.3390/pr10091798](https://www.mdpi.com/2227-9717/10/9/1798). Its inverse model separates equilibrium Ogden fitting from two-branch relaxation fitting. The protocol models a 20 mm diameter, 9.1 mm high specimen and a 10 mm diameter indenter, up to 50% indentation strain, 3000%/s ramp, 300 s hold. Numeric raw data are on request; complete parameter-table extraction is still pending. Avoid transferring the model directly into a St Venant–Kirchhoff solver.
+Further primary lead: [Fontanella et al. 2022, abdominal SAT/VAT in severe obesity, DOI 10.3390/pr10091798](https://www.mdpi.com/2227-9717/10/9/1798). Its inverse model separates equilibrium Ogden fitting from two-branch relaxation fitting. The protocol models a 20 mm diameter, 9.1 mm high specimen and a 10 mm diameter indenter, up to 50% indentation strain, 3000%/s ramp, 300 s hold. Numeric raw data are on request; complete parameter-table extraction and units/support audit are recorded in [the source audit](abdominal-fat-calibration-source.md). Avoid transferring the model directly into a St Venant–Kirchhoff solver.
 
 ## Proposed solver calibration
 

@@ -23,6 +23,7 @@ namespace Scalpal.Anatomy.Tissue
         public readonly VolumeMaterial[] Materials;
         public readonly Face[] Faces;
         readonly bool[] originalPins;
+        readonly Vector3[] boundaryTargets;
         readonly TissueTensor[] restInverse;
         readonly float[] restVolumes, lambdas;
         readonly MaxwellHistory[] histories;
@@ -30,6 +31,9 @@ namespace Scalpal.Anatomy.Tissue
         Vector3[] positions, rest, previous, velocities;
         float[] inverseMass;
         bool[] pinned;
+        int[] originalNodeFor;
+        Vector3[] acceptedForces, trialForces;
+        public bool HasAcceptedStep { get; private set; }
         public Vector3[] Positions => positions;
         public Vector3[] Rest => rest;
         public int CutFaceCount { get; private set; }
@@ -47,7 +51,7 @@ namespace Scalpal.Anatomy.Tissue
             if (nodes==null || cells==null || materials==null || pins==null || nodes.Length!=pins.Length || cells.Length==0 || nodes.Length>MaxNodes)
                 throw new ArgumentException("Invalid volume inputs");
             foreach(var material in materials) if(!material.HasValidUnits) throw new ArgumentException("Invalid SI material parameters");
-            Original=(Vector3[])nodes.Clone(); Cells=(Cell[])cells.Clone(); Materials=(VolumeMaterial[])materials.Clone(); originalPins=(bool[])pins.Clone();
+            Original=(Vector3[])nodes.Clone(); Cells=(Cell[])cells.Clone(); Materials=(VolumeMaterial[])materials.Clone(); originalPins=(bool[])pins.Clone(); boundaryTargets=(Vector3[])nodes.Clone();
             restInverse=new TissueTensor[cells.Length]; restVolumes=new float[cells.Length]; lambdas=new float[cells.Length]; binding=new int[cells.Length,4];
             histories=new MaxwellHistory[cells.Length];
             for(int i=0;i<cells.Length;i++)
@@ -87,6 +91,21 @@ namespace Scalpal.Anatomy.Tissue
             for(int i=0;i<4;i++) if(Cells[cell].Vertex(i)==root) return binding[cell,i];
             throw new InvalidOperationException("Face/root not owned by cell");
         }
+        // Prescribed grips use original material-node identities, surviving cut fan duplication.
+        // Only constructor-pinned nodes are eligible; pending targets apply on the next step.
+        public bool SetBoundaryTarget(int originalNode, Vector3 meters)
+        {
+            if(originalNode<0||originalNode>=Original.Length||!originalPins[originalNode]||!TissueCage.Finite(meters))return false;
+            boundaryTargets[originalNode]=meters; return true;
+        }
+        // Accepted material INTERNAL nodal forces, N. A grip reaction is their negative.
+        // This excludes inertial, contact, damping and constraint-force contributions.
+        // Free-node equilibrium residual must be checked before treating it as a coupon load.
+        public void MeasureNodalForces(Vector3[] output)
+        {
+            if(output==null||output.Length!=NodeCount)throw new ArgumentException("Force buffer must match active material nodes");
+            Array.Copy(acceptedForces,output,NodeCount);
+        }
         public bool BeginHandle(Vector3 point,float maximumDistance)
         {
             if(!TissueCage.Finite(point)||!(maximumDistance>0)||float.IsInfinity(maximumDistance)){ReleaseHandle();return false;}
@@ -117,7 +136,9 @@ namespace Scalpal.Anatomy.Tissue
             foreach(int i in candidate) {var face=Faces[i];face.cut=true;Faces[i]=face;}
             // Atomic topology update: refuse over-budget fracture without partial mutation.
             if(!RebuildNodes(false)) {foreach(int i in candidate) {var face=Faces[i];face.cut=false;Faces[i]=face;} return 0;}
-            CutFaceCount+=candidate.Count; ReleaseHandle(); Dirty=true; return candidate.Count;
+            CutFaceCount+=candidate.Count; ReleaseHandle(); Dirty=true;
+            if(HasAcceptedStep&&!ComputeNodalForces(acceptedForces,false)) {HasAcceptedStep=false;Array.Clear(acceptedForces,0,NodeCount);}
+            return candidate.Count;
         }
         public static bool BladeIntersectsFace(Vector3 a,Vector3 b,Vector3 c,Vector3 p,Vector3 q,Vector3 r,float tolerance)
         {
@@ -159,7 +180,7 @@ namespace Scalpal.Anatomy.Tissue
                 UnionRoot(face.cell,face.neighbor,face.a,parent);UnionRoot(face.cell,face.neighbor,face.b,parent);UnionRoot(face.cell,face.neighbor,face.c,parent);
             }
             var map=new Dictionary<int,int>();var nextPositions=new List<Vector3>();var nextRest=new List<Vector3>();var nextVelocity=new List<Vector3>();var nextPins=new List<bool>();var mass=new List<float>();
-            var nextBinding=new int[Cells.Length,4];
+            var nextBinding=new int[Cells.Length,4];var nextRoots=new List<int>();
             for(int cell=0;cell<Cells.Length;cell++)for(int corner=0;corner<4;corner++)
             {
                 int set=Find(parent,cell*4+corner),root=Cells[cell].Vertex(corner);
@@ -167,11 +188,12 @@ namespace Scalpal.Anatomy.Tissue
                 {
                     node=map.Count;if(node>=MaxNodes)return false;map.Add(set,node);
                     int old=initial?-1:binding[cell,corner];
-                    nextPositions.Add(initial?Original[root]:positions[old]);nextRest.Add(Original[root]);nextVelocity.Add(initial?Vector3.zero:velocities[old]);nextPins.Add(originalPins[root]);mass.Add(0);
+                    nextPositions.Add(initial?Original[root]:positions[old]);nextRest.Add(Original[root]);nextVelocity.Add(initial?Vector3.zero:velocities[old]);nextPins.Add(originalPins[root]);nextRoots.Add(root);mass.Add(0);
                 }
                 nextBinding[cell,corner]=node;mass[node]+=Materials[Cells[cell].material].densityKgPerCubicMeter*restVolumes[cell]/4;
             }
-            positions=nextPositions.ToArray();rest=nextRest.ToArray();velocities=nextVelocity.ToArray();pinned=nextPins.ToArray();previous=new Vector3[positions.Length];inverseMass=new float[positions.Length];TotalMass=0;
+            positions=nextPositions.ToArray();rest=nextRest.ToArray();velocities=nextVelocity.ToArray();pinned=nextPins.ToArray();previous=new Vector3[positions.Length];inverseMass=new float[positions.Length];originalNodeFor=nextRoots.ToArray();
+            acceptedForces=new Vector3[positions.Length];trialForces=new Vector3[positions.Length];TotalMass=0;
             for(int i=0;i<positions.Length;i++){TotalMass+=mass[i];inverseMass[i]=pinned[i]?0:1/mass[i];}
             for(int cell=0;cell<Cells.Length;cell++)for(int corner=0;corner<4;corner++)binding[cell,corner]=nextBinding[cell,corner];
             return true;
@@ -197,7 +219,7 @@ namespace Scalpal.Anatomy.Tissue
             {
                 for(int cell=0;cell<Cells.Length;cell++)SolveCell(cell,dt);
                 if(Handle>=0)positions[Handle]=rest[Handle]+Vector3.ClampMagnitude(handleTarget-rest[Handle],.02f);
-                for(int i=0;i<NodeCount;i++)if(pinned[i])positions[i]=rest[i];
+                for(int i=0;i<NodeCount;i++)if(pinned[i])positions[i]=boundaryTargets[originalNodeFor[i]];
             }
             bool invalid=false;
             for(int cell=0;cell<Cells.Length;cell++)
@@ -206,6 +228,7 @@ namespace Scalpal.Anatomy.Tissue
                 if(float.IsNaN(f.Determinant)||float.IsInfinity(f.Determinant)||f.Determinant<=.02f||!TissueCage.Finite(f.x)||!TissueCage.Finite(f.y)||!TissueCage.Finite(f.z)||
                     !TissueCage.Finite(strain.x)||!TissueCage.Finite(strain.y)||!TissueCage.Finite(strain.z)){invalid=true;break;}
             }
+            if(!invalid&&!ComputeNodalForces(trialForces,true))invalid=true;
             if(invalid)
             {
                 // Roll back a failed timestep, preserving the existing cut topology and mass.
@@ -213,6 +236,23 @@ namespace Scalpal.Anatomy.Tissue
             }
             for(int i=0;i<NodeCount;i++){velocities[i]=Vector3.ClampMagnitude((positions[i]-previous[i])/dt,.5f);Dirty|=(positions[i]-previous[i]).sqrMagnitude>1e-12f;}
             for(int cell=0;cell<Cells.Length;cell++){var f=Deformation(cell);histories[cell].Commit((f.Transpose().Multiply(f)-TissueTensor.Identity)*.5f);}
+            Array.Copy(trialForces,acceptedForces,NodeCount);HasAcceptedStep=true;
+        }
+        bool ComputeNodalForces(Vector3[] forces,bool trial)
+        {
+            Array.Clear(forces,0,forces.Length);
+            for(int cell=0;cell<Cells.Length;cell++)
+            {
+                var f=Deformation(cell);var strain=(f.Transpose().Multiply(f)-TissueTensor.Identity)*.5f;
+                var material=Materials[Cells[cell].material];
+                var stress=trial?histories[cell].Stress(strain,material):histories[cell].CommittedStress(material);
+                var gradient=f.Multiply(stress).Multiply(restInverse[cell].Transpose())*restVolumes[cell];
+                if(!TissueCage.Finite(gradient.x)||!TissueCage.Finite(gradient.y)||!TissueCage.Finite(gradient.z))return false;
+                forces[binding[cell,0]]+=gradient.x+gradient.y+gradient.z;
+                forces[binding[cell,1]]-=gradient.x;forces[binding[cell,2]]-=gradient.y;forces[binding[cell,3]]-=gradient.z;
+            }
+            foreach(var force in forces)if(!TissueCage.Finite(force))return false;
+            return true;
         }
         TissueTensor Deformation(int cell)
         {
@@ -236,6 +276,7 @@ namespace Scalpal.Anatomy.Tissue
         {
             for(int i=0;i<Faces.Length;i++){var face=Faces[i];face.cut=false;Faces[i]=face;}
             foreach(var history in histories)history.Reset();
+            Array.Copy(Original,boundaryTargets,Original.Length);HasAcceptedStep=false;
             CutFaceCount=0;ReleaseHandle();if(!RebuildNodes(true)) throw new ArgumentException("Initial material connectivity exceeds tissue node budget");Dirty=true;
         }
         public void Freeze(){ReleaseHandle();Array.Clear(velocities,0,velocities.Length);}
