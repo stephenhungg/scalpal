@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import statistics
 import time
 from pathlib import Path
@@ -56,16 +57,18 @@ def main() -> None:
     parser.add_argument("--models", nargs="+", default=["owlv2", "grounding-dino"])
     parser.add_argument("--device")
     parser.add_argument("--runs", type=int, default=5)
+    parser.add_argument("--size", type=int, help="OWLv2 input size (default 960)")
     parser.add_argument("--threshold", type=float, default=0.2)
     args = parser.parse_args()
     images = sorted(p for p in BENCH.glob("*.jpg"))
     summary = {}
     for model in args.models:
         start = time.perf_counter()
-        detector = Detector(model, device=args.device)
+        detector = Detector(model, device=args.device, size=args.size)
         load_ms = (time.perf_counter() - start) * 1000
         warm_ms = detector.warmup()
-        out = BENCH / "out" / model
+        tag = f"{model}-{args.size}" if args.size else model
+        out = BENCH / "out" / tag
         out.mkdir(parents=True, exist_ok=True)
         per_image = {}
         for path in images:
@@ -87,18 +90,19 @@ def main() -> None:
             labels = ", ".join(f"{d['label']}:{d['score']:.2f}" for d in detections[:12])
             print(f"{model:15s} {path.name[:40]:40s} {statistics.median(times):7.1f} ms  {labels}", flush=True)
         medians = [v["median_ms"] for v in per_image.values()]
-        summary[model] = {
+        summary[tag] = {
             "device": detector.device,
             "load_ms": round(load_ms),
             "first_inference_ms": round(warm_ms),
             "median_ms": round(statistics.median(medians), 1),
             "max_ms": max(medians),
+            "load_average_1m_after": round(os.getloadavg()[0], 1),
             "images": per_image,
         }
         print(f"== {model} on {detector.device}: load {load_ms:.0f} ms, first {warm_ms:.0f} ms, "
-              f"median warm {statistics.median(medians):.1f} ms", flush=True)
+              f"median warm {statistics.median(medians):.1f} ms, load avg {os.getloadavg()[0]:.1f}", flush=True)
         del detector
-    (BENCH / "out" / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
+    (BENCH / "out" / f"summary-{'-'.join(args.models)}{'-' + str(args.size) if args.size else ''}.json").write_text(json.dumps(summary, indent=2) + "\n")
 
 
 if __name__ == "__main__":

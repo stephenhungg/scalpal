@@ -24,10 +24,11 @@ def main(argv: list[str] | None = None) -> None:
     for command in (serve, detect):
         command.add_argument("--model", choices=sorted(BACKENDS), default=DEFAULT_MODEL)
         command.add_argument("--device", help="mps, cpu or cuda; default picks mps when available")
+        command.add_argument("--size", type=int, help="OWLv2 input size, multiple of 16 (default 960)")
         command.add_argument("--weights", help="fine-tuned checkpoint directory (same architecture)")
     args = parser.parse_args(argv)
 
-    detector = Detector(args.model, device=args.device, weights=args.weights)
+    detector = Detector(args.model, device=args.device, weights=args.weights, size=args.size)
     warmup_ms = detector.warmup()
     if args.command == "detect":
         image = decode_image(args.image.read_bytes())

@@ -12,6 +12,7 @@ import io
 import time
 from dataclasses import dataclass
 
+import numpy as np
 from PIL import Image, ImageOps
 
 MODELS = {
@@ -82,10 +83,34 @@ def nms(detections: list[RawDetection], threshold: float = 0.5) -> list[RawDetec
     return kept
 
 
+OWLV2_SIZE = 960
+CLIP_MEAN = (0.48145466, 0.4578275, 0.40821073)
+CLIP_STD = (0.26862954, 0.26130258, 0.27577711)
+
+
+def owlv2_pixels(image: Image.Image, size: int = OWLV2_SIZE):
+    """OWLv2 preprocessing without the slow scipy path in transformers' Owlv2ImageProcessor.
+
+    Same steps: scale to [0, 1], pad bottom/right to a square with 0.5, resize to 960,
+    normalize with CLIP mean/std. Measured max per-pixel difference from the reference
+    processor is reported in README.md.
+    """
+    import torch
+
+    side = max(image.size)
+    canvas = Image.new("RGB", (side, side), (128, 128, 128))
+    canvas.paste(image, (0, 0))
+    resized = canvas.resize((size, size), Image.Resampling.BILINEAR)
+    pixels = torch.from_numpy(np.asarray(resized, dtype=np.float32) / 255.0).permute(2, 0, 1)
+    mean = torch.tensor(CLIP_MEAN).view(3, 1, 1)
+    std = torch.tensor(CLIP_STD).view(3, 1, 1)
+    return ((pixels - mean) / std).unsqueeze(0)
+
+
 class Owlv2Backend:
     name = "owlv2"
 
-    def __init__(self, device: str, repo: str = MODELS["owlv2"], weights: str | None = None):
+    def __init__(self, device: str, repo: str = MODELS["owlv2"], weights: str | None = None, size: int | None = None):
         import torch
         from transformers import Owlv2ForObjectDetection, Owlv2Processor
 
@@ -93,7 +118,15 @@ class Owlv2Backend:
         self.device = device
         self.repo = weights or repo
         self.processor = Owlv2Processor.from_pretrained(repo)
-        self.model = Owlv2ForObjectDetection.from_pretrained(self.repo).to(device).eval()
+        # Native resolution is 960 (60 x 60 patches). Smaller sizes interpolate the position
+        # embeddings: faster, but small objects get fewer patches.
+        size = size or OWLV2_SIZE
+        if size % 16:
+            raise ValueError("OWLv2 input size must be a multiple of 16")
+        self.size = size
+        # fp16 on MPS measured about 20% faster with max-score drift under 0.001 (README).
+        self.dtype = torch.float16 if device == "mps" else torch.float32
+        self.model = Owlv2ForObjectDetection.from_pretrained(self.repo).to(device, self.dtype).eval()
         self._text_cache: dict[tuple[str, ...], dict] = {}
 
     def _text_inputs(self, labels: tuple[str, ...]) -> dict:
@@ -108,19 +141,26 @@ class Owlv2Backend:
 
     def predict(self, image: Image.Image, labels: list[str], threshold: float) -> list[RawDetection]:
         torch = self.torch
-        pixel = self.processor.image_processor(images=image, return_tensors="pt")["pixel_values"].to(self.device)
+        pixel = owlv2_pixels(image, self.size).to(self.device, self.dtype)
         text = self._text_inputs(tuple(labels))
         with torch.inference_mode():
-            outputs = self.model(pixel_values=pixel, input_ids=text["input_ids"], attention_mask=text["attention_mask"])
+            outputs = self.model(
+                pixel_values=pixel,
+                input_ids=text["input_ids"],
+                attention_mask=text["attention_mask"],
+                interpolate_pos_encoding=self.size != OWLV2_SIZE,
+            )
         # OWLv2 pads the image to a square at the bottom/right, so boxes are relative to
         # the padded square. Scale by the long side, then clamp in normalize_box.
         side = max(image.size)
         logits = outputs.logits[0].float().cpu()  # (patches, labels)
         boxes = outputs.pred_boxes[0].float().cpu()  # (patches, 4) cx, cy, w, h normalized
-        scores, label_idx = torch.sigmoid(logits).max(dim=-1)
-        keep = scores >= threshold
+        # Every (patch, label) pair above threshold, not only each patch's best label, so one
+        # object can be reported as both "hand" and "person" when both prompts are asked for.
+        patch_idx, label_idx = torch.nonzero(torch.sigmoid(logits) >= threshold, as_tuple=True)
+        scores = torch.sigmoid(logits[patch_idx, label_idx])
         result = []
-        for score, li, (cx, cy, w, h) in zip(scores[keep].tolist(), label_idx[keep].tolist(), boxes[keep].tolist()):
+        for score, li, (cx, cy, w, h) in zip(scores.tolist(), label_idx.tolist(), boxes[patch_idx].tolist()):
             xyxy = ((cx - w / 2) * side, (cy - h / 2) * side, (cx + w / 2) * side, (cy + h / 2) * side)
             result.append(RawDetection(li, score, xyxy))
         return nms(result)
@@ -129,7 +169,8 @@ class Owlv2Backend:
 class GroundingDinoBackend:
     name = "grounding-dino"
 
-    def __init__(self, device: str, repo: str = MODELS["grounding-dino"], weights: str | None = None):
+    def __init__(self, device: str, repo: str = MODELS["grounding-dino"], weights: str | None = None, size: int | None = None):
+        # size is ignored; Grounding DINO resizes internally (shortest side 800, max 1333).
         import torch
         from transformers import AutoModelForZeroShotObjectDetection, AutoProcessor
 
@@ -182,17 +223,19 @@ BACKENDS = {"owlv2": Owlv2Backend, "grounding-dino": GroundingDinoBackend}
 class Detector:
     """Loads one backend once and serves detections with catalog metadata."""
 
-    def __init__(self, model: str = DEFAULT_MODEL, device: str | None = None, weights: str | None = None):
+    def __init__(
+        self, model: str = DEFAULT_MODEL, device: str | None = None, weights: str | None = None, size: int | None = None
+    ):
         if model not in BACKENDS:
             raise ValueError(f"unknown model {model!r}; choose one of {sorted(BACKENDS)}")
         self.device = pick_device(device)
         try:
-            self.backend = BACKENDS[model](self.device, weights=weights)
+            self.backend = BACKENDS[model](self.device, weights=weights, size=size)
         except Exception:
             if self.device == "cpu":
                 raise
             self.device = "cpu"
-            self.backend = BACKENDS[model](self.device, weights=weights)
+            self.backend = BACKENDS[model](self.device, weights=weights, size=size)
         self.model = model
         self.repo = self.backend.repo
 
