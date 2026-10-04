@@ -214,8 +214,9 @@ const clientTools = Object.fromEntries(
 
 // ---- voice --------------------------------------------------------------------------------------
 
-async function startVoice(created) {
-  const conn = await api("GET", "/jarvis/connection");
+async function startVoice() {
+  // The server binds the connection to this session and supplies the prompt it built for it.
+  const conn = await api("GET", `/jarvis/connection?sessionId=${encodeURIComponent(sid)}`);
   if (!conn.ok) {
     $("voice").textContent = "voice not configured"; $("voice").className = "pill warn";
     log("event", `${conn.json.error?.message ?? "Voice unavailable."} Cautions will use the browser voice.`);
@@ -224,7 +225,7 @@ async function startVoice(created) {
   await navigator.mediaDevices.getUserMedia({ audio: true });
   convo = await Conversation.startSession({
     ...(conn.json.signedUrl ? { signedUrl: conn.json.signedUrl, connectionType: "websocket" } : { agentId: conn.json.agentId }),
-    overrides: { agent: { prompt: { prompt: created.systemPrompt }, firstMessage: created.firstMessage } },
+    overrides: { agent: { prompt: { prompt: conn.json.prompt }, firstMessage: conn.json.firstMessage } },
     clientTools,
     onConnect: () => { mirrorStatus("listening"); $("voice").textContent = "voice live"; $("voice").className = "pill on"; lastSemantic = ""; syncContext(true); },
     onDisconnect: () => { mirrorStatus("offline"); $("voice").textContent = "voice off"; $("voice").className = "pill"; convo = null; },
@@ -289,7 +290,7 @@ async function startSurgery() {
   openFeed();
   $("stop").disabled = false;
   await loadReflexClips();
-  try { await startVoice(created.json); }
+  try { await startVoice(); }
   catch (e) { log("event", `Voice failed to start: ${e?.message ?? e}. Cautions will use the browser voice.`, "urgent"); }
   if (!convo) log("ai", created.json.firstMessage);
 }

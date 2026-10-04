@@ -278,6 +278,43 @@ describe("coach routes", () => {
   });
 });
 
+// /jarvis/connection hands out a credential for an agent billed to the owner. It must only be minted for a
+// live session, and the prompt the voice runs with must be the one the server built for that session.
+describe("voice connection", () => {
+  const app = createApp({ client: fixtureClient(), now: () => NOW, coachTickMs: 0, elevenLabs: { apiKey: "", agentId: "agent-jarvis", patientAgentId: "agent-patient" } });
+  const call = async (method: string, route: string, body?: unknown) => {
+    const res = await app.request(route, { method, headers: body ? { "Content-Type": "application/json" } : {}, body: body ? JSON.stringify(body) : undefined });
+    return { status: res.status, json: (await res.json()) as Record<string, any> };
+  };
+
+  it("refuses to mint a connection when nothing is live", async () => {
+    expect((await call("GET", "/jarvis/connection")).status).toBe(409);
+    expect((await call("GET", "/jarvis/connection?agent=patient")).status).toBe(409);
+    expect((await call("GET", "/jarvis/connection?sessionId=coach-doesnotexist")).status).toBe(404);
+    expect((await call("GET", "/jarvis/connection?encounterId=enc-doesnotexist")).status).toBe(404);
+  });
+
+  it("returns the server-built prompt for a coach session", async () => {
+    const created = (await call("POST", "/coach/sessions", { patientId: "patient-demo-pediatric-asthma" })).json;
+    const conn = await call("GET", `/jarvis/connection?sessionId=${created.sessionId}`);
+    expect(conn.status).toBe(200);
+    expect(conn.json).toMatchObject({ agentId: "agent-jarvis", prompt: created.systemPrompt, firstMessage: created.firstMessage });
+    expect((await call("GET", "/jarvis/connection")).status).toBe(200); // the headset's legacy call while a session is live
+  });
+
+  it("picks the agent and prompt from the encounter phase, never from the client", async () => {
+    const enc = (await call("POST", "/encounters", { patientId: "patient-demo-sparse" })).json;
+    const patient = await call("GET", `/jarvis/connection?encounterId=${enc.encounterId}&agent=jarvis`);
+    expect(patient.json).toMatchObject({ agentId: "agent-patient", role: "patient", prompt: enc.patientPrompt, firstMessage: enc.patientFirstMessage, voiceId: enc.voiceId });
+    expect((await call("GET", "/jarvis/connection?agent=patient")).status).toBe(200);
+    const attending = (await call("POST", `/encounters/${enc.encounterId}/attending`)).json;
+    const jarvis = await call("GET", `/jarvis/connection?encounterId=${enc.encounterId}`);
+    expect(jarvis.json).toMatchObject({ agentId: "agent-jarvis", role: "attending", prompt: attending.attendingPrompt, firstMessage: attending.attendingFirstMessage, voiceId: "" });
+    await call("POST", `/encounters/${enc.encounterId}/tools/record_assessment`, { diagnosis: "appendicitis", differential: [], procedure: "appendectomy", urgency: "emergency" });
+    expect((await call("GET", `/jarvis/connection?encounterId=${enc.encounterId}`)).status).toBe(409);
+  });
+});
+
 describe("danger focus", () => {
   it("does not warn when the learner looks at the step's own target", () => {
     const s = new CoachSession("coach-f", buildCase(fixture("patient-demo-pediatric-asthma"), "", NOW), () => NOW);

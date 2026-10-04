@@ -16,6 +16,19 @@ export interface EncounterRouteOptions {
   realtime?: RealtimeSink;
 }
 
+// What /jarvis/connection needs to bind a voice connection to a live encounter, with the server-built prompt.
+export interface EncounterVoice {
+  role: "patient" | "attending";
+  prompt: string;
+  firstMessage: string;
+  voiceId: string;
+}
+export interface EncounterVoices {
+  // null: no live encounter with that id; "scored": nothing left to talk about.
+  voiceFor(encounterId: string): EncounterVoice | "scored" | null;
+  anyLive(role: EncounterVoice["role"]): boolean;
+}
+
 const ENCOUNTER_ID = /^enc-[a-z0-9]{6,40}$/;
 const MAX = 50;
 
@@ -24,7 +37,7 @@ const encounterActions = (id: string): Action[] => [
   { id: "choose_patient", label: "Choose another patient", method: "GET", route: "/patients" },
 ];
 
-export function registerEncounterRoutes(app: Hono, options: EncounterRouteOptions) {
+export function registerEncounterRoutes(app: Hono, options: EncounterRouteOptions): EncounterVoices {
   const sessions = new Map<string, EncounterSession>();
   const voices = { ...DEFAULT_PATIENT_VOICES, ...(options.patientVoices ?? {}) };
   const realtime = options.realtime ?? NO_REALTIME;
@@ -176,4 +189,17 @@ export function registerEncounterRoutes(app: Hono, options: EncounterRouteOption
     }
     return c.json({ result, display, state: s.state(), actions: encounterActions(s.id) });
   });
+
+  const roleOf = (s: EncounterSession) => (s.phase === "interview" ? "patient" : s.phase === "attending" ? "attending" : null);
+  return {
+    voiceFor(encounterId) {
+      const s = ENCOUNTER_ID.test(encounterId) ? sessions.get(encounterId) : undefined;
+      if (!s) return null;
+      const role = roleOf(s);
+      if (role === "patient") return { role, prompt: patientPrompt(s), firstMessage: patientFirstMessage(s), voiceId: voices[s.encounter.persona.voiceKey] };
+      if (role === "attending") return { role, prompt: attendingPrompt(s), firstMessage: attendingFirstMessage(s), voiceId: "" };
+      return "scored";
+    },
+    anyLive: (role) => [...sessions.values()].some((s) => roleOf(s) === role),
+  };
 }

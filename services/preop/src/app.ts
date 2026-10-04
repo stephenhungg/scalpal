@@ -447,7 +447,7 @@ export function createApp(options: AppOptions = {}) {
     });
   });
 
-  registerEncounterRoutes(app, {
+  const encounters = registerEncounterRoutes(app, {
     now,
     realtime: options.realtime ?? undefined,
     loadCase: async (id) => {
@@ -467,6 +467,7 @@ export function createApp(options: AppOptions = {}) {
     toolAckWaitMs: options.toolAckWaitMs,
     realtime: options.realtime ?? undefined,
     bridge: options.realtime ?? null,
+    encounters,
     loadCase: async (id) => {
       const target = await resolve(id);
       return target ? caseOrUnavailable(target.subject, target.scenarioId) : null;
