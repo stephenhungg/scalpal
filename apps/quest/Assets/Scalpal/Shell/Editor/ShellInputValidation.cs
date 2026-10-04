@@ -85,6 +85,21 @@ namespace Scalpal.Shell.Editor
                 }
                 InputSystem.QueueDeltaStateEvent(hand.pinchValue,0f); UpdateInput();
                 check(tracked.ReadValue<float>()==0 && ready.ReadValue<float>()==0 && pinch.ReadValue<float>()==0,"tracking loss and pinch release reach production action inputs");
+                var pressGate=new ShellInput.PinchPressGate();
+                Func<float,float,bool> sample=(value,now)=>
+                {
+                    InputSystem.QueueDeltaStateEvent(hand.pinchValue,value); UpdateInput();
+                    return pressGate.Sample(pinch.ReadValue<float>(),true,now);
+                };
+                check(!sample(.9f,0),"initial held pinch cannot select before a release");
+                check(!sample(.2f,.1f) && sample(.8f,1f),"released hand gets one deliberate press above .75");
+                check(!sample(.74f,1.01f) && !sample(.76f,1.02f) && !sample(.6f,1.03f) && !sample(.9f,1.04f),"threshold jitter cannot repeat a held pinch");
+                check(!sample(.44f,1.05f) && !sample(.8f,1.10f),"release below .45 does not bypass 150 ms press interval");
+                check(!sample(.9f,1.30f),"suppressed rapid press never fires late while still held");
+                check(!sample(.2f,1.31f) && sample(.9f,1.32f),"new release and press after cooldown selects exactly once");
+                check(!pressGate.Sample(.9f,false,1.4f) && !sample(.9f,1.6f),"tracking loss requires a new release even after cooldown");
+                check(!sample(.2f,1.7f) && sample(.9f,1.8f),"tracking recovery accepts only a fresh deliberate pinch");
+                check(!pressGate.Sample(float.NaN,true,2f),"invalid pinch values disarm selection");
                 check(ShellInput.CanPoint(false,false,false),"normal hub input permitted");
                 check(!ShellInput.CanPoint(true,false,false),"black transition blocks normal hub input");
                 check(!ShellInput.CanPoint(true,true,false),"paused transition blocks background input");

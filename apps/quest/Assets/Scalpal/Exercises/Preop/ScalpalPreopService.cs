@@ -3,6 +3,8 @@
 // When the service is unreachable it answers from Resources/scalpal_bundle.json instead.
 using System;
 using System.Collections;
+using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using Scalpal.Exercises.Data;
@@ -22,6 +24,10 @@ namespace Scalpal.Exercises.Preop
         [SerializeField] string offlineBundleResource = "scalpal_bundle";
 
         ScalpalBundle offlineBundle;
+        readonly HashSet<UnityWebRequest> pending = new HashSet<UnityWebRequest>();
+        int generation;
+        public bool LastResponseOffline { get; private set; }
+        public event Action<string, int> RequestRetryAfterForRoute;
 
         public bool IsOffline { get; private set; }
         public string BaseUrl => baseUrl;
@@ -55,10 +61,25 @@ namespace Scalpal.Exercises.Preop
             SetOffline(offline);
         }
 
+        // Metadata/fallback hydration performs no network request and does not change connectivity.
+        public void LoadCachedBundle()
+        {
+            bool previous=LastResponseOffline;
+            try { LastResponseOffline=true;BundleLoaded?.Invoke(Bundle()); }
+            finally { LastResponseOffline=previous; }
+        }
+        public void CancelPendingRequests()
+        {
+            generation++;
+            foreach (var request in pending) { request.Abort(); request.Dispose(); }
+            pending.Clear();
+            StopAllCoroutines();
+        }
+        void OnDestroy() => CancelPendingRequests();
         public void LoadBundle() => Dispatch(Get("/unity/bundle"));
         public void LoadBrief(string patientId) => Dispatch(Get($"/patients/{Uri.EscapeDataString(patientId ?? "")}/brief"));
         public void LoadPatients() => Dispatch(Get("/patients"));
-        public void LoadCase(string patientId) => Dispatch(Get($"/patients/{patientId}/case"));
+        public void LoadCase(string patientId) => Dispatch(Get($"/patients/{Uri.EscapeDataString(patientId ?? "")}/case"));
         public void Admit(string scenarioId) => Dispatch(new ScalpalAction { id = "admit_patient", method = "POST", route = $"/admit/{scenarioId}" });
 
         public void SubmitPreopCheck(string patientId, string[] selected) =>
@@ -81,6 +102,7 @@ namespace Scalpal.Exercises.Preop
             var body = kind == RouteKind.PreopCheck ? JsonUtility.ToJson(new PreopCheckRequest { selected = selected ?? new string[0] }) : null;
             if (forceOffline)
             {
+                LastResponseOffline = true;
                 SetOffline(true);
                 Answer(kind, action.route, null, selected);
             }
@@ -89,8 +111,10 @@ namespace Scalpal.Exercises.Preop
 
         IEnumerator Send(RouteKind kind, ScalpalAction action, string body, string[] selected)
         {
+            int requestGeneration = generation;
             using (var req = new UnityWebRequest(baseUrl.TrimEnd('/') + action.route, action.method))
             {
+                pending.Add(req);
                 req.downloadHandler = new DownloadHandlerBuffer();
                 if (body != null)
                 {
@@ -100,6 +124,9 @@ namespace Scalpal.Exercises.Preop
                 req.SetRequestHeader("Accept", "application/json");
                 req.timeout = timeoutSeconds;
                 yield return req.SendWebRequest();
+                pending.Remove(req);
+                if (requestGeneration != generation) yield break;
+                LastResponseOffline = req.result == UnityWebRequest.Result.ConnectionError;
 
                 if (req.result == UnityWebRequest.Result.ConnectionError)
                 {
@@ -107,11 +134,12 @@ namespace Scalpal.Exercises.Preop
                     Answer(kind, action.route, null, selected);
                     yield break;
                 }
-                SetOffline(false);
                 var json = req.downloadHandler.text;
                 if (req.result == UnityWebRequest.Result.ProtocolError)
                 {
                     var error = TryParse<ErrorResponse>(json);
+                    if (req.responseCode == 429)
+                        RequestRetryAfterForRoute?.Invoke(action.route, ParseRetryAfter(req.GetResponseHeader("Retry-After")));
                     ReportFailure(action.route, error?.error != null ? error : Error($"http_{req.responseCode}", $"HTTP {req.responseCode} from {action.route}"));
                     yield break;
                 }
@@ -120,6 +148,7 @@ namespace Scalpal.Exercises.Preop
                     ReportFailure(action.route, Error("invalid_response", "The service returned an unreadable response. Try again."));
                     yield break;
                 }
+                SetOffline(false);
                 Answer(kind, action.route, json, selected);
             }
         }
@@ -272,6 +301,14 @@ namespace Scalpal.Exercises.Preop
         {
             RequestFailedForRoute?.Invoke(route, error);
             RequestFailed?.Invoke(error);
+        }
+
+        public static int ParseRetryAfter(string value)
+        {
+            if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var seconds)) return Math.Max(1, seconds);
+            if (DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var date))
+                return Math.Max(1, (int)Math.Ceiling((date - DateTimeOffset.UtcNow).TotalSeconds));
+            return 1; // An omitted/malformed header must not allow a tight retry loop.
         }
 
         static ErrorResponse Error(string code, string message) =>

@@ -9,16 +9,11 @@ namespace Scalpal.Shell
 {
     public sealed class ExplorePatientModel
     {
-        // Packaged demo IDs used to audit cached coverage. Live eligibility comes from the service.
-        static readonly HashSet<string> AuthoredIds = new HashSet<string>(StringComparer.Ordinal)
-        {
-            "patient-demo-multi-source", "patient-demo-pediatric-asthma", "patient-demo-sparse",
-            "patient-demo-polypharmacy", "patient-demo-001", "patient-demo-source-unavailable",
-            "patient-demo-messy-coding", "patient-demo-consent-partial"
-        };
         readonly Dictionary<string, SurgicalCase> cases = new Dictionary<string, SurgicalCase>(StringComparer.Ordinal);
         PatientListEntry[] patients = Array.Empty<PatientListEntry>();
+        PatientListEntry[] allRecords = Array.Empty<PatientListEntry>();
         bool hasPatientList;
+        public int UnavailableCount { get; private set; }
         public PatientListEntry[] Patients => patients;
         public string ProcedureFilter { get; private set; } = "";
         public string UrgencyFilter { get; private set; } = "";
@@ -30,14 +25,15 @@ namespace Scalpal.Shell
         public string DetailError { get; private set; } = "";
         public bool CanBegin => Selected != null && CanSelect(Selected) &&
             (Selected.status == "ready" || Selected.status == "needs_review") &&
-            Selected.encounterAvailable && HasNativeEncounter(Selected.patientId) && !DetailLoading && string.IsNullOrEmpty(DetailError) &&
+            Selected.encounterAvailable && EncounterContract.ValidPatientId(Selected.patientId) && !DetailLoading && string.IsNullOrEmpty(DetailError) &&
             SelectedBrief?.patient != null && SelectedBrief.patientId == SelectedPatientId && SelectedBrief.synthetic &&
-            SelectedBrief.dataSource == "demo";
+            (SelectedBrief.dataSource == "demo" || SelectedBrief.dataSource == "sandbox");
 
         public string AvailabilityReason => Selected == null ? "Choose a patient" :
+            !EncounterContract.ValidPatientId(Selected.patientId) ? "Patient record ID is invalid." :
             !CanSelect(Selected) ? StatusReason(Selected) :
             Selected.status == "retry" ? "Chart unavailable. Try again." :
-            !Selected.encounterAvailable || !HasNativeEncounter(Selected.patientId) ? "Interview coming soon" :
+            !Selected.encounterAvailable ? "Interview coming soon" :
             DetailLoading ? "Loading chart…" :
             !string.IsNullOrEmpty(DetailError) ? DetailError :
             SelectedBrief == null ? "Load the chart to begin" : "";
@@ -71,17 +67,18 @@ namespace Scalpal.Shell
             entry.procedureTitle = patientCase.procedure?.title ?? entry.procedureTitle;
             entry.urgency = patientCase.urgency;
             entry.displayLabel = patientCase.patient?.displayLabel ?? entry.displayLabel;
-            patients = patients.OrderBy(p => StatusOrder(p.status)).ThenBy(p => p.displayLabel, StringComparer.Ordinal).ToArray();
+            ReplacePatients(allRecords);
             if (SelectedPatientId == patientCase.patientId && !CanSelect(entry)) ClearSelection();
             return true;
         }
 
         void ReplacePatients(PatientListEntry[] source)
         {
-            // Keep the two connection-only scenarios visible but disabled, without inventing subjects.
-            patients = (source ?? Array.Empty<PatientListEntry>())
-                .Where(p => p != null)
-                .GroupBy(p => string.IsNullOrEmpty(p.patientId) ? "scenario:" + p.scenarioId : p.patientId, StringComparer.Ordinal).Select(g => g.First())
+            var records = (source ?? Array.Empty<PatientListEntry>()).Where(p => p != null && !string.IsNullOrWhiteSpace(p.patientId))
+                .GroupBy(p => p.patientId, StringComparer.Ordinal).Select(g => g.First()).ToArray();
+            allRecords=records;
+            UnavailableCount = records.Count(p => p.status == "blocked");
+            patients = records.Where(p => p.status != "blocked")
                 .OrderBy(p => StatusOrder(p.status)).ThenBy(p => p.displayLabel, StringComparer.Ordinal).ToArray();
             if (Selected == null || !CanSelect(Selected)) ClearSelection();
         }
@@ -108,7 +105,7 @@ namespace Scalpal.Shell
             SelectedPatientId = patientId;
             SelectedBrief = null;
             DetailError = "";
-            DetailLoading = true;
+            DetailLoading = patient.status != "retry";
             return true;
         }
 
@@ -124,7 +121,7 @@ namespace Scalpal.Shell
             }
             SelectedBrief = brief;
             DetailLoading = false;
-            DetailError = brief.synthetic && brief.dataSource == "demo" ? "" : "Only synthetic demo records can begin an encounter.";
+            DetailError = brief.synthetic && (brief.dataSource == "demo" || brief.dataSource == "sandbox") ? "" : "Only synthetic records can begin an encounter.";
             return true;
         }
 
@@ -145,10 +142,6 @@ namespace Scalpal.Shell
         }
 
         public SurgicalCase CaseFor(string patientId) => patientId != null && cases.TryGetValue(patientId, out var result) ? result : null;
-        // Eligibility comes from the matching synthetic demo brief and the office's authoritative
-        // case lookup. Generic avatar availability does not restrict clinical encounter subjects.
-        public static bool HasNativeEncounter(string patientId) => EncounterContract.ValidPatientId(patientId);
-        public static bool HasAuthoredEncounter(string patientId) => patientId != null && AuthoredIds.Contains(patientId);
         public static bool CanSelect(PatientListEntry patient) => patient != null && !string.IsNullOrEmpty(patient.patientId) &&
             (patient.status == "ready" || patient.status == "needs_review" || patient.status == "retry");
         public static string StatusLabel(string status)
@@ -165,11 +158,11 @@ namespace Scalpal.Shell
         }
         public string StatusReason(PatientListEntry patient) => NonEmpty(CaseFor(patient?.patientId)?.statusReason,
             patient?.status == "blocked" ? "Chart access is blocked." : StatusLabel(patient?.status));
-        public string Name(PatientListEntry patient) => NonEmpty(CaseFor(patient?.patientId)?.patient?.name,
-            NonEmpty(patient?.displayLabel, "Unavailable patient"));
+        public string Name(PatientListEntry patient) => NonEmpty((SelectedBrief?.patientId == patient?.patientId ? SelectedBrief.patient : null)?.name, NonEmpty(CaseFor(patient?.patientId)?.patient?.name,
+            NonEmpty(patient?.displayLabel, "Unavailable patient")));
         public string Demographics(PatientListEntry patient)
         {
-            var summary = CaseFor(patient?.patientId)?.patient;
+            var summary = SelectedBrief?.patientId == patient?.patientId ? SelectedBrief.patient : CaseFor(patient?.patientId)?.patient;
             return summary != null && summary.age >= 0 ? summary.age + " · " + NonEmpty(summary.sex, "Unknown sex") : "Demographics unavailable";
         }
         public string Complaint(PatientListEntry patient) => NonEmpty(CaseFor(patient?.patientId)?.presentation,

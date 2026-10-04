@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using Scalpal.EncounterOffice;
+using Scalpal.Realtime;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -23,19 +24,25 @@ namespace Scalpal.Shell.Editor
         static ShellPlayModeValidation()
         {
             EditorApplication.update += Tick;
-            SceneManager.sceneLoaded += DetachOfficePairingForHttpFixture;
+            SceneManager.sceneLoaded += IsolateRealtimeForComponentTest;
         }
 
-        // This gate owns only isolated HTTP, fades and pause/voice lifecycle. Detach before scene
-        // Start can reconnect the production bridge; shared-attempt validation runs separately.
-        static void DetachOfficePairingForHttpFixture(Scene scene, LoadSceneMode mode)
+        static void IsolateRealtimeForComponentTest(Scene scene, LoadSceneMode mode)
         {
-            if (!SessionState.GetBool(Prefix + "active", false) || scene.name != "DiagnosisOffice") return;
-            var office = UnityEngine.Object.FindFirstObjectByType<NativeEncounterSession>();
-            if (!office) throw new InvalidOperationException("HTTP scene fixture has no office session.");
-            if (office.realtime) { office.realtime.autoConnect = false; office.realtime.enabled = false; }
-            office.realtime = null;
+            if (!SessionState.GetBool(Prefix + "active", false) || !Application.isPlaying || scene.name != "DiagnosisOffice") return;
+            // sceneLoaded runs after OnEnable and before Start. This gate isolates the shell's
+            // actual service HTTP handoff; invite pairing belongs to the separate realtime gate.
+            var bridges = scene.GetRootGameObjects().SelectMany(root => root.GetComponentsInChildren<QuestSessionBridge>(true)).ToArray();
+            foreach (var bridge in bridges) { bridge.autoConnect = false; bridge.enabled = false; }
+            var offices = scene.GetRootGameObjects().SelectMany(root => root.GetComponentsInChildren<NativeEncounterSession>(true)).ToArray();
+            if (offices.Length == 0) throw new InvalidOperationException("HTTP scene fixture has no office session.");
+            foreach (var office in offices)
+            {
+                if (office.realtime) { office.realtime.autoConnect = false; office.realtime.enabled = false; }
+                office.realtime = null;
+            }
             SessionState.SetBool(Prefix + "httpOnlyOffice", true);
+            UnityEngine.Debug.Log("SCALPAL_SHELL_PLAY_FIXTURE isolatedRealtime=true scene=DiagnosisOffice disabledBridges=" + bridges.Length);
         }
 
         public static void Run()
@@ -46,12 +53,12 @@ namespace Scalpal.Shell.Editor
             {
                 string repo = Path.GetFullPath(Path.Combine(Application.dataPath, "../../.."));
                 string service = Path.Combine(repo, "services/preop");
-                var info = new ProcessStartInfo("/usr/bin/env", "node --import " + Quote(Path.Combine(service, "node_modules/tsx/dist/loader.mjs")) + " " + Quote(Path.Combine(repo, "scripts/quest/native-coach-check/server.ts")))
+                var info = new ProcessStartInfo("/usr/bin/env", "node --import " + Quote(Path.Combine(service, "node_modules/tsx/dist/loader.mjs")) + " " + Quote(Path.Combine(repo, "scripts/quest/shell-check/server.ts")))
                 { WorkingDirectory = service, UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true };
                 server = Process.Start(info);
                 var ready = server.StandardOutput.ReadLineAsync();
                 if (!ready.Wait(15000)) throw new InvalidOperationException("Shell play-mode service fixture did not become ready.");
-                const string marker = "SCALPAL_COACH_TEST_ENDPOINT=";
+                const string marker = "SCALPAL_SHELL_TEST_ENDPOINT=";
                 string line = ready.Result ?? "";
                 if (!line.StartsWith(marker, StringComparison.Ordinal)) throw new InvalidOperationException("Shell play-mode fixture failed startup.");
                 string endpoint = line.Substring(marker.Length);
@@ -107,8 +114,20 @@ namespace Scalpal.Shell.Editor
                         Check(hub.Exploring, "actual Start button opens Explore in Play Mode");
                         Stage("catalog"); break;
                     case "catalog":
-                        if (!hub || hub.Model.Patients.Length != 12 || hub.Model.CaseFor(Female) == null || hub.service.IsOffline) return;
-                        Check(hub.service.BaseUrl == endpoint && hub.Model.Patients.Count(patient => !string.IsNullOrEmpty(patient.patientId)) == 10, "runtime HTTP list and bundle return all ten synthetic patients at isolated endpoint");
+                        if (!hub || hub.Model.Patients.Length != 9 || hub.Model.CaseFor(Female) == null || hub.service.IsOffline) return;
+                        Check(hub.service.BaseUrl == endpoint && hub.Model.UnavailableCount == 1 && hub.Model.Patients.All(patient => !string.IsNullOrEmpty(patient.patientId) && patient.status != "blocked"), "live runtime catalog shows nine available patients with cached metadata and one unavailable record");
+                        Check(hub.Select("patient-demo-rate-limited") && !hub.Model.DetailLoading && PendingCount(hub) == 0, "selecting retry patient opens recovery detail without requesting a failing brief");
+                        hub.Retry();
+                        Check(PendingCount(hub) == 1, "explicit Retry starts exactly one actual case request");
+                        Stage("retry"); break;
+                    case "retry":
+                        if (!hub || hub.RetryRemaining <= 0 || PendingCount(hub) != 0) return;
+                        Check(hub.Model.Selected?.status == "retry" && !hub.CanBegin, "actual case HTTP200 retry state sets a live cooldown and closed Begin gate");
+                        hub.Retry();
+                        Check(PendingCount(hub) == 0, "repeated Retry during service-provided cooldown starts no request");
+                        hub.Select(Female); hub.Select("patient-demo-rate-limited");
+                        Check(hub.RetryRemaining > 0, "switching cards cannot bypass the rate-limited patient's cooldown");
+                        hub.service.CancelPendingRequests();
                         var row = hub.Model.Patients.Single(patient => patient.patientId == Female);
                         hub.content.GetComponentsInChildren<ShellButton>(true).Single(button => button.name == "Patient_" + row.scenarioId && button.gameObject.activeInHierarchy).Press();
                         Check(hub.Model.SelectedPatientId == Female && !hub.Transitioning, "one patient-card press selects detail without scene activation");
@@ -123,8 +142,8 @@ namespace Scalpal.Shell.Editor
                         if (SceneManager.GetActiveScene().name != "DiagnosisOffice" || ShellTransition.Busy) return;
                         var office = UnityEngine.Object.FindFirstObjectByType<NativeEncounterSession>();
                         if (!office || office.State == null) return;
+                        Check(SessionState.GetBool(Prefix + "httpOnlyOffice", false) && office.realtime == null && UnityEngine.Object.FindObjectsByType<QuestSessionBridge>(FindObjectsInactive.Include, FindObjectsSortMode.None).All(bridge => !bridge.enabled), "component fixture disables realtime invite pairing before office Start; no realtime integration is claimed");
                         Check(string.IsNullOrEmpty(ShellTransition.LastError), "asynchronous office handoff completed without transition error");
-                        Check(SessionState.GetBool(Prefix + "httpOnlyOffice", false)&&office.realtime==null,"isolated HTTP fixture explicitly disables office pairing; this gate does not validate a shared attempt");
                         Check(office.baseUrl == endpoint && office.State.patientId == Female && !string.IsNullOrEmpty(office.State.encounterId) && office.State.phase == "interview", "loaded office creates actual authoritative encounter for exact selected patient and endpoint");
                         Check(!ShellTransition.TryConsumeSelection(out _), "scene activation consumed the selected-patient handoff exactly once");
                         var pause = ShellPause.Instance;
@@ -143,7 +162,7 @@ namespace Scalpal.Shell.Editor
                         if (SceneManager.GetActiveScene().name != "Launch" || ShellTransition.Busy || !hub || !hub.Exploring) return;
                         Check(hub.Model.Selected == null && !hub.Transitioning && Mathf.Approximately(Time.timeScale, 1), "confirmed return opens fresh Explore with no prior patient selected");
                         Check(UnityEngine.Object.FindFirstObjectByType<NativeEncounterSession>() == null, "office encounter component is unloaded after Back to Explore");
-                        UnityEngine.Debug.Log("SCALPAL_SHELL_PLAY_VERIFY_OK checks=" + SessionState.GetInt(Prefix + "checks", 0) + " actualAsyncSceneLoad=true actualEncounterPost=true sharedAttempt=false isolatedHttpFixture=true provider=false headset=false");
+                        UnityEngine.Debug.Log("SCALPAL_SHELL_PLAY_VERIFY_OK checks=" + SessionState.GetInt(Prefix + "checks", 0) + " actualAsyncSceneLoad=true actualEncounterPost=true sharedAttempt=false isolatedHttpFixture=true isolatedRealtime=true provider=false headset=false");
                         Finish(0); break;
                 }
             }
@@ -154,6 +173,7 @@ namespace Scalpal.Shell.Editor
             }
         }
 
+        static int PendingCount(HubController hub) => ((System.Collections.IEnumerable)hub.service.GetType().GetField("pending", Private).GetValue(hub.service)).Cast<object>().Count();
         static Transform Menu(ShellPause pause) => (Transform)typeof(ShellPause).GetField("panel", Private).GetValue(pause);
         static ShellButton MenuButton(ShellPause pause, string label) => Menu(pause).GetComponentsInChildren<ShellButton>().Single(button => button.label && button.label.text == label);
         static string DescribeState()

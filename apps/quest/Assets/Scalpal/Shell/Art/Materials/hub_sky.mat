@@ -26,8 +26,8 @@ Material:
     m_Ints: []
     m_Floats: []
     m_Colors:
-    - _Bottom: {r: 0.83, g: 0.78, b: 0.65, a: 1}
-    - _Horizon: {r: 0.81, g: 0.69, b: 0.72, a: 1}
-    - _Top: {r: 0.35999998, g: 0.30999997, b: 0.5, a: 1}
+    - _Bottom: {r: 0.89, g: 0.84, b: 0.72, a: 1}
+    - _Horizon: {r: 0.86, g: 0.77, b: 0.81, a: 1}
+    - _Top: {r: 0.55, g: 0.47, b: 0.69, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

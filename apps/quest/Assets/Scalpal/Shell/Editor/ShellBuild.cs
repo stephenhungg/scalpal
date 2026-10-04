@@ -25,8 +25,8 @@ namespace Scalpal.Shell.Editor
             var scene=EditorSceneManager.NewScene(NewSceneSetup.EmptyScene,NewSceneMode.Single);
             var root=new GameObject("ScalpalHub");var hub=root.AddComponent<HubController>();
             hub.font=AssetDatabase.LoadAssetAtPath<Font>(Office+"/Fonts/Inter-Regular.ttf");
-            hub.glass=CopyMaterial("hub_glass",Office+"/Materials/office_glass_card.mat",new Color(.045f,.060f,.086f,.96f));
-            hub.buttonMaterial=CopyMaterial("hub_button",Office+"/Materials/office_glass_button.mat",new Color(.025f,.034f,.050f,.98f));
+            hub.glass=CopyMaterial("hub_glass",Office+"/Materials/office_glass_card.mat",new Color(.075f,.055f,.115f,.83f));
+            hub.buttonMaterial=CopyMaterial("hub_button",Office+"/Materials/office_glass_button.mat",new Color(.035f,.028f,.055f,.90f));
             hub.textMaterial=AssetDatabase.LoadAssetAtPath<Material>(Office+"/Materials/office_world_text_Inter-Regular.mat");
             hub.accent=Material("hub_lilac",new Color(.78f,.69f,.92f));
             hub.service=root.AddComponent<ScalpalPreopService>();
@@ -36,12 +36,11 @@ namespace Scalpal.Shell.Editor
             var content=new GameObject("WorldLockedHub").transform;content.position=new Vector3(0,1.52f,0);hub.content=content;
             hub.input=origin.gameObject.AddComponent<ShellInput>();hub.input.head=head;hub.input.origin=origin;hub.input.content=content;
             RenderSettings.skybox=Sky();RenderSettings.ambientMode=AmbientMode.Flat;RenderSettings.ambientLight=new Color(.75f,.70f,.83f);
-            RenderSettings.fog=true;RenderSettings.fogColor=new Color(.79f,.70f,.76f);RenderSettings.fogMode=FogMode.Linear;RenderSettings.fogStartDistance=4;RenderSettings.fogEndDistance=15;
+            RenderSettings.fog=true;RenderSettings.fogColor=new Color(.83f,.76f,.83f);RenderSettings.fogMode=FogMode.Linear;RenderSettings.fogStartDistance=4;RenderSettings.fogEndDistance=15;
             var sun=new GameObject("SoftDaylight").AddComponent<Light>();sun.type=LightType.Directional;sun.intensity=.65f;sun.color=new Color(1,.93f,.83f);sun.shadows=LightShadows.None;sun.transform.rotation=Quaternion.Euler(40,-25,0);
             Decor(content);
             EditorSceneManager.SaveScene(scene,ScenePath);
-            var ordered=new[]{ScenePath,EncounterOfficeBuild.ScenePath,"Assets/Scalpal/Quest/Scenes/NativeSession.unity","Assets/Scalpal/Recap/Scenes/RunEnding.unity"};
-            EditorBuildSettings.scenes=ordered.Select(p=>new EditorBuildSettingsScene(p,true)).Concat(EditorBuildSettings.scenes.Where(s=>!ordered.Contains(s.path))).ToArray();
+            EnsureSceneOrder();
             // EXT hand interaction drives our pointer/pinch actions; preserve all other feature settings.
             foreach(var asset in AssetDatabase.LoadAllAssetsAtPath("Assets/XR/Settings/OpenXRPackageSettings.asset"))
             {
@@ -75,10 +74,16 @@ namespace Scalpal.Shell.Editor
             graphics.ApplyModifiedPropertiesWithoutUndo();
             AssetDatabase.SaveAssets();Debug.Log("SCALPAL_SHELL_PREPARED launchFirst=true");
         }
+        public static void EnsureSceneOrder()
+        {
+            var required=new[]{ScenePath,EncounterOfficeBuild.ScenePath,"Assets/Scalpal/Quest/Scenes/NativeSession.unity","Assets/Scalpal/Recap/Scenes/RunEnding.unity"};
+            EditorBuildSettings.scenes=required.Select(p=>new EditorBuildSettingsScene(p,true))
+                .Concat(EditorBuildSettings.scenes.Where(s=>!required.Contains(s.path)).GroupBy(s=>s.path).Select(g=>g.First())).ToArray();
+        }
         static Material CopyMaterial(string name,string source,Color color)
         {
             string path=Root+"/Art/Materials/"+name+".mat";var value=AssetDatabase.LoadAssetAtPath<Material>(path);
-            if(!value){value=new Material(AssetDatabase.LoadAssetAtPath<Material>(source));AssetDatabase.CreateAsset(value,path);}value.color=color;EditorUtility.SetDirty(value);return value;
+            if(!value){value=new Material(AssetDatabase.LoadAssetAtPath<Material>(source));AssetDatabase.CreateAsset(value,path);}value.shader=Shader.Find("Scalpal/Shell/Frosted Glass");value.color=color;value.SetFloat("_Sheen",.012f);EditorUtility.SetDirty(value);return value;
         }
         static Material Material(string name,Color color)
         {
@@ -88,18 +93,21 @@ namespace Scalpal.Shell.Editor
         static Material Sky()
         {
             string path=Root+"/Art/Materials/hub_sky.mat";var value=AssetDatabase.LoadAssetAtPath<Material>(path);
-            if(!value){value=new Material(Shader.Find("Scalpal/Shell/Hub Sky"));AssetDatabase.CreateAsset(value,path);}return value;
+            if(!value){value=new Material(Shader.Find("Scalpal/Shell/Hub Sky"));AssetDatabase.CreateAsset(value,path);}
+            value.SetColor("_Top",new Color(.55f,.47f,.69f));value.SetColor("_Horizon",new Color(.86f,.77f,.81f));value.SetColor("_Bottom",new Color(.89f,.84f,.72f));EditorUtility.SetDirty(value);return value;
         }
         static void Decor(Transform parent)
         {
             var petals=Material("hub_petals",new Color(.85f,.64f,.77f));var butter=Material("hub_butter",new Color(.95f,.82f,.56f));
-            var green=Material("hub_vines",new Color(.38f,.50f,.44f));
+            petals.EnableKeyword("_EMISSION");petals.SetColor("_EmissionColor",new Color(.15f,.075f,.12f));
+            butter.EnableKeyword("_EMISSION");butter.SetColor("_EmissionColor",new Color(.17f,.12f,.045f));
+            var green=Material("hub_vines",new Color(.48f,.60f,.55f));
             var prototype=GameObject.CreatePrimitive(PrimitiveType.Sphere);var sphere=prototype.GetComponent<MeshFilter>().sharedMesh;UnityEngine.Object.DestroyImmediate(prototype);
             // Combine each floral material once. All petal shapes are original low-cost primitives.
             var pinkMeshes=new System.Collections.Generic.List<CombineInstance>();var centerMeshes=new System.Collections.Generic.List<CombineInstance>();
             for(int i=0;i<12;i++)
             {
-                float sign=i%2==0?-1:1;float h=(i/2)*.40f-1.2f;float x=sign*(1.19f+Mathf.Sin(i*2)*.13f);float z=2.2f+Mathf.Cos(i)*.25f;
+                float sign=i%2==0?-1:1;float h=(i/2)*.40f-1.2f;float x=sign*(2.0f+Mathf.Sin(i*2)*.13f);float z=2.2f+Mathf.Cos(i)*.25f;
                 var center=new Vector3(x,h,z);
                 for(int j=0;j<5;j++)
                 { float a=j*Mathf.PI*2/5;var offset=new Vector3(Mathf.Cos(a)*.055f,Mathf.Sin(a)*.055f,0);pinkMeshes.Add(new CombineInstance{mesh=sphere,transform=Matrix4x4.TRS(center+offset,Quaternion.Euler(0,0,a*Mathf.Rad2Deg),new Vector3(.105f,.048f,.022f))}); }
@@ -124,8 +132,9 @@ namespace Scalpal.Shell.Editor
             string path=Environment.GetEnvironmentVariable("SCALPAL_SHELL_PREVIEWS");
             if(string.IsNullOrEmpty(path))path=Path.GetFullPath(Path.Combine(Application.dataPath,"../../../assets/previews/shell"));
             Directory.CreateDirectory(path);Capture(hub.input.head,Path.Combine(path,"launch.png"));
-            var bundle=JsonUtility.FromJson<ScalpalBundle>(Resources.Load<TextAsset>("scalpal_bundle").text);hub.service.Configure("http://127.0.0.1:8787",true);hub.Reload();hub.Enter();
+            var bundle=JsonUtility.FromJson<ScalpalBundle>(Resources.Load<TextAsset>("scalpal_bundle").text);hub.service.Configure("http://127.0.0.1:8787",true);hub.Reload();hub.Enter();hub.input.head.fieldOfView=90;
             Capture(hub.input.head,Path.Combine(path,"explore.png"));
+            hub.input.head.fieldOfView=100;hub.input.head.transform.rotation=Quaternion.Euler(0,20,0);
             hub.Model.Select("patient-demo-multi-source");hub.BriefLoaded(bundle.cases.First(c=>c.patientId=="patient-demo-multi-source").brief);
             Capture(hub.input.head,Path.Combine(path,"explore-detail.png"));
             Debug.Log("SCALPAL_SHELL_PREVIEWS_OK monoEditorOnly=true path="+path);
@@ -142,7 +151,7 @@ namespace Scalpal.Shell.Editor
         [MenuItem("Scalpal/Shell/Build Android")]
         public static void Build()
         {
-            ShellValidation.Run();
+            EnsureSceneOrder();ShellValidation.Run();
             // Validation intentionally exercises/mutates a scene instance. Build the committed clean scene.
             EditorSceneManager.OpenScene(ScenePath,OpenSceneMode.Single);
             var output=Environment.GetEnvironmentVariable("SCALPAL_SHELL_APK");

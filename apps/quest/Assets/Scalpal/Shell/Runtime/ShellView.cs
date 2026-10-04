@@ -17,7 +17,36 @@ namespace Scalpal.Shell
         public static readonly Color Ink = new Color(.94f, .95f, .97f);
         static readonly Dictionary<Vector2, Mesh> meshes = new Dictionary<Vector2, Mesh>();
         public static void Configure(Font font, Material glass, Material button, Material text, Material accent)
-        { Font = font; Glass = glass; ButtonMaterial = button; TextMaterial = text; Accent = accent; }
+        {
+            UnityEngine.Font.textureRebuilt -= RefreshAtlas;
+            Font = font; Glass = glass; ButtonMaterial = button; TextMaterial = text; Accent = accent;
+            UnityEngine.Font.textureRebuilt += RefreshAtlas;
+        }
+        static void RefreshAtlas(Font font) { if(font==Font && TextMaterial)TextMaterial.mainTexture=font.material.mainTexture; }
+        public static void SetText(TextMesh text,string value)
+        {
+            if(!text)return;
+            text.text=value??"";text.GetComponent<EncounterOfficeText>().Fit();
+        }
+        // Fixed physical line height: trim width instead of silently shrinking accessibility text.
+        public static TextMesh FixedText(Transform parent,string value,Vector3 position,float height,float width)
+        {
+            var text=Text(parent,value,position,height,width);
+            string original=value??"";
+            for(int remaining=original.Length;remaining>=1;remaining--)
+            {
+                text.text=remaining==original.Length?original:original.Substring(0,remaining)+"…";
+                text.font.RequestCharactersInTexture(text.text,text.fontSize,text.fontStyle);
+                text.characterSize=.01f;
+                float measured=text.GetComponent<Renderer>().localBounds.size.y;
+                if(measured>.0001f)text.characterSize*=height/measured;
+                if(text.GetComponent<Renderer>().localBounds.size.x<=width)break;
+            }
+            RefreshAtlas(text.font);
+            var fit=text.GetComponent<EncounterOfficeText>();fit.preferredCharacterSize=text.characterSize;fit.maximumWidth=width;fit.maximumHeight=height+.0001f;
+            var at=text.transform.localPosition;at.y-=text.GetComponent<Renderer>().localBounds.max.y;text.transform.localPosition=at;
+            return text;
+        }
         public static Transform Panel(Transform parent, string name, Vector3 position, Vector2 size)
         {
             var go = new GameObject(name, typeof(MeshFilter), typeof(MeshRenderer));
@@ -31,7 +60,7 @@ namespace Scalpal.Shell
         {
             if (meshes.TryGetValue(size, out var cached) && cached) return cached;
             const int segments = 6, count = 4 * (segments + 1);
-            float radius = Mathf.Min(.022f, size.y * .16f);
+            float radius = Mathf.Min(.05f, size.y * .16f);
             var vertices = new Vector3[count + 1]; var uv = new Vector2[count + 1]; var triangles = new int[count * 3];
             uv[0] = Vector2.one * .5f;
             for (int corner = 0; corner < 4; corner++)
@@ -58,7 +87,7 @@ namespace Scalpal.Shell
             text.GetComponent<Renderer>().sharedMaterial = TextMaterial;
             var fit = text.gameObject.AddComponent<EncounterOfficeText>();
             fit.preferredCharacterSize = height * .19f; fit.maximumWidth = width;
-            fit.maximumHeight = height * 1.5f * Mathf.Max(1, value.Split('\n').Length); fit.Fit();
+            fit.maximumHeight = height * 1.5f * Mathf.Max(1, value.Split('\n').Length); fit.Fit();fit.enabled=false;
             return text;
         }
         public static ShellButton Button(Transform parent, string label, Vector3 position, Vector2 size, Action action, bool enabled = true)
