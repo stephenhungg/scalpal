@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "motion/react";
+import { useEffect } from "react";
 import { BlurWords } from "./BlurWords";
 import { ExploreTitle } from "./ExploreTitle";
 import { FadeIn } from "./FadeIn";
@@ -18,7 +19,11 @@ const LEDE = "One rep, from the first cut to the robot replay.";
 export function ExploreBody({ apkUrl, videoUrl }: { apkUrl: string; videoUrl: string }) {
   const { leaving, go } = useLeave("/");
   // Reaching this page counts as having seen the site: Back returns to the finished landing.
-  session.introPlayed = true;
+  // Set in an effect so it only ever happens in the browser; module state on the server is
+  // shared across requests and would make the server render a different landing than the client.
+  useEffect(() => {
+    session.introPlayed = true;
+  }, []);
   return (
     <main className="relative">
       <HandsBackdrop />
