@@ -8,7 +8,7 @@ namespace UnityEngine
     [AttributeUsage(AttributeTargets.Class)] public sealed class DisallowMultipleComponent : Attribute { }
     [AttributeUsage(AttributeTargets.Field)] public sealed class SerializeField : Attribute { }
     [AttributeUsage(AttributeTargets.Field)] public sealed class TooltipAttribute : Attribute { public TooltipAttribute(string _) { } }
-    public class Object { public string name; public static void DestroyImmediate(Object value) { } }
+    public class Object { public string name; public static void DestroyImmediate(Object value) { } public static implicit operator bool(Object value) => value != null; }
     public class GameObject : Object
     {
         public int layer;

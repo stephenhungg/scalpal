@@ -24,6 +24,8 @@ import spacetimedb, {
   coachMessage,
   coachStatus,
   command,
+  encounter,
+  encounterEvent,
   exerciseEvent,
   exerciseState,
   mediaSource,
@@ -64,7 +66,10 @@ const MODES = [
 const REGISTRATION = ['unaligned', 'valid', 'uncertain'];
 const RECORDING = ['off', 'recording', 'failed', 'complete'];
 const PRACTICE_STATUS = ['not_started', 'in_progress', 'completed', 'abandoned'];
-const SPEAKERS = ['learner', 'coach', 'system'];
+const SPEAKERS = ['learner', 'coach', 'system', 'patient'];
+const ENCOUNTER_PHASES = ['interview', 'attending', 'scored'];
+const ENCOUNTER_EVENT_KINDS = ['history', 'exam', 'test', 'assessment', 'transcript'];
+const ENCOUNTER_SPEAKERS = ['learner', 'patient', 'coach'];
 const COACH_STATUS = ['offline', 'connecting', 'listening', 'thinking', 'speaking', 'error'];
 const ARTIFACT_KINDS = [
   'raw_clip',
@@ -825,6 +830,102 @@ export const setCoachStatus = spacetimedb.reducer(
 );
 
 // ---------------------------------------------------------------------------
+// Pre-op encounter (Jarvis lane)
+// ---------------------------------------------------------------------------
+
+function encounterFor(ctx: Ctx, encounterId: string) {
+  const e = ctx.db.encounter.encounterId.find(encounterId) ?? fail('unknown encounter');
+  requireRole(ctx, e.sessionId, ['coach', 'operator']);
+  activeSession(ctx, e.sessionId);
+  return e;
+}
+
+/** Start the pre-op interview for the session's current attempt. Idempotent on encounterId. */
+export const startEncounter = spacetimedb.reducer(
+  {
+    encounterId: t.string(),
+    sessionId: t.string(),
+    patientId: t.string(),
+    patientName: t.string(),
+    speaker: t.string(),
+    speakerName: t.string(),
+  },
+  (ctx, a) => {
+    requireRole(ctx, a.sessionId, ['coach', 'operator']);
+    const s = activeSession(ctx, a.sessionId);
+    checkId(a.encounterId, 'encounterId');
+    checkText(a.patientId, 'patientId', 120);
+    checkText(a.patientName, 'patientName', 120);
+    checkText(a.speakerName, 'speakerName', 120);
+    oneOf(a.speaker, ['patient', 'parent'], 'speaker');
+    if (ctx.db.encounter.encounterId.find(a.encounterId)) return;
+    ctx.db.encounter.insert({
+      encounterId: a.encounterId,
+      sessionId: a.sessionId,
+      attemptId: s.currentAttemptId,
+      patientId: a.patientId,
+      patientName: a.patientName,
+      speaker: a.speaker,
+      speakerName: a.speakerName,
+      phase: 'interview',
+      scoreTotal: undefined,
+      grade: undefined,
+      scorecardJson: undefined,
+      startedAt: ctx.timestamp,
+      updatedAt: ctx.timestamp,
+    });
+  }
+);
+
+export const appendEncounterEvent = spacetimedb.reducer(
+  { encounterId: t.string(), kind: t.string(), itemId: t.string(), speaker: t.option(t.string()), text: t.string() },
+  (ctx, a) => {
+    const e = encounterFor(ctx, a.encounterId);
+    oneOf(a.kind, ENCOUNTER_EVENT_KINDS, 'kind');
+    if (a.speaker) oneOf(a.speaker, ENCOUNTER_SPEAKERS, 'speaker');
+    checkText(a.itemId, 'itemId', 120);
+    checkText(a.text, 'text');
+    ctx.db.encounterEvent.insert({
+      eventId: 0n,
+      sessionId: e.sessionId,
+      encounterId: e.encounterId,
+      kind: a.kind,
+      itemId: a.itemId,
+      speaker: a.speaker,
+      text: a.text,
+      at: ctx.timestamp,
+    });
+  }
+);
+
+export const setEncounterPhase = spacetimedb.reducer(
+  { encounterId: t.string(), phase: t.string() },
+  (ctx, { encounterId, phase }) => {
+    const e = encounterFor(ctx, encounterId);
+    oneOf(phase, ENCOUNTER_PHASES, 'phase');
+    ctx.db.encounter.encounterId.update({ ...e, phase, updatedAt: ctx.timestamp });
+  }
+);
+
+export const setEncounterResult = spacetimedb.reducer(
+  { encounterId: t.string(), scoreTotal: t.u32(), grade: t.string(), scorecardJson: t.string() },
+  (ctx, a) => {
+    const e = encounterFor(ctx, a.encounterId);
+    if (a.scoreTotal > 100) fail('scoreTotal out of range');
+    checkText(a.grade, 'grade', 40);
+    checkText(a.scorecardJson, 'scorecardJson', 32_000);
+    ctx.db.encounter.encounterId.update({
+      ...e,
+      phase: 'scored',
+      scoreTotal: a.scoreTotal,
+      grade: a.grade,
+      scorecardJson: a.scorecardJson,
+      updatedAt: ctx.timestamp,
+    });
+  }
+);
+
+// ---------------------------------------------------------------------------
 // Commands
 // ---------------------------------------------------------------------------
 
@@ -1262,10 +1363,20 @@ export const claimMotionJob = spacetimedb.reducer(
   }
 );
 
+/**
+ * The run must be current and its lease unexpired at call time; the sweep
+ * only requeues expired leases every SWEEP_INTERVAL_MICROS, so without this
+ * check a lapsed worker could still heartbeat (re-extending) or complete.
+ * Worker ownership is checked by the gateway, which knows the caller's
+ * workerId; these reducers have no worker argument.
+ */
 function requireActiveRun(ctx: Ctx, jobId: string, run: number) {
   const job = ctx.db.motionJob.jobId.find(jobId) ?? fail('unknown job');
   if (job.status !== 'running' || job.run !== run) {
     fail(`stale run ${run}: job is ${job.status} on run ${job.run}`);
+  }
+  if (job.leaseExpiresAt && job.leaseExpiresAt.microsSinceUnixEpoch <= ctx.timestamp.microsSinceUnixEpoch) {
+    fail(`stale run ${run}: lease expired`);
   }
   return job;
 }
@@ -1653,6 +1764,22 @@ export const sessionCoachStatus = spacetimedb.view(
     const s = ctx.db.coachStatus.sessionId.find(id);
     return s ? [s] : [];
   })
+);
+
+export const sessionEncounters = spacetimedb.view(
+  { name: 'session_encounters', public: true },
+  t.array(encounter.rowType),
+  ctx => [...viewerSessions(ctx.db as ViewDb, ctx.sender)].flatMap(id => [
+    ...ctx.db.encounter.sessionId.filter(id),
+  ])
+);
+
+export const sessionEncounterEvents = spacetimedb.view(
+  { name: 'session_encounter_events', public: true },
+  t.array(encounterEvent.rowType),
+  ctx => [...viewerSessions(ctx.db as ViewDb, ctx.sender)].flatMap(id => [
+    ...ctx.db.encounterEvent.sessionId.filter(id),
+  ])
 );
 
 export const sessionCommands = spacetimedb.view(

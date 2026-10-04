@@ -154,7 +154,10 @@ Reviewed `packages/contracts/realtime-v1.md` on `nathan/companion-realtime` (9bd
 
 Until this is agreed, the HTTP coach routes stay as the working path.
 
-## Blocker for Stephen: HTTP from the headset
+## Resolved: HTTP from the headset
+
+Resolved for the session build: `NativeSessionBuild` sets `InsecureHttpOption.DevelopmentOnly`. The workbench-only build still uses `NotAllowed`, which is fine because it does not talk to the coach. Original note kept below for context.
+
 
 `codex/native-quest-workbench` (a895dab) sets `PlayerSettings.insecureHttpOption = InsecureHttpOption.NotAllowed` in `NativeQuestBuild.cs`. The coach and pre-op service run as plain HTTP on the Mac (`http://<mac-lan-ip>:8787`), so on the Quest every `CoachRelay` and `ScalpalPreopService` request would be refused: no events reach Jarvis, no highlights reach the headset, and cases load only from the offline bundle.
 
@@ -229,3 +232,50 @@ IEnumerator RunTool(QuestJarvisVoice.ToolRequest request, int epoch, string sid)
 Download all clips at session start from `GET /jarvis/reflex/:id` (load with `UnityWebRequestMultimedia.GetAudioClip(url, AudioType.MPEG)`), so a warning plays with no network wait. The browser page's `services/preop/src/jarvis/arbiter.js` is the reference implementation of these rules, with tests in `test/arbiter.test.ts`.
 
 **4. Demo patient.** `NativeCaseSession.PatientId` is hardcoded to `patient-demo-multi-source`. The real-data demo patient is sandbox Priya, `u_115958ef4e58c641` (needs `FINCHNODE_API_KEY` on the service). Make it configurable next to `coachBaseUrl` and keep the demo id as the fallback.
+
+
+## Shared session: Jarvis on SpacetimeDB
+
+Jarvis joins the shared SpacetimeDB session as the `coach` role (`services/preop/src/realtime-bridge.ts`) and writes everything live:
+
+| What | Where in SpacetimeDB |
+| --- | --- |
+| Pre-op encounter: patient, phase (`interview` -> `attending` -> `scored`), score, full scorecard JSON | `encounter` (view `session_encounters`) |
+| Every question topic, exam, test, transcript line, and the final assessment | `encounter_event` (view `session_encounter_events`) |
+| What the learner, patient, Jarvis, and the simulator said (including instant warning clips) | `coach_message` (speakers `learner`, `patient`, `coach`, `system`) |
+| Jarvis's voice status | `coach_status` |
+| Jarvis highlights during surgery | `command` via `requestCommand(highlightStructure)`, resolved by the headset; Jarvis only says "highlighted" after `applied` |
+
+The module changes are additive (two tables, four reducers for coach or operator, two views, `patient` speaker). Bindings are regenerated for the companion, gateway, Unity C# (`services/realtime/bindings/csharp`), and the coach service.
+
+**Run it locally:** `spacetime start`, then in `services/realtime` run `npm run publish:local`. Start the coach service with `SPACETIMEDB_URI=ws://127.0.0.1:3000` and join a session with its coach invite code (`POST /realtime/join {"code": "..."}` or `SPACETIMEDB_COACH_INVITE`). `npm run realtime:e2e` in `services/preop` checks the whole path with three identities (operator, coach, simulated headset). Measured October 4 locally: all checks pass; highlight round trip (Jarvis -> SpacetimeDB -> headset applied -> Jarvis) about 50 ms.
+
+**For Nathan:** the companion can show the encounter and scorecard from `session_encounters` / `session_encounter_events` with no new plumbing; the coach panel already shows `coach_message` and now includes patient lines. **For Stephen:** recopy `services/realtime/bindings/csharp` into `apps/quest/Assets/Scalpal/Realtime/Generated` only if the headset needs the encounter tables; nothing in the headset path requires it.
+
+## Diagnosis office (Stephen's `codex/diagnosis-office`): transcript mirroring
+
+Reviewed 59f1d98. The office uses the encounter engine as intended (one server scorer, patient voice per encounter, attending through Jarvis). One gap: `QuestJarvisVoice.Transcript` lines are not posted anywhere, so the shared session gets every question topic, exam, test, phase, and score, but not what was actually said. Post each final line:
+
+- Encounter: `POST /encounters/:id/transcript {"speaker": "learner" | "patient" | "coach", "text": ...}` (user lines are `learner`; agent lines are `patient` while interviewing and `coach` while presenting to the attending).
+- Surgery: `POST /coach/sessions/:id/transcript {"speaker": "learner" | "coach", "text": ...}` and `POST /coach/sessions/:id/voice-status {"status": "listening" | "speaking" | ...}` on mode changes.
+
+The coach service writes these to `coach_message` and `encounter_event` in SpacetimeDB, so the companion shows the live conversation. Strip expressive tags like `[wince]` before posting (the browser uses `/\[[a-z ]{2,24}\]\s*/gi`).
+
+## Bleeding and checkpoints (for Stephen's tissue model)
+
+The coach accepts a `bleeding` event: `{"type": "bleeding", "structureId": "<anatomy id>", "active": true | false, "rateMlPerMin": <number>, "totalMl": <cumulative ml this attempt>}`. Send it through `CoachRelay` (or `POST /coach/sessions/:id/events`) when `VesselBleeding` opens an injury (`active: true`), periodically while it bleeds (rate updates are silent), and when it is controlled (`active: false`).
+
+- Opening a bleed plays an instant warning clip in Jarvis's voice ("Stop. Bleeding from the appendicular artery. Get control first."), pre-rendered for every vessel in the case.
+- While any bleed is active, Jarvis's context leads with it and his guidance becomes "control the bleeding first".
+- Control is acknowledged silently in context with the running total.
+
+Every completed step is now a checkpoint (`completedSteps[]`: seconds, mistakes, hints, blood loss at the time), and the context reminds Jarvis of earlier rough steps so he can refer back.
+
+## State tracker events (tools in hand, tool contact)
+
+Jarvis has two parts. The state tracker (`CoachSession` in `services/preop/src/coach.ts`) is deterministic: it turns headset events into facts and pushes a fresh `[LIVE SURGERY STATE vN]` context to the voice agent whenever something meaningful changes (300 ms debounce on the laptop page). The voice agent only talks from that context and its tools. Two events feed the tracker without scoring anything:
+
+- `{"type": "instrument", "instrumentId": "scalpel", "hand": "left" | "right", "held": true | false}` when a tool is picked up or put down.
+- `{"type": "contact", "instrumentId": "scalpel", "structureId": "skin"}` when a tool tip first touches a tissue or structure (send once per contact, not every frame). In open surgery, the first contact with a critical structure (cecum, terminal ileum, iliac vessels, ureter) gives a one-time caution.
+
+Send them through `CoachRelay` / `POST /coach/sessions/:id/events` like the others. With them, the context shows "In hand: right scalpel" and a timed recent history ("0:03 Scalpel touched the skin. 0:05 Scalpel: cut the skin, 52 mm (cut across the fibers)."). Body actions (`surgery` events) and milestones appear in the same history in plain words.

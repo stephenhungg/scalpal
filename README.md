@@ -1,8 +1,10 @@
 # scalpal
 
-**AI-guided mixed-reality practice that can become demonstrations for robots.**
+**AI-guided VR surgical practice that can become demonstrations for robots.**
 
-Scalpal is an MHacks project for Meta Quest 3S. A learner talks to a voice coach, explores a rotating 3D anatomy model, and practices a supported surgery-themed exercise with virtual tools and generic anatomy aligned to a real reclining participant. A recording of the passthrough camera supplies input for estimating human hand motion, retargeting it to a simulated robot hand, and replaying the demonstration.
+> **Scope notice:** the current product flow is the [latest experience flow](docs/current-direction.md#latest-experience-flow): launch → explore patients → diagnosis office → full-VR surgery → required robot replay. Mixed reality with a real participant, conversational selection and the rotating preview are off the main path. Where an older document disagrees, current direction wins.
+
+Scalpal is an MHacks project for Meta Quest 3S. The learner launches the app, browses a large explore page of synthetic FinchNode patients, picks a case, diagnoses the patient in a full-VR doctor's office through a voice back-and-forth, then performs the surgery that patient needs in a full-VR operating room. A recording of the passthrough camera during the surgery supplies input for estimating human hand motion, retargeting it to a simulated robot hand, and replaying the demonstration. See the [latest experience flow](docs/current-direction.md#latest-experience-flow).
 
 The long-term thesis is that human learning can supply useful robot demonstrations. The proposed demo proves a smaller chain: **one guided exercise → feedback → one video-derived movement sequence → one simulated robot replay.** Replay is not autonomous robot learning.
 
@@ -15,7 +17,7 @@ The backend uses [SpacetimeDB for shared state plus private file storage for vid
 Main contains documentation, the complete source atlas and team services, a native Quest tool workbench and an assembled single-case full-VR session. Open `apps/quest` in Unity 6000.0.66f2; see [project setup](apps/quest/README.md). Start with the [system integration map](docs/system-integration.md): actual contents, routes, shared scene bindings and shipping checks. Then read these:
 
 1. [Thesis and scope](docs/thesis.md): What we are building, for whom, and what the demo must establish.
-2. [End-to-end experience](docs/demo-flow.md): Current target journey in MR and full VR, with live observing and video-derived replay.
+2. [End-to-end experience](docs/demo-flow.md): Current target journey (explore, diagnosis office, full-VR surgery), with live observing and the required video-derived replay.
 3. [Decisions and open questions](docs/decisions.md): Current user direction, superseded ideas, and choices still needed.
 4. [Architecture](docs/architecture.md): Proposed components, responsibilities, and failure handling.
 5. [Hardware baseline](docs/hardware-baseline.md): What was actually demonstrated on the physical Quest 3S.
@@ -28,11 +30,13 @@ Main contains documentation, the complete source atlas and team services, a nati
 
 The new [native appendectomy session](docs/native-session.md) assembles the working Quest rig, selected anatomy, authored case, coach and real session adapter. Start with `Assets/Scalpal/Quest/Scenes/NativeSession.unity`; use the component workbench for isolated tool checks. Verification and unconnected media/MR/robot interfaces are listed in that document.
 
+The separate [floral diagnosis office](docs/diagnosis-office.md) uses original Blender office art and CC0 MakeHuman characters representing fictional adult patients with Matthew's authoritative interview/attending encounter engine. Its dedicated native scene includes visual questions, examinations, test results and editable diagnosis/differential/plan fallback. It preserves the surgical scene and tool path; headset comfort/performance and live spoken provider conversation remain separate verification checkpoints.
+
 ## Status
 
 As of October 3, 2026, native camera acquisition, Unity sample deployment, desktop mirroring, and an immersive bottle-detection overlay have been demonstrated on the headset. The native workbench combines the shared tools, tracked head/controllers and operating-room/patient art. USB installation, XR tracking and held-tool telemetry were exercised on Quest; the user reported tool-motion lag, then confirmed the corrected build keeps up with hand movement. See [native workbench evidence](docs/native-workbench.md). Teammate branches contain anatomy, case/coach, realtime/companion and motion implementations. Native torso registration, capture and their complete integration have not been demonstrated; see the audited map.
 
-The conversational selection experience was accepted during product exploration. Robotics and recording were subsequent additions; the onchain reward idea was subsequently removed. The architecture, demo flow and integration contracts now reflect the current scope; older research and planning notes preserve historical proposals with scope notices. No expanded specification or application acceptance checks have been completed.
+The conversational selection experience was accepted during earlier product exploration and has since been replaced by the explore → diagnosis office → full-VR operating room flow. Robotics and recording were subsequent additions; the onchain reward idea was subsequently removed. The architecture, demo flow and integration contracts now reflect the current scope; older research and planning notes preserve historical proposals with scope notices. No expanded specification or application acceptance checks have been completed.
 
 ## Collaboration
 
@@ -46,6 +50,6 @@ The [Unity project](apps/quest/README.md) includes committed scenes, assets, pac
 
 Our earlier physical camera experiment is preserved as [pinned upstream source plus local changes](experiments/quest-camera-baseline/README.md). Unity caches, captured footage and build outputs are excluded; all authored instrument environment source is committed. Run the [repeatable session gate](scripts/README.md) after changes to the affected boundaries.
 
-## Two Demo Modes
+## Two Demo Modes (Superseded)
 
-The latest direction adds a full-VR virtual patient/operating room alongside the real-person mixed-reality overlay. Both should share organs, tools and the coach/exercise core. [Mode engineering](docs/environment-modes.md) separates surface perception from body registration. [Reusable environment art](assets/environments/README.md) supplies the room/patient. Selected anatomy bindings are assembled in the native session; MR registration and mode switching remain pending. The [comprehensive anatomy research](docs/research/comprehensive-anatomy.md) describes how a reusable library can support additional cases; [TAPNet research](docs/research/tapnet.md) evaluates video point tracking.
+The main flow now runs in full VR only; the real-person mixed-reality overlay stays in the repository off the main path. The earlier direction added a full-VR virtual patient/operating room alongside that overlay, both sharing organs, tools and the coach/exercise core. [Mode engineering](docs/environment-modes.md) separates surface perception from body registration. [Reusable environment art](assets/environments/README.md) supplies the room/patient. Selected anatomy bindings are assembled in the native session; MR registration and mode switching remain pending. The [comprehensive anatomy research](docs/research/comprehensive-anatomy.md) describes how a reusable library can support additional cases; [TAPNet research](docs/research/tapnet.md) evaluates video point tracking.

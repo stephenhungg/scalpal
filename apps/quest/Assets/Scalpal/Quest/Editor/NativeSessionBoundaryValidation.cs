@@ -1,6 +1,8 @@
 using System;
 using System.Reflection;
 using System.Linq;
+using System.IO;
+using SpacetimeDB.Types;
 using Scalpal.Anatomy;
 using Scalpal.Exercises.Data;
 using Scalpal.Exercises.Engine;
@@ -68,6 +70,9 @@ namespace Scalpal.Quest.Editor
                 var input = scoringRoot.AddComponent<NativeProcedureInput>();
                 Set(session, "input", input);
                 Set(session, "candidate", candidate);
+                // This inactive fixture bypasses LoadCase, which normally adopts the service identity.
+                SetProperty(session, "SelectedPatientId", candidate.patientId);
+                SetProperty(session, "SelectedProcedureId", candidate.procedureId);
                 Set(session, "previewScale", session.preview.transform.parent.localScale);
                 Set(session, "nextUi", float.PositiveInfinity);
                 Set(session, "nextContext", float.PositiveInfinity);
@@ -79,6 +84,7 @@ namespace Scalpal.Quest.Editor
                 failed = reason => Call(session, "AttemptFailed", reason);
                 bridge.AttemptFailed += failed;
                 InterruptedAttempt(session, candidate);
+                BridgePairingAndDeadline();
                 Debug.Log("SCALPAL_NATIVE_SESSION_BOUNDARY_VALIDATION_OK checks=" + checks
                     + " synthetic editor identities/callbacks with real scene/case/assets; no HTTP, headset or reducer commit validation");
             }
@@ -185,6 +191,137 @@ namespace Scalpal.Quest.Editor
             // pretending a new shared attempt was committed. A real reducer round trip is separate.
             Assert(!session.realtime.AttemptPending && !Get<bool>(session, "sharedAttemptReady"),
                 "absent fixture transport cannot falsely commit the requested fresh attempt");
+        }
+
+        static void BridgePairingAndDeadline()
+        {
+            // These call the production selection/deadline transitions with real generated
+            // row types. They do not construct a socket or alter the persisted demo identity.
+            var root = new GameObject("BridgePairingAndDeadlineFixture");
+            root.SetActive(false);
+            var fixture = root.AddComponent<QuestSessionBridge>();
+            fixture.autoConnect = false;
+            string directory = Path.Combine(Path.GetTempPath(), "scalpal-pairing-validation-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                var a = new Session { SessionId = "session-a", Status = "active", CurrentAttemptId = "attempt-a" };
+                var b = new Session { SessionId = "session-b", Status = "active", CurrentAttemptId = "attempt-b" };
+                var members = new[] { new Membership { SessionId = a.SessionId, Role = "headset" },
+                    new Membership { SessionId = b.SessionId, Role = "headset" } };
+                var sessions = new[] { a, b };
+                Assert(SelectPairing(new[] { members[0] }, sessions, "", "", false, false, out _) == null,
+                    "cached old membership cannot pair before configured invite resolves");
+                Assert(SelectPairing(new[] { members[0] }, sessions, "", "", true, true, out var rejected) == null
+                    && rejected.StartsWith("Pairing rejected:", StringComparison.Ordinal),
+                    "rejected new invite cannot silently adopt the only older headset membership");
+                Assert(SelectPairing(new[] { members[0] }, sessions, b.SessionId, a.SessionId, true, true, out rejected) == null
+                    && rejected.StartsWith("Pairing rejected:", StringComparison.Ordinal),
+                    "explicit configured session rejection cannot fall back to another persisted membership");
+                Assert(SelectPairing(new[] { members[0] }, sessions, "", b.SessionId, true, true, out _) == null,
+                    "same-invite persisted session must actually have an active headset membership");
+                Assert(SelectPairing(members, sessions, "", a.SessionId, true, true, out _) == a,
+                    "rotated invite may reconnect exactly its known persisted session among several memberships");
+                Assert(SelectPairing(members, sessions, b.SessionId, a.SessionId, true, true, out _) == b,
+                    "explicit configured session takes priority over invite history");
+                Assert(SelectPairing(members, sessions, "", "", true, false, out var multiple) == null
+                    && multiple.StartsWith("Choose preferredSessionId:", StringComparison.Ordinal),
+                    "successful join still refuses ambiguous headset memberships");
+                Assert(SelectPairing(members, sessions, b.SessionId, "", true, false, out _) == b,
+                    "positive control: a successful join pairs the configured active headset session");
+                a.Status = "ended";
+                Assert(SelectPairing(members, sessions, "", a.SessionId, true, true, out _) == null,
+                    "persisted membership cannot resurrect an ended session");
+                a.Status = "active";
+                members[0].Role = "viewer";
+                Assert(SelectPairing(members, sessions, "", a.SessionId, true, true, out _) == null,
+                    "viewer membership cannot satisfy headset reconnect");
+
+                string path = Path.Combine(directory, "identity.pairing");
+                string hashA = (string)CallBridgeStatic("InviteHash", new object[] { "A-CODE" });
+                string hashB = (string)CallBridgeStatic("InviteHash", new object[] { "B-CODE" });
+                Assert(hashA != hashB && hashA == (string)CallBridgeStatic("InviteHash", new object[] { " a-code " }),
+                    "invite persistence normalizes case and whitespace but distinguishes newly configured invites");
+                CallBridgeStatic("SavePersistedSession", new object[] { path, hashA, a.SessionId });
+                Assert((string)CallBridgeStatic("ReadPersistedSession", new object[] { path, hashA }) == a.SessionId,
+                    "real temporary pairing file round-trips the same invite's session");
+                Assert((string)CallBridgeStatic("ReadPersistedSession", new object[] { path, hashB }) == "",
+                    "changing the configured invite prevents reuse of the older session file");
+                Assert(!File.ReadAllText(path).Contains("A-CODE"), "pairing file contains no plaintext invite");
+                File.WriteAllText(path, "malformed-pairing");
+                Assert((string)CallBridgeStatic("ReadPersistedSession", new object[] { path, hashA }) == "",
+                    "invalid persistence fails closed instead of adopting an arbitrary membership");
+                File.Delete(path);
+                Assert((string)CallBridgeStatic("ReadPersistedSession", new object[] { path, hashA }) == "",
+                    "legacy token without a pairing file requires an explicit configured session on rejection");
+                fixture.uri = "ws://fixture-a"; fixture.database = "fixture-db-a";
+                string endpointA = (string)CallResult(fixture, "TokenPath");
+                fixture.uri = "ws://fixture-b";
+                Assert(endpointA != (string)CallResult(fixture, "TokenPath"), "pairing file is scoped to its configured URI");
+                fixture.uri = "ws://fixture-a"; fixture.database = "fixture-db-b";
+                Assert(endpointA != (string)CallResult(fixture, "TokenPath"), "pairing file is scoped to its configured database");
+
+                int started = 0, failed = 0;
+                string deliveredAttempt = "", failure = "";
+                fixture.AttemptStarted += id => { started++; deliveredAttempt = id; };
+                fixture.AttemptFailed += reason => { failed++; failure = reason; };
+                b.ExerciseId = "open_appendectomy"; b.ExerciseVersion = "fixture-version";
+                SetProperty(fixture, "Paired", true);
+                SetProperty(fixture, "AttemptId", b.CurrentAttemptId);
+                Set(fixture, "requestedExercise", b.ExerciseId);
+                Set(fixture, "requestedVersion", b.ExerciseVersion);
+                Set(fixture, "committedAttemptId", b.CurrentAttemptId);
+                Set(fixture, "attemptStartedAt", 100f);
+                Set(fixture, "attemptInFlight", true);
+                Set(fixture, "attemptCommitted", true);
+                Call(fixture, "EvaluateAttempt", b, 110.5f);
+                Assert(!fixture.AttemptPending && started == 1 && failed == 0 && deliveredAttempt == b.CurrentAttemptId,
+                    "a correlated confirmation wins over an expired deadline in the same state transition");
+                Call(fixture, "EvaluateAttempt", null, 111f);
+                Assert(started == 1 && failed == 0, "later deadline checks cannot fail or redeliver an already confirmed attempt");
+
+                Set(fixture, "attemptInFlight", true); Set(fixture, "attemptCommitted", false);
+                Call(fixture, "EvaluateAttempt", b, 109.5f);
+                Assert(fixture.AttemptPending && failed == 0, "unconfirmed request remains pending before its deadline");
+                Call(fixture, "EvaluateAttempt", b, 110f);
+                Assert(!fixture.AttemptPending && failed == 1 && started == 1,
+                    "negative control: matching cached state without a reducer commit must time out");
+                Set(fixture, "attemptInFlight", true); Set(fixture, "attemptCommitted", true);
+                Set(fixture, "committedAttemptId", "different-attempt");
+                Call(fixture, "EvaluateAttempt", b, 110f);
+                Assert(!fixture.AttemptPending && failed == 2 && started == 1,
+                    "negative control: another attempt's commit cannot satisfy this request at the deadline");
+                Set(fixture, "attemptInFlight", true);
+                Call(fixture, "Disconnected", "Synthetic acknowledgement loss");
+                Assert(failed == 3 && failure.Contains("Left menu: retry") && !failure.Contains("A: retry"),
+                    "lost acknowledgement points to the actual retry control rather than tool reset");
+            }
+            finally
+            {
+                if (Directory.Exists(directory)) Directory.Delete(directory, true);
+                UnityEngine.Object.DestroyImmediate(root);
+            }
+        }
+
+        static Session SelectPairing(Membership[] memberships, Session[] sessions, string preferred, string persisted,
+            bool resolved, bool rejected, out string status)
+        {
+            object[] arguments = { memberships, sessions, preferred, persisted, resolved, rejected, null };
+            var result = (Session)CallBridgeStatic("SelectSession", arguments);
+            status = (string)arguments[6];
+            return result;
+        }
+        static object CallBridgeStatic(string name, object[] arguments)
+        {
+            var method = typeof(QuestSessionBridge).GetMethod(name, BindingFlags.Static | BindingFlags.NonPublic);
+            if (method == null) throw new InvalidOperationException("Bridge fixture static method not found: " + name);
+            try { return method.Invoke(null, arguments); }
+            catch (TargetInvocationException error) { throw new InvalidOperationException("Bridge fixture call failed: " + name, error.InnerException); }
+        }
+        static object CallResult(object target, string name)
+        {
+            var method = target.GetType().GetMethod(name, PrivateInstance);
+            if (method == null) throw new InvalidOperationException("Fixture method not found: " + name);
+            return method.Invoke(target, null);
         }
 
         static void Set(object target, string field, object value)

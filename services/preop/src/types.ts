@@ -1,3 +1,4 @@
+import type { OpenBodyCase } from "./open-body.js";
 // FinchNode input: the subset of the normalized health record (schemaVersion 2) that Scalpal reads.
 // Fields are optional because synthetic scenarios deliberately omit or blank them.
 
@@ -211,14 +212,14 @@ export type StepAction =
   | "close";
 
 export interface SuccessCheck {
-  type: "touch_target" | "identify_targets" | "apply_count" | "place_ports" | "confirm";
+  type: "touch_target" | "identify_targets" | "apply_count" | "place_ports" | "confirm" | "body_predicate";
   targets: string[];
   count: number;
 }
 
 export interface StepMistake {
   id: string;
-  trigger: "touch_structure" | "wrong_identification" | "wrong_order" | "excess_energy";
+  trigger: "touch_structure" | "wrong_identification" | "wrong_order" | "excess_energy" | "guardrail";
   structure: string;
   severity: Severity;
   feedback: string;
@@ -239,6 +240,7 @@ export interface ProcedureStep {
 }
 
 export interface Procedure {
+  openBody?: OpenBodyCase;
   id: string;
   title: string;
   shortTitle: string;

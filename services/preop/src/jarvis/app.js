@@ -3,6 +3,8 @@
 // turns; the agent's background context is updated only when something meaningful changes.
 import { Conversation } from "https://esm.sh/@elevenlabs/client@1.26.0";
 import { createArbiter, percentile, semanticKey } from "/jarvis/arbiter.js";
+import { createContextFeed } from "/jarvis/context-feed.js";
+import { cleanTranscript, createEncounterFlow } from "/jarvis/encounter.js";
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
@@ -13,6 +15,7 @@ const api = async (method, path, body) => {
 };
 
 let sid = "", patientId = "", kase = null, convo = null, feed = null, lastTyped = "";
+let encounterConvo = null; // the patient or attending conversation before surgery
 let snapshot = null, currentContext = "", currentContextKey = "", lastSemantic = "", contextTimer = 0;
 let arbiter = createArbiter();
 const reflexClips = new Map(); // reflexKey -> HTMLAudioElement
@@ -59,14 +62,18 @@ function render(snap) {
   for (const b of document.querySelectorAll("#simbuttons button")) b.disabled = snap.status === "completed";
 }
 
-// Background context: only when a meaningful field changed, debounced, newest version wins.
+// Background context: only when a meaningful field changed, debounced, newest version wins. The feed
+// sends the full card on structural changes or about every 10 s, and one-line deltas in between.
+const contextFeed = createContextFeed();
 function syncContext(force = false) {
   clearTimeout(contextTimer);
   contextTimer = setTimeout(() => {
     const key = currentContextKey || semanticKey(snapshot);
     if (!convo || (!force && key === lastSemantic)) return;
     lastSemantic = key;
-    try { convo.sendContextualUpdate(currentContext); } catch (e) { console.warn(e); }
+    const update = contextFeed.next(snapshot, currentContext, { force });
+    if (!update) return;
+    try { convo.sendContextualUpdate(update.text); } catch (e) { console.warn(e); }
   }, force ? 0 : 300);
 }
 
@@ -82,6 +89,14 @@ function stateTag() {
   return snapshot ? `v${snapshot.version} step ${snapshot.stepNumber}/${snapshot.stepCount} "${snapshot.step.title}"` : "";
 }
 
+// Mirror what Jarvis and the learner actually said, and the voice status, into the shared session.
+function mirrorTranscript(speaker, text) {
+  if (sid && text) api("POST", `/coach/sessions/${sid}/transcript`, { speaker, text }).catch(() => {});
+}
+function mirrorStatus(status) {
+  if (sid) api("POST", `/coach/sessions/${sid}/voice-status`, { status }).catch(() => {});
+}
+
 function speakViaLLM(alert, path) {
   if (!convo) {
     if ("speechSynthesis" in window) speechSynthesis.speak(new SpeechSynthesisUtterance(alert.say));
@@ -92,6 +107,7 @@ function speakViaLLM(alert, path) {
   t.sentAt = performance.timeOrigin + performance.now();
   pendingTrace = t;
   convo.sendUserMessage(`[SIM EVENT ${stateTag()}] kind=${alert.kind} tier=${alert.tier}: ${alert.say}`);
+  mirrorTranscript("system", `${alert.kind}: ${alert.say}`);
   renderLatency();
 }
 
@@ -102,7 +118,7 @@ function playReflex(alert, { duck = true } = {}) {
   arbiter.setReflexPlaying(true);
   if (convo && duck) convo.setVolume({ volume: 0 }); // a warning cuts off whatever the agent was saying
   clip.currentTime = 0;
-  clip.onplaying = () => { t.playAt = performance.timeOrigin + performance.now(); renderLatency(); };
+  clip.onplaying = () => { t.playAt = performance.timeOrigin + performance.now(); renderLatency(); mirrorTranscript("coach", alert.reflexText || alert.say); };
   clip.onended = clip.onerror = () => {
     arbiter.setReflexPlaying(false);
     arbiter.deliveryDone();
@@ -190,7 +206,7 @@ async function loadReflexClips() {
 // ---- tools --------------------------------------------------------------------------------------
 
 // Tools run on the coach server, shared with the native headset voice client.
-const TOOL_NAMES = ["get_surgery_state", "get_hint", "explain_structure", "highlight_structure", "get_patient_brief", "check_preop"];
+const TOOL_NAMES = ["get_surgery_state", "get_hint", "explain_structure", "highlight_structure", "get_patient_brief", "check_preop", "look_at_scene"];
 const clientTools = Object.fromEntries(
   TOOL_NAMES.map((name) => [
     name,
@@ -203,8 +219,9 @@ const clientTools = Object.fromEntries(
 
 // ---- voice --------------------------------------------------------------------------------------
 
-async function startVoice(created) {
-  const conn = await api("GET", "/jarvis/connection");
+async function startVoice() {
+  // The server binds the connection to this session and supplies the prompt it built for it.
+  const conn = await api("GET", `/jarvis/connection?sessionId=${encodeURIComponent(sid)}`);
   if (!conn.ok) {
     $("voice").textContent = "voice not configured"; $("voice").className = "pill warn";
     log("event", `${conn.json.error?.message ?? "Voice unavailable."} Cautions will use the browser voice.`);
@@ -213,13 +230,14 @@ async function startVoice(created) {
   await navigator.mediaDevices.getUserMedia({ audio: true });
   convo = await Conversation.startSession({
     ...(conn.json.signedUrl ? { signedUrl: conn.json.signedUrl, connectionType: "websocket" } : { agentId: conn.json.agentId }),
-    overrides: { agent: { prompt: { prompt: created.systemPrompt }, firstMessage: created.firstMessage } },
+    overrides: { agent: { prompt: { prompt: conn.json.prompt }, firstMessage: conn.json.firstMessage } },
     clientTools,
-    onConnect: () => { $("voice").textContent = "voice live"; $("voice").className = "pill on"; lastSemantic = ""; syncContext(true); },
-    onDisconnect: () => { $("voice").textContent = "voice off"; $("voice").className = "pill"; convo = null; },
+    onConnect: () => { mirrorStatus("listening"); $("voice").textContent = "voice live"; $("voice").className = "pill on"; lastSemantic = ""; syncContext(true); },
+    onDisconnect: () => { mirrorStatus("offline"); $("voice").textContent = "voice off"; $("voice").className = "pill"; convo = null; },
     onError: (e) => log("event", `Voice error: ${e?.message ?? e}`, "urgent"),
     onModeChange: ({ mode }) => {
       arbiter.setMode(mode);
+      mirrorStatus(mode === "speaking" ? "speaking" : "listening");
       $("mode").textContent = mode; $("mode").className = `pill ${mode === "speaking" ? "speaking" : ""}`;
       if (mode === "speaking" && pendingTrace && !pendingTrace.speakingAt) { pendingTrace.speakingAt = performance.timeOrigin + performance.now(); renderLatency(); }
     },
@@ -235,34 +253,60 @@ async function startVoice(created) {
     },
     onMessage: ({ message, source }) => {
       if (source === "user") {
-        if (String(message).startsWith("[SIM EVENT]") || String(message).startsWith("[SIM EVENT ") || message === lastTyped) return;
+        if (String(message).startsWith("[SIM EVENT]") || String(message).startsWith("[SIM EVENT ")) return;
+        if (message === lastTyped) return;
         arbiter.userSpoke();
       }
-      log(source === "user" ? "user" : "ai", message);
+      mirrorTranscript(source === "user" ? "learner" : "coach", cleanTranscript(message));
+      log(source === "user" ? "user" : "ai", cleanTranscript(message));
     },
   });
 }
 
+// Pick a patient: interview first when the case has one, otherwise straight to surgery.
+const encounter = createEncounterFlow({
+  api,
+  log,
+  Conversation,
+  setActiveConvo: (c) => { encounterConvo = c; },
+  onStatus: (text, cls) => { $("voice").textContent = text; $("voice").className = `pill ${cls}`; },
+  onScrubIn: (encounterId) => startSurgery(encounterId),
+});
+$("to-attending").onclick = () => encounter.presentToAttending();
+$("scrub-in").onclick = () => encounter.scrubIn();
+// Encounter failures stay on screen with Retry; a retried start may find no interview and go to surgery.
+$("flow-retry").onclick = async () => {
+  if ((await encounter.retry()) === "none") await startSurgery();
+};
+
 $("start").onclick = async () => {
   $("start").disabled = true;
+  $("stop").disabled = false;
   patientId = $("patient").value;
-  const created = await api("POST", "/coach/sessions", { patientId, mode: $("presentation").value });
+  $("log").innerHTML = "";
+  if ((await encounter.start(patientId)) === "none") await startSurgery();
+};
+
+async function startSurgery(encounterId = "") {
+  // The scored office encounter carries into the operating room prompt.
+  const created = await api("POST", "/coach/sessions", { patientId, mode: $("presentation").value, ...(encounterId ? { encounterId } : {}) });
   if (!created.ok) { log("event", created.json.error?.message ?? "Could not start.", "urgent"); $("start").disabled = false; return; }
+  log("event", "Surgery: Jarvis is coaching. Use the simulator or the headset.");
   sid = created.json.sessionId;
   arbiter = createArbiter();
   traces.length = 0;
   kase = (await api("GET", `/patients/${patientId}/case`)).json;
-  $("log").innerHTML = "";
   onState({ snapshot: created.json.snapshot, context: created.json.context, alerts: [] });
   openFeed();
   $("stop").disabled = false;
   await loadReflexClips();
-  try { await startVoice(created.json); }
+  try { await startVoice(); }
   catch (e) { log("event", `Voice failed to start: ${e?.message ?? e}. Cautions will use the browser voice.`, "urgent"); }
   if (!convo) log("ai", created.json.firstMessage);
-};
+}
 
 $("stop").onclick = async () => {
+  await encounter.stop();
   feed?.close(); feed = null;
   if (convo) await convo.endSession();
   convo = null; sid = "";
@@ -281,8 +325,9 @@ $("say").onsubmit = (e) => {
   const text = $("sayinput").value.trim();
   if (!text) return;
   $("sayinput").value = "";
-  if (convo) { lastTyped = text; arbiter.userSpoke(); convo.sendUserMessage(text); log("user", text); }
-  else log("event", "Voice is not connected. Configure ElevenLabs to talk to Jarvis.");
+  const target = encounterConvo ?? convo;
+  if (target) { lastTyped = text; arbiter.userSpoke(); target.sendUserMessage(text); log("user", text); if (target === convo) mirrorTranscript("learner", text); }
+  else log("event", "Voice is not connected. Configure ElevenLabs first.");
 };
 
 loadPatients();

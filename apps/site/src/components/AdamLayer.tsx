@@ -10,16 +10,18 @@ export function AdamLayer({
   holdAfterTouch,
   shiftY = 0.22,
   startTouched,
+  onUnavailable,
 }: {
   onTouch?: () => void;
   introSpeed?: number;
   holdAfterTouch?: boolean;
   shiftY?: number;
   startTouched?: boolean;
+  onUnavailable?: () => void;
 }) {
   return (
     <div className="pointer-events-none absolute inset-0">
-      <AsciiAdam onTouch={onTouch} introSpeed={introSpeed} holdAfterTouch={holdAfterTouch} shiftY={shiftY} startTouched={startTouched} />
+      <AsciiAdam onTouch={onTouch} introSpeed={introSpeed} holdAfterTouch={holdAfterTouch} shiftY={shiftY} startTouched={startTouched} onUnavailable={onUnavailable} />
     </div>
   );
 }

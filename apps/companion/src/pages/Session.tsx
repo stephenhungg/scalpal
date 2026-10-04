@@ -46,7 +46,7 @@ export default function SessionPage({ sessionId }: { sessionId: string }) {
     <main className="page">
       <div className="row" style={{ marginBottom: 16 }}>
         <div>
-          <h1 style={{ fontSize: 20 }}>{s.label}</h1>
+          <h1 style={{ fontSize: 40, marginBottom: 6 }}>{s.label}</h1>
           <div className="row muted small" style={{ gap: 8, marginTop: 2 }}>
             <button className="btn ghost sm mono" style={{ padding: '0 4px' }} onClick={() => copy(s.sessionId, 'Session id copied')}>
               {s.sessionId}
@@ -58,6 +58,7 @@ export default function SessionPage({ sessionId }: { sessionId: string }) {
           </div>
         </div>
         <div className="spacer" />
+        <Link to={`/s/${sessionId}/recap`} className="btn sm">Run recap</Link>
         <StatusPill status={s.status} label={s.status === 'active' ? 'Session active' : 'Session ended'} />
         {roles.map(r => (
           <span className="chip" key={r}>

@@ -19,7 +19,7 @@ namespace Scalpal.Anatomy
         readonly HashSet<string> ambiguousIds = new HashSet<string>(StringComparer.Ordinal);
         readonly HashSet<string> hiddenSystems = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         AnatomyPart[] parts = Array.Empty<AnatomyPart>();
-        string isolatedId;
+        string isolatedId, desiredHighlight;
         HashSet<string> exerciseParts;
         bool registrationValid;
         bool initialFiltersApplied;
@@ -28,6 +28,15 @@ namespace Scalpal.Anatomy
         public bool PreviewMode => previewMode;
         public bool CanDisplay => isActiveAndEnabled && (previewMode || registrationValid);
         public IReadOnlyList<AnatomyPart> Parts => parts;
+        public string HighlightedPartId
+        {
+            get
+            {
+                if (!CanDisplay) return "";
+                foreach (var part in parts) if (part && part.IsVisible && part.IsHighlighted) return part.stableId;
+                return "";
+            }
+        }
         public event Action<bool> RegistrationChanged;
 
         void Awake() { RebuildIndex(); }
@@ -154,11 +163,14 @@ namespace Scalpal.Anatomy
         {
             if (!CanDisplay || !TryGetPart(id, out var part) || !part.IsVisible) return false;
             ClearHighlight();
-            return part.SetHighlight(highlightColor);
+            bool applied = part.SetHighlight(highlightColor);
+            if (applied) desiredHighlight = id;
+            return applied;
         }
 
         public void ClearHighlight()
         {
+            desiredHighlight = null;
             foreach (var part in parts) if (part != null) part.ClearHighlight();
         }
 
@@ -186,6 +198,8 @@ namespace Scalpal.Anatomy
                 var inCase = exerciseParts == null || exerciseParts.Contains(part.stableId);
                 var selected = inCase && (isolatedId != null ? part.stableId == isolatedId : !hiddenSystems.Contains(part.system ?? ""));
                 part.SetVisible(CanDisplay && selected);
+                if (part.IsVisible && part.stableId == desiredHighlight && !part.IsHighlighted)
+                    part.SetHighlight(highlightColor);
             }
         }
     }

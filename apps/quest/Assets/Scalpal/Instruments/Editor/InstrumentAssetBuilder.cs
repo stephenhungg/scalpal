@@ -13,7 +13,8 @@ namespace Scalpal.Instruments.Editor
         const string Root = "Assets/Scalpal/Instruments";
         public static readonly string[] ToolIds = {
             "trocar_5mm", "trocar_12mm", "laparoscope_30", "atraumatic_grasper", "maryland_dissector", "hook_cautery", "vessel_sealer", "clip_applier",
-            "lap_scissors", "endo_stapler", "circular_stapler", "suction_irrigator", "retrieval_bag", "fascial_closure", "scalpel"
+            "lap_scissors", "endo_stapler", "circular_stapler", "suction_irrigator", "retrieval_bag", "fascial_closure", "scalpel",
+            "skin_marker", "toothed_forceps", "retractor", "babcock", "hemostat", "right_angle_clamp", "metzenbaum_scissors", "suture_tie"
         };
 
         [MenuItem("Scalpal/Instruments/Build Prefabs and Sandbox")]
@@ -28,20 +29,64 @@ namespace Scalpal.Instruments.Editor
             Directory.CreateDirectory(Root + "/Prefabs");
             Directory.CreateDirectory(Root + "/Materials");
             Directory.CreateDirectory(Root + "/Samples");
+            Directory.CreateDirectory(Root + "/Models/Open");
             AssetDatabase.Refresh();
             foreach (string id in ToolIds) BuildInstrument(id);
+            BuildOpenKit();
             BuildPatch();
             BuildSandbox();
             AssetDatabase.SaveAssets();
-            Debug.Log("SCALPAL_INSTRUMENT_BUILD_OK: 15 instruments, teaching patch, sandbox. Headset behavior is untested.");
+            Debug.Log("SCALPAL_INSTRUMENT_BUILD_OK: " + ToolIds.Length + " instruments, teaching patch, sandbox. Headset behavior is untested.");
+        }
+
+        [MenuItem("Scalpal/Instruments/Build Open Surgery Instruments")]
+        public static void BuildOpenInstruments()
+        {
+            Directory.CreateDirectory(Root + "/Prefabs");
+            Directory.CreateDirectory(Root + "/Materials");
+            Directory.CreateDirectory(Root + "/Models/Open");
+            AssetDatabase.Refresh();
+            foreach (string id in OpenInstrumentModels.Ids) BuildInstrument(id);
+            BuildOpenKit();
+            AssetDatabase.SaveAssets();
+            Debug.Log("SCALPAL_OPEN_INSTRUMENT_BUILD_OK: 8 original models, 10 pickup instances with paired retractors and hemostats.");
+        }
+
+        public static void BuildOpenAndValidate()
+        {
+            BuildOpenInstruments();
+            InstrumentRuntimeValidation.Run();
+        }
+
+        static void BuildOpenKit()
+        {
+            Directory.CreateDirectory(Root + "/Resources");
+            AssetDatabase.Refresh();
+            var root = new GameObject("OpenSurgeryInstruments");
+            string[] tray = { "skin_marker", "toothed_forceps", "retractor", "retractor", "babcock",
+                "hemostat", "hemostat", "right_angle_clamp", "metzenbaum_scissors", "suture_tie" };
+            try
+            {
+                for (int i = 0; i < tray.Length; i++)
+                {
+                    var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(Root + "/Prefabs/inst_" + tray[i] + ".prefab");
+                    if (prefab == null) throw new InvalidOperationException("Missing open tray instrument: " + tray[i]);
+                    var item = (GameObject)PrefabUtility.InstantiatePrefab(prefab, root.transform);
+                    item.name = "inst_" + tray[i] + "_tray_" + i;
+                    item.transform.localPosition = new Vector3(-.24f + (i % 5) * .12f, .035f, (i / 5) * .23f);
+                }
+                PrefabUtility.SaveAsPrefabAsset(root, Root + "/Resources/OpenSurgeryInstruments.prefab");
+            }
+            finally { UnityEngine.Object.DestroyImmediate(root); }
         }
 
         static InstrumentAction ActionFor(string id)
         {
             switch (id)
             {
-                case "scalpel": case "lap_scissors": return InstrumentAction.Cut;
-                case "atraumatic_grasper": case "maryland_dissector": return InstrumentAction.Grasp;
+                case "scalpel": case "lap_scissors": case "metzenbaum_scissors": return InstrumentAction.Cut;
+                case "atraumatic_grasper": case "maryland_dissector":
+                case "toothed_forceps": case "retractor": case "babcock": case "hemostat": case "right_angle_clamp": return InstrumentAction.Grasp;
                 case "hook_cautery": case "vessel_sealer": return InstrumentAction.Seal;
                 case "clip_applier": return InstrumentAction.Clip;
                 case "endo_stapler": case "circular_stapler": return InstrumentAction.Staple;
@@ -58,10 +103,11 @@ namespace Scalpal.Instruments.Editor
         static void BuildInstrument(string id)
         {
             string path = Root + "/Models/inst_" + id + ".fbx";
-            var model = AssetDatabase.LoadAssetAtPath<GameObject>(path);
-            if (model == null) throw new InvalidOperationException("Missing instrument model: " + path);
+            bool isOpen = OpenInstrumentModels.Ids.Contains(id);
+            var model = isOpen ? null : AssetDatabase.LoadAssetAtPath<GameObject>(path);
+            if (!isOpen && model == null) throw new InvalidOperationException("Missing instrument model: " + path);
             var root = new GameObject("inst_" + id);
-            var geometry = (GameObject)PrefabUtility.InstantiatePrefab(model);
+            var geometry = isOpen ? OpenInstrumentModels.Build(id) : (GameObject)PrefabUtility.InstantiatePrefab(model);
             geometry.name = "Geometry";
             geometry.transform.SetParent(root.transform, false);
             var grip = Find(geometry.transform, "GripAnchor");
@@ -89,6 +135,7 @@ namespace Scalpal.Instruments.Editor
             var tool = root.AddComponent<InstrumentBehaviour>();
             tool.instrumentId = id;
             tool.action = ActionFor(id);
+            if (isOpen) { tool.contactRadius = 0.006f; tool.jawOpenDegrees = id == "toothed_forceps" ? 7 : 16; }
             tool.gripAnchor = grip;
             tool.actionPoint = tip;
             tool.upperJaw = Find(geometry.transform, "JawUpper");
@@ -117,7 +164,7 @@ namespace Scalpal.Instruments.Editor
             root.AddComponent<InstrumentProjection>();
             int instrumentLayer = LayerMask.NameToLayer("Instrument");
             if (instrumentLayer >= 0) foreach (var t in root.GetComponentsInChildren<Transform>(true)) t.gameObject.layer = instrumentLayer;
-            foreach (var renderer in root.GetComponentsInChildren<Renderer>())
+            foreach (var renderer in isOpen ? Array.Empty<Renderer>() : root.GetComponentsInChildren<Renderer>())
             {
                 var materials = renderer.sharedMaterials;
                 for (int i = 0; i < materials.Length; i++)
@@ -147,7 +194,7 @@ namespace Scalpal.Instruments.Editor
             return Material(safeName, color, metal, smooth);
         }
 
-        static Material Material(string name, Color color, float metal = 0, float smooth = 0.3f)
+        internal static Material Material(string name, Color color, float metal = 0, float smooth = 0.3f)
         {
             string path = Root + "/Materials/" + name + ".mat";
             var existing = AssetDatabase.LoadAssetAtPath<Material>(path);
@@ -209,7 +256,7 @@ namespace Scalpal.Instruments.Editor
             light.type = LightType.Directional;
             light.transform.rotation = Quaternion.Euler(45, -30, 0);
             light.intensity = 1.3f;
-            Cube("Workbench", null, new Vector3(0, 0.7f, 0.35f), new Vector3(1.2f, 0.05f, 1.3f), Material("Workbench", new Color(0.08f, 0.12f, 0.13f)));
+            Cube("Workbench", null, new Vector3(0, 0.7f, 0.35f), new Vector3(1.2f, 0.05f, 1.6f), Material("Workbench", new Color(0.08f, 0.12f, 0.13f)));
             var scopeMonitor = GameObject.CreatePrimitive(PrimitiveType.Quad);
             scopeMonitor.name = "VirtualLaparoscopeMonitor";
             scopeMonitor.transform.SetPositionAndRotation(new Vector3(0.63f, 1.13f, 0.45f), Quaternion.Euler(0, -15, 0));
@@ -220,7 +267,7 @@ namespace Scalpal.Instruments.Editor
             {
                 var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(Root + "/Prefabs/inst_" + ToolIds[i] + ".prefab");
                 var tool = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
-                tool.transform.SetPositionAndRotation(new Vector3(-0.5f + (i % 5) * 0.25f, 0.81f, -0.05f + (i / 5) * 0.4f), Quaternion.Euler(0, 0, 90));
+                tool.transform.SetPositionAndRotation(new Vector3(-0.5f + (i % 5) * 0.25f, 0.81f, -0.05f + (i / 5) * 0.28f), Quaternion.Euler(0, 0, 90));
                 var scopeView = tool.GetComponent<LaparoscopeView>();
                 if (scopeView != null) scopeView.monitor = scopeMonitor.GetComponent<Renderer>();
             }

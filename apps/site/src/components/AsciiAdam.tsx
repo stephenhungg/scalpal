@@ -1,6 +1,6 @@
 "use client";
 
-// From MatthewKim323/adam (src/components/AsciiAdam.tsx), unchanged apart from this header, both arms set to white, the onTouch / introSpeed / holdAfterTouch (with breathing) / shiftY / startTouched props, a livelier spark, and pointer reach turned off (glyph scramble kept).
+// From MatthewKim323/adam (src/components/AsciiAdam.tsx), unchanged apart from this header, both arms set to white, the onTouch / introSpeed / holdAfterTouch (with breathing) / shiftY / startTouched / onUnavailable props, a livelier spark, and pointer reach turned off (glyph scramble kept).
 import { useEffect, useRef } from 'react'
 
 /*
@@ -256,6 +256,8 @@ function aim(arm: Arm, base: Xf, pointer: Vec | null, dt: number): Xf {
 // Scalpal site additions: onTouch fires once when the fingertips first meet (spark fully lit),
 // introSpeed speeds up only that first approach so it can work as a loader, and holdAfterTouch
 // keeps the hands together once they meet instead of looping.
+// onUnavailable fires instead when the art cannot render (no WebGL2, failed images or shaders),
+// so a page waiting on onTouch is never left blank.
 const TOUCH = 6.6
 const CLOSED = 6.8 // arms fully at their touching pose
 // once held, the arms breathe: a slow bob (out of phase) and a slight ease apart and back
@@ -264,21 +266,23 @@ const BREATH = { period: 3.4, bob: 0.006, part: 0.007, easeIn: 1.2 }
 // so the hands keep the same phase when the page changes instead of snapping back to rest.
 let breathStart: number | null = null
 
-type Props = { playing?: boolean; time?: number; onTouch?: () => void; introSpeed?: number; holdAfterTouch?: boolean; shiftY?: number; startTouched?: boolean }
+type Props = { playing?: boolean; time?: number; onTouch?: () => void; introSpeed?: number; holdAfterTouch?: boolean; shiftY?: number; startTouched?: boolean; onUnavailable?: () => void }
 
-export function AsciiAdam({ playing = true, time, onTouch, introSpeed = 1, holdAfterTouch = false, shiftY = 0, startTouched = false }: Props) {
+export function AsciiAdam({ playing = true, time, onTouch, introSpeed = 1, holdAfterTouch = false, shiftY = 0, startTouched = false, onUnavailable }: Props) {
   const ref = useRef<HTMLCanvasElement>(null)
   const playingRef = useRef(playing)
   const onTouchRef = useRef(onTouch)
   const introSpeedRef = useRef(introSpeed)
   const holdRef = useRef(holdAfterTouch)
+  const onUnavailableRef = useRef(onUnavailable)
   const shiftRef = useRef(shiftY)
   shiftRef.current = shiftY
   useEffect(() => {
     onTouchRef.current = onTouch
     introSpeedRef.current = introSpeed
     holdRef.current = holdAfterTouch
-  }, [onTouch, introSpeed, holdAfterTouch])
+    onUnavailableRef.current = onUnavailable
+  }, [onTouch, introSpeed, holdAfterTouch, onUnavailable])
   useEffect(() => {
     playingRef.current = playing
   }, [playing])
@@ -287,7 +291,11 @@ export function AsciiAdam({ playing = true, time, onTouch, introSpeed = 1, holdA
     const canvas = ref.current
     if (!canvas) return
     const gl = canvas.getContext('webgl2', { antialias: false, premultipliedAlpha: false })
-    if (!gl) return
+    if (!gl) {
+      console.warn('AsciiAdam: WebGL2 unavailable, skipping hero art')
+      onUnavailableRef.current?.()
+      return
+    }
 
     let raf = 0
     let disposed = false
@@ -471,6 +479,10 @@ export function AsciiAdam({ playing = true, time, onTouch, introSpeed = 1, holdA
         document.documentElement.removeEventListener('pointerleave', onLeave)
         window.removeEventListener('blur', onLeave)
       }
+    }).catch((err: unknown) => {
+      if (disposed) return
+      console.warn('AsciiAdam: hero art failed to load', err)
+      onUnavailableRef.current?.()
     })
 
     let cleanup = () => {}

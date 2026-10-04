@@ -48010,6 +48010,11 @@
         "urinary_bladder"
       ],
       "missingTargets": []
+    },
+    {
+      "procedureId": "open_appendectomy",
+      "interactionTargets": [],
+      "missingTargets": []
     }
   ]
 }

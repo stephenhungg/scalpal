@@ -1,5 +1,6 @@
 using System;
 using System.Reflection;
+using System.IO;
 using Scalpal.Realtime;
 using SpacetimeDB.Types;
 using UnityEngine;
@@ -28,10 +29,18 @@ static class BridgeCheck
             Connection.Db.MyMemberships.Rows.Add(new Membership { SessionId = "fixture", Role = "headset" });
             Connection.Db.SessionExerciseState.Rows.Add(State);
             Set(Bridge, "connection", Connection); Set(Bridge, "subscribed", true);
+            Set(Bridge, "joinResolved", true); Set(Bridge, "persistedSessionId", Session.SessionId);
             Call(Bridge, "HookReducers", Connection);
             Tick();
         }
         public void Tick() { Time.realtimeSinceStartup += 0.6f; Call(Bridge, "Update"); }
+        public void ObserveAttempt(string id, DateTimeOffset? timestamp = null, string sender = "headset")
+        {
+            Session.CurrentAttemptId = State.AttemptId = id;
+            State.ExerciseId = Session.ExerciseId; State.ExerciseVersion = Session.ExerciseVersion;
+            State.UpdatedAt = timestamp ?? Connection.Reducers.AttemptTimestamp;
+            State.UpdatedBy = new SpacetimeDB.Identity(sender);
+        }
         public void Snapshot(bool paused = false, bool registered = true)
         { Bridge.PublishSnapshot("Practicing", "inspect", 3, 10, "appendix", "appendix", false, paused, registered, "fixture authored geometry"); }
         public Command Command(string id = "c1")
@@ -111,12 +120,12 @@ static class BridgeCheck
 
         var attempt = new Fixture(); int started = 0, failed = 0;
         attempt.Bridge.AttemptStarted += id => started++;
-        attempt.Bridge.AttemptFailed += reason => failed++;
+        attempt.Bridge.AttemptFailed += reason => { failed++; Check("lost acknowledgement advertises the actual retry control", reason.Contains("Left menu: retry") && !reason.Contains("A: retry")); };
         Check("attempt request is sent once", attempt.Bridge.BeginAttempt("lap_appendectomy", "0.1.0") && !attempt.Bridge.BeginAttempt("lap_appendectomy", "0.1.0") && attempt.Connection.Reducers.Attempts.Count == 1);
         Check("attempt is not claimed before acknowledgement", started == 0 && attempt.Bridge.AttemptPending);
         attempt.Connection.Reducers.AckAttempt(true); attempt.Tick();
         Check("attempt commit alone waits for observed new attempt row", started == 0 && attempt.Bridge.AttemptPending);
-        attempt.Session.CurrentAttemptId = attempt.State.AttemptId = "fixture-a2"; attempt.Tick();
+        attempt.ObserveAttempt("fixture-a2"); attempt.Tick();
         Check("matching observed attempt after commit confirms exactly once", started == 1 && !attempt.Bridge.AttemptPending);
         attempt.Tick(); Check("repeated subscription frame cannot duplicate attempt confirmation", started == 1);
         attempt.Bridge.BeginAttempt("lap_appendectomy", "0.1.0"); Call(attempt.Bridge, "Disconnected", "fixture");
@@ -138,9 +147,229 @@ static class BridgeCheck
         f.Bridge.ReportAttemptResult(10, 10, 1, 0, "fixture"); f.Connection.Reducers.AckResult(true);
         Check("committed result callback fires only after actual reducer callback", committed == 1);
     }
+
+    static DbConnection ConnectThroughCallback(QuestSessionBridge bridge, string role = "headset", string status = "active",
+        string invite = "REVOKED", bool committed = false, bool deferJoin = false)
+    {
+        bridge.joinCode = invite;
+        bridge.Reconnect();
+        var conn = DbConnection.LastBuilt;
+        conn.Reducers.JoinCommitted = committed;
+        conn.Reducers.DeferJoin = deferJoin;
+        conn.Db.MySessions.Rows.Add(new Session { SessionId = "fixture", CurrentAttemptId = "fixture-a1", Status = status,
+            ExerciseId = "lap_appendectomy", ExerciseVersion = "0.1.0" });
+        if (role != null) conn.Db.MyMemberships.Rows.Add(new Membership { SessionId = "fixture", Role = role });
+        conn.Db.SessionExerciseState.Rows.Add(new ExerciseState { SessionId = "fixture", AttemptId = "fixture-a1" });
+        conn.FireConnected();
+        return conn;
+    }
+
+    static void RotatedInviteMembership()
+    {
+        var bridge = new QuestSessionBridge { autoConnect = false, preferredSessionId = "fixture" };
+        var conn = ConnectThroughCallback(bridge);
+        Check("real connect callback subscribes even when revoked invite join fails", conn.Subscriptions.Count == 1 && conn.Reducers.Joins == 1);
+        Check("membership subscription includes all authoritative views", conn.SubscriptionQueries.Count == 1 &&
+            Array.IndexOf(conn.SubscriptionQueries[0], "SELECT * FROM my_memberships") >= 0 &&
+            Array.IndexOf(conn.SubscriptionQueries[0], "SELECT * FROM my_sessions") >= 0 &&
+            Array.IndexOf(conn.SubscriptionQueries[0], "SELECT * FROM session_exercise_state") >= 0);
+        Call(bridge, "Update");
+        Check("cache rows cannot authorize pairing before subscription applied", !bridge.Paired && !bridge.Status.StartsWith("Pairing rejected:"));
+        if (conn.Subscriptions.Count != 0) conn.Subscriptions[0].Apply();
+        Call(bridge, "Update");
+        Check("revoked invite preserves explicitly configured active headset session", bridge.Paired && bridge.Status == "Paired");
+        conn.Reducers.JoinSession("REVOKED", "Quest");
+        Call(bridge, "Update");
+        Check("join response never creates another subscription or unpairs a configured member", bridge.Paired && conn.Subscriptions.Count == 1);
+
+        var reconnect = ConnectThroughCallback(bridge);
+        if (conn.Subscriptions.Count != 0) conn.Subscriptions[0].Apply();
+        Call(bridge, "Update");
+        Check("late subscription from old connection cannot authorize reconnect", !bridge.Paired);
+        if (reconnect.Subscriptions.Count != 0) reconnect.Subscriptions[0].Apply();
+        Call(bridge, "Update");
+        Check("same bridge reconnect pairs only the configured session despite rotated invite", bridge.Paired && bridge.Status == "Paired");
+        if (conn.Subscriptions.Count != 0) conn.Subscriptions[0].Fail();
+        Check("obsolete subscription error cannot revoke current connection pairing", bridge.Paired);
+
+        foreach (string role in new[] { null, "observer" })
+        {
+            var denied = new QuestSessionBridge { autoConnect = false, preferredSessionId = "fixture" };
+            var deniedConn = ConnectThroughCallback(denied, role);
+            if (deniedConn.Subscriptions.Count != 0) deniedConn.Subscriptions[0].Apply();
+            Call(denied, "Update");
+            Check("revoked invite cannot grant missing or observer-only headset membership: " + (role ?? "none"),
+                !denied.Paired && denied.Status.StartsWith("Pairing rejected:"));
+            Call(denied, "OnDisable");
+        }
+        var ended = new QuestSessionBridge { autoConnect = false, preferredSessionId = "fixture" };
+        var endedConn = ConnectThroughCallback(ended, "headset", "ended");
+        if (endedConn.Subscriptions.Count != 0) endedConn.Subscriptions[0].Apply();
+        Call(ended, "Update");
+        Check("existing headset membership cannot reactivate an ended session", !ended.Paired);
+
+        var unknown = new QuestSessionBridge { autoConnect = false };
+        var unknownConn = ConnectThroughCallback(unknown, invite: "NEW-TYPO");
+        unknownConn.Subscriptions[0].Apply(); Call(unknown, "Update");
+        Check("rejected new invite cannot silently pair an old active headset session", !unknown.Paired && unknown.Status.StartsWith("Pairing rejected:"));
+        Check("rejected new invite cannot start an attempt against old membership", !unknown.BeginAttempt("lap_appendectomy", "0.1.0") && unknownConn.Reducers.Attempts.Count == 0);
+
+        var preferredMismatch = new QuestSessionBridge { autoConnect = false, preferredSessionId = "new-session" };
+        var mismatchConn = ConnectThroughCallback(preferredMismatch);
+        mismatchConn.Subscriptions[0].Apply(); Call(preferredMismatch, "Update");
+        Check("rejected invite cannot fall back when preferred session differs from old membership", !preferredMismatch.Paired && preferredMismatch.Status.StartsWith("Pairing rejected:"));
+
+        var pending = new QuestSessionBridge { autoConnect = false };
+        var pendingConn = ConnectThroughCallback(pending, invite: "PENDING-INVITE", deferJoin: true);
+        pendingConn.Subscriptions[0].Apply(); Call(pending, "Update");
+        Check("old cached membership cannot pair while configured join is unresolved", !pending.Paired);
+        pendingConn.Reducers.AckJoin(false); Call(pending, "Update");
+        Check("join rejection remains visible after the pending subscription", !pending.Paired && pending.Status.StartsWith("Pairing rejected:"));
+
+        var known = new QuestSessionBridge { autoConnect = false };
+        var knownConn = ConnectThroughCallback(known, invite: "EXPIRES", committed: true);
+        knownConn.Subscriptions[0].Apply(); Call(known, "Update");
+        Check("successful join persists exactly its invite-scoped active session", known.Paired);
+        Call(known, "OnDisable");
+        var persisted = new QuestSessionBridge { autoConnect = false };
+        var persistedConn = ConnectThroughCallback(persisted, invite: "EXPIRES");
+        persistedConn.Db.MySessions.Rows.Add(new Session { SessionId = "older-other", CurrentAttemptId = "older-a1" });
+        persistedConn.Db.MyMemberships.Rows.Add(new Membership { SessionId = "older-other", Role = "headset" });
+        persistedConn.Subscriptions[0].Apply(); Call(persisted, "Update");
+        Check("same persisted invite reconnects only its known session among multiple old memberships", persisted.Paired && persisted.SessionId == "fixture");
+        var changedInvite = new QuestSessionBridge { autoConnect = false };
+        var changedConn = ConnectThroughCallback(changedInvite, invite: "DIFFERENT-INVITE");
+        changedConn.Subscriptions[0].Apply(); Call(changedInvite, "Update");
+        Check("changing invite cannot reuse persistence from the previously successful invite", !changedInvite.Paired && changedInvite.Status.StartsWith("Pairing rejected:"));
+        var changedEndpoint = new QuestSessionBridge { autoConnect = false, database = "different-db" };
+        var changedEndpointConn = ConnectThroughCallback(changedEndpoint, invite: "EXPIRES");
+        changedEndpointConn.Subscriptions[0].Apply(); Call(changedEndpoint, "Update");
+        Check("changing endpoint cannot reuse another database's known pairing", !changedEndpoint.Paired && changedEndpoint.Status.StartsWith("Pairing rejected:"));
+        foreach (var current in new[] { ended, unknown, preferredMismatch, pending, persisted, changedInvite, changedEndpoint, bridge })
+            Call(current, "OnDisable");
+    }
+
+    static void AttemptDeadlines()
+    {
+        var unacked = new Fixture(); int failures = 0, started = 0;
+        unacked.Bridge.AttemptFailed += reason => { failures++; Check("timeout exposes confirmation failure", reason.Contains("10 seconds")); };
+        unacked.Bridge.AttemptStarted += id => started++;
+        unacked.Bridge.BeginAttempt("lap_appendectomy", "0.1.0");
+        unacked.Snapshot();
+        Time.realtimeSinceStartup += 9;
+        Call(unacked.Bridge, "Update");
+        Check("pending attempt survives before bounded deadline", unacked.Bridge.AttemptPending && failures == 0);
+        Time.realtimeSinceStartup += 1.1f;
+        Call(unacked.Bridge, "Update");
+        Check("missing reducer acknowledgement clears pending attempt after deadline", !unacked.Bridge.AttemptPending && failures == 1 && started == 0);
+        unacked.Tick();
+        Check("timeout fires once and never publishes pending scene state", failures == 1 && unacked.Connection.Reducers.Snapshots.Count == 0);
+        unacked.Connection.Reducers.AckAttempt(true);
+        unacked.ObserveAttempt("late-a2");
+        unacked.Tick();
+        Check("late acknowledgement and row cannot revive timed-out request", started == 0 && !unacked.Bridge.AttemptPending);
+        Check("timeout permits explicit subsequent attempt request", unacked.Bridge.BeginAttempt("lap_appendectomy", "0.1.0") && unacked.Connection.Reducers.Attempts.Count == 2);
+
+        var deadlineCommit = new Fixture(); int deadlineStarted = 0, deadlineFailed = 0;
+        deadlineCommit.Bridge.AttemptStarted += id => deadlineStarted++;
+        deadlineCommit.Bridge.AttemptFailed += reason => deadlineFailed++;
+        deadlineCommit.Bridge.BeginAttempt("lap_appendectomy", "0.1.0");
+        Time.realtimeSinceStartup += 10.5f;
+        deadlineCommit.Connection.NextFrameTick = () =>
+        {
+            var timestamp = DateTimeOffset.UtcNow;
+            deadlineCommit.ObserveAttempt("deadline-a2", timestamp);
+            deadlineCommit.Connection.Reducers.AckAttempt(true, timestamp);
+        };
+        Call(deadlineCommit.Bridge, "Update");
+        Check("FrameTick confirmation at expired deadline is observed before timeout", deadlineStarted == 1 && deadlineFailed == 0 && !deadlineCommit.Bridge.AttemptPending && deadlineCommit.Bridge.AttemptId == "deadline-a2");
+        deadlineCommit.Tick();
+        Check("deadline confirmation remains single and never fails on following frame", deadlineStarted == 1 && deadlineFailed == 0);
+
+        var mismatch = new Fixture(); int mismatchFailed = 0, mismatchStarted = 0;
+        mismatch.Bridge.AttemptFailed += reason => mismatchFailed++;
+        mismatch.Bridge.AttemptStarted += id => mismatchStarted++;
+        mismatch.Bridge.BeginAttempt("lap_appendectomy", "0.1.0");
+        mismatch.Connection.Reducers.AckAttempt(true);
+        mismatch.Session.ExerciseId = "lap_cholecystectomy";
+        mismatch.ObserveAttempt("foreign-a2");
+        mismatch.Tick();
+        Check("committed request never accepts unrelated exercise attempt", mismatchStarted == 0 && mismatch.Bridge.AttemptPending);
+        Time.realtimeSinceStartup += 10.1f; mismatch.Tick();
+        Check("committed but mismatched observation fails instead of wedging", mismatchFailed == 1 && mismatchStarted == 0 && !mismatch.Bridge.AttemptPending);
+
+        var missingState = new Fixture(); int missingStarted = 0;
+        missingState.Bridge.AttemptStarted += id => missingStarted++;
+        missingState.Bridge.BeginAttempt("lap_appendectomy", "0.1.0");
+        missingState.Connection.Reducers.AckAttempt(true);
+        missingState.Session.CurrentAttemptId = "new-a2";
+        missingState.Tick();
+        Check("new session attempt without matching exercise-state row is not confirmed", missingStarted == 0 && missingState.Bridge.AttemptPending && !missingState.Bridge.Paired);
+        missingState.ObserveAttempt("new-a2"); missingState.Tick();
+        Check("matching state arriving before deadline confirms request", missingStarted == 1 && !missingState.Bridge.AttemptPending);
+
+        var foreign = new Fixture(); int foreignStarted = 0;
+        foreign.Bridge.AttemptStarted += id => foreignStarted++;
+        foreign.Bridge.BeginAttempt("lap_appendectomy", "0.1.0");
+        foreign.Connection.Reducers.AckForeignAttempt("fixture", "lap_appendectomy", "0.1.0", true);
+        foreign.ObserveAttempt("operator-a2", DateTimeOffset.UtcNow, "operator"); foreign.Tick();
+        Check("operator reducer event cannot acknowledge this headset request", foreignStarted == 0 && foreign.Bridge.AttemptPending);
+
+        var superseded = new Fixture(); int supersededStarted = 0, supersededFailed = 0;
+        superseded.Bridge.AttemptStarted += id => supersededStarted++;
+        superseded.Bridge.AttemptFailed += reason => supersededFailed++;
+        superseded.Bridge.BeginAttempt("lap_appendectomy", "0.1.0");
+        var commitAt = DateTimeOffset.UtcNow;
+        superseded.ObserveAttempt("own-a2", commitAt);
+        superseded.Connection.Reducers.AckAttempt(true, commitAt);
+        superseded.ObserveAttempt("operator-a3", commitAt.AddMilliseconds(1), "operator");
+        superseded.Tick();
+        Check("same-exercise operator attempt cannot replace captured headset commit", supersededStarted == 0 && superseded.Bridge.AttemptPending);
+        Time.realtimeSinceStartup += 10.1f; superseded.Tick();
+        Check("superseded headset commit fails at deadline without adopting operator attempt", supersededStarted == 0 && supersededFailed == 1 && !superseded.Bridge.AttemptPending);
+
+        var uncorrelated = new Fixture(); int uncorrelatedStarted = 0;
+        uncorrelated.Bridge.AttemptStarted += id => uncorrelatedStarted++;
+        uncorrelated.Bridge.BeginAttempt("lap_appendectomy", "0.1.0");
+        uncorrelated.Connection.Reducers.AckAttempt(true);
+        uncorrelated.ObserveAttempt("same-exercise-other", uncorrelated.Connection.Reducers.AttemptTimestamp.AddMilliseconds(1));
+        uncorrelated.Tick();
+        Check("same sender and exercise cannot confirm a different transaction timestamp", uncorrelatedStarted == 0 && uncorrelated.Bridge.AttemptPending);
+
+        var noSubscription = new Fixture(); int noSubscriptionFailed = 0;
+        noSubscription.Bridge.AttemptFailed += reason => noSubscriptionFailed++;
+        noSubscription.Bridge.BeginAttempt("lap_appendectomy", "0.1.0");
+        Set(noSubscription.Bridge, "subscribed", false);
+        Time.realtimeSinceStartup += 10.1f; noSubscription.Tick();
+        Check("observation unavailable still expires attempt instead of bypassing timeout", noSubscriptionFailed == 1 && !noSubscription.Bridge.AttemptPending);
+    }
+    static void EncounterBinding()
+    {
+        var unavailable = new QuestSessionBridge { autoConnect = false };
+        Check("unavailable bridge cannot invent encounter provenance", !unavailable.TryGetEncounterBinding("enc-fixture123", out var sid, out var aid, out var patient, out var phase)
+            && sid == "" && aid == "" && patient == "" && phase == "");
+        var f = new Fixture();
+        Check("paired bridge rejects a missing encounter", !f.Bridge.TryGetEncounterBinding("enc-fixture123", out sid, out aid, out patient, out phase));
+        f.Connection.Db.SessionEncounters.Rows.Add(new Encounter { EncounterId = "enc-fixture123", SessionId = "fixture", AttemptId = "fixture-a1", PatientId = "u_fixture_patient", Phase = "scored" });
+        Check("exact encounter row supplies recorded shared attempt and patient", f.Bridge.TryGetEncounterBinding("enc-fixture123", out sid, out aid, out patient, out phase)
+            && sid == "fixture" && aid == "fixture-a1" && patient == "u_fixture_patient" && phase == "scored");
+        Check("encounter lookup cannot use another ID", !f.Bridge.TryGetEncounterBinding("enc-other123", out sid, out aid, out patient, out phase)
+            && sid == "" && aid == "" && patient == "" && phase == "");
+        f.Session.CurrentAttemptId = f.State.AttemptId = "fixture-a2"; f.Tick();
+        Check("recorded encounter provenance does not silently move to a newer attempt", f.Bridge.TryGetEncounterBinding("enc-fixture123", out sid, out aid, out patient, out phase)
+            && aid == "fixture-a1" && aid != f.Bridge.AttemptId && f.Connection.Reducers.Attempts.Count == 0);
+        f.Connection.IsActive = false;
+        Check("disconnected cache cannot authorize an office handoff", !f.Bridge.TryGetEncounterBinding("enc-fixture123", out sid, out aid, out patient, out phase)
+            && sid == "" && aid == "" && patient == "" && phase == "");
+    }
+
     public static int Main()
     {
-        AcknowledgementOrdering(); CommandBoundaries(); ReconnectAndReset(); Results();
+        // Connection lifecycle tests persist only a disposable fixture token, never an app token.
+        string tokenDirectory = Path.Combine(Path.GetTempPath(), "scalpal-bridge-check-" + Guid.NewGuid().ToString("N"));
+        Application.persistentDataPath = tokenDirectory;
+        try { AcknowledgementOrdering(); CommandBoundaries(); ReconnectAndReset(); Results(); EncounterBinding(); RotatedInviteMembership(); AttemptDeadlines(); }
+        finally { if (Directory.Exists(tokenDirectory)) Directory.Delete(tokenDirectory, true); }
         Console.WriteLine("SCALPAL_NATIVE_BRIDGE_CHECK checks=" + checks + " passed=" + (checks - failures) + " failed=" + failures + "; production bridge with deterministic transport/cache doubles, no Unity or live reducer validation");
         return failures == 0 ? 0 : 1;
     }

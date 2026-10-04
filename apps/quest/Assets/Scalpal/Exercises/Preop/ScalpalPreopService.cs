@@ -3,6 +3,8 @@
 // When the service is unreachable it answers from Resources/scalpal_bundle.json instead.
 using System;
 using System.Collections;
+using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using Scalpal.Exercises.Data;
@@ -22,6 +24,10 @@ namespace Scalpal.Exercises.Preop
         [SerializeField] string offlineBundleResource = "scalpal_bundle";
 
         ScalpalBundle offlineBundle;
+        readonly HashSet<UnityWebRequest> pending = new HashSet<UnityWebRequest>();
+        int generation;
+        public bool LastResponseOffline { get; private set; }
+        public event Action<string, int> RequestRetryAfterForRoute;
 
         public bool IsOffline { get; private set; }
         public string BaseUrl => baseUrl;
@@ -40,10 +46,40 @@ namespace Scalpal.Exercises.Preop
         public event Action<AdmissionStatus> AdmissionUpdated;
         public event Action<ScalpalBundle> BundleLoaded;
         public event Action<ErrorResponse> RequestFailed;
+        // Identity-bearing failures let Explore ignore errors for a previously selected patient.
+        public event Action<string, ErrorResponse> RequestFailedForRoute;
         public event Action<bool> OfflineModeChanged;
 
+        public void Configure(string serviceUrl, bool offline = false, int timeout = 8)
+        {
+            if (!Uri.TryCreate(serviceUrl, UriKind.Absolute, out var uri) ||
+                (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+                throw new ArgumentException("Use an absolute HTTP(S) preop service URL.", nameof(serviceUrl));
+            baseUrl = serviceUrl.TrimEnd('/');
+            forceOffline = offline;
+            timeoutSeconds = Mathf.Clamp(timeout, 1, 60);
+            SetOffline(offline);
+        }
+
+        // Metadata/fallback hydration performs no network request and does not change connectivity.
+        public void LoadCachedBundle()
+        {
+            bool previous=LastResponseOffline;
+            try { LastResponseOffline=true;BundleLoaded?.Invoke(Bundle()); }
+            finally { LastResponseOffline=previous; }
+        }
+        public void CancelPendingRequests()
+        {
+            generation++;
+            foreach (var request in pending) { request.Abort(); request.Dispose(); }
+            pending.Clear();
+            StopAllCoroutines();
+        }
+        void OnDestroy() => CancelPendingRequests();
+        public void LoadBundle() => Dispatch(Get("/unity/bundle"));
+        public void LoadBrief(string patientId) => Dispatch(Get($"/patients/{Uri.EscapeDataString(patientId ?? "")}/brief"));
         public void LoadPatients() => Dispatch(Get("/patients"));
-        public void LoadCase(string patientId) => Dispatch(Get($"/patients/{patientId}/case"));
+        public void LoadCase(string patientId) => Dispatch(Get($"/patients/{Uri.EscapeDataString(patientId ?? "")}/case"));
         public void Admit(string scenarioId) => Dispatch(new ScalpalAction { id = "admit_patient", method = "POST", route = $"/admit/{scenarioId}" });
 
         public void SubmitPreopCheck(string patientId, string[] selected) =>
@@ -64,14 +100,21 @@ namespace Scalpal.Exercises.Preop
                 return;
             }
             var body = kind == RouteKind.PreopCheck ? JsonUtility.ToJson(new PreopCheckRequest { selected = selected ?? new string[0] }) : null;
-            if (forceOffline) Answer(kind, action.route, null, selected);
+            if (forceOffline)
+            {
+                LastResponseOffline = true;
+                SetOffline(true);
+                Answer(kind, action.route, null, selected);
+            }
             else StartCoroutine(Send(kind, action, body, selected));
         }
 
         IEnumerator Send(RouteKind kind, ScalpalAction action, string body, string[] selected)
         {
+            int requestGeneration = generation;
             using (var req = new UnityWebRequest(baseUrl.TrimEnd('/') + action.route, action.method))
             {
+                pending.Add(req);
                 req.downloadHandler = new DownloadHandlerBuffer();
                 if (body != null)
                 {
@@ -81,6 +124,9 @@ namespace Scalpal.Exercises.Preop
                 req.SetRequestHeader("Accept", "application/json");
                 req.timeout = timeoutSeconds;
                 yield return req.SendWebRequest();
+                pending.Remove(req);
+                if (requestGeneration != generation) yield break;
+                LastResponseOffline = req.result == UnityWebRequest.Result.ConnectionError;
 
                 if (req.result == UnityWebRequest.Result.ConnectionError)
                 {
@@ -88,14 +134,21 @@ namespace Scalpal.Exercises.Preop
                     Answer(kind, action.route, null, selected);
                     yield break;
                 }
-                SetOffline(false);
                 var json = req.downloadHandler.text;
                 if (req.result == UnityWebRequest.Result.ProtocolError)
                 {
                     var error = TryParse<ErrorResponse>(json);
-                    RequestFailed?.Invoke(error?.error != null ? error : Error($"http_{req.responseCode}", $"HTTP {req.responseCode} from {action.route}"));
+                    if (req.responseCode == 429)
+                        RequestRetryAfterForRoute?.Invoke(action.route, ParseRetryAfter(req.GetResponseHeader("Retry-After")));
+                    ReportFailure(action.route, error?.error != null ? error : Error($"http_{req.responseCode}", $"HTTP {req.responseCode} from {action.route}"));
                     yield break;
                 }
+                if (req.result == UnityWebRequest.Result.DataProcessingError || string.IsNullOrWhiteSpace(json))
+                {
+                    ReportFailure(action.route, Error("invalid_response", "The service returned an unreadable response. Try again."));
+                    yield break;
+                }
+                SetOffline(false);
                 Answer(kind, action.route, json, selected);
             }
         }
@@ -106,10 +159,10 @@ namespace Scalpal.Exercises.Preop
             var bundle = json == null ? Bundle() : null;
             if (json == null && bundle == null)
             {
-                Fail("offline_unavailable", "The service is unreachable and no offline bundle is packaged.");
+                Fail("offline_unavailable", "The service is unreachable and no offline bundle is packaged.", route);
                 return;
             }
-            var segment = route.Split('/').ElementAtOrDefault(2) ?? "";
+            var segment = Uri.UnescapeDataString(route.Split('/').ElementAtOrDefault(2) ?? "");
 
             switch (kind)
             {
@@ -119,17 +172,21 @@ namespace Scalpal.Exercises.Preop
                     else IndexLoaded?.Invoke(new ServiceIndex { service = "scalpal-preop (offline)", description = "", disclaimer = bundle.disclaimer, actions = new[] { Get("/patients") } });
                     break;
                 case RouteKind.Patients:
-                    PatientsLoaded?.Invoke(json != null ? TryParse<PatientList>(json) : new PatientList { patients = bundle.patients, actions = new[] { Get("/") } });
+                    var patientList = json != null ? TryParse<PatientList>(json) : new PatientList { patients = bundle.patients, actions = new[] { Get("/") } };
+                    if (patientList?.patients != null) PatientsLoaded?.Invoke(patientList);
+                    else Fail("invalid_response", "The service returned an unreadable patient list. Try again.", route);
                     break;
                 case RouteKind.Case:
                     var kase = json != null ? TryParse<SurgicalCase>(json) : FindOfflineCase(segment);
-                    if (kase != null) CaseLoaded?.Invoke(kase);
-                    else Fail("patient_not_found", "That patient is not in the offline bundle.");
+                    if (kase != null && (kase.patientId == segment || kase.scenarioId == segment)) CaseLoaded?.Invoke(kase);
+                    else if (json != null) Fail("invalid_response", "The service returned a missing or mismatched patient case. Try again.", route);
+                    else Fail("patient_not_found", "That patient is not in the offline bundle.", route);
                     break;
                 case RouteKind.Brief:
                     var brief = json != null ? TryParse<PreopBrief>(json) : FindOfflineCase(segment)?.brief;
-                    if (brief != null) BriefLoaded?.Invoke(brief);
-                    else Fail("patient_not_found", "That patient is not in the offline bundle.");
+                    if (BriefMatchesRoute(brief, segment)) BriefLoaded?.Invoke(brief);
+                    else if (json != null) Fail("invalid_response", "The service returned a missing or mismatched patient chart. Try again.", route);
+                    else Fail("patient_not_found", "That patient is not in the offline bundle.", route);
                     break;
                 case RouteKind.PreopCheck:
                     if (json != null) PreopChecked?.Invoke(TryParse<PreopCheckResult>(json));
@@ -194,15 +251,33 @@ namespace Scalpal.Exercises.Preop
                     });
                     break;
                 case RouteKind.Bundle:
-                    BundleLoaded?.Invoke(json != null ? TryParse<ScalpalBundle>(json) : bundle);
+                    var loadedBundle = json != null ? TryParse<ScalpalBundle>(json) : bundle;
+                    if (loadedBundle?.patients == null || loadedBundle.cases == null)
+                    {
+                        Fail("invalid_response", "The service returned an unreadable offline bundle. Try again.", route);
+                        break;
+                    }
+                    // Cache a successful GET /unity/bundle for this session before packaged fallback.
+                    offlineBundle = loadedBundle;
+                    BundleLoaded?.Invoke(loadedBundle);
                     break;
             }
+        }
+
+        bool BriefMatchesRoute(PreopBrief brief, string idOrScenario)
+        {
+            if (brief == null || string.IsNullOrEmpty(brief.patientId)) return false;
+            if (brief.patientId == idOrScenario) return true;
+            // Existing callers may request a FinchNode scenario alias. Accept only a known
+            // bundle mapping; an unrelated patient returned for that alias remains a failure.
+            var known = FindOfflineCase(idOrScenario);
+            return known != null && known.scenarioId == idOrScenario && known.patientId == brief.patientId;
         }
 
         SurgicalCase FindOfflineCase(string idOrScenario)
         {
             var bundle = Bundle();
-            return bundle?.cases.FirstOrDefault(c => c.patientId == idOrScenario || c.scenarioId == idOrScenario);
+            return bundle?.cases?.FirstOrDefault(c => c != null && (c.patientId == idOrScenario || c.scenarioId == idOrScenario));
         }
 
         ScalpalBundle Bundle()
@@ -220,7 +295,21 @@ namespace Scalpal.Exercises.Preop
             OfflineModeChanged?.Invoke(offline);
         }
 
-        void Fail(string code, string message) => RequestFailed?.Invoke(Error(code, message));
+        void Fail(string code, string message, string route = "") => ReportFailure(route, Error(code, message));
+
+        void ReportFailure(string route, ErrorResponse error)
+        {
+            RequestFailedForRoute?.Invoke(route, error);
+            RequestFailed?.Invoke(error);
+        }
+
+        public static int ParseRetryAfter(string value)
+        {
+            if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var seconds)) return Math.Max(1, seconds);
+            if (DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var date))
+                return Math.Max(1, (int)Math.Ceiling((date - DateTimeOffset.UtcNow).TotalSeconds));
+            return 1; // An omitted/malformed header must not allow a tight retry loop.
+        }
 
         static ErrorResponse Error(string code, string message) =>
             new ErrorResponse { error = new ErrorInfo { code = code, message = message }, actions = new[] { Get("/patients") } };

@@ -12,8 +12,8 @@ Read `README.md`, `docs/current-direction.md` and `docs/system-integration.md` f
 
 User direction takes precedence over older proposals. In particular:
 
-- Support mixed reality with a real reclining participant and generic teaching anatomy, plus a full-VR virtual patient/operating room. Share the coach/tool/exercise core. A static room preview does not prove body registration or a native VR app. See `docs/environment-modes.md`.
-- Selection is conversational, with a rotating 3D anatomy preview during selection.
+- Build the latest experience flow in `docs/current-direction.md#latest-experience-flow`: launch → Enter → explore the FinchNode patients → full-VR diagnosis office (voice patient plus Jarvis attending) → the diagnosis decides the surgery → operating room in AR (real reclining person) or VR (virtual patient), chosen at the handoff → required robot replay → recap.
+- The explore hub and diagnosis office are full VR. The operating room supports both modes as a user choice: AR (passthrough, MediaPipe detection of a real reclining participant, generic teaching anatomy registered to their body) or full VR (virtual patient in the virtual OR). Keep one shared tool/anatomy/exercise/coach core; presentation mode is separate from lifecycle. Conversational case selection and the rotating anatomy preview are off the main path; keep that code but do not extend it unless asked.
 - The robotics input proposal is recorded passthrough video, not Meta SDK hand-joint telemetry.
 - First demonstrate video-derived hand motion retargeting and replay in simulation. Do not describe replay as a learned autonomous policy.
 - Preserve both education and robotics goals. Do not silently replace the project with a pure analytics dashboard or robotics-only collector.
@@ -26,6 +26,7 @@ User direction takes precedence over older proposals. In particular:
 - Delegate bounded independent work when useful, with explicit file ownership. Avoid overlapping edits.
 - Coordinate shared schemas and state transitions through `docs/integration-contracts.md` and the audited routes in `docs/system-integration.md`. Nathan's branch has implemented proposals; they are not yet an agreed end-to-end contract. Compare actual producer/consumer code before adding an adapter.
 - Preserve unrelated work and inspect the final diff. Choose verification based on behavior and risk, and never claim a check passed unless it ran.
+- Before removing apparently unused shared code, search symbols and Unity `.meta` GUID references in this checkout and the active sibling worktrees `../scalpal-shell`, `../scalpal-handoff`, `../scalpal-surgery` and `../scalpal-recap`, including unpublished changes. If a worktree is unavailable, record the incomplete check and defer removal. Absence of main scene/prefab bindings alone does not establish that code is unused. Preserve `ScalpalPreopService.cs` and its original GUID: Shell's `HubController` and `ShellBuild` consume it.
 - State whether a result is measured on the headset, reported by a participant, simulated, or merely proposed.
 - Keep camera-image coordinates, camera-relative estimates, Unity world coordinates, and robot coordinates explicit. Do not conceal missing depth, clock synchronization, or registration behind smoothing.
 - Pause scoring and hide misleading anatomy when registration is invalid. Handle missing video landmarks explicitly in replay rather than inventing precise movement.
@@ -35,7 +36,7 @@ User direction takes precedence over older proposals. In particular:
 
 ## Status and Handoff
 
-Commit and push verified milestones as work progresses; the user has authorized this ongoing workflow. Fetch teammate commits at integration checkpoints and before publishing. Use focused branches and pull requests, preserve unrelated local changes, and report verification and remaining limitations with each handoff.
+Commit and push verified milestones as work progresses; the user has authorized this ongoing workflow. Work directly on `main`: fetch and rebase/merge `origin/main` before each new chunk and before pushing, then push small focused commits to `origin main`. Do not create feature branches or pull requests, and never force-push `main`. Preserve unrelated local changes and report verification and remaining limitations with each handoff. This workflow supersedes older branch/PR instructions.
 
 The repository/context and team-layout requests authorize this handoff and scaffold, not implementation of every proposed component. Follow subsequent user-assigned scope. Before a broad build, reconcile the expanded architecture and unresolved decisions with the owner; do not treat the prior pre-robotics draft review as approval of the current specification.
 
@@ -45,6 +46,6 @@ For every shipping milestone:
 - Trace the changed route through real producer and consumer code. Check IDs/versions, coordinates/clocks, required scene bindings, validity gates and reset/retry behavior. Do not claim an adapter exists because a contract or generated SDK binding exists.
 - Keep one shared tool/anatomy/exercise/coach core across MR and full VR. Presentation mode and lifecycle phase are separate. Use one scored event path and a deliberately chosen step authority; do not add duplicate progression engines.
 - Run the component checks and the affected boundary exchange. State explicitly when a physical-headset or complete-session test has not run. Standalone art, synthetic workers and browser headset substitutes remain component evidence.
-- Update the map, component documentation and required follow-up when behavior or routing changes, then commit/push the verified milestone through a focused PR.
+- Update the map, component documentation and required follow-up when behavior or routing changes, then commit/push the verified milestone directly to `main` using the synchronization workflow above.
 
 For completed work, report changed files, relevant checks, measured limitations, and the next blocked interface or decision. Update the relevant document when evidence changes a premise. Do not add a tracking file for every small task.

@@ -14,6 +14,8 @@ __pycache__/
 *.pyc
 /apps/quest/Library/
 /apps/quest/Temp/
+/apps/quest/Assets/XR/Temp/
+/apps/quest/Assets/XR/Temp.meta
 /apps/quest/Obj/
 /apps/quest/Logs/
 /apps/quest/UserSettings/
@@ -22,3 +24,6 @@ __pycache__/
 
 # Pre-rendered Jarvis warning audio
 services/preop/.cache/
+
+# SpacetimeDB coach identity token (services/preop)
+.coach-token

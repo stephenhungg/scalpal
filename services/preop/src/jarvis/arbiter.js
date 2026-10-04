@@ -47,6 +47,8 @@ export function createArbiter(options = {}) {
     if (snap.status === "paused") return true;
     if (STEP_SCOPED.has(alert.kind) && alert.stepId && alert.stepId !== snap.step.id) return true;
     if (alert.kind === "stuck" && snap.stuckLevel === 0) return true;
+    // A hazard is spoken only while the latest state still shows it.
+    if (alert.kind === "bleeding" && snap.activeBleeds && !snap.activeBleeds.some((b) => b.structure?.id === alert.highlight?.[0])) return true;
     return false;
   }
 

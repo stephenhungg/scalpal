@@ -6,7 +6,7 @@ Research snapshot: October 3, 2026. This page consolidates the sources relevant 
 
 Start with the [repository overview](../../README.md) for the thesis and product scope. See [sponsor alignment](../sponsors.md) for event eligibility. Sources below support decisions; they do not automatically validate Scalpal's educational effectiveness or robotics results.
 
-Latest research: [TAPNet family and video tracking](tapnet.md) and [reusable comprehensive anatomy and case coverage](comprehensive-anatomy.md). These are researched directions, not newly implemented tracking or tissue physics.
+Latest research: [VR shell and navigation UX](ux-vr-shell.md) and [medical simulation, voice and debrief UX](ux-medical-sim.md), summarized in [experience UX](../experience-ux.md). Earlier: [TAPNet family and video tracking](tapnet.md) and [reusable comprehensive anatomy and case coverage](comprehensive-anatomy.md). These are researched directions, not newly implemented tracking or tissue physics.
 
 ## Current Research Position
 

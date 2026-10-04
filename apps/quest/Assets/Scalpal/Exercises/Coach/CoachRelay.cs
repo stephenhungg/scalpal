@@ -7,6 +7,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Text;
 using Scalpal.Exercises.Engine;
+using Scalpal.Exercises.Data;
 using UnityEngine;
 using UnityEngine.Networking;
 
@@ -22,6 +23,9 @@ namespace Scalpal.Exercises.Coach
         public bool valid;
         public string eventId;
         public string stepId;
+        public BodyAction evidence;
+        public bool active;
+        public float rateMlPerMin, totalMl;
     }
 
     [Serializable]
@@ -85,6 +89,7 @@ namespace Scalpal.Exercises.Coach
     [Serializable]
     public class CoachSnapshotState
     {
+        public BodyGrade bodyGrade;
         public string sessionId;
         public string patientId;
         public string procedureId;
@@ -103,6 +108,22 @@ namespace Scalpal.Exercises.Coach
 
     [Serializable]
     public class CoachCommandResponse { public CoachCommand command; }
+
+    [Serializable]
+    public class CoachAlertDto
+    {
+        public string id, kind, priority, tier, stepId, say, reflexKey, reflexRoute, simEvent;
+        public string[] highlight;
+        public int seq, version;
+    }
+
+    [Serializable]
+    public class CoachAlertFeed
+    {
+        public CoachAlertDto[] alerts;
+        public int latestSeq;
+        public CoachSnapshotState snapshot;
+    }
 
     public class CoachRelay : MonoBehaviour
     {
@@ -132,10 +153,30 @@ namespace Scalpal.Exercises.Coach
         public bool Connected => !string.IsNullOrEmpty(SessionId);
         // True after initial tracking state was acknowledged, false after any scoring delivery failure.
         public bool IsSynchronized { get; private set; }
+        public bool DeliveryIdle => pending.Count == 0 && !sending;
         public string SyncFailureReason { get; private set; } = "";
         public event Action<CoachCommand> CommandRequested;
         public event Action<string> SessionAdopted;
         public event Action<string> SyncFailed;
+        public event Action SessionReset;
+        public event Action<CoachAlertDto> AlertReceived;
+        public int AlertCursor { get; private set; }
+        public CoachSnapshotState AlertSnapshot { get; private set; }
+
+        // A clip must remain on this session's reflex route on the configured service.
+        public bool TryReflexUrl(string route, out string url)
+        {
+            url = "";
+            if (!Connected || string.IsNullOrEmpty(route)) return false;
+            string prefix = "/jarvis/reflex/" + Uri.EscapeDataString(SessionId) + "/";
+            if (!route.StartsWith(prefix, StringComparison.Ordinal)) return false;
+            string key = route.Substring(prefix.Length);
+            if (key.Length == 0 || key.Length > 120) return false;
+            foreach (char c in key) if (!(char.IsLetterOrDigit(c) || c == '_' || c == '.' || c == '-')) return false;
+            if (key.Contains("..")) return false;
+            url = baseUrl.TrimEnd('/') + route;
+            return true;
+        }
 
         public void ConfigureEndpoint(string url)
         {
@@ -179,6 +220,9 @@ namespace Scalpal.Exercises.Coach
                 && SessionProcedureId == (procedureId ?? "") && SessionInitialStepId == (initialStepId ?? "")
                 && SessionCaseId == (caseId ?? "") && SessionMode == (mode ?? "")) return;
             generation++;
+            AlertCursor = 0;
+            AlertSnapshot = null;
+            SessionReset?.Invoke();
             SessionId = sessionId;
             SessionPatientId = patientId ?? "";
             SessionProcedureId = procedureId ?? "";
@@ -200,6 +244,7 @@ namespace Scalpal.Exercises.Coach
             SessionAdopted?.Invoke(SessionId);
             StartFlush();
             StartCoroutine(PollCommands(SessionId, generation));
+            StartCoroutine(PollAlerts(SessionId, generation));
         }
 
         void OnDisable() { UseSession(""); }
@@ -210,11 +255,30 @@ namespace Scalpal.Exercises.Coach
             if (!Connected || !IsSynchronized || failed) return;
             switch (e.type)
             {
+                case CaseEventType.Surgery:
+                    // Copy now: later physical samples must never mutate an already queued retry body.
+                    if (e.evidence == null) return;
+                    var evidence = JsonUtility.FromJson<BodyAction>(JsonUtility.ToJson(e.evidence));
+                    pending.Enqueue(new CoachEventDto { type = "surgery", evidence = evidence,
+                        eventId = NewEventId(), stepId = stepId ?? "" });
+                    StartFlush();
+                    break;
                 case CaseEventType.PlacePort: Enqueue("place_port", portId: e.id, stepId: stepId); break;
                 case CaseEventType.Touch: Enqueue("touch", structureId: e.id, instrumentId: e.instrumentId, stepId: stepId); break;
                 case CaseEventType.Identify: Enqueue("identify", structureId: e.id, stepId: stepId); break;
                 case CaseEventType.Confirm: Enqueue("confirm", stepId: stepId); break;
+                case CaseEventType.Finish: Enqueue("finish", stepId: stepId); break;
             }
+        }
+
+        public void Bleeding(string structureId, bool active, float rateMlPerMin, float totalMl)
+        {
+            if (!Connected || !IsSynchronized || failed || string.IsNullOrEmpty(structureId)
+                || float.IsNaN(rateMlPerMin) || float.IsInfinity(rateMlPerMin) || rateMlPerMin < 0
+                || float.IsNaN(totalMl) || float.IsInfinity(totalMl) || totalMl < 0) return;
+            pending.Enqueue(new CoachEventDto { type = "bleeding", structureId = structureId, active = active,
+                rateMlPerMin = rateMlPerMin, totalMl = totalMl, eventId = NewEventId(), stepId = "" });
+            StartFlush();
         }
 
         public void Focus(string structureId)
@@ -305,11 +369,20 @@ namespace Scalpal.Exercises.Coach
                     if (response?.results != null && response.results.Length == events.Length)
                     {
                         delivered = true;
-                        foreach (var result in response.results)
-                            if (!ReceiptDelivered(result)) { delivered = false; break; }
+                        string dropped = null;
+                        for (int i = 0; i < events.Length && delivered; i++)
+                        {
+                            if (!ReceiptDelivered(response.results[i])) delivered = false;
+                            // The headset already applied this body action; the coach did not. With no
+                            // resync yet, continuing would silently diverge local and coach body state.
+                            else if (events[i].type == "surgery" && !response.results[i].applied && response.results[i].reason == "tracking_invalid")
+                            { delivered = false; dropped = events[i].evidence?.actionId ?? ""; }
+                        }
                         if (!delivered)
                         {
-                            FailSync("coach returned a malformed or rejected event receipt; start a new attempt");
+                            FailSync(dropped != null
+                                ? "coach dropped body action " + dropped + " as tracking-invalid; local and coach body states diverged; start a new attempt"
+                                : "coach returned a malformed or rejected event receipt; start a new attempt");
                             break;
                         }
                         for (int i = 0; i < events.Length; i++) pending.Dequeue();
@@ -412,6 +485,50 @@ namespace Scalpal.Exercises.Coach
                 }
                 yield return wait;
             }
+        }
+
+        IEnumerator PollAlerts(string sid, int epoch)
+        {
+            var wait = new WaitForSecondsRealtime(Mathf.Max(.25f, commandPollSeconds));
+            while (Current(sid, epoch) && !failed)
+            {
+                if (!IsSynchronized) { yield return wait; continue; }
+                string json = null;
+                yield return Request("GET", SessionPath(sid) + "/alerts?after=" + AlertCursor, null, value => json = value);
+                if (!Current(sid, epoch) || failed) yield break;
+                CoachAlertFeed feed = null;
+                try { if (json != null) feed = JsonUtility.FromJson<CoachAlertFeed>(json); }
+                catch (ArgumentException) { }
+                if (IsSynchronized && ValidAlertFeed(feed, sid, AlertCursor))
+                {
+                    AlertSnapshot = feed.snapshot;
+                    foreach (var alert in feed.alerts ?? Array.Empty<CoachAlertDto>())
+                    {
+                        if (!Current(sid, epoch) || failed) yield break;
+                        if (alert == null || alert.seq <= AlertCursor || alert.seq > feed.latestSeq) continue;
+                        AlertCursor = alert.seq;
+                        AlertReceived?.Invoke(alert);
+                    }
+                    AlertCursor = feed.latestSeq;
+                }
+                yield return wait;
+            }
+        }
+
+        // Validate the entire page before moving its cursor; a malformed page is retried intact.
+        public static bool ValidAlertFeed(CoachAlertFeed feed, string sessionId, int cursor)
+        {
+            if (feed?.snapshot == null || feed.snapshot.sessionId != sessionId || feed.latestSeq < cursor
+                || feed.snapshot.version < 0 || feed.alerts == null) return false;
+            int previous = cursor;
+            foreach (var alert in feed.alerts)
+            {
+                if (alert == null || alert.seq <= previous || alert.seq > feed.latestSeq
+                    || alert.version < 0 || alert.version > feed.snapshot.version || string.IsNullOrEmpty(alert.id)
+                    || string.IsNullOrEmpty(alert.say)) return false;
+                previous = alert.seq;
+            }
+            return previous == feed.latestSeq;
         }
 
         bool Current(string sid, int epoch) => isActiveAndEnabled && Connected && SessionId == sid && generation == epoch;

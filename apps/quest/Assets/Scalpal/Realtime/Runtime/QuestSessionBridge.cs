@@ -28,16 +28,22 @@ namespace Scalpal.Realtime
         public string Status { get; private set; } = "Unavailable: configure a headset invite";
         public ExerciseState ObservedState { get; private set; }
         public bool AttemptPending => attemptInFlight;
+        // Same client identity used by the authenticated gateway; never serialize or log it.
+        public string GetClientAccessToken() => Paired ? ReadToken() : "";
         public event Action<string> AttemptFailed;
         public event Action<Command> CommandRequested;
         public event Action<string> AttemptStarted;
         public event Action<string> ResultCommitted;
 
+        const float AttemptTimeoutSeconds = 10;
+
         DbConnection connection;
         SubscriptionHandle subscription;
-        bool subscribed, connecting, stopping, dirty, snapshotInFlight, attemptInFlight, attemptCommitted;
-        float reconnectAt, nextPublish, connectStarted;
-        string attemptBeforeStart, requestedExercise, requestedVersion;
+        bool subscribed, connecting, stopping, dirty, snapshotInFlight, attemptInFlight, attemptCommitted, joinRejected, joinResolved;
+        float reconnectAt, nextPublish, connectStarted, attemptStartedAt;
+        string attemptBeforeStart, requestedExercise, requestedVersion, committedAttemptId;
+        string persistedSessionId, configuredInviteHash;
+        DateTimeOffset committedAttemptAt;
         long generation, sentGeneration, acknowledgedGeneration;
         string sentAttempt;
         Snapshot latest;
@@ -75,6 +81,9 @@ namespace Scalpal.Realtime
                 SetStatus("Unavailable: configure URI, database and a headset invite");
                 return;
             }
+            joinResolved = joinRejected = false;
+            configuredInviteHash = InviteHash(joinCode);
+            persistedSessionId = ReadPersistedSession(TokenPath() + ".pairing", configuredInviteHash);
             connecting = true;
             connectStarted = Time.realtimeSinceStartup;
             try
@@ -87,8 +96,19 @@ namespace Scalpal.Realtime
                         connecting = false;
                         SaveToken(token);
                         HookReducers(conn);
+                        // Invites authorize joining, not an existing identity's reads. A rotated
+                        // invite must not prevent a persisted headset member from resubscribing.
+                        subscription = conn.SubscriptionBuilder().OnApplied(context =>
+                            { if (!stopping && conn == connection) subscribed = true; })
+                            .OnError((context, error) =>
+                            {
+                                if (stopping || conn != connection) return;
+                                subscribed = false; Paired = false;
+                                SetStatus("Session subscription unavailable");
+                            })
+                            .Subscribe(new[] { "SELECT * FROM my_sessions", "SELECT * FROM my_memberships", "SELECT * FROM session_exercise_state", "SELECT * FROM session_commands", "SELECT * FROM session_encounters" });
                         conn.Reducers.JoinSession(joinCode.Trim().ToUpperInvariant(), displayName);
-                        SetStatus("Connected: pairing headset invite");
+                        SetStatus("Connected: checking headset membership");
                     })
                     .OnConnectError(error => Disconnected("Connection unavailable"))
                     .OnDisconnect((conn, error) => { if (conn == connection) Disconnected("Disconnected"); })
@@ -102,16 +122,23 @@ namespace Scalpal.Realtime
         {
             conn.Reducers.OnJoinSession += (ctx, code, name) =>
             {
-                if (!(ctx.Event.Status is SpacetimeDB.Status.Committed)) { SetStatus("Pairing rejected: check headset invite"); return; }
-                subscription = conn.SubscriptionBuilder().OnApplied(context => subscribed = true)
-                    .OnError((context, error) => { subscribed = false; Paired = false; SetStatus("Session subscription unavailable"); })
-                    .Subscribe(new[] { "SELECT * FROM my_sessions", "SELECT * FROM my_memberships", "SELECT * FROM session_exercise_state", "SELECT * FROM session_commands" });
+                if (stopping || conn != connection) return;
+                joinRejected = !(ctx.Event.Status is SpacetimeDB.Status.Committed);
+                joinResolved = true;
+                // ObserveSession decides pairing only after the membership subscription applies.
             };
             conn.Reducers.OnStartAttempt += (ctx, session, exercise, version) =>
             {
-                if (!attemptInFlight || session != SessionId) return;
-                if (ctx.Event.Status is SpacetimeDB.Status.Committed) attemptCommitted = true;
-                else { attemptInFlight = false; attemptCommitted = false; SetStatus("Attempt request rejected"); AttemptFailed?.Invoke("Shared attempt request rejected; A: retry"); }
+                if (conn != connection || !attemptInFlight || session != SessionId ||
+                    exercise != requestedExercise || version != requestedVersion ||
+                    !(conn.Identity is Identity identity) || !identity.Equals(ctx.Event.CallerIdentity)) return;
+                if (ctx.Event.Status is SpacetimeDB.Status.Committed)
+                {
+                    attemptCommitted = true;
+                    committedAttemptAt = (DateTimeOffset)ctx.Event.Timestamp;
+                    CaptureCommittedAttempt();
+                }
+                else FailAttempt("Attempt request rejected", "Shared attempt request rejected; retry explicitly");
             };
             conn.Reducers.OnPublishExerciseState += (ctx, session, attempt, mode, step, index, count, selected, clearSelected, highlighted, clearHighlighted, rotating, paused, registration, reason, recording) =>
             {
@@ -159,6 +186,10 @@ namespace Scalpal.Realtime
                 catch (Exception) { CloseConnection(); Disconnected("Network processing unavailable"); }
             }
             if (connecting && Time.realtimeSinceStartup - connectStarted > 15) Disconnected("Connection timed out");
+            // FrameTick can deliver the confirmation at the deadline (or after a pause).
+            // Apply its subscribed state before deciding that acknowledgement was lost.
+            if (Connected && subscribed) ObserveSession();
+            EvaluateAttempt(null, Time.realtimeSinceStartup);
             if (!Connected)
             {
                 if (autoConnect && !stopping && !connecting && Time.realtimeSinceStartup >= reconnectAt)
@@ -168,7 +199,6 @@ namespace Scalpal.Realtime
                 return;
             }
             if (!subscribed) return;
-            ObserveSession();
             if (!Paired) return;
             PumpSnapshot();
             PumpCommands();
@@ -176,22 +206,14 @@ namespace Scalpal.Realtime
 
         void ObserveSession()
         {
-            Session chosen = null;
-            foreach (var member in connection.Db.MyMemberships.Iter())
+            var chosen = SelectSession(connection.Db.MyMemberships.Iter(), connection.Db.MySessions.Iter(),
+                preferredSessionId, persistedSessionId, joinResolved, joinRejected, out var pairingStatus);
+            if (chosen == null)
             {
-                if (member.Role != "headset") continue;
-                if (!string.IsNullOrEmpty(preferredSessionId) && member.SessionId != preferredSessionId) continue;
-                foreach (var candidate in connection.Db.MySessions.Iter())
-                {
-                    if (candidate.SessionId != member.SessionId || candidate.Status != "active") continue;
-                    if (chosen != null && chosen.SessionId != candidate.SessionId)
-                    {
-                        Paired = false; SetStatus("Choose preferredSessionId: multiple active headset memberships"); return;
-                    }
-                    chosen = candidate;
-                }
+                Paired = false; ObservedState = null;
+                SetStatus(pairingStatus);
+                return;
             }
-            if (chosen == null) { Paired = false; ObservedState = null; SetStatus("Unpaired: no active headset membership"); return; }
             bool hadSession = !string.IsNullOrEmpty(SessionId);
             bool changed = SessionId != chosen.SessionId || AttemptId != chosen.CurrentAttemptId;
             SessionId = chosen.SessionId;
@@ -205,13 +227,94 @@ namespace Scalpal.Realtime
                 dispatchedIds.Clear(); dispatchOrder.Clear();
                 if (hadSession && !attemptInFlight) { latest = null; dirty = false; }
             }
-            if (attemptInFlight && attemptCommitted && AttemptId != attemptBeforeStart &&
+            CaptureCommittedAttempt();
+            if (Paired && !joinRejected && persistedSessionId != SessionId)
+            {
+                // Scope this fallback to the same endpoint AND configured invite. An old
+                // membership must never turn a typo/new rejected invite into an old session.
+                SavePersistedSession(TokenPath() + ".pairing", configuredInviteHash, SessionId);
+                persistedSessionId = SessionId;
+            }
+            if (Paired && (changed || Status.StartsWith("Connected:", StringComparison.Ordinal) ||
+                Status.StartsWith("Unpaired:", StringComparison.Ordinal) || Status.StartsWith("Pairing rejected:", StringComparison.Ordinal))) SetStatus("Paired");
+            EvaluateAttempt(chosen, Time.realtimeSinceStartup);
+        }
+
+        static Session SelectSession(IEnumerable<Membership> memberships, IEnumerable<Session> sessions,
+            string preferred, string persisted, bool resolved, bool rejected, out string status)
+        {
+            status = "Connected: checking headset membership";
+            // Subscription rows can arrive before JoinSession resolves. Do not transiently
+            // pair an old membership while the operator's newly configured invite is pending.
+            if (!resolved) return null;
+            string required = !string.IsNullOrEmpty(preferred) ? preferred : rejected ? persisted : "";
+            if (rejected && string.IsNullOrEmpty(required))
+            {
+                status = "Pairing rejected: configured invite has no known session; check invite";
+                return null;
+            }
+            Session chosen = null;
+            foreach (var member in memberships)
+            {
+                if (member.Role != "headset" || (!string.IsNullOrEmpty(required) && member.SessionId != required)) continue;
+                foreach (var candidate in sessions)
+                {
+                    if (candidate.SessionId != member.SessionId || candidate.Status != "active") continue;
+                    if (chosen != null && chosen.SessionId != candidate.SessionId)
+                    {
+                        status = "Choose preferredSessionId: multiple active headset memberships";
+                        return null;
+                    }
+                    chosen = candidate;
+                }
+            }
+            if (chosen == null) status = rejected
+                ? "Pairing rejected: no active headset membership for configured session; check invite"
+                : "Unpaired: no active headset membership";
+            return chosen;
+        }
+
+        void EvaluateAttempt(Session chosen, float now)
+        {
+            if (!attemptInFlight) return;
+            // A timestamp/sender-correlated commit must win over the deadline. ObserveSession
+            // calls this with the current session first; the null call in Update only handles
+            // disconnected, unsubscribed or unpaired deadline expiry.
+            if (chosen != null && Paired && attemptCommitted && AttemptId == committedAttemptId &&
                 chosen.ExerciseId == requestedExercise && chosen.ExerciseVersion == requestedVersion)
             {
                 attemptInFlight = false; attemptCommitted = false;
                 AttemptStarted?.Invoke(AttemptId);
+                return;
             }
-            if (Paired && (changed || Status.StartsWith("Connected:", StringComparison.Ordinal))) SetStatus("Paired");
+            if (now - attemptStartedAt >= AttemptTimeoutSeconds)
+                FailAttempt("Attempt confirmation timed out", "Shared attempt was not confirmed within 10 seconds; check the session and retry explicitly");
+        }
+
+        void CaptureCommittedAttempt()
+        {
+            if (!attemptInFlight || !attemptCommitted || !string.IsNullOrEmpty(committedAttemptId)) return;
+            // The server start reducer stamps this state with its transaction's timestamp and
+            // sender. Bind that commit to one attempt rather than adopting any later matching
+            // exercise. SDK v2 applies reducer DB updates before invoking its callback; delayed
+            // state is still allowed, but an uncorrelated cache must fail at the deadline.
+            var state = connection.Db.SessionExerciseState.SessionId.Find(SessionId);
+            if (state == null || state.AttemptId == attemptBeforeStart ||
+                state.ExerciseId != requestedExercise || state.ExerciseVersion != requestedVersion ||
+                (DateTimeOffset)state.UpdatedAt != committedAttemptAt ||
+                !(connection.Identity is Identity identity) || !identity.Equals(state.UpdatedBy)) return;
+            committedAttemptId = state.AttemptId;
+        }
+
+        public bool TryGetEncounterBinding(string id, out string sessionId, out string attemptId, out string patientId, out string phase)
+        {
+            sessionId = attemptId = patientId = phase = "";
+            if (!Connected || !Paired || string.IsNullOrEmpty(id)) return false;
+            var encounter = connection.Db.SessionEncounters.EncounterId.Find(id);
+            if (encounter == null) return false;
+            sessionId = encounter.SessionId; attemptId = encounter.AttemptId;
+            patientId = encounter.PatientId; phase = encounter.Phase;
+            return true;
         }
 
         public bool BeginAttempt(string exerciseId, string version)
@@ -220,9 +323,20 @@ namespace Scalpal.Realtime
             attemptBeforeStart = AttemptId;
             requestedExercise = exerciseId; requestedVersion = version;
             attemptInFlight = true; attemptCommitted = false;
+            committedAttemptId = null;
+            attemptStartedAt = Time.realtimeSinceStartup;
             latest = null; dirty = false;
             try { connection.Reducers.StartAttempt(SessionId, exerciseId, version); return true; }
             catch (Exception) { attemptInFlight = false; SetStatus("Attempt could not be sent"); return false; }
+        }
+
+        void FailAttempt(string status, string reason)
+        {
+            attemptInFlight = false; attemptCommitted = false;
+            // A pending scene snapshot is not confirmation of this uncertain attempt.
+            latest = null; dirty = false;
+            SetStatus(status);
+            AttemptFailed?.Invoke(reason);
         }
 
         public void PublishSnapshot(string phase, string stepId, uint index, uint count,
@@ -337,7 +451,7 @@ namespace Scalpal.Realtime
         void Disconnected(string status)
         {
             bool uncertainAttempt = attemptInFlight;
-            connecting = false; subscribed = false; Paired = false; ObservedState = null;
+            connecting = false; subscribed = false; joinRejected = joinResolved = false; Paired = false; ObservedState = null;
             snapshotInFlight = false; acknowledgedGeneration = 0; dirty = latest != null;
             dispatchedCommand = null; resolution = null; resolutionInFlight = false;
             // A lost attempt acknowledgement must not create another attempt on retry.
@@ -345,7 +459,7 @@ namespace Scalpal.Realtime
             resultPendingAttempt = null;
             reconnectAt = Time.realtimeSinceStartup + 5;
             SetStatus(status);
-            if (uncertainAttempt) AttemptFailed?.Invoke("Shared attempt acknowledgement lost; A: retry after reconnect");
+            if (uncertainAttempt) AttemptFailed?.Invoke("Shared attempt acknowledgement lost; Left menu: retry after reconnect");
         }
 
         void Close()
@@ -374,6 +488,33 @@ namespace Scalpal.Realtime
                 string key = BitConverter.ToString(hash.ComputeHash(Encoding.UTF8.GetBytes(uri + "\n" + database))).Replace("-", "");
                 return Path.Combine(Application.persistentDataPath, "scalpal-session-" + key + ".token");
             }
+        }
+
+        static string InviteHash(string invite)
+        {
+            using (var hash = SHA256.Create())
+                return BitConverter.ToString(hash.ComputeHash(Encoding.UTF8.GetBytes((invite ?? "").Trim().ToUpperInvariant()))).Replace("-", "");
+        }
+
+        static string ReadPersistedSession(string path, string inviteHash)
+        {
+            try
+            {
+                if (!File.Exists(path)) return "";
+                var lines = File.ReadAllLines(path);
+                return lines.Length == 2 && lines[0] == inviteHash ? lines[1] : "";
+            }
+            catch (Exception) { return ""; }
+        }
+
+        static void SavePersistedSession(string path, string inviteHash, string sessionId)
+        {
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(path));
+                File.WriteAllText(path, inviteHash + "\n" + sessionId);
+            }
+            catch (Exception) { /* Missing persistence disables fallback on the next launch. */ }
         }
 
         string ReadToken() { try { return File.Exists(TokenPath()) ? File.ReadAllText(TokenPath()) : null; } catch (Exception) { return null; } }

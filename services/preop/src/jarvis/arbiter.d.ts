@@ -14,6 +14,7 @@ export interface ArbiterSnapshot {
   status: string;
   stuckLevel: number;
   step: { id: string };
+  activeBleeds?: { structure: { id: string } }[];
 }
 
 export interface ArbiterOptions {

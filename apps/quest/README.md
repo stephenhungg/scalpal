@@ -4,6 +4,8 @@ Owner: Stephen for runtime, capture, registration, bootstrap and Unity configura
 
 ## Open the Current 3D Environment
 
+For the separate floral diagnosis experience, open `Assets/Scalpal/EncounterOffice/Scenes/DiagnosisOffice.unity`. It uses the existing Android OpenXR configuration, original Blender office art and CC0 MakeHuman patient models, and the authoritative patient/attending encounter service. It has visual question/exam/test/assessment controls when voice credentials are absent. The default surgery build scene is preserved. See [diagnosis office](../../docs/diagnosis-office.md) for preparation, dedicated build and evidence.
+
 1. Clone the repository and run `git lfs install` followed by `git lfs pull`.
 2. In Unity Hub, add this repository's `apps/quest` directory as a project.
 3. Open it with Unity **6000.0.66f2**.

@@ -1,6 +1,6 @@
 # Scalpal Instrument Kit
 
-Fifteen generic simulator tools matching Matthew's current instrument catalog, including the scalpel used in the cutting sandbox. This is the simulator's bounded kit, not an exhaustive inventory for every surgical specialty.
+The original fifteen-tool Blender kit includes the scalpel used in the cutting sandbox. Eight additional original open-surgery tools use the Unity mesh recipe described below, giving the runtime catalog 23 distinct tool IDs. This is the simulator's bounded kit, not an exhaustive inventory for every surgical specialty. The Blender library, previews and importable package below cover the original fifteen tools.
 
 - [Importable Unity package](scalpal-instruments.unitypackage): use **Assets → Import Package → Custom Package** in Unity, then open `InstrumentSandbox`.
 - [Blender library](source/scalpal-instrument-library.blend): all fifteen editable tools in separate collections.
@@ -44,3 +44,11 @@ blender --background --python scripts/instruments/render_cv_dataset.py -- --root
 ```
 
 This renders controlled synthetic images with camera metadata. It does not train a model, validate physical-tool recognition or establish camera registration. Real props require labeled real images and held-out evaluation. Participant footage is not included.
+
+## Open appendectomy additions
+
+The eight original open-instrument models are authored as metric mesh recipes in [OpenInstrumentModels.cs](../../apps/quest/Assets/Scalpal/Instruments/Editor/OpenInstrumentModels.cs), with generated `.asset` meshes under `Models/Open` and ordinary pickup prefabs under `Prefabs`. They do not reuse third-party geometry. Rebuild with **Scalpal → Instruments → Build Open Surgery Instruments**. The existing Blender/FBX kit above remains available.
+
+IDs: `skin_marker`, `toothed_forceps`, `retractor`, `babcock`, `hemostat`, `right_angle_clamp`, `metzenbaum_scissors`, `suture_tie`. The runtime-loadable `Resources/OpenSurgeryInstruments.prefab` contains ten pickup instances, including two independent retractors and two independent hemostats. Reuse the existing `scalpel`, `suction_irrigator` and `hook_cautery` for the remaining open tray. All tools retain the existing grip/tip, tracking and activation interfaces; scissors expose `CutStart`/`CutEnd`. The procedural forms are simplified teaching props, not manufactured instrument specifications. Surgery mechanics and scoring belong to the shared surgery route, not these model recipes.
+
+The focused batch entry point `Scalpal.Instruments.Editor.InstrumentAssetBuilder.BuildOpenAndValidate` generates only the open models/tray, then runs the full instrument runtime validator. It checks metric +Z anchors, persistent meshes without degenerate triangles, the 2,000-triangle budget, all eight tray IDs, paired retractors/hemostats, tracked pickup/release and jaw articulation. It also verifies the Metzenbaum blade segment consumed by tissue interactions. These are synthetic Editor checks; the new models still require visual and physical Quest review. Marker and tie use the shared activation/contact interfaces; their effects are supplied by `Surgery/`, not the old sandbox `InstrumentAction` enum.

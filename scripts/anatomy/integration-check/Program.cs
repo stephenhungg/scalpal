@@ -6,7 +6,6 @@ using Scalpal.Anatomy;
 using Scalpal.Exercises.Data;
 using Scalpal.Exercises.Engine;
 using Scalpal.Exercises.Coach;
-using Scalpal.Exercises.Preop;
 using UnityEngine;
 
 static class Program
@@ -76,6 +75,7 @@ static class Program
         relay.SessionPatientId = selected.patientId; relay.SessionProcedureId = "wrong"; relay.SessionInitialStepId = selected.procedure.firstStep;
         Check(!exercise.CanScore, "wrong coach procedure pauses");
         relay.SessionProcedureId = selected.procedureId;
+        relay.SessionCaseId = selected.caseId; relay.SessionMode = exercise.presentationMode;
         Check(exercise.CanScore, "matching fresh coach enables");
         Check(exercise.Submit(CaseEvent.Confirm(), out _, out reason) && relay.forwarded == 1, "live handled event forwarded exactly once");
         relay.SessionId = "other-session";
@@ -83,14 +83,13 @@ static class Program
         exercise.requireCoachSynchronization = false;
         Check(!exercise.CanScore, "cannot silently switch active live attempt to local");
         exercise.SelectCase(bundle, selected.caseId, true, out reason);
-        var tip = root.Child().AddComponent<AnatomyInstrumentTip>(); tip.exercise = exercise; tip.instrumentId = selected.instruments[0].id;
         Check(anatomy.TryGetPart("cecum", out var cecum), "cecum resolves");
         var collider = cecum.GetComponentsInChildren<Collider>(true)[0];
-        Check(!tip.ActivateContact(collider, out _), "unselected instrument tip rejects");
-        exercise.SelectInstrument(tip.instrumentId);
-        Check(tip.ActivateContact(collider, out _), "selected tool tip routes contact to exercise");
+        Check(!exercise.TouchCollider(collider, out _, out reason), "contact without a selected instrument rejects");
+        Check(exercise.SelectInstrument(selected.instruments[0].id), "known instrument selects");
+        Check(exercise.TouchCollider(collider, out _, out reason), "selected tool contact routes through live exercise boundary");
         anatomy.SetSystemVisible(cecum.system, false);
-        Check(!tip.ActivateContact(collider, out _), "hidden anatomy collider rejects tool contact");
+        Check(!exercise.TouchCollider(collider, out _, out reason), "hidden anatomy collider rejects tool contact");
         var atlas = JsonDocument.Parse(File.ReadAllText("apps/quest/Assets/Scalpal/Anatomy/Resources/anatomy-atlas.json"));
         var actualIds = atlas.RootElement.GetProperty("parts").EnumerateArray()
             .Select(p => p.GetProperty("stableId").GetString()).ToHashSet(StringComparer.Ordinal);
@@ -112,38 +111,6 @@ static class Program
             }
             Check(binding.Completed, "actual atlas completed " + procedure.id);
         }
-        var sourceRoot = new GameObject("case source test");
-        var sourceAnatomy = sourceRoot.AddComponent<AnatomyController>();
-        foreach (var id in actualIds) Add(sourceRoot, id);
-        var sourceExercise = sourceRoot.AddComponent<AnatomyExerciseBinding>(); sourceExercise.anatomy = sourceAnatomy;
-        var service = sourceRoot.AddComponent<ScalpalPreopService>();
-        var source = sourceRoot.AddComponent<AnatomyCaseSource>(); source.service = service; source.exercise = sourceExercise;
-        sourceExercise.coach = sourceRoot.AddComponent<CoachRelay>();
-        service.BaseUrl = "http://192.168.1.20:8787";
-        source.Rebind();
-        var readyCase = bundle.cases.First(c => c.status == "ready");
-        Check(source.LoadPatient(readyCase.patientId) && source.IsLoading && service.RequestedPatient == readyCase.patientId, "service patient load routed");
-        Check(sourceExercise.coach.Endpoint == service.BaseUrl, "case client and coach share configured LAN endpoint");
-        Check(!source.LoadPatient(selected.patientId), "overlapping service load rejected");
-        service.Deliver(readyCase);
-        Check(sourceExercise.SelectedCase == readyCase && !source.IsLoading && !sourceExercise.CanScore, "ready service case starts unregistered");
-        sourceAnatomy.SetRegistrationValid(true);
-        Check(sourceExercise.CanScore, "ready service case allows registered scoring");
-        source.LoadPatient(selected.patientId);
-        sourceAnatomy.SetRegistrationValid(true);
-        Check(sourceExercise.SelectedCase == null && !sourceExercise.CanScore, "new request discards stale runner despite reacquisition");
-        service.Deliver(selected);
-        Check(source.PendingCase == selected && sourceExercise.SelectedCase == null, "review case waits for acknowledgement");
-        Check(source.AcknowledgeReviewAndStart() && sourceExercise.SelectedCase == selected, "acknowledged service case starts");
-        source.LoadPatient(readyCase.patientId);
-        service.Fail("network unavailable");
-        sourceAnatomy.SetRegistrationValid(true);
-        Check(source.Status == "network unavailable" && !sourceExercise.CanScore && source.PendingCase == null, "service failure leaves stale attempt stopped");
-        var blockedCase = bundle.cases.First(c => c.status == "blocked");
-        source.LoadPatient(blockedCase.patientId); service.Deliver(blockedCase);
-        Check(sourceExercise.SelectedCase == null && !source.IsLoading && !source.AcknowledgeReviewAndStart(), "blocked case cannot start");
-        source.LoadPatient(readyCase.patientId); service.Deliver(selected);
-        Check(sourceExercise.SelectedCase == null && source.Status.Contains("did not match"), "wrong patient response rejected");
         Console.WriteLine($"integration-check: {checks} checks passed; real CaseRunner completed all three procedures using actual atlas IDs through AnatomyExerciseBinding.");
     }
     static void Add(GameObject root, string id)

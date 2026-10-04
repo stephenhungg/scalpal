@@ -1,3 +1,4 @@
+import { bodyAction } from "../src/open-body.js";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -53,8 +54,8 @@ describe("shared Jarvis tools", () => {
     await req("POST", `/coach/sessions/${sid}/simulate`, { kind: "complete_step" });
     const first = (await req("POST", `/coach/sessions/${sid}/tools/get_hint`, {})).json.result;
     const second = (await req("POST", `/coach/sessions/${sid}/tools/get_hint`, {})).json.result;
-    expect(first).toMatch(/^Hint tier 1 of 3/);
-    expect(second).toMatch(/^Hint tier 2 of 3: .*cecum/i);
+    expect(first).toMatch(/^Hint tier 1 of 4/);
+    expect(second).toMatch(/^Hint tier 2 of 4: .*fascia/i);
   });
 });
 
@@ -65,12 +66,12 @@ describe("alerts feed for clients without SSE", () => {
     const sid = await session(req);
     expect((await req("GET", `/coach/sessions/${sid}/alerts`)).json).toMatchObject({ alerts: [], latestSeq: 0 });
     await req("POST", `/coach/sessions/${sid}/simulate`, { kind: "complete_step" });
-    await req("POST", `/coach/sessions/${sid}/events`, { event: { type: "touch", structureId: "urinary_bladder", instrumentId: "trocar_5mm" } });
+    await req("POST", `/coach/sessions/${sid}/events`, { event: { type: "surgery", evidence: bodyAction("cut", "skin", { lengthMm: 4, depthMm: 15 }) } });
     const feed = (await req("GET", `/coach/sessions/${sid}/alerts?after=0`)).json;
     const [step, warning] = feed.alerts;
-    expect(step).toMatchObject({ kind: "step_complete", tier: "caution", reflexRoute: `/jarvis/reflex/${sid}/step.working_ports` });
-    expect(step.simEvent).toMatch(/^\[SIM EVENT v1 step 2\/10 "Place working ports"\] kind=step_complete/);
-    expect(warning).toMatchObject({ kind: "mistake", tier: "warning", reflexRoute: `/jarvis/reflex/${sid}/mistake.port_into_bladder` });
+    expect(step).toMatchObject({ kind: "step_complete", tier: "caution", reflexRoute: `/jarvis/reflex/${sid}/step.incise_skin` });
+    expect(step.simEvent).toMatch(/^\[SIM EVENT v1 step 2\/10 "Incise skin"\] kind=step_complete/);
+    expect(warning).toMatchObject({ kind: "mistake", tier: "warning", reflexRoute: `/jarvis/reflex/${sid}/mistake.deep_skin_cut` });
     expect((await req("GET", `/coach/sessions/${sid}/alerts?after=${feed.latestSeq}`)).json.alerts).toEqual([]);
   });
 });

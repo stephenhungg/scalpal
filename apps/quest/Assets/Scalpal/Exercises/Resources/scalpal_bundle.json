@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-10-03T21:53:17.825Z",
+ "generatedAt": "2026-10-04T03:44:32.527Z",
  "anatomy": [
   {
    "id": "abdominal_wall",
@@ -234,6 +234,54 @@
   }
  ],
  "instruments": [
+  {
+   "id": "skin_marker",
+   "unityPrefab": "inst_skin_marker",
+   "displayName": "Skin marker",
+   "kind": "marking"
+  },
+  {
+   "id": "toothed_forceps",
+   "unityPrefab": "inst_toothed_forceps",
+   "displayName": "Toothed forceps",
+   "kind": "grasper"
+  },
+  {
+   "id": "retractor",
+   "unityPrefab": "inst_retractor",
+   "displayName": "Hand retractor",
+   "kind": "retractor"
+  },
+  {
+   "id": "babcock",
+   "unityPrefab": "inst_babcock",
+   "displayName": "Babcock forceps",
+   "kind": "grasper"
+  },
+  {
+   "id": "hemostat",
+   "unityPrefab": "inst_hemostat",
+   "displayName": "Hemostat",
+   "kind": "ligation"
+  },
+  {
+   "id": "right_angle_clamp",
+   "unityPrefab": "inst_right_angle_clamp",
+   "displayName": "Right-angle clamp",
+   "kind": "ligation"
+  },
+  {
+   "id": "metzenbaum_scissors",
+   "unityPrefab": "inst_metzenbaum_scissors",
+   "displayName": "Metzenbaum scissors",
+   "kind": "cutting"
+  },
+  {
+   "id": "suture_tie",
+   "unityPrefab": "inst_suture_tie",
+   "displayName": "Suture tie",
+   "kind": "ligation"
+  },
   {
    "id": "scalpel",
    "unityPrefab": "inst_scalpel",
@@ -1579,6 +1627,794 @@
     }
    ],
    "firstStep": "access_umbilical"
+  },
+  {
+   "id": "open_appendectomy",
+   "title": "Open appendectomy",
+   "shortTitle": "Open appendix removal",
+   "approach": "Open muscle-splitting incision",
+   "typicalMinutes": 45,
+   "summary": "Registered incision, layered exposure, delivery, vascular control and base ligation, then dry inspection.",
+   "structures": [
+    "abdominal_wall",
+    "umbilicus",
+    "appendix",
+    "mesoappendix",
+    "appendicular_artery",
+    "cecum",
+    "terminal_ileum"
+   ],
+   "focusStructures": [
+    "appendix",
+    "mesoappendix",
+    "cecum"
+   ],
+   "ports": [],
+   "openBody": {
+    "version": 1,
+    "fastPathPremarked": false,
+    "tissues": [
+     {
+      "id": "skin",
+      "layer": "skin",
+      "order": 0,
+      "cuttable": true,
+      "splittable": false,
+      "perfused": false,
+      "hollow": false,
+      "critical": false,
+      "tentable": false,
+      "flowMlPerSecond": 0,
+      "fiberAxis": ""
+     },
+     {
+      "id": "fat",
+      "layer": "fat",
+      "order": 1,
+      "cuttable": true,
+      "splittable": false,
+      "perfused": false,
+      "hollow": false,
+      "critical": false,
+      "tentable": false,
+      "flowMlPerSecond": 0,
+      "fiberAxis": ""
+     },
+     {
+      "id": "fascia",
+      "layer": "fascia",
+      "order": 2,
+      "cuttable": true,
+      "splittable": false,
+      "perfused": false,
+      "hollow": false,
+      "critical": false,
+      "tentable": false,
+      "flowMlPerSecond": 0,
+      "fiberAxis": "incision_line"
+     },
+     {
+      "id": "muscle",
+      "layer": "muscle",
+      "order": 3,
+      "cuttable": true,
+      "splittable": true,
+      "perfused": true,
+      "hollow": false,
+      "critical": false,
+      "tentable": false,
+      "flowMlPerSecond": 0.3,
+      "fiberAxis": ""
+     },
+     {
+      "id": "peritoneum",
+      "layer": "peritoneum",
+      "order": 4,
+      "cuttable": true,
+      "splittable": false,
+      "perfused": false,
+      "hollow": false,
+      "critical": false,
+      "tentable": true,
+      "flowMlPerSecond": 0,
+      "fiberAxis": ""
+     },
+     {
+      "id": "appendix",
+      "layer": "appendix",
+      "order": -1,
+      "cuttable": true,
+      "splittable": false,
+      "perfused": false,
+      "hollow": true,
+      "critical": false,
+      "tentable": false,
+      "flowMlPerSecond": 0,
+      "fiberAxis": ""
+     },
+     {
+      "id": "mesoappendix",
+      "layer": "mesoappendix",
+      "order": -1,
+      "cuttable": true,
+      "splittable": false,
+      "perfused": true,
+      "hollow": false,
+      "critical": false,
+      "tentable": false,
+      "flowMlPerSecond": 2,
+      "fiberAxis": ""
+     },
+     {
+      "id": "appendicular_artery",
+      "layer": "appendicular_artery",
+      "order": -1,
+      "cuttable": true,
+      "splittable": false,
+      "perfused": true,
+      "hollow": false,
+      "critical": false,
+      "tentable": false,
+      "flowMlPerSecond": 2,
+      "fiberAxis": ""
+     },
+     {
+      "id": "cecum",
+      "layer": "cecum",
+      "order": -1,
+      "cuttable": true,
+      "splittable": false,
+      "perfused": false,
+      "hollow": true,
+      "critical": true,
+      "tentable": false,
+      "flowMlPerSecond": 0,
+      "fiberAxis": ""
+     },
+     {
+      "id": "terminal_ileum",
+      "layer": "terminal_ileum",
+      "order": -1,
+      "cuttable": true,
+      "splittable": false,
+      "perfused": false,
+      "hollow": true,
+      "critical": true,
+      "tentable": false,
+      "flowMlPerSecond": 0,
+      "fiberAxis": ""
+     },
+     {
+      "id": "iliac_vessels",
+      "layer": "iliac_vessels",
+      "order": -1,
+      "cuttable": true,
+      "splittable": false,
+      "perfused": true,
+      "hollow": false,
+      "critical": true,
+      "tentable": false,
+      "flowMlPerSecond": 8,
+      "fiberAxis": "",
+      "structureIds": [
+       "cardiovascular__common_iliac_artery_r",
+       "cardiovascular__common_iliac_vein_r"
+      ]
+     },
+     {
+      "id": "ureter",
+      "layer": "ureter",
+      "order": -1,
+      "cuttable": true,
+      "splittable": false,
+      "perfused": false,
+      "hollow": true,
+      "critical": true,
+      "tentable": false,
+      "flowMlPerSecond": 0,
+      "fiberAxis": "",
+      "structureIds": [
+       "right_ureter"
+      ]
+     }
+    ],
+    "milestones": [
+     {
+      "id": "mark_incision",
+      "predicates": [
+       {
+        "tissueId": "skin",
+        "fact": "marked",
+        "op": "eq",
+        "value": 1
+       },
+       {
+        "tissueId": "skin",
+        "fact": "markErrorMm",
+        "op": "lte",
+        "value": 20
+       },
+       {
+        "tissueId": "skin",
+        "fact": "markLengthMm",
+        "op": "gte",
+        "value": 50
+       },
+       {
+        "tissueId": "skin",
+        "fact": "markLengthMm",
+        "op": "lte",
+        "value": 80
+       },
+       {
+        "tissueId": "skin",
+        "fact": "markAngleDegrees",
+        "op": "lte",
+        "value": 25
+       }
+      ]
+     },
+     {
+      "id": "incise_skin",
+      "predicates": [
+       {
+        "tissueId": "skin",
+        "fact": "cutCoverage",
+        "op": "gte",
+        "value": 0.8
+       },
+       {
+        "tissueId": "skin",
+        "fact": "cutErrorMm",
+        "op": "lte",
+        "value": 5
+       },
+       {
+        "tissueId": "skin",
+        "fact": "cutDepthMm",
+        "op": "lte",
+        "value": 14
+       },
+       {
+        "tissueId": "fat",
+        "fact": "opened",
+        "op": "eq",
+        "value": 1
+       }
+      ]
+     },
+     {
+      "id": "open_fascia",
+      "predicates": [
+       {
+        "tissueId": "fascia",
+        "fact": "opened",
+        "op": "eq",
+        "value": 1
+       },
+       {
+        "tissueId": "fascia",
+        "fact": "cutAngleDegrees",
+        "op": "lte",
+        "value": 25
+       }
+      ]
+     },
+     {
+      "id": "split_muscle",
+      "predicates": [
+       {
+        "tissueId": "muscle",
+        "fact": "splitWidthMm",
+        "op": "gte",
+        "value": 15
+       }
+      ]
+     },
+     {
+      "id": "open_peritoneum",
+      "predicates": [
+       {
+        "tissueId": "peritoneum",
+        "fact": "opened",
+        "op": "eq",
+        "value": 1
+       },
+       {
+        "tissueId": "peritoneum",
+        "fact": "tentedBeforeCut",
+        "op": "eq",
+        "value": 1
+       }
+      ]
+     },
+     {
+      "id": "deliver_appendix",
+      "predicates": [
+       {
+        "tissueId": "appendix",
+        "fact": "delivered",
+        "op": "eq",
+        "value": 1
+       }
+      ]
+     },
+     {
+      "id": "divide_mesoappendix",
+      "predicates": [
+       {
+        "tissueId": "mesoappendix",
+        "fact": "cutBetweenClamps",
+        "op": "eq",
+        "value": 1
+       },
+       {
+        "tissueId": "mesoappendix",
+        "fact": "tieCount",
+        "op": "gte",
+        "value": 2
+       },
+       {
+        "tissueId": "mesoappendix",
+        "fact": "tiedBothSides",
+        "op": "eq",
+        "value": 1
+       },
+       {
+        "tissueId": "",
+        "fact": "activeBleeds",
+        "op": "eq",
+        "value": 0
+       }
+      ]
+     },
+     {
+      "id": "ligate_base",
+      "predicates": [
+       {
+        "tissueId": "appendix",
+        "fact": "decision_true_base",
+        "op": "eq",
+        "value": 1
+       },
+       {
+        "tissueId": "appendix",
+        "fact": "crushed",
+        "op": "eq",
+        "value": 1
+       },
+       {
+        "tissueId": "appendix",
+        "fact": "tieDistanceMm",
+        "op": "lte",
+        "value": 5
+       },
+       {
+        "tissueId": "appendix",
+        "fact": "stumpLengthMm",
+        "op": "lte",
+        "value": 5
+       },
+       {
+        "tissueId": "appendix",
+        "fact": "cutAboveTie",
+        "op": "eq",
+        "value": 1
+       },
+       {
+        "tissueId": "appendix",
+        "fact": "cutBetweenTieAndClamp",
+        "op": "eq",
+        "value": 1
+       },
+       {
+        "tissueId": "appendix",
+        "fact": "removed",
+        "op": "eq",
+        "value": 1
+       }
+      ]
+     },
+     {
+      "id": "inspect_clean",
+      "predicates": [
+       {
+        "tissueId": "",
+        "fact": "activeBleeds",
+        "op": "eq",
+        "value": 0
+       },
+       {
+        "tissueId": "",
+        "fact": "poolMl",
+        "op": "lte",
+        "value": 1
+       },
+       {
+        "tissueId": "appendix",
+        "fact": "inspectionMs",
+        "op": "gte",
+        "value": 1000
+       },
+       {
+        "tissueId": "mesoappendix",
+        "fact": "inspectionMs",
+        "op": "gte",
+        "value": 1000
+       }
+      ]
+     },
+     {
+      "id": "close",
+      "predicates": [
+       {
+        "tissueId": "skin",
+        "fact": "closed",
+        "op": "eq",
+        "value": 1
+       }
+      ]
+     }
+    ],
+    "guardrails": [
+     {
+      "id": "off_mark",
+      "outcome": "",
+      "tissueId": "skin",
+      "verb": "cut",
+      "eventPredicate": {
+       "tissueId": "",
+       "fact": "distanceMm",
+       "op": "gte",
+       "value": 5.001
+      },
+      "severity": "moderate",
+      "feedback": "Follow the marked line. This cut is off target."
+     },
+     {
+      "id": "deep_skin_cut",
+      "outcome": "",
+      "tissueId": "skin",
+      "verb": "cut",
+      "eventPredicate": {
+       "tissueId": "",
+       "fact": "depthMm",
+       "op": "gte",
+       "value": 14.001
+      },
+      "severity": "high",
+      "feedback": "Too deep. Skin and fat only for this stroke."
+     },
+     {
+      "id": "mark_far",
+      "outcome": "",
+      "tissueId": "skin",
+      "verb": "mark",
+      "eventPredicate": {
+       "tissueId": "",
+       "fact": "distanceMm",
+       "op": "gte",
+       "value": 20.001
+      },
+      "severity": "moderate",
+      "feedback": "Recheck the hip and belly button landmarks."
+     },
+     {
+      "id": "bowel_injury",
+      "outcome": "hollow_leak",
+      "tissueId": "",
+      "severity": "high",
+      "feedback": "Hollow tissue is leaking. Contamination is recorded."
+     },
+     {
+      "id": "critical_injury",
+      "outcome": "critical_injury",
+      "tissueId": "",
+      "severity": "high",
+      "feedback": "Critical structure injured. Control bleeding and reassess."
+     },
+     {
+      "id": "cut_before_control",
+      "outcome": "cut_unsecured",
+      "tissueId": "",
+      "severity": "high",
+      "feedback": "Active bleeding. Clamp, tie, or seal the injured vessel."
+     },
+     {
+      "id": "split_dont_cut",
+      "outcome": "muscle_cut",
+      "tissueId": "muscle",
+      "severity": "moderate",
+      "feedback": "Split the muscle along its fibers; avoid the blade."
+     },
+     {
+      "id": "lift_first",
+      "outcome": "untented_cut",
+      "tissueId": "peritoneum",
+      "severity": "high",
+      "feedback": "Lift the peritoneum before nicking it."
+     },
+     {
+      "id": "fiber_direction",
+      "outcome": "across_fibers",
+      "tissueId": "fascia",
+      "severity": "moderate",
+      "feedback": "Open the fascia along its fibers."
+     },
+     {
+      "id": "rough_handling",
+      "outcome": "rough_handling",
+      "tissueId": "",
+      "severity": "moderate",
+      "feedback": "Slow down. Lift gently."
+     }
+    ],
+    "decisions": [
+     {
+      "id": "true_base",
+      "prompt": "Where is the true base?",
+      "choices": [
+       "true_base",
+       "appendix_tip",
+       "appendix_midpoint"
+      ],
+      "correctChoice": "true_base"
+     }
+    ]
+   },
+   "steps": [
+    {
+     "id": "mark_incision",
+     "title": "Mark McBurney incision",
+     "instrumentId": "skin_marker",
+     "targets": [
+      "abdominal_wall"
+     ],
+     "instruction": "Find the hip bone and belly button. Mark a third.",
+     "action": "dissect",
+     "portIds": [],
+     "check": {
+      "type": "body_predicate",
+      "targets": [
+       "abdominal_wall"
+      ],
+      "count": 1
+     },
+     "mistakes": [],
+     "hints": [
+      "Find the hip bone and belly button. Mark a third.",
+      "Inspect the tissue and the tool position.",
+      "Follow the expected action; other actions still have consequences."
+     ],
+     "next": "incise_skin"
+    },
+    {
+     "id": "incise_skin",
+     "title": "Incise skin",
+     "instrumentId": "scalpel",
+     "targets": [
+      "abdominal_wall"
+     ],
+     "instruction": "One smooth stroke along your line. Skin only.",
+     "action": "dissect",
+     "portIds": [],
+     "check": {
+      "type": "body_predicate",
+      "targets": [
+       "abdominal_wall"
+      ],
+      "count": 1
+     },
+     "mistakes": [],
+     "hints": [
+      "One smooth stroke along your line. Skin only.",
+      "Inspect the tissue and the tool position.",
+      "Follow the expected action; other actions still have consequences."
+     ],
+     "next": "open_fascia"
+    },
+    {
+     "id": "open_fascia",
+     "title": "Open fascia",
+     "instrumentId": "metzenbaum_scissors",
+     "targets": [
+      "abdominal_wall"
+     ],
+     "instruction": "Open the aponeurosis along its fibers.",
+     "action": "dissect",
+     "portIds": [],
+     "check": {
+      "type": "body_predicate",
+      "targets": [
+       "abdominal_wall"
+      ],
+      "count": 1
+     },
+     "mistakes": [],
+     "hints": [
+      "Open the aponeurosis along its fibers.",
+      "Inspect the tissue and the tool position.",
+      "Follow the expected action; other actions still have consequences."
+     ],
+     "next": "split_muscle"
+    },
+    {
+     "id": "split_muscle",
+     "title": "Split muscle",
+     "instrumentId": "retractor",
+     "targets": [
+      "abdominal_wall"
+     ],
+     "instruction": "Now split the muscle. Pull, don’t cut.",
+     "action": "dissect",
+     "portIds": [],
+     "check": {
+      "type": "body_predicate",
+      "targets": [
+       "abdominal_wall"
+      ],
+      "count": 1
+     },
+     "mistakes": [],
+     "hints": [
+      "Now split the muscle. Pull, don’t cut.",
+      "Inspect the tissue and the tool position.",
+      "Follow the expected action; other actions still have consequences."
+     ],
+     "next": "open_peritoneum"
+    },
+    {
+     "id": "open_peritoneum",
+     "title": "Open peritoneum",
+     "instrumentId": "toothed_forceps",
+     "targets": [
+      "abdominal_wall"
+     ],
+     "instruction": "Lift the peritoneum first, then nick it.",
+     "action": "dissect",
+     "portIds": [],
+     "check": {
+      "type": "body_predicate",
+      "targets": [
+       "abdominal_wall"
+      ],
+      "count": 1
+     },
+     "mistakes": [],
+     "hints": [
+      "Lift the peritoneum first, then nick it.",
+      "Inspect the tissue and the tool position.",
+      "Follow the expected action; other actions still have consequences."
+     ],
+     "next": "deliver_appendix"
+    },
+    {
+     "id": "deliver_appendix",
+     "title": "Deliver appendix",
+     "instrumentId": "babcock",
+     "targets": [
+      "appendix"
+     ],
+     "instruction": "Follow the taenia to the appendix. Lift it out gently.",
+     "action": "dissect",
+     "portIds": [],
+     "check": {
+      "type": "body_predicate",
+      "targets": [
+       "appendix"
+      ],
+      "count": 1
+     },
+     "mistakes": [],
+     "hints": [
+      "Follow the taenia to the appendix. Lift it out gently.",
+      "Inspect the tissue and the tool position.",
+      "Follow the expected action; other actions still have consequences."
+     ],
+     "next": "divide_mesoappendix"
+    },
+    {
+     "id": "divide_mesoappendix",
+     "title": "Secure mesoappendix",
+     "instrumentId": "hemostat",
+     "targets": [
+      "mesoappendix"
+     ],
+     "instruction": "Clamp twice, cut between, then tie.",
+     "action": "dissect",
+     "portIds": [],
+     "check": {
+      "type": "body_predicate",
+      "targets": [
+       "mesoappendix"
+      ],
+      "count": 1
+     },
+     "mistakes": [],
+     "hints": [
+      "Clamp twice, cut between, then tie.",
+      "Inspect the tissue and the tool position.",
+      "Follow the expected action; other actions still have consequences."
+     ],
+     "next": "ligate_base"
+    },
+    {
+     "id": "ligate_base",
+     "title": "Identify and secure base",
+     "instrumentId": "right_angle_clamp",
+     "targets": [
+      "appendix"
+     ],
+     "instruction": "Crush, tie at the base, cut above your tie.",
+     "action": "dissect",
+     "portIds": [],
+     "check": {
+      "type": "body_predicate",
+      "targets": [
+       "appendix"
+      ],
+      "count": 1
+     },
+     "mistakes": [],
+     "hints": [
+      "Crush, tie at the base, cut above your tie.",
+      "Inspect the tissue and the tool position.",
+      "Follow the expected action; other actions still have consequences."
+     ],
+     "next": "inspect_clean"
+    },
+    {
+     "id": "inspect_clean",
+     "title": "Inspect and clean",
+     "instrumentId": "suction_irrigator",
+     "targets": [
+      "mesoappendix"
+     ],
+     "instruction": "Dry field? Check the stump and the vessels.",
+     "action": "dissect",
+     "portIds": [],
+     "check": {
+      "type": "body_predicate",
+      "targets": [
+       "mesoappendix"
+      ],
+      "count": 1
+     },
+     "mistakes": [],
+     "hints": [
+      "Dry field? Check the stump and the vessels.",
+      "Inspect the tissue and the tool position.",
+      "Follow the expected action; other actions still have consequences."
+     ],
+     "next": "close"
+    },
+    {
+     "id": "close",
+     "title": "Close wound",
+     "instrumentId": "suture_tie",
+     "targets": [
+      "abdominal_wall"
+     ],
+     "instruction": "Close in layers. Nice work.",
+     "action": "close",
+     "portIds": [],
+     "check": {
+      "type": "body_predicate",
+      "targets": [
+       "abdominal_wall"
+      ],
+      "count": 1
+     },
+     "mistakes": [],
+     "hints": [
+      "Close in layers. Nice work.",
+      "Inspect the tissue and the tool position.",
+      "Follow the expected action; other actions still have consequences."
+     ],
+     "next": ""
+    }
+   ],
+   "firstStep": "mark_incision"
   }
  ],
  "patients": [
@@ -1593,6 +2429,7 @@
    "urgency": "elective",
    "status": "ready",
    "flagCount": 2,
+   "encounterAvailable": true,
    "actions": [
     {
      "id": "open_case",
@@ -1613,6 +2450,7 @@
    "urgency": "urgent",
    "status": "ready",
    "flagCount": 10,
+   "encounterAvailable": true,
    "actions": [
     {
      "id": "open_case",
@@ -1628,11 +2466,12 @@
    "kind": "record",
    "title": "Pediatric asthma, age 9",
    "displayLabel": "Theo Abernathy, 9 M",
-   "procedureId": "lap_appendectomy",
-   "procedureTitle": "Laparoscopic appendectomy",
+   "procedureId": "open_appendectomy",
+   "procedureTitle": "Open appendectomy",
    "urgency": "urgent",
    "status": "needs_review",
    "flagCount": 4,
+   "encounterAvailable": true,
    "actions": [
     {
      "id": "open_case",
@@ -1648,11 +2487,12 @@
    "kind": "record",
    "title": "Two sources with overlapping records, age 40",
    "displayLabel": "Priya Ramaswamy, 40 F",
-   "procedureId": "lap_appendectomy",
-   "procedureTitle": "Laparoscopic appendectomy",
+   "procedureId": "open_appendectomy",
+   "procedureTitle": "Open appendectomy",
    "urgency": "urgent",
    "status": "needs_review",
    "flagCount": 3,
+   "encounterAvailable": true,
    "actions": [
     {
      "id": "open_case",
@@ -1668,11 +2508,12 @@
    "kind": "record",
    "title": "Sparse record, age 30",
    "displayLabel": "Jonah Okoye, 30 M",
-   "procedureId": "lap_appendectomy",
-   "procedureTitle": "Laparoscopic appendectomy",
+   "procedureId": "open_appendectomy",
+   "procedureTitle": "Open appendectomy",
    "urgency": "emergency",
    "status": "needs_review",
    "flagCount": 1,
+   "encounterAvailable": true,
    "actions": [
     {
      "id": "open_case",
@@ -1693,6 +2534,7 @@
    "urgency": "elective",
    "status": "needs_review",
    "flagCount": 3,
+   "encounterAvailable": true,
    "actions": [
     {
      "id": "open_case",
@@ -1713,6 +2555,7 @@
    "urgency": "",
    "status": "retry",
    "flagCount": 0,
+   "encounterAvailable": false,
    "actions": [
     {
      "id": "open_case",
@@ -1733,6 +2576,7 @@
    "urgency": "",
    "status": "blocked",
    "flagCount": 0,
+   "encounterAvailable": false,
    "actions": [
     {
      "id": "open_case",
@@ -1753,6 +2597,7 @@
    "urgency": "elective",
    "status": "needs_review",
    "flagCount": 2,
+   "encounterAvailable": true,
    "actions": [
     {
      "id": "open_case",
@@ -1773,6 +2618,7 @@
    "urgency": "elective",
    "status": "needs_review",
    "flagCount": 2,
+   "encounterAvailable": true,
    "actions": [
     {
      "id": "open_case",
@@ -1793,6 +2639,7 @@
    "urgency": "",
    "status": "connect",
    "flagCount": 0,
+   "encounterAvailable": false,
    "actions": [
     {
      "id": "start_connect",
@@ -1819,6 +2666,7 @@
    "urgency": "",
    "status": "connect",
    "flagCount": 0,
+   "encounterAvailable": false,
    "actions": [
     {
      "id": "start_connect",
@@ -2352,7 +3200,7 @@
     "dataSource": "demo",
     "consentStatus": "simulated",
     "consentReceipts": [],
-    "generatedAt": "2026-10-03T21:53:17.822Z",
+    "generatedAt": "2026-10-04T03:44:32.524Z",
     "dataAsOf": "2026-08-25T17:00:00Z",
     "patient": {
      "name": "Morgan Rivera",
@@ -3227,7 +4075,7 @@
     "dataSource": "demo",
     "consentStatus": "simulated",
     "consentReceipts": [],
-    "generatedAt": "2026-10-03T21:53:17.824Z",
+    "generatedAt": "2026-10-04T03:44:32.525Z",
     "dataAsOf": "2026-09-01T00:00:00Z",
     "patient": {
      "name": "Harriet Lindqvist",
@@ -3772,7 +4620,7 @@
     {
      "flagId": "flag_cardiac",
      "stepId": "access_umbilical",
-     "note": "Cardiac disease: insufflate slowly and warn anesthesia. Pneumoperitoneum and tilt change venous return."
+     "note": "Cardiac disease: coordinate induction, positioning, and fluid management with anesthesia."
     },
     {
      "flagId": "flag_contrast",
@@ -3782,7 +4630,7 @@
     {
      "flagId": "flag_renal",
      "stepId": "access_umbilical",
-     "note": "Reduced kidney function: high-pressure pneumoperitoneum lowers renal blood flow. Use the lowest pressure that gives a working view."
+     "note": "Reduced kidney function: confirm the latest renal results and coordinate fluids and medication dosing with anesthesia."
     },
     {
      "flagId": "flag_diabetes",
@@ -4073,7 +4921,7 @@
    "disclaimer": "Synthetic FinchNode demo data. Flags and cases are illustrative teaching material, not clinical guidance."
   },
   {
-   "caseId": "case_patient-demo-pediatric-asthma_lap_appendectomy",
+   "caseId": "case_patient-demo-pediatric-asthma_open_appendectomy",
    "patientId": "patient-demo-pediatric-asthma",
    "scenarioId": "pediatric-asthma",
    "status": "needs_review",
@@ -4089,365 +4937,794 @@
    "urgency": "urgent",
    "indication": "Acute uncomplicated appendicitis",
    "presentation": "Eighteen hours of pain that started around the umbilicus and moved to the right lower quadrant, with anorexia and one episode of vomiting. Temperature 38.0 C, white count 14.2. Ultrasound shows a noncompressible 9 mm appendix.",
-   "procedureId": "lap_appendectomy",
+   "procedureId": "open_appendectomy",
    "procedure": {
-    "id": "lap_appendectomy",
-    "title": "Laparoscopic appendectomy",
-    "shortTitle": "Appendix removal",
-    "approach": "Three-port laparoscopic",
-    "summary": "Find the appendix by following the taeniae of the cecum, divide the mesoappendix with its artery, secure and divide the appendix base, and remove it in a bag.",
+    "id": "open_appendectomy",
+    "title": "Open appendectomy",
+    "shortTitle": "Open appendix removal",
+    "approach": "Open muscle-splitting incision",
     "typicalMinutes": 45,
+    "summary": "Registered incision, layered exposure, delivery, vascular control and base ligation, then dry inspection.",
     "structures": [
      "abdominal_wall",
      "umbilicus",
-     "cecum",
      "appendix",
      "mesoappendix",
      "appendicular_artery",
-     "terminal_ileum",
-     "small_bowel",
-     "right_ureter",
-     "urinary_bladder",
-     "greater_omentum"
+     "cecum",
+     "terminal_ileum"
     ],
     "focusStructures": [
      "appendix",
      "mesoappendix",
-     "appendicular_artery",
      "cecum"
     ],
-    "ports": [
-     {
-      "id": "umbilical",
-      "label": "Umbilical camera port",
-      "sizeMm": 12,
-      "position": {
-       "x": 0,
-       "y": 0,
-       "z": 0
+    "ports": [],
+    "openBody": {
+     "version": 1,
+     "fastPathPremarked": false,
+     "tissues": [
+      {
+       "id": "skin",
+       "layer": "skin",
+       "order": 0,
+       "cuttable": true,
+       "splittable": false,
+       "perfused": false,
+       "hollow": false,
+       "critical": false,
+       "tentable": false,
+       "flowMlPerSecond": 0,
+       "fiberAxis": ""
       },
-      "instrumentIds": [
-       "trocar_12mm",
-       "laparoscope_30",
-       "endo_stapler",
-       "retrieval_bag",
-       "fascial_closure"
-      ]
-     },
-     {
-      "id": "left_lower",
-      "label": "Left lower quadrant port",
-      "sizeMm": 5,
-      "position": {
-       "x": 0.07,
-       "y": 0,
-       "z": -0.08
+      {
+       "id": "fat",
+       "layer": "fat",
+       "order": 1,
+       "cuttable": true,
+       "splittable": false,
+       "perfused": false,
+       "hollow": false,
+       "critical": false,
+       "tentable": false,
+       "flowMlPerSecond": 0,
+       "fiberAxis": ""
       },
-      "instrumentIds": [
-       "trocar_5mm",
-       "atraumatic_grasper",
-       "maryland_dissector",
-       "vessel_sealer",
-       "suction_irrigator"
-      ]
-     },
-     {
-      "id": "suprapubic",
-      "label": "Suprapubic port",
-      "sizeMm": 5,
-      "position": {
-       "x": 0,
-       "y": 0,
-       "z": -0.13
+      {
+       "id": "fascia",
+       "layer": "fascia",
+       "order": 2,
+       "cuttable": true,
+       "splittable": false,
+       "perfused": false,
+       "hollow": false,
+       "critical": false,
+       "tentable": false,
+       "flowMlPerSecond": 0,
+       "fiberAxis": "incision_line"
       },
-      "instrumentIds": [
-       "trocar_5mm",
-       "atraumatic_grasper"
-      ]
-     }
-    ],
+      {
+       "id": "muscle",
+       "layer": "muscle",
+       "order": 3,
+       "cuttable": true,
+       "splittable": true,
+       "perfused": true,
+       "hollow": false,
+       "critical": false,
+       "tentable": false,
+       "flowMlPerSecond": 0.3,
+       "fiberAxis": ""
+      },
+      {
+       "id": "peritoneum",
+       "layer": "peritoneum",
+       "order": 4,
+       "cuttable": true,
+       "splittable": false,
+       "perfused": false,
+       "hollow": false,
+       "critical": false,
+       "tentable": true,
+       "flowMlPerSecond": 0,
+       "fiberAxis": ""
+      },
+      {
+       "id": "appendix",
+       "layer": "appendix",
+       "order": -1,
+       "cuttable": true,
+       "splittable": false,
+       "perfused": false,
+       "hollow": true,
+       "critical": false,
+       "tentable": false,
+       "flowMlPerSecond": 0,
+       "fiberAxis": ""
+      },
+      {
+       "id": "mesoappendix",
+       "layer": "mesoappendix",
+       "order": -1,
+       "cuttable": true,
+       "splittable": false,
+       "perfused": true,
+       "hollow": false,
+       "critical": false,
+       "tentable": false,
+       "flowMlPerSecond": 2,
+       "fiberAxis": ""
+      },
+      {
+       "id": "appendicular_artery",
+       "layer": "appendicular_artery",
+       "order": -1,
+       "cuttable": true,
+       "splittable": false,
+       "perfused": true,
+       "hollow": false,
+       "critical": false,
+       "tentable": false,
+       "flowMlPerSecond": 2,
+       "fiberAxis": ""
+      },
+      {
+       "id": "cecum",
+       "layer": "cecum",
+       "order": -1,
+       "cuttable": true,
+       "splittable": false,
+       "perfused": false,
+       "hollow": true,
+       "critical": true,
+       "tentable": false,
+       "flowMlPerSecond": 0,
+       "fiberAxis": ""
+      },
+      {
+       "id": "terminal_ileum",
+       "layer": "terminal_ileum",
+       "order": -1,
+       "cuttable": true,
+       "splittable": false,
+       "perfused": false,
+       "hollow": true,
+       "critical": true,
+       "tentable": false,
+       "flowMlPerSecond": 0,
+       "fiberAxis": ""
+      },
+      {
+       "id": "iliac_vessels",
+       "layer": "iliac_vessels",
+       "order": -1,
+       "cuttable": true,
+       "splittable": false,
+       "perfused": true,
+       "hollow": false,
+       "critical": true,
+       "tentable": false,
+       "flowMlPerSecond": 8,
+       "fiberAxis": "",
+       "structureIds": [
+        "cardiovascular__common_iliac_artery_r",
+        "cardiovascular__common_iliac_vein_r"
+       ]
+      },
+      {
+       "id": "ureter",
+       "layer": "ureter",
+       "order": -1,
+       "cuttable": true,
+       "splittable": false,
+       "perfused": false,
+       "hollow": true,
+       "critical": true,
+       "tentable": false,
+       "flowMlPerSecond": 0,
+       "fiberAxis": "",
+       "structureIds": [
+        "right_ureter"
+       ]
+      }
+     ],
+     "milestones": [
+      {
+       "id": "mark_incision",
+       "predicates": [
+        {
+         "tissueId": "skin",
+         "fact": "marked",
+         "op": "eq",
+         "value": 1
+        },
+        {
+         "tissueId": "skin",
+         "fact": "markErrorMm",
+         "op": "lte",
+         "value": 20
+        },
+        {
+         "tissueId": "skin",
+         "fact": "markLengthMm",
+         "op": "gte",
+         "value": 50
+        },
+        {
+         "tissueId": "skin",
+         "fact": "markLengthMm",
+         "op": "lte",
+         "value": 80
+        },
+        {
+         "tissueId": "skin",
+         "fact": "markAngleDegrees",
+         "op": "lte",
+         "value": 25
+        }
+       ]
+      },
+      {
+       "id": "incise_skin",
+       "predicates": [
+        {
+         "tissueId": "skin",
+         "fact": "cutCoverage",
+         "op": "gte",
+         "value": 0.8
+        },
+        {
+         "tissueId": "skin",
+         "fact": "cutErrorMm",
+         "op": "lte",
+         "value": 5
+        },
+        {
+         "tissueId": "skin",
+         "fact": "cutDepthMm",
+         "op": "lte",
+         "value": 14
+        },
+        {
+         "tissueId": "fat",
+         "fact": "opened",
+         "op": "eq",
+         "value": 1
+        }
+       ]
+      },
+      {
+       "id": "open_fascia",
+       "predicates": [
+        {
+         "tissueId": "fascia",
+         "fact": "opened",
+         "op": "eq",
+         "value": 1
+        },
+        {
+         "tissueId": "fascia",
+         "fact": "cutAngleDegrees",
+         "op": "lte",
+         "value": 25
+        }
+       ]
+      },
+      {
+       "id": "split_muscle",
+       "predicates": [
+        {
+         "tissueId": "muscle",
+         "fact": "splitWidthMm",
+         "op": "gte",
+         "value": 15
+        }
+       ]
+      },
+      {
+       "id": "open_peritoneum",
+       "predicates": [
+        {
+         "tissueId": "peritoneum",
+         "fact": "opened",
+         "op": "eq",
+         "value": 1
+        },
+        {
+         "tissueId": "peritoneum",
+         "fact": "tentedBeforeCut",
+         "op": "eq",
+         "value": 1
+        }
+       ]
+      },
+      {
+       "id": "deliver_appendix",
+       "predicates": [
+        {
+         "tissueId": "appendix",
+         "fact": "delivered",
+         "op": "eq",
+         "value": 1
+        }
+       ]
+      },
+      {
+       "id": "divide_mesoappendix",
+       "predicates": [
+        {
+         "tissueId": "mesoappendix",
+         "fact": "cutBetweenClamps",
+         "op": "eq",
+         "value": 1
+        },
+        {
+         "tissueId": "mesoappendix",
+         "fact": "tieCount",
+         "op": "gte",
+         "value": 2
+        },
+        {
+         "tissueId": "mesoappendix",
+         "fact": "tiedBothSides",
+         "op": "eq",
+         "value": 1
+        },
+        {
+         "tissueId": "",
+         "fact": "activeBleeds",
+         "op": "eq",
+         "value": 0
+        }
+       ]
+      },
+      {
+       "id": "ligate_base",
+       "predicates": [
+        {
+         "tissueId": "appendix",
+         "fact": "decision_true_base",
+         "op": "eq",
+         "value": 1
+        },
+        {
+         "tissueId": "appendix",
+         "fact": "crushed",
+         "op": "eq",
+         "value": 1
+        },
+        {
+         "tissueId": "appendix",
+         "fact": "tieDistanceMm",
+         "op": "lte",
+         "value": 5
+        },
+        {
+         "tissueId": "appendix",
+         "fact": "stumpLengthMm",
+         "op": "lte",
+         "value": 5
+        },
+        {
+         "tissueId": "appendix",
+         "fact": "cutAboveTie",
+         "op": "eq",
+         "value": 1
+        },
+        {
+         "tissueId": "appendix",
+         "fact": "cutBetweenTieAndClamp",
+         "op": "eq",
+         "value": 1
+        },
+        {
+         "tissueId": "appendix",
+         "fact": "removed",
+         "op": "eq",
+         "value": 1
+        }
+       ]
+      },
+      {
+       "id": "inspect_clean",
+       "predicates": [
+        {
+         "tissueId": "",
+         "fact": "activeBleeds",
+         "op": "eq",
+         "value": 0
+        },
+        {
+         "tissueId": "",
+         "fact": "poolMl",
+         "op": "lte",
+         "value": 1
+        },
+        {
+         "tissueId": "appendix",
+         "fact": "inspectionMs",
+         "op": "gte",
+         "value": 1000
+        },
+        {
+         "tissueId": "mesoappendix",
+         "fact": "inspectionMs",
+         "op": "gte",
+         "value": 1000
+        }
+       ]
+      },
+      {
+       "id": "close",
+       "predicates": [
+        {
+         "tissueId": "skin",
+         "fact": "closed",
+         "op": "eq",
+         "value": 1
+        }
+       ]
+      }
+     ],
+     "guardrails": [
+      {
+       "id": "off_mark",
+       "outcome": "",
+       "tissueId": "skin",
+       "verb": "cut",
+       "eventPredicate": {
+        "tissueId": "",
+        "fact": "distanceMm",
+        "op": "gte",
+        "value": 5.001
+       },
+       "severity": "moderate",
+       "feedback": "Follow the marked line. This cut is off target."
+      },
+      {
+       "id": "deep_skin_cut",
+       "outcome": "",
+       "tissueId": "skin",
+       "verb": "cut",
+       "eventPredicate": {
+        "tissueId": "",
+        "fact": "depthMm",
+        "op": "gte",
+        "value": 14.001
+       },
+       "severity": "high",
+       "feedback": "Too deep. Skin and fat only for this stroke."
+      },
+      {
+       "id": "mark_far",
+       "outcome": "",
+       "tissueId": "skin",
+       "verb": "mark",
+       "eventPredicate": {
+        "tissueId": "",
+        "fact": "distanceMm",
+        "op": "gte",
+        "value": 20.001
+       },
+       "severity": "moderate",
+       "feedback": "Recheck the hip and belly button landmarks."
+      },
+      {
+       "id": "bowel_injury",
+       "outcome": "hollow_leak",
+       "tissueId": "",
+       "severity": "high",
+       "feedback": "Hollow tissue is leaking. Contamination is recorded."
+      },
+      {
+       "id": "critical_injury",
+       "outcome": "critical_injury",
+       "tissueId": "",
+       "severity": "high",
+       "feedback": "Critical structure injured. Control bleeding and reassess."
+      },
+      {
+       "id": "cut_before_control",
+       "outcome": "cut_unsecured",
+       "tissueId": "",
+       "severity": "high",
+       "feedback": "Active bleeding. Clamp, tie, or seal the injured vessel."
+      },
+      {
+       "id": "split_dont_cut",
+       "outcome": "muscle_cut",
+       "tissueId": "muscle",
+       "severity": "moderate",
+       "feedback": "Split the muscle along its fibers; avoid the blade."
+      },
+      {
+       "id": "lift_first",
+       "outcome": "untented_cut",
+       "tissueId": "peritoneum",
+       "severity": "high",
+       "feedback": "Lift the peritoneum before nicking it."
+      },
+      {
+       "id": "fiber_direction",
+       "outcome": "across_fibers",
+       "tissueId": "fascia",
+       "severity": "moderate",
+       "feedback": "Open the fascia along its fibers."
+      },
+      {
+       "id": "rough_handling",
+       "outcome": "rough_handling",
+       "tissueId": "",
+       "severity": "moderate",
+       "feedback": "Slow down. Lift gently."
+      }
+     ],
+     "decisions": [
+      {
+       "id": "true_base",
+       "prompt": "Where is the true base?",
+       "choices": [
+        "true_base",
+        "appendix_tip",
+        "appendix_midpoint"
+       ],
+       "correctChoice": "true_base"
+      }
+     ]
+    },
     "steps": [
      {
-      "portIds": [
-       "umbilical"
-      ],
-      "mistakes": [],
-      "hints": [],
-      "id": "access_umbilical",
-      "title": "Open umbilical access",
-      "instruction": "Enter at the umbilicus with an open technique, place the camera port, and insufflate.",
-      "action": "place_port",
-      "instrumentId": "trocar_12mm",
-      "targets": [
-       "umbilicus"
-      ],
-      "check": {
-       "type": "place_ports",
-       "targets": [
-        "umbilical"
-       ],
-       "count": 1
-      },
-      "next": "working_ports"
-     },
-     {
-      "portIds": [
-       "left_lower",
-       "suprapubic"
-      ],
-      "mistakes": [
-       {
-        "id": "port_into_bladder",
-        "trigger": "touch_structure",
-        "structure": "urinary_bladder",
-        "severity": "high",
-        "feedback": "The suprapubic trocar hit the bladder. It should be emptied before surgery and the trocar watched in."
-       }
-      ],
-      "hints": [],
-      "id": "working_ports",
-      "title": "Place working ports",
-      "instruction": "Place the left lower quadrant and suprapubic ports under vision.",
-      "action": "place_port",
-      "instrumentId": "trocar_5mm",
+      "id": "mark_incision",
+      "title": "Mark McBurney incision",
+      "instrumentId": "skin_marker",
       "targets": [
        "abdominal_wall"
       ],
+      "instruction": "Find the hip bone and belly button. Mark a third.",
+      "action": "dissect",
+      "portIds": [],
       "check": {
-       "type": "place_ports",
+       "type": "body_predicate",
        "targets": [
-        "left_lower",
-        "suprapubic"
+        "abdominal_wall"
        ],
-       "count": 2
+       "count": 1
       },
-      "next": "find_appendix"
+      "mistakes": [],
+      "hints": [
+       "Find the hip bone and belly button. Mark a third.",
+       "Inspect the tissue and the tool position.",
+       "Follow the expected action; other actions still have consequences."
+      ],
+      "next": "incise_skin"
      },
      {
-      "portIds": [
-       "left_lower",
-       "suprapubic"
-      ],
-      "mistakes": [
-       {
-        "id": "grab_appendix",
-        "trigger": "touch_structure",
-        "structure": "appendix",
-        "severity": "moderate",
-        "feedback": "Grasping an inflamed appendix can perforate it. Hold the mesoappendix instead."
-       }
-      ],
-      "hints": [
-       "All three taeniae converge on the appendix base."
-      ],
-      "id": "find_appendix",
-      "title": "Locate the appendix",
-      "instruction": "Tilt head down and left side down, sweep the small bowel away, and follow the taeniae of the cecum to the appendix base.",
-      "action": "identify",
-      "instrumentId": "atraumatic_grasper",
+      "id": "incise_skin",
+      "title": "Incise skin",
+      "instrumentId": "scalpel",
       "targets": [
-       "cecum",
+       "abdominal_wall"
+      ],
+      "instruction": "One smooth stroke along your line. Skin only.",
+      "action": "dissect",
+      "portIds": [],
+      "check": {
+       "type": "body_predicate",
+       "targets": [
+        "abdominal_wall"
+       ],
+       "count": 1
+      },
+      "mistakes": [],
+      "hints": [
+       "One smooth stroke along your line. Skin only.",
+       "Inspect the tissue and the tool position.",
+       "Follow the expected action; other actions still have consequences."
+      ],
+      "next": "open_fascia"
+     },
+     {
+      "id": "open_fascia",
+      "title": "Open fascia",
+      "instrumentId": "metzenbaum_scissors",
+      "targets": [
+       "abdominal_wall"
+      ],
+      "instruction": "Open the aponeurosis along its fibers.",
+      "action": "dissect",
+      "portIds": [],
+      "check": {
+       "type": "body_predicate",
+       "targets": [
+        "abdominal_wall"
+       ],
+       "count": 1
+      },
+      "mistakes": [],
+      "hints": [
+       "Open the aponeurosis along its fibers.",
+       "Inspect the tissue and the tool position.",
+       "Follow the expected action; other actions still have consequences."
+      ],
+      "next": "split_muscle"
+     },
+     {
+      "id": "split_muscle",
+      "title": "Split muscle",
+      "instrumentId": "retractor",
+      "targets": [
+       "abdominal_wall"
+      ],
+      "instruction": "Now split the muscle. Pull, don’t cut.",
+      "action": "dissect",
+      "portIds": [],
+      "check": {
+       "type": "body_predicate",
+       "targets": [
+        "abdominal_wall"
+       ],
+       "count": 1
+      },
+      "mistakes": [],
+      "hints": [
+       "Now split the muscle. Pull, don’t cut.",
+       "Inspect the tissue and the tool position.",
+       "Follow the expected action; other actions still have consequences."
+      ],
+      "next": "open_peritoneum"
+     },
+     {
+      "id": "open_peritoneum",
+      "title": "Open peritoneum",
+      "instrumentId": "toothed_forceps",
+      "targets": [
+       "abdominal_wall"
+      ],
+      "instruction": "Lift the peritoneum first, then nick it.",
+      "action": "dissect",
+      "portIds": [],
+      "check": {
+       "type": "body_predicate",
+       "targets": [
+        "abdominal_wall"
+       ],
+       "count": 1
+      },
+      "mistakes": [],
+      "hints": [
+       "Lift the peritoneum first, then nick it.",
+       "Inspect the tissue and the tool position.",
+       "Follow the expected action; other actions still have consequences."
+      ],
+      "next": "deliver_appendix"
+     },
+     {
+      "id": "deliver_appendix",
+      "title": "Deliver appendix",
+      "instrumentId": "babcock",
+      "targets": [
        "appendix"
       ],
+      "instruction": "Follow the taenia to the appendix. Lift it out gently.",
+      "action": "dissect",
+      "portIds": [],
       "check": {
-       "type": "identify_targets",
+       "type": "body_predicate",
        "targets": [
-        "cecum",
         "appendix"
        ],
-       "count": 2
+       "count": 1
       },
-      "next": "inspect"
+      "mistakes": [],
+      "hints": [
+       "Follow the taenia to the appendix. Lift it out gently.",
+       "Inspect the tissue and the tool position.",
+       "Follow the expected action; other actions still have consequences."
+      ],
+      "next": "divide_mesoappendix"
      },
      {
-      "portIds": [
-       "left_lower"
-      ],
-      "mistakes": [],
-      "hints": [],
-      "id": "inspect",
-      "title": "Assess the appendix",
-      "instruction": "Look for perforation, abscess, or a mass, and run the terminal ileum.",
-      "action": "inspect",
-      "instrumentId": "atraumatic_grasper",
-      "targets": [
-       "appendix",
-       "terminal_ileum"
-      ],
-      "check": {
-       "type": "touch_target",
-       "targets": [
-        "appendix",
-        "terminal_ileum"
-       ],
-       "count": 2
-      },
-      "next": "mesoappendix_window"
-     },
-     {
-      "portIds": [
-       "left_lower"
-      ],
-      "mistakes": [],
-      "hints": [],
-      "id": "mesoappendix_window",
-      "title": "Window the mesoappendix",
-      "instruction": "Create a window in the mesoappendix right at the appendix base.",
-      "action": "dissect",
-      "instrumentId": "maryland_dissector",
+      "id": "divide_mesoappendix",
+      "title": "Secure mesoappendix",
+      "instrumentId": "hemostat",
       "targets": [
        "mesoappendix"
       ],
+      "instruction": "Clamp twice, cut between, then tie.",
+      "action": "dissect",
+      "portIds": [],
       "check": {
-       "type": "touch_target",
+       "type": "body_predicate",
        "targets": [
         "mesoappendix"
        ],
        "count": 1
       },
-      "next": "divide_mesoappendix"
-     },
-     {
-      "portIds": [
-       "left_lower"
-      ],
-      "mistakes": [
-       {
-        "id": "sealer_on_ileum",
-        "trigger": "touch_structure",
-        "structure": "terminal_ileum",
-        "severity": "high",
-        "feedback": "The sealer jaws were on the terminal ileum. Thermal spread can cause a delayed leak."
-       }
-      ],
-      "hints": [],
-      "id": "divide_mesoappendix",
-      "title": "Divide the mesoappendix",
-      "instruction": "Seal and divide the mesoappendix, including the appendicular artery.",
-      "action": "seal",
-      "instrumentId": "vessel_sealer",
-      "targets": [
-       "mesoappendix",
-       "appendicular_artery"
-      ],
-      "check": {
-       "type": "touch_target",
-       "targets": [
-        "appendicular_artery"
-       ],
-       "count": 1
-      },
-      "next": "staple_base"
-     },
-     {
-      "portIds": [
-       "umbilical"
-      ],
-      "mistakes": [
-       {
-        "id": "staple_cecum_wide",
-        "trigger": "touch_structure",
-        "structure": "cecum",
-        "severity": "moderate",
-        "feedback": "Too much cecum in the jaws. Stay at the base."
-       },
-       {
-        "id": "staple_ileum",
-        "trigger": "touch_structure",
-        "structure": "terminal_ileum",
-        "severity": "high",
-        "feedback": "The stapler caught the terminal ileum."
-       }
-      ],
+      "mistakes": [],
       "hints": [
-       "A long stump left behind can cause stump appendicitis later."
+       "Clamp twice, cut between, then tie.",
+       "Inspect the tissue and the tool position.",
+       "Follow the expected action; other actions still have consequences."
       ],
-      "id": "staple_base",
-      "title": "Staple the appendix base",
-      "instruction": "Fire the stapler across the appendix flush with the cecum.",
-      "action": "staple",
-      "instrumentId": "endo_stapler",
+      "next": "ligate_base"
+     },
+     {
+      "id": "ligate_base",
+      "title": "Identify and secure base",
+      "instrumentId": "right_angle_clamp",
       "targets": [
        "appendix"
       ],
+      "instruction": "Crush, tie at the base, cut above your tie.",
+      "action": "dissect",
+      "portIds": [],
       "check": {
-       "type": "touch_target",
+       "type": "body_predicate",
        "targets": [
         "appendix"
        ],
        "count": 1
       },
-      "next": "extract"
+      "mistakes": [],
+      "hints": [
+       "Crush, tie at the base, cut above your tie.",
+       "Inspect the tissue and the tool position.",
+       "Follow the expected action; other actions still have consequences."
+      ],
+      "next": "inspect_clean"
      },
      {
-      "portIds": [
-       "umbilical"
-      ],
-      "mistakes": [],
-      "hints": [],
-      "id": "extract",
-      "title": "Extract the appendix",
-      "instruction": "Bag the appendix and remove it through the umbilical port without touching the wound.",
-      "action": "extract",
-      "instrumentId": "retrieval_bag",
-      "targets": [
-       "appendix"
-      ],
-      "check": {
-       "type": "touch_target",
-       "targets": [
-        "appendix"
-       ],
-       "count": 1
-      },
-      "next": "irrigate"
-     },
-     {
-      "portIds": [
-       "left_lower"
-      ],
-      "mistakes": [],
-      "hints": [],
-      "id": "irrigate",
-      "title": "Suction and inspect",
-      "instruction": "Suction any fluid from the right lower quadrant and pelvis and check the staple line.",
-      "action": "inspect",
+      "id": "inspect_clean",
+      "title": "Inspect and clean",
       "instrumentId": "suction_irrigator",
       "targets": [
-       "cecum"
+       "mesoappendix"
       ],
+      "instruction": "Dry field? Check the stump and the vessels.",
+      "action": "dissect",
+      "portIds": [],
       "check": {
-       "type": "touch_target",
+       "type": "body_predicate",
        "targets": [
-        "cecum"
+        "mesoappendix"
        ],
        "count": 1
       },
+      "mistakes": [],
+      "hints": [
+       "Dry field? Check the stump and the vessels.",
+       "Inspect the tissue and the tool position.",
+       "Follow the expected action; other actions still have consequences."
+      ],
       "next": "close"
      },
      {
-      "portIds": [
-       "umbilical"
-      ],
-      "mistakes": [],
-      "hints": [],
       "id": "close",
-      "title": "Close",
-      "instruction": "Remove ports under vision, release the pneumoperitoneum, and close the umbilical fascia.",
-      "action": "close",
-      "instrumentId": "fascial_closure",
+      "title": "Close wound",
+      "instrumentId": "suture_tie",
       "targets": [
        "abdominal_wall"
       ],
+      "instruction": "Close in layers. Nice work.",
+      "action": "close",
+      "portIds": [],
       "check": {
-       "type": "confirm",
-       "targets": [],
-       "count": 0
+       "type": "body_predicate",
+       "targets": [
+        "abdominal_wall"
+       ],
+       "count": 1
       },
+      "mistakes": [],
+      "hints": [
+       "Close in layers. Nice work.",
+       "Inspect the tissue and the tool position.",
+       "Follow the expected action; other actions still have consequences."
+      ],
       "next": ""
      }
     ],
-    "firstStep": "access_umbilical"
+    "firstStep": "mark_incision"
    },
    "brief": {
     "patientId": "patient-demo-pediatric-asthma",
@@ -4455,7 +5732,7 @@
     "dataSource": "demo",
     "consentStatus": "simulated",
     "consentReceipts": [],
-    "generatedAt": "2026-10-03T21:53:17.824Z",
+    "generatedAt": "2026-10-04T03:44:32.526Z",
     "dataAsOf": "2026-09-01T00:00:00Z",
     "patient": {
      "name": "Theo Abernathy",
@@ -4614,22 +5891,22 @@
    "considerations": [
     {
      "flagId": "flag_allergy",
-     "stepId": "access_umbilical",
+     "stepId": "mark_incision",
      "note": "Allergy on file: confirm the prophylactic antibiotic was chosen around it before incision."
     },
     {
      "flagId": "flag_airway",
-     "stepId": "access_umbilical",
-     "note": "Airway disease: bronchospasm risk at induction. Pneumoperitoneum raises airway pressures; watch them as you insufflate."
+     "stepId": "mark_incision",
+     "note": "Airway disease: bronchospasm risk at induction. Review inhalers and monitor airway pressures with anesthesia."
     },
     {
      "flagId": "flag_pediatric",
-     "stepId": "working_ports",
-     "note": "Pediatric abdomen: less working space. Lower insufflation pressure and watch every trocar enter."
+     "stepId": "incise_skin",
+     "note": "Pediatric abdomen: less working space. Use age-appropriate instruments and watch incision depth and tissue handling."
     },
     {
      "flagId": "flag_incomplete_chart",
-     "stepId": "access_umbilical",
+     "stepId": "mark_incision",
      "note": "Incomplete chart: confirm identity, allergies, and medications directly with the patient or family at the time out."
     }
    ],
@@ -4661,40 +5938,40 @@
    ],
    "instruments": [
     {
-     "id": "trocar_12mm",
-     "unityPrefab": "inst_trocar_12mm",
-     "displayName": "12 mm trocar",
-     "kind": "access"
+     "id": "scalpel",
+     "unityPrefab": "inst_scalpel",
+     "displayName": "Scalpel",
+     "kind": "cutting"
     },
     {
-     "id": "laparoscope_30",
-     "unityPrefab": "inst_laparoscope_30",
-     "displayName": "30 degree laparoscope",
-     "kind": "visualization"
+     "id": "metzenbaum_scissors",
+     "unityPrefab": "inst_metzenbaum_scissors",
+     "displayName": "Metzenbaum scissors",
+     "kind": "cutting"
     },
     {
-     "id": "endo_stapler",
-     "unityPrefab": "inst_endo_stapler",
-     "displayName": "Endoscopic linear stapler",
-     "kind": "stapler"
+     "id": "skin_marker",
+     "unityPrefab": "inst_skin_marker",
+     "displayName": "Skin marker",
+     "kind": "marking"
     },
     {
-     "id": "retrieval_bag",
-     "unityPrefab": "inst_retrieval_bag",
-     "displayName": "Specimen retrieval bag",
-     "kind": "retrieval"
+     "id": "toothed_forceps",
+     "unityPrefab": "inst_toothed_forceps",
+     "displayName": "Toothed forceps",
+     "kind": "grasper"
     },
     {
-     "id": "fascial_closure",
-     "unityPrefab": "inst_fascial_closure",
-     "displayName": "Fascial closure device",
-     "kind": "closure"
+     "id": "retractor",
+     "unityPrefab": "inst_retractor",
+     "displayName": "Hand retractor",
+     "kind": "retractor"
     },
     {
-     "id": "trocar_5mm",
-     "unityPrefab": "inst_trocar_5mm",
-     "displayName": "5 mm trocar",
-     "kind": "access"
+     "id": "babcock",
+     "unityPrefab": "inst_babcock",
+     "displayName": "Babcock forceps",
+     "kind": "grasper"
     },
     {
      "id": "atraumatic_grasper",
@@ -4703,10 +5980,28 @@
      "kind": "grasper"
     },
     {
-     "id": "maryland_dissector",
-     "unityPrefab": "inst_maryland_dissector",
-     "displayName": "Maryland dissector",
-     "kind": "dissector"
+     "id": "hemostat",
+     "unityPrefab": "inst_hemostat",
+     "displayName": "Hemostat",
+     "kind": "ligation"
+    },
+    {
+     "id": "right_angle_clamp",
+     "unityPrefab": "inst_right_angle_clamp",
+     "displayName": "Right-angle clamp",
+     "kind": "ligation"
+    },
+    {
+     "id": "suture_tie",
+     "unityPrefab": "inst_suture_tie",
+     "displayName": "Suture tie",
+     "kind": "ligation"
+    },
+    {
+     "id": "hook_cautery",
+     "unityPrefab": "inst_hook_cautery",
+     "displayName": "Monopolar hook",
+     "kind": "energy"
     },
     {
      "id": "vessel_sealer",
@@ -4737,13 +6032,6 @@
      "region": "abdominal_wall"
     },
     {
-     "id": "cecum",
-     "unityName": "anat_cecum",
-     "displayName": "Cecum",
-     "system": "digestive",
-     "region": "right_lower_quadrant"
-    },
-    {
      "id": "appendix",
      "unityName": "anat_appendix",
      "displayName": "Vermiform appendix",
@@ -4765,39 +6053,18 @@
      "region": "right_lower_quadrant"
     },
     {
+     "id": "cecum",
+     "unityName": "anat_cecum",
+     "displayName": "Cecum",
+     "system": "digestive",
+     "region": "right_lower_quadrant"
+    },
+    {
      "id": "terminal_ileum",
      "unityName": "anat_terminal_ileum",
      "displayName": "Terminal ileum",
      "system": "digestive",
      "region": "right_lower_quadrant"
-    },
-    {
-     "id": "small_bowel",
-     "unityName": "anat_small_bowel",
-     "displayName": "Small bowel",
-     "system": "digestive",
-     "region": "mid_abdomen"
-    },
-    {
-     "id": "right_ureter",
-     "unityName": "anat_right_ureter",
-     "displayName": "Right ureter",
-     "system": "urinary",
-     "region": "retroperitoneum"
-    },
-    {
-     "id": "urinary_bladder",
-     "unityName": "anat_urinary_bladder",
-     "displayName": "Urinary bladder",
-     "system": "urinary",
-     "region": "pelvis"
-    },
-    {
-     "id": "greater_omentum",
-     "unityName": "anat_greater_omentum",
-     "displayName": "Greater omentum",
-     "system": "digestive",
-     "region": "peritoneal"
     },
     {
      "id": "lungs",
@@ -4824,7 +6091,7 @@
      "id": "view_procedure",
      "label": "View procedure steps",
      "method": "GET",
-     "route": "/procedures/lap_appendectomy"
+     "route": "/procedures/open_appendectomy"
     },
     {
      "id": "choose_patient",
@@ -4836,7 +6103,7 @@
    "disclaimer": "Synthetic FinchNode demo data. Flags and cases are illustrative teaching material, not clinical guidance."
   },
   {
-   "caseId": "case_patient-demo-multi-source_lap_appendectomy",
+   "caseId": "case_patient-demo-multi-source_open_appendectomy",
    "patientId": "patient-demo-multi-source",
    "scenarioId": "multi-source-overlap",
    "status": "needs_review",
@@ -4852,365 +6119,794 @@
    "urgency": "urgent",
    "indication": "Acute appendicitis",
    "presentation": "One day of right lower quadrant pain with rebound tenderness and a temperature of 37.9 C. CT shows an 11 mm appendix with periappendiceal fat stranding and no abscess. Her records come from two health systems that disagree in places.",
-   "procedureId": "lap_appendectomy",
+   "procedureId": "open_appendectomy",
    "procedure": {
-    "id": "lap_appendectomy",
-    "title": "Laparoscopic appendectomy",
-    "shortTitle": "Appendix removal",
-    "approach": "Three-port laparoscopic",
-    "summary": "Find the appendix by following the taeniae of the cecum, divide the mesoappendix with its artery, secure and divide the appendix base, and remove it in a bag.",
+    "id": "open_appendectomy",
+    "title": "Open appendectomy",
+    "shortTitle": "Open appendix removal",
+    "approach": "Open muscle-splitting incision",
     "typicalMinutes": 45,
+    "summary": "Registered incision, layered exposure, delivery, vascular control and base ligation, then dry inspection.",
     "structures": [
      "abdominal_wall",
      "umbilicus",
-     "cecum",
      "appendix",
      "mesoappendix",
      "appendicular_artery",
-     "terminal_ileum",
-     "small_bowel",
-     "right_ureter",
-     "urinary_bladder",
-     "greater_omentum"
+     "cecum",
+     "terminal_ileum"
     ],
     "focusStructures": [
      "appendix",
      "mesoappendix",
-     "appendicular_artery",
      "cecum"
     ],
-    "ports": [
-     {
-      "id": "umbilical",
-      "label": "Umbilical camera port",
-      "sizeMm": 12,
-      "position": {
-       "x": 0,
-       "y": 0,
-       "z": 0
+    "ports": [],
+    "openBody": {
+     "version": 1,
+     "fastPathPremarked": false,
+     "tissues": [
+      {
+       "id": "skin",
+       "layer": "skin",
+       "order": 0,
+       "cuttable": true,
+       "splittable": false,
+       "perfused": false,
+       "hollow": false,
+       "critical": false,
+       "tentable": false,
+       "flowMlPerSecond": 0,
+       "fiberAxis": ""
       },
-      "instrumentIds": [
-       "trocar_12mm",
-       "laparoscope_30",
-       "endo_stapler",
-       "retrieval_bag",
-       "fascial_closure"
-      ]
-     },
-     {
-      "id": "left_lower",
-      "label": "Left lower quadrant port",
-      "sizeMm": 5,
-      "position": {
-       "x": 0.07,
-       "y": 0,
-       "z": -0.08
+      {
+       "id": "fat",
+       "layer": "fat",
+       "order": 1,
+       "cuttable": true,
+       "splittable": false,
+       "perfused": false,
+       "hollow": false,
+       "critical": false,
+       "tentable": false,
+       "flowMlPerSecond": 0,
+       "fiberAxis": ""
       },
-      "instrumentIds": [
-       "trocar_5mm",
-       "atraumatic_grasper",
-       "maryland_dissector",
-       "vessel_sealer",
-       "suction_irrigator"
-      ]
-     },
-     {
-      "id": "suprapubic",
-      "label": "Suprapubic port",
-      "sizeMm": 5,
-      "position": {
-       "x": 0,
-       "y": 0,
-       "z": -0.13
+      {
+       "id": "fascia",
+       "layer": "fascia",
+       "order": 2,
+       "cuttable": true,
+       "splittable": false,
+       "perfused": false,
+       "hollow": false,
+       "critical": false,
+       "tentable": false,
+       "flowMlPerSecond": 0,
+       "fiberAxis": "incision_line"
       },
-      "instrumentIds": [
-       "trocar_5mm",
-       "atraumatic_grasper"
-      ]
-     }
-    ],
+      {
+       "id": "muscle",
+       "layer": "muscle",
+       "order": 3,
+       "cuttable": true,
+       "splittable": true,
+       "perfused": true,
+       "hollow": false,
+       "critical": false,
+       "tentable": false,
+       "flowMlPerSecond": 0.3,
+       "fiberAxis": ""
+      },
+      {
+       "id": "peritoneum",
+       "layer": "peritoneum",
+       "order": 4,
+       "cuttable": true,
+       "splittable": false,
+       "perfused": false,
+       "hollow": false,
+       "critical": false,
+       "tentable": true,
+       "flowMlPerSecond": 0,
+       "fiberAxis": ""
+      },
+      {
+       "id": "appendix",
+       "layer": "appendix",
+       "order": -1,
+       "cuttable": true,
+       "splittable": false,
+       "perfused": false,
+       "hollow": true,
+       "critical": false,
+       "tentable": false,
+       "flowMlPerSecond": 0,
+       "fiberAxis": ""
+      },
+      {
+       "id": "mesoappendix",
+       "layer": "mesoappendix",
+       "order": -1,
+       "cuttable": true,
+       "splittable": false,
+       "perfused": true,
+       "hollow": false,
+       "critical": false,
+       "tentable": false,
+       "flowMlPerSecond": 2,
+       "fiberAxis": ""
+      },
+      {
+       "id": "appendicular_artery",
+       "layer": "appendicular_artery",
+       "order": -1,
+       "cuttable": true,
+       "splittable": false,
+       "perfused": true,
+       "hollow": false,
+       "critical": false,
+       "tentable": false,
+       "flowMlPerSecond": 2,
+       "fiberAxis": ""
+      },
+      {
+       "id": "cecum",
+       "layer": "cecum",
+       "order": -1,
+       "cuttable": true,
+       "splittable": false,
+       "perfused": false,
+       "hollow": true,
+       "critical": true,
+       "tentable": false,
+       "flowMlPerSecond": 0,
+       "fiberAxis": ""
+      },
+      {
+       "id": "terminal_ileum",
+       "layer": "terminal_ileum",
+       "order": -1,
+       "cuttable": true,
+       "splittable": false,
+       "perfused": false,
+       "hollow": true,
+       "critical": true,
+       "tentable": false,
+       "flowMlPerSecond": 0,
+       "fiberAxis": ""
+      },
+      {
+       "id": "iliac_vessels",
+       "layer": "iliac_vessels",
+       "order": -1,
+       "cuttable": true,
+       "splittable": false,
+       "perfused": true,
+       "hollow": false,
+       "critical": true,
+       "tentable": false,
+       "flowMlPerSecond": 8,
+       "fiberAxis": "",
+       "structureIds": [
+        "cardiovascular__common_iliac_artery_r",
+        "cardiovascular__common_iliac_vein_r"
+       ]
+      },
+      {
+       "id": "ureter",
+       "layer": "ureter",
+       "order": -1,
+       "cuttable": true,
+       "splittable": false,
+       "perfused": false,
+       "hollow": true,
+       "critical": true,
+       "tentable": false,
+       "flowMlPerSecond": 0,
+       "fiberAxis": "",
+       "structureIds": [
+        "right_ureter"
+       ]
+      }
+     ],
+     "milestones": [
+      {
+       "id": "mark_incision",
+       "predicates": [
+        {
+         "tissueId": "skin",
+         "fact": "marked",
+         "op": "eq",
+         "value": 1
+        },
+        {
+         "tissueId": "skin",
+         "fact": "markErrorMm",
+         "op": "lte",
+         "value": 20
+        },
+        {
+         "tissueId": "skin",
+         "fact": "markLengthMm",
+         "op": "gte",
+         "value": 50
+        },
+        {
+         "tissueId": "skin",
+         "fact": "markLengthMm",
+         "op": "lte",
+         "value": 80
+        },
+        {
+         "tissueId": "skin",
+         "fact": "markAngleDegrees",
+         "op": "lte",
+         "value": 25
+        }
+       ]
+      },
+      {
+       "id": "incise_skin",
+       "predicates": [
+        {
+         "tissueId": "skin",
+         "fact": "cutCoverage",
+         "op": "gte",
+         "value": 0.8
+        },
+        {
+         "tissueId": "skin",
+         "fact": "cutErrorMm",
+         "op": "lte",
+         "value": 5
+        },
+        {
+         "tissueId": "skin",
+         "fact": "cutDepthMm",
+         "op": "lte",
+         "value": 14
+        },
+        {
+         "tissueId": "fat",
+         "fact": "opened",
+         "op": "eq",
+         "value": 1
+        }
+       ]
+      },
+      {
+       "id": "open_fascia",
+       "predicates": [
+        {
+         "tissueId": "fascia",
+         "fact": "opened",
+         "op": "eq",
+         "value": 1
+        },
+        {
+         "tissueId": "fascia",
+         "fact": "cutAngleDegrees",
+         "op": "lte",
+         "value": 25
+        }
+       ]
+      },
+      {
+       "id": "split_muscle",
+       "predicates": [
+        {
+         "tissueId": "muscle",
+         "fact": "splitWidthMm",
+         "op": "gte",
+         "value": 15
+        }
+       ]
+      },
+      {
+       "id": "open_peritoneum",
+       "predicates": [
+        {
+         "tissueId": "peritoneum",
+         "fact": "opened",
+         "op": "eq",
+         "value": 1
+        },
+        {
+         "tissueId": "peritoneum",
+         "fact": "tentedBeforeCut",
+         "op": "eq",
+         "value": 1
+        }
+       ]
+      },
+      {
+       "id": "deliver_appendix",
+       "predicates": [
+        {
+         "tissueId": "appendix",
+         "fact": "delivered",
+         "op": "eq",
+         "value": 1
+        }
+       ]
+      },
+      {
+       "id": "divide_mesoappendix",
+       "predicates": [
+        {
+         "tissueId": "mesoappendix",
+         "fact": "cutBetweenClamps",
+         "op": "eq",
+         "value": 1
+        },
+        {
+         "tissueId": "mesoappendix",
+         "fact": "tieCount",
+         "op": "gte",
+         "value": 2
+        },
+        {
+         "tissueId": "mesoappendix",
+         "fact": "tiedBothSides",
+         "op": "eq",
+         "value": 1
+        },
+        {
+         "tissueId": "",
+         "fact": "activeBleeds",
+         "op": "eq",
+         "value": 0
+        }
+       ]
+      },
+      {
+       "id": "ligate_base",
+       "predicates": [
+        {
+         "tissueId": "appendix",
+         "fact": "decision_true_base",
+         "op": "eq",
+         "value": 1
+        },
+        {
+         "tissueId": "appendix",
+         "fact": "crushed",
+         "op": "eq",
+         "value": 1
+        },
+        {
+         "tissueId": "appendix",
+         "fact": "tieDistanceMm",
+         "op": "lte",
+         "value": 5
+        },
+        {
+         "tissueId": "appendix",
+         "fact": "stumpLengthMm",
+         "op": "lte",
+         "value": 5
+        },
+        {
+         "tissueId": "appendix",
+         "fact": "cutAboveTie",
+         "op": "eq",
+         "value": 1
+        },
+        {
+         "tissueId": "appendix",
+         "fact": "cutBetweenTieAndClamp",
+         "op": "eq",
+         "value": 1
+        },
+        {
+         "tissueId": "appendix",
+         "fact": "removed",
+         "op": "eq",
+         "value": 1
+        }
+       ]
+      },
+      {
+       "id": "inspect_clean",
+       "predicates": [
+        {
+         "tissueId": "",
+         "fact": "activeBleeds",
+         "op": "eq",
+         "value": 0
+        },
+        {
+         "tissueId": "",
+         "fact": "poolMl",
+         "op": "lte",
+         "value": 1
+        },
+        {
+         "tissueId": "appendix",
+         "fact": "inspectionMs",
+         "op": "gte",
+         "value": 1000
+        },
+        {
+         "tissueId": "mesoappendix",
+         "fact": "inspectionMs",
+         "op": "gte",
+         "value": 1000
+        }
+       ]
+      },
+      {
+       "id": "close",
+       "predicates": [
+        {
+         "tissueId": "skin",
+         "fact": "closed",
+         "op": "eq",
+         "value": 1
+        }
+       ]
+      }
+     ],
+     "guardrails": [
+      {
+       "id": "off_mark",
+       "outcome": "",
+       "tissueId": "skin",
+       "verb": "cut",
+       "eventPredicate": {
+        "tissueId": "",
+        "fact": "distanceMm",
+        "op": "gte",
+        "value": 5.001
+       },
+       "severity": "moderate",
+       "feedback": "Follow the marked line. This cut is off target."
+      },
+      {
+       "id": "deep_skin_cut",
+       "outcome": "",
+       "tissueId": "skin",
+       "verb": "cut",
+       "eventPredicate": {
+        "tissueId": "",
+        "fact": "depthMm",
+        "op": "gte",
+        "value": 14.001
+       },
+       "severity": "high",
+       "feedback": "Too deep. Skin and fat only for this stroke."
+      },
+      {
+       "id": "mark_far",
+       "outcome": "",
+       "tissueId": "skin",
+       "verb": "mark",
+       "eventPredicate": {
+        "tissueId": "",
+        "fact": "distanceMm",
+        "op": "gte",
+        "value": 20.001
+       },
+       "severity": "moderate",
+       "feedback": "Recheck the hip and belly button landmarks."
+      },
+      {
+       "id": "bowel_injury",
+       "outcome": "hollow_leak",
+       "tissueId": "",
+       "severity": "high",
+       "feedback": "Hollow tissue is leaking. Contamination is recorded."
+      },
+      {
+       "id": "critical_injury",
+       "outcome": "critical_injury",
+       "tissueId": "",
+       "severity": "high",
+       "feedback": "Critical structure injured. Control bleeding and reassess."
+      },
+      {
+       "id": "cut_before_control",
+       "outcome": "cut_unsecured",
+       "tissueId": "",
+       "severity": "high",
+       "feedback": "Active bleeding. Clamp, tie, or seal the injured vessel."
+      },
+      {
+       "id": "split_dont_cut",
+       "outcome": "muscle_cut",
+       "tissueId": "muscle",
+       "severity": "moderate",
+       "feedback": "Split the muscle along its fibers; avoid the blade."
+      },
+      {
+       "id": "lift_first",
+       "outcome": "untented_cut",
+       "tissueId": "peritoneum",
+       "severity": "high",
+       "feedback": "Lift the peritoneum before nicking it."
+      },
+      {
+       "id": "fiber_direction",
+       "outcome": "across_fibers",
+       "tissueId": "fascia",
+       "severity": "moderate",
+       "feedback": "Open the fascia along its fibers."
+      },
+      {
+       "id": "rough_handling",
+       "outcome": "rough_handling",
+       "tissueId": "",
+       "severity": "moderate",
+       "feedback": "Slow down. Lift gently."
+      }
+     ],
+     "decisions": [
+      {
+       "id": "true_base",
+       "prompt": "Where is the true base?",
+       "choices": [
+        "true_base",
+        "appendix_tip",
+        "appendix_midpoint"
+       ],
+       "correctChoice": "true_base"
+      }
+     ]
+    },
     "steps": [
      {
-      "portIds": [
-       "umbilical"
-      ],
-      "mistakes": [],
-      "hints": [],
-      "id": "access_umbilical",
-      "title": "Open umbilical access",
-      "instruction": "Enter at the umbilicus with an open technique, place the camera port, and insufflate.",
-      "action": "place_port",
-      "instrumentId": "trocar_12mm",
-      "targets": [
-       "umbilicus"
-      ],
-      "check": {
-       "type": "place_ports",
-       "targets": [
-        "umbilical"
-       ],
-       "count": 1
-      },
-      "next": "working_ports"
-     },
-     {
-      "portIds": [
-       "left_lower",
-       "suprapubic"
-      ],
-      "mistakes": [
-       {
-        "id": "port_into_bladder",
-        "trigger": "touch_structure",
-        "structure": "urinary_bladder",
-        "severity": "high",
-        "feedback": "The suprapubic trocar hit the bladder. It should be emptied before surgery and the trocar watched in."
-       }
-      ],
-      "hints": [],
-      "id": "working_ports",
-      "title": "Place working ports",
-      "instruction": "Place the left lower quadrant and suprapubic ports under vision.",
-      "action": "place_port",
-      "instrumentId": "trocar_5mm",
+      "id": "mark_incision",
+      "title": "Mark McBurney incision",
+      "instrumentId": "skin_marker",
       "targets": [
        "abdominal_wall"
       ],
+      "instruction": "Find the hip bone and belly button. Mark a third.",
+      "action": "dissect",
+      "portIds": [],
       "check": {
-       "type": "place_ports",
+       "type": "body_predicate",
        "targets": [
-        "left_lower",
-        "suprapubic"
+        "abdominal_wall"
        ],
-       "count": 2
+       "count": 1
       },
-      "next": "find_appendix"
+      "mistakes": [],
+      "hints": [
+       "Find the hip bone and belly button. Mark a third.",
+       "Inspect the tissue and the tool position.",
+       "Follow the expected action; other actions still have consequences."
+      ],
+      "next": "incise_skin"
      },
      {
-      "portIds": [
-       "left_lower",
-       "suprapubic"
-      ],
-      "mistakes": [
-       {
-        "id": "grab_appendix",
-        "trigger": "touch_structure",
-        "structure": "appendix",
-        "severity": "moderate",
-        "feedback": "Grasping an inflamed appendix can perforate it. Hold the mesoappendix instead."
-       }
-      ],
-      "hints": [
-       "All three taeniae converge on the appendix base."
-      ],
-      "id": "find_appendix",
-      "title": "Locate the appendix",
-      "instruction": "Tilt head down and left side down, sweep the small bowel away, and follow the taeniae of the cecum to the appendix base.",
-      "action": "identify",
-      "instrumentId": "atraumatic_grasper",
+      "id": "incise_skin",
+      "title": "Incise skin",
+      "instrumentId": "scalpel",
       "targets": [
-       "cecum",
+       "abdominal_wall"
+      ],
+      "instruction": "One smooth stroke along your line. Skin only.",
+      "action": "dissect",
+      "portIds": [],
+      "check": {
+       "type": "body_predicate",
+       "targets": [
+        "abdominal_wall"
+       ],
+       "count": 1
+      },
+      "mistakes": [],
+      "hints": [
+       "One smooth stroke along your line. Skin only.",
+       "Inspect the tissue and the tool position.",
+       "Follow the expected action; other actions still have consequences."
+      ],
+      "next": "open_fascia"
+     },
+     {
+      "id": "open_fascia",
+      "title": "Open fascia",
+      "instrumentId": "metzenbaum_scissors",
+      "targets": [
+       "abdominal_wall"
+      ],
+      "instruction": "Open the aponeurosis along its fibers.",
+      "action": "dissect",
+      "portIds": [],
+      "check": {
+       "type": "body_predicate",
+       "targets": [
+        "abdominal_wall"
+       ],
+       "count": 1
+      },
+      "mistakes": [],
+      "hints": [
+       "Open the aponeurosis along its fibers.",
+       "Inspect the tissue and the tool position.",
+       "Follow the expected action; other actions still have consequences."
+      ],
+      "next": "split_muscle"
+     },
+     {
+      "id": "split_muscle",
+      "title": "Split muscle",
+      "instrumentId": "retractor",
+      "targets": [
+       "abdominal_wall"
+      ],
+      "instruction": "Now split the muscle. Pull, don’t cut.",
+      "action": "dissect",
+      "portIds": [],
+      "check": {
+       "type": "body_predicate",
+       "targets": [
+        "abdominal_wall"
+       ],
+       "count": 1
+      },
+      "mistakes": [],
+      "hints": [
+       "Now split the muscle. Pull, don’t cut.",
+       "Inspect the tissue and the tool position.",
+       "Follow the expected action; other actions still have consequences."
+      ],
+      "next": "open_peritoneum"
+     },
+     {
+      "id": "open_peritoneum",
+      "title": "Open peritoneum",
+      "instrumentId": "toothed_forceps",
+      "targets": [
+       "abdominal_wall"
+      ],
+      "instruction": "Lift the peritoneum first, then nick it.",
+      "action": "dissect",
+      "portIds": [],
+      "check": {
+       "type": "body_predicate",
+       "targets": [
+        "abdominal_wall"
+       ],
+       "count": 1
+      },
+      "mistakes": [],
+      "hints": [
+       "Lift the peritoneum first, then nick it.",
+       "Inspect the tissue and the tool position.",
+       "Follow the expected action; other actions still have consequences."
+      ],
+      "next": "deliver_appendix"
+     },
+     {
+      "id": "deliver_appendix",
+      "title": "Deliver appendix",
+      "instrumentId": "babcock",
+      "targets": [
        "appendix"
       ],
+      "instruction": "Follow the taenia to the appendix. Lift it out gently.",
+      "action": "dissect",
+      "portIds": [],
       "check": {
-       "type": "identify_targets",
+       "type": "body_predicate",
        "targets": [
-        "cecum",
         "appendix"
        ],
-       "count": 2
+       "count": 1
       },
-      "next": "inspect"
+      "mistakes": [],
+      "hints": [
+       "Follow the taenia to the appendix. Lift it out gently.",
+       "Inspect the tissue and the tool position.",
+       "Follow the expected action; other actions still have consequences."
+      ],
+      "next": "divide_mesoappendix"
      },
      {
-      "portIds": [
-       "left_lower"
-      ],
-      "mistakes": [],
-      "hints": [],
-      "id": "inspect",
-      "title": "Assess the appendix",
-      "instruction": "Look for perforation, abscess, or a mass, and run the terminal ileum.",
-      "action": "inspect",
-      "instrumentId": "atraumatic_grasper",
-      "targets": [
-       "appendix",
-       "terminal_ileum"
-      ],
-      "check": {
-       "type": "touch_target",
-       "targets": [
-        "appendix",
-        "terminal_ileum"
-       ],
-       "count": 2
-      },
-      "next": "mesoappendix_window"
-     },
-     {
-      "portIds": [
-       "left_lower"
-      ],
-      "mistakes": [],
-      "hints": [],
-      "id": "mesoappendix_window",
-      "title": "Window the mesoappendix",
-      "instruction": "Create a window in the mesoappendix right at the appendix base.",
-      "action": "dissect",
-      "instrumentId": "maryland_dissector",
+      "id": "divide_mesoappendix",
+      "title": "Secure mesoappendix",
+      "instrumentId": "hemostat",
       "targets": [
        "mesoappendix"
       ],
+      "instruction": "Clamp twice, cut between, then tie.",
+      "action": "dissect",
+      "portIds": [],
       "check": {
-       "type": "touch_target",
+       "type": "body_predicate",
        "targets": [
         "mesoappendix"
        ],
        "count": 1
       },
-      "next": "divide_mesoappendix"
-     },
-     {
-      "portIds": [
-       "left_lower"
-      ],
-      "mistakes": [
-       {
-        "id": "sealer_on_ileum",
-        "trigger": "touch_structure",
-        "structure": "terminal_ileum",
-        "severity": "high",
-        "feedback": "The sealer jaws were on the terminal ileum. Thermal spread can cause a delayed leak."
-       }
-      ],
-      "hints": [],
-      "id": "divide_mesoappendix",
-      "title": "Divide the mesoappendix",
-      "instruction": "Seal and divide the mesoappendix, including the appendicular artery.",
-      "action": "seal",
-      "instrumentId": "vessel_sealer",
-      "targets": [
-       "mesoappendix",
-       "appendicular_artery"
-      ],
-      "check": {
-       "type": "touch_target",
-       "targets": [
-        "appendicular_artery"
-       ],
-       "count": 1
-      },
-      "next": "staple_base"
-     },
-     {
-      "portIds": [
-       "umbilical"
-      ],
-      "mistakes": [
-       {
-        "id": "staple_cecum_wide",
-        "trigger": "touch_structure",
-        "structure": "cecum",
-        "severity": "moderate",
-        "feedback": "Too much cecum in the jaws. Stay at the base."
-       },
-       {
-        "id": "staple_ileum",
-        "trigger": "touch_structure",
-        "structure": "terminal_ileum",
-        "severity": "high",
-        "feedback": "The stapler caught the terminal ileum."
-       }
-      ],
+      "mistakes": [],
       "hints": [
-       "A long stump left behind can cause stump appendicitis later."
+       "Clamp twice, cut between, then tie.",
+       "Inspect the tissue and the tool position.",
+       "Follow the expected action; other actions still have consequences."
       ],
-      "id": "staple_base",
-      "title": "Staple the appendix base",
-      "instruction": "Fire the stapler across the appendix flush with the cecum.",
-      "action": "staple",
-      "instrumentId": "endo_stapler",
+      "next": "ligate_base"
+     },
+     {
+      "id": "ligate_base",
+      "title": "Identify and secure base",
+      "instrumentId": "right_angle_clamp",
       "targets": [
        "appendix"
       ],
+      "instruction": "Crush, tie at the base, cut above your tie.",
+      "action": "dissect",
+      "portIds": [],
       "check": {
-       "type": "touch_target",
+       "type": "body_predicate",
        "targets": [
         "appendix"
        ],
        "count": 1
       },
-      "next": "extract"
+      "mistakes": [],
+      "hints": [
+       "Crush, tie at the base, cut above your tie.",
+       "Inspect the tissue and the tool position.",
+       "Follow the expected action; other actions still have consequences."
+      ],
+      "next": "inspect_clean"
      },
      {
-      "portIds": [
-       "umbilical"
-      ],
-      "mistakes": [],
-      "hints": [],
-      "id": "extract",
-      "title": "Extract the appendix",
-      "instruction": "Bag the appendix and remove it through the umbilical port without touching the wound.",
-      "action": "extract",
-      "instrumentId": "retrieval_bag",
-      "targets": [
-       "appendix"
-      ],
-      "check": {
-       "type": "touch_target",
-       "targets": [
-        "appendix"
-       ],
-       "count": 1
-      },
-      "next": "irrigate"
-     },
-     {
-      "portIds": [
-       "left_lower"
-      ],
-      "mistakes": [],
-      "hints": [],
-      "id": "irrigate",
-      "title": "Suction and inspect",
-      "instruction": "Suction any fluid from the right lower quadrant and pelvis and check the staple line.",
-      "action": "inspect",
+      "id": "inspect_clean",
+      "title": "Inspect and clean",
       "instrumentId": "suction_irrigator",
       "targets": [
-       "cecum"
+       "mesoappendix"
       ],
+      "instruction": "Dry field? Check the stump and the vessels.",
+      "action": "dissect",
+      "portIds": [],
       "check": {
-       "type": "touch_target",
+       "type": "body_predicate",
        "targets": [
-        "cecum"
+        "mesoappendix"
        ],
        "count": 1
       },
+      "mistakes": [],
+      "hints": [
+       "Dry field? Check the stump and the vessels.",
+       "Inspect the tissue and the tool position.",
+       "Follow the expected action; other actions still have consequences."
+      ],
       "next": "close"
      },
      {
-      "portIds": [
-       "umbilical"
-      ],
-      "mistakes": [],
-      "hints": [],
       "id": "close",
-      "title": "Close",
-      "instruction": "Remove ports under vision, release the pneumoperitoneum, and close the umbilical fascia.",
-      "action": "close",
-      "instrumentId": "fascial_closure",
+      "title": "Close wound",
+      "instrumentId": "suture_tie",
       "targets": [
        "abdominal_wall"
       ],
+      "instruction": "Close in layers. Nice work.",
+      "action": "close",
+      "portIds": [],
       "check": {
-       "type": "confirm",
-       "targets": [],
-       "count": 0
+       "type": "body_predicate",
+       "targets": [
+        "abdominal_wall"
+       ],
+       "count": 1
       },
+      "mistakes": [],
+      "hints": [
+       "Close in layers. Nice work.",
+       "Inspect the tissue and the tool position.",
+       "Follow the expected action; other actions still have consequences."
+      ],
       "next": ""
      }
     ],
-    "firstStep": "access_umbilical"
+    "firstStep": "mark_incision"
    },
    "brief": {
     "patientId": "patient-demo-multi-source",
@@ -5218,7 +6914,7 @@
     "dataSource": "demo",
     "consentStatus": "simulated",
     "consentReceipts": [],
-    "generatedAt": "2026-10-03T21:53:17.825Z",
+    "generatedAt": "2026-10-04T03:44:32.526Z",
     "dataAsOf": "2026-09-01T00:00:00Z",
     "patient": {
      "name": "Priya Ramaswamy",
@@ -5351,17 +7047,17 @@
    "considerations": [
     {
      "flagId": "flag_latex",
-     "stepId": "access_umbilical",
+     "stepId": "mark_incision",
      "note": "Latex allergy: the room, gloves, catheters, and every instrument must be latex free before entry."
     },
     {
      "flagId": "flag_anemia",
-     "stepId": "irrigate",
+     "stepId": "inspect_clean",
      "note": "Preoperative anemia: little reserve for blood loss. Know the latest hemoglobin and whether blood is available."
     },
     {
      "flagId": "flag_incomplete_chart",
-     "stepId": "access_umbilical",
+     "stepId": "mark_incision",
      "note": "Incomplete chart: confirm identity, allergies, and medications directly with the patient or family at the time out."
     }
    ],
@@ -5393,40 +7089,40 @@
    ],
    "instruments": [
     {
-     "id": "trocar_12mm",
-     "unityPrefab": "inst_trocar_12mm",
-     "displayName": "12 mm trocar",
-     "kind": "access"
+     "id": "scalpel",
+     "unityPrefab": "inst_scalpel",
+     "displayName": "Scalpel",
+     "kind": "cutting"
     },
     {
-     "id": "laparoscope_30",
-     "unityPrefab": "inst_laparoscope_30",
-     "displayName": "30 degree laparoscope",
-     "kind": "visualization"
+     "id": "metzenbaum_scissors",
+     "unityPrefab": "inst_metzenbaum_scissors",
+     "displayName": "Metzenbaum scissors",
+     "kind": "cutting"
     },
     {
-     "id": "endo_stapler",
-     "unityPrefab": "inst_endo_stapler",
-     "displayName": "Endoscopic linear stapler",
-     "kind": "stapler"
+     "id": "skin_marker",
+     "unityPrefab": "inst_skin_marker",
+     "displayName": "Skin marker",
+     "kind": "marking"
     },
     {
-     "id": "retrieval_bag",
-     "unityPrefab": "inst_retrieval_bag",
-     "displayName": "Specimen retrieval bag",
-     "kind": "retrieval"
+     "id": "toothed_forceps",
+     "unityPrefab": "inst_toothed_forceps",
+     "displayName": "Toothed forceps",
+     "kind": "grasper"
     },
     {
-     "id": "fascial_closure",
-     "unityPrefab": "inst_fascial_closure",
-     "displayName": "Fascial closure device",
-     "kind": "closure"
+     "id": "retractor",
+     "unityPrefab": "inst_retractor",
+     "displayName": "Hand retractor",
+     "kind": "retractor"
     },
     {
-     "id": "trocar_5mm",
-     "unityPrefab": "inst_trocar_5mm",
-     "displayName": "5 mm trocar",
-     "kind": "access"
+     "id": "babcock",
+     "unityPrefab": "inst_babcock",
+     "displayName": "Babcock forceps",
+     "kind": "grasper"
     },
     {
      "id": "atraumatic_grasper",
@@ -5435,10 +7131,28 @@
      "kind": "grasper"
     },
     {
-     "id": "maryland_dissector",
-     "unityPrefab": "inst_maryland_dissector",
-     "displayName": "Maryland dissector",
-     "kind": "dissector"
+     "id": "hemostat",
+     "unityPrefab": "inst_hemostat",
+     "displayName": "Hemostat",
+     "kind": "ligation"
+    },
+    {
+     "id": "right_angle_clamp",
+     "unityPrefab": "inst_right_angle_clamp",
+     "displayName": "Right-angle clamp",
+     "kind": "ligation"
+    },
+    {
+     "id": "suture_tie",
+     "unityPrefab": "inst_suture_tie",
+     "displayName": "Suture tie",
+     "kind": "ligation"
+    },
+    {
+     "id": "hook_cautery",
+     "unityPrefab": "inst_hook_cautery",
+     "displayName": "Monopolar hook",
+     "kind": "energy"
     },
     {
      "id": "vessel_sealer",
@@ -5469,13 +7183,6 @@
      "region": "abdominal_wall"
     },
     {
-     "id": "cecum",
-     "unityName": "anat_cecum",
-     "displayName": "Cecum",
-     "system": "digestive",
-     "region": "right_lower_quadrant"
-    },
-    {
      "id": "appendix",
      "unityName": "anat_appendix",
      "displayName": "Vermiform appendix",
@@ -5497,39 +7204,18 @@
      "region": "right_lower_quadrant"
     },
     {
+     "id": "cecum",
+     "unityName": "anat_cecum",
+     "displayName": "Cecum",
+     "system": "digestive",
+     "region": "right_lower_quadrant"
+    },
+    {
      "id": "terminal_ileum",
      "unityName": "anat_terminal_ileum",
      "displayName": "Terminal ileum",
      "system": "digestive",
      "region": "right_lower_quadrant"
-    },
-    {
-     "id": "small_bowel",
-     "unityName": "anat_small_bowel",
-     "displayName": "Small bowel",
-     "system": "digestive",
-     "region": "mid_abdomen"
-    },
-    {
-     "id": "right_ureter",
-     "unityName": "anat_right_ureter",
-     "displayName": "Right ureter",
-     "system": "urinary",
-     "region": "retroperitoneum"
-    },
-    {
-     "id": "urinary_bladder",
-     "unityName": "anat_urinary_bladder",
-     "displayName": "Urinary bladder",
-     "system": "urinary",
-     "region": "pelvis"
-    },
-    {
-     "id": "greater_omentum",
-     "unityName": "anat_greater_omentum",
-     "displayName": "Greater omentum",
-     "system": "digestive",
-     "region": "peritoneal"
     }
    ],
    "actions": [
@@ -5549,7 +7235,7 @@
      "id": "view_procedure",
      "label": "View procedure steps",
      "method": "GET",
-     "route": "/procedures/lap_appendectomy"
+     "route": "/procedures/open_appendectomy"
     },
     {
      "id": "choose_patient",
@@ -5561,7 +7247,7 @@
    "disclaimer": "Synthetic FinchNode demo data. Flags and cases are illustrative teaching material, not clinical guidance."
   },
   {
-   "caseId": "case_patient-demo-sparse_lap_appendectomy",
+   "caseId": "case_patient-demo-sparse_open_appendectomy",
    "patientId": "patient-demo-sparse",
    "scenarioId": "sparse-record",
    "status": "needs_review",
@@ -5577,365 +7263,794 @@
    "urgency": "emergency",
    "indication": "Suspected perforated appendicitis",
    "presentation": "Brought in with two days of worsening right lower quadrant pain, now diffuse, with guarding, temperature 38.9 C, and heart rate 118. His record holds only demographics and one visit: medications, allergies, and history are unknown.",
-   "procedureId": "lap_appendectomy",
+   "procedureId": "open_appendectomy",
    "procedure": {
-    "id": "lap_appendectomy",
-    "title": "Laparoscopic appendectomy",
-    "shortTitle": "Appendix removal",
-    "approach": "Three-port laparoscopic",
-    "summary": "Find the appendix by following the taeniae of the cecum, divide the mesoappendix with its artery, secure and divide the appendix base, and remove it in a bag.",
+    "id": "open_appendectomy",
+    "title": "Open appendectomy",
+    "shortTitle": "Open appendix removal",
+    "approach": "Open muscle-splitting incision",
     "typicalMinutes": 45,
+    "summary": "Registered incision, layered exposure, delivery, vascular control and base ligation, then dry inspection.",
     "structures": [
      "abdominal_wall",
      "umbilicus",
-     "cecum",
      "appendix",
      "mesoappendix",
      "appendicular_artery",
-     "terminal_ileum",
-     "small_bowel",
-     "right_ureter",
-     "urinary_bladder",
-     "greater_omentum"
+     "cecum",
+     "terminal_ileum"
     ],
     "focusStructures": [
      "appendix",
      "mesoappendix",
-     "appendicular_artery",
      "cecum"
     ],
-    "ports": [
-     {
-      "id": "umbilical",
-      "label": "Umbilical camera port",
-      "sizeMm": 12,
-      "position": {
-       "x": 0,
-       "y": 0,
-       "z": 0
+    "ports": [],
+    "openBody": {
+     "version": 1,
+     "fastPathPremarked": false,
+     "tissues": [
+      {
+       "id": "skin",
+       "layer": "skin",
+       "order": 0,
+       "cuttable": true,
+       "splittable": false,
+       "perfused": false,
+       "hollow": false,
+       "critical": false,
+       "tentable": false,
+       "flowMlPerSecond": 0,
+       "fiberAxis": ""
       },
-      "instrumentIds": [
-       "trocar_12mm",
-       "laparoscope_30",
-       "endo_stapler",
-       "retrieval_bag",
-       "fascial_closure"
-      ]
-     },
-     {
-      "id": "left_lower",
-      "label": "Left lower quadrant port",
-      "sizeMm": 5,
-      "position": {
-       "x": 0.07,
-       "y": 0,
-       "z": -0.08
+      {
+       "id": "fat",
+       "layer": "fat",
+       "order": 1,
+       "cuttable": true,
+       "splittable": false,
+       "perfused": false,
+       "hollow": false,
+       "critical": false,
+       "tentable": false,
+       "flowMlPerSecond": 0,
+       "fiberAxis": ""
       },
-      "instrumentIds": [
-       "trocar_5mm",
-       "atraumatic_grasper",
-       "maryland_dissector",
-       "vessel_sealer",
-       "suction_irrigator"
-      ]
-     },
-     {
-      "id": "suprapubic",
-      "label": "Suprapubic port",
-      "sizeMm": 5,
-      "position": {
-       "x": 0,
-       "y": 0,
-       "z": -0.13
+      {
+       "id": "fascia",
+       "layer": "fascia",
+       "order": 2,
+       "cuttable": true,
+       "splittable": false,
+       "perfused": false,
+       "hollow": false,
+       "critical": false,
+       "tentable": false,
+       "flowMlPerSecond": 0,
+       "fiberAxis": "incision_line"
       },
-      "instrumentIds": [
-       "trocar_5mm",
-       "atraumatic_grasper"
-      ]
-     }
-    ],
+      {
+       "id": "muscle",
+       "layer": "muscle",
+       "order": 3,
+       "cuttable": true,
+       "splittable": true,
+       "perfused": true,
+       "hollow": false,
+       "critical": false,
+       "tentable": false,
+       "flowMlPerSecond": 0.3,
+       "fiberAxis": ""
+      },
+      {
+       "id": "peritoneum",
+       "layer": "peritoneum",
+       "order": 4,
+       "cuttable": true,
+       "splittable": false,
+       "perfused": false,
+       "hollow": false,
+       "critical": false,
+       "tentable": true,
+       "flowMlPerSecond": 0,
+       "fiberAxis": ""
+      },
+      {
+       "id": "appendix",
+       "layer": "appendix",
+       "order": -1,
+       "cuttable": true,
+       "splittable": false,
+       "perfused": false,
+       "hollow": true,
+       "critical": false,
+       "tentable": false,
+       "flowMlPerSecond": 0,
+       "fiberAxis": ""
+      },
+      {
+       "id": "mesoappendix",
+       "layer": "mesoappendix",
+       "order": -1,
+       "cuttable": true,
+       "splittable": false,
+       "perfused": true,
+       "hollow": false,
+       "critical": false,
+       "tentable": false,
+       "flowMlPerSecond": 2,
+       "fiberAxis": ""
+      },
+      {
+       "id": "appendicular_artery",
+       "layer": "appendicular_artery",
+       "order": -1,
+       "cuttable": true,
+       "splittable": false,
+       "perfused": true,
+       "hollow": false,
+       "critical": false,
+       "tentable": false,
+       "flowMlPerSecond": 2,
+       "fiberAxis": ""
+      },
+      {
+       "id": "cecum",
+       "layer": "cecum",
+       "order": -1,
+       "cuttable": true,
+       "splittable": false,
+       "perfused": false,
+       "hollow": true,
+       "critical": true,
+       "tentable": false,
+       "flowMlPerSecond": 0,
+       "fiberAxis": ""
+      },
+      {
+       "id": "terminal_ileum",
+       "layer": "terminal_ileum",
+       "order": -1,
+       "cuttable": true,
+       "splittable": false,
+       "perfused": false,
+       "hollow": true,
+       "critical": true,
+       "tentable": false,
+       "flowMlPerSecond": 0,
+       "fiberAxis": ""
+      },
+      {
+       "id": "iliac_vessels",
+       "layer": "iliac_vessels",
+       "order": -1,
+       "cuttable": true,
+       "splittable": false,
+       "perfused": true,
+       "hollow": false,
+       "critical": true,
+       "tentable": false,
+       "flowMlPerSecond": 8,
+       "fiberAxis": "",
+       "structureIds": [
+        "cardiovascular__common_iliac_artery_r",
+        "cardiovascular__common_iliac_vein_r"
+       ]
+      },
+      {
+       "id": "ureter",
+       "layer": "ureter",
+       "order": -1,
+       "cuttable": true,
+       "splittable": false,
+       "perfused": false,
+       "hollow": true,
+       "critical": true,
+       "tentable": false,
+       "flowMlPerSecond": 0,
+       "fiberAxis": "",
+       "structureIds": [
+        "right_ureter"
+       ]
+      }
+     ],
+     "milestones": [
+      {
+       "id": "mark_incision",
+       "predicates": [
+        {
+         "tissueId": "skin",
+         "fact": "marked",
+         "op": "eq",
+         "value": 1
+        },
+        {
+         "tissueId": "skin",
+         "fact": "markErrorMm",
+         "op": "lte",
+         "value": 20
+        },
+        {
+         "tissueId": "skin",
+         "fact": "markLengthMm",
+         "op": "gte",
+         "value": 50
+        },
+        {
+         "tissueId": "skin",
+         "fact": "markLengthMm",
+         "op": "lte",
+         "value": 80
+        },
+        {
+         "tissueId": "skin",
+         "fact": "markAngleDegrees",
+         "op": "lte",
+         "value": 25
+        }
+       ]
+      },
+      {
+       "id": "incise_skin",
+       "predicates": [
+        {
+         "tissueId": "skin",
+         "fact": "cutCoverage",
+         "op": "gte",
+         "value": 0.8
+        },
+        {
+         "tissueId": "skin",
+         "fact": "cutErrorMm",
+         "op": "lte",
+         "value": 5
+        },
+        {
+         "tissueId": "skin",
+         "fact": "cutDepthMm",
+         "op": "lte",
+         "value": 14
+        },
+        {
+         "tissueId": "fat",
+         "fact": "opened",
+         "op": "eq",
+         "value": 1
+        }
+       ]
+      },
+      {
+       "id": "open_fascia",
+       "predicates": [
+        {
+         "tissueId": "fascia",
+         "fact": "opened",
+         "op": "eq",
+         "value": 1
+        },
+        {
+         "tissueId": "fascia",
+         "fact": "cutAngleDegrees",
+         "op": "lte",
+         "value": 25
+        }
+       ]
+      },
+      {
+       "id": "split_muscle",
+       "predicates": [
+        {
+         "tissueId": "muscle",
+         "fact": "splitWidthMm",
+         "op": "gte",
+         "value": 15
+        }
+       ]
+      },
+      {
+       "id": "open_peritoneum",
+       "predicates": [
+        {
+         "tissueId": "peritoneum",
+         "fact": "opened",
+         "op": "eq",
+         "value": 1
+        },
+        {
+         "tissueId": "peritoneum",
+         "fact": "tentedBeforeCut",
+         "op": "eq",
+         "value": 1
+        }
+       ]
+      },
+      {
+       "id": "deliver_appendix",
+       "predicates": [
+        {
+         "tissueId": "appendix",
+         "fact": "delivered",
+         "op": "eq",
+         "value": 1
+        }
+       ]
+      },
+      {
+       "id": "divide_mesoappendix",
+       "predicates": [
+        {
+         "tissueId": "mesoappendix",
+         "fact": "cutBetweenClamps",
+         "op": "eq",
+         "value": 1
+        },
+        {
+         "tissueId": "mesoappendix",
+         "fact": "tieCount",
+         "op": "gte",
+         "value": 2
+        },
+        {
+         "tissueId": "mesoappendix",
+         "fact": "tiedBothSides",
+         "op": "eq",
+         "value": 1
+        },
+        {
+         "tissueId": "",
+         "fact": "activeBleeds",
+         "op": "eq",
+         "value": 0
+        }
+       ]
+      },
+      {
+       "id": "ligate_base",
+       "predicates": [
+        {
+         "tissueId": "appendix",
+         "fact": "decision_true_base",
+         "op": "eq",
+         "value": 1
+        },
+        {
+         "tissueId": "appendix",
+         "fact": "crushed",
+         "op": "eq",
+         "value": 1
+        },
+        {
+         "tissueId": "appendix",
+         "fact": "tieDistanceMm",
+         "op": "lte",
+         "value": 5
+        },
+        {
+         "tissueId": "appendix",
+         "fact": "stumpLengthMm",
+         "op": "lte",
+         "value": 5
+        },
+        {
+         "tissueId": "appendix",
+         "fact": "cutAboveTie",
+         "op": "eq",
+         "value": 1
+        },
+        {
+         "tissueId": "appendix",
+         "fact": "cutBetweenTieAndClamp",
+         "op": "eq",
+         "value": 1
+        },
+        {
+         "tissueId": "appendix",
+         "fact": "removed",
+         "op": "eq",
+         "value": 1
+        }
+       ]
+      },
+      {
+       "id": "inspect_clean",
+       "predicates": [
+        {
+         "tissueId": "",
+         "fact": "activeBleeds",
+         "op": "eq",
+         "value": 0
+        },
+        {
+         "tissueId": "",
+         "fact": "poolMl",
+         "op": "lte",
+         "value": 1
+        },
+        {
+         "tissueId": "appendix",
+         "fact": "inspectionMs",
+         "op": "gte",
+         "value": 1000
+        },
+        {
+         "tissueId": "mesoappendix",
+         "fact": "inspectionMs",
+         "op": "gte",
+         "value": 1000
+        }
+       ]
+      },
+      {
+       "id": "close",
+       "predicates": [
+        {
+         "tissueId": "skin",
+         "fact": "closed",
+         "op": "eq",
+         "value": 1
+        }
+       ]
+      }
+     ],
+     "guardrails": [
+      {
+       "id": "off_mark",
+       "outcome": "",
+       "tissueId": "skin",
+       "verb": "cut",
+       "eventPredicate": {
+        "tissueId": "",
+        "fact": "distanceMm",
+        "op": "gte",
+        "value": 5.001
+       },
+       "severity": "moderate",
+       "feedback": "Follow the marked line. This cut is off target."
+      },
+      {
+       "id": "deep_skin_cut",
+       "outcome": "",
+       "tissueId": "skin",
+       "verb": "cut",
+       "eventPredicate": {
+        "tissueId": "",
+        "fact": "depthMm",
+        "op": "gte",
+        "value": 14.001
+       },
+       "severity": "high",
+       "feedback": "Too deep. Skin and fat only for this stroke."
+      },
+      {
+       "id": "mark_far",
+       "outcome": "",
+       "tissueId": "skin",
+       "verb": "mark",
+       "eventPredicate": {
+        "tissueId": "",
+        "fact": "distanceMm",
+        "op": "gte",
+        "value": 20.001
+       },
+       "severity": "moderate",
+       "feedback": "Recheck the hip and belly button landmarks."
+      },
+      {
+       "id": "bowel_injury",
+       "outcome": "hollow_leak",
+       "tissueId": "",
+       "severity": "high",
+       "feedback": "Hollow tissue is leaking. Contamination is recorded."
+      },
+      {
+       "id": "critical_injury",
+       "outcome": "critical_injury",
+       "tissueId": "",
+       "severity": "high",
+       "feedback": "Critical structure injured. Control bleeding and reassess."
+      },
+      {
+       "id": "cut_before_control",
+       "outcome": "cut_unsecured",
+       "tissueId": "",
+       "severity": "high",
+       "feedback": "Active bleeding. Clamp, tie, or seal the injured vessel."
+      },
+      {
+       "id": "split_dont_cut",
+       "outcome": "muscle_cut",
+       "tissueId": "muscle",
+       "severity": "moderate",
+       "feedback": "Split the muscle along its fibers; avoid the blade."
+      },
+      {
+       "id": "lift_first",
+       "outcome": "untented_cut",
+       "tissueId": "peritoneum",
+       "severity": "high",
+       "feedback": "Lift the peritoneum before nicking it."
+      },
+      {
+       "id": "fiber_direction",
+       "outcome": "across_fibers",
+       "tissueId": "fascia",
+       "severity": "moderate",
+       "feedback": "Open the fascia along its fibers."
+      },
+      {
+       "id": "rough_handling",
+       "outcome": "rough_handling",
+       "tissueId": "",
+       "severity": "moderate",
+       "feedback": "Slow down. Lift gently."
+      }
+     ],
+     "decisions": [
+      {
+       "id": "true_base",
+       "prompt": "Where is the true base?",
+       "choices": [
+        "true_base",
+        "appendix_tip",
+        "appendix_midpoint"
+       ],
+       "correctChoice": "true_base"
+      }
+     ]
+    },
     "steps": [
      {
-      "portIds": [
-       "umbilical"
-      ],
-      "mistakes": [],
-      "hints": [],
-      "id": "access_umbilical",
-      "title": "Open umbilical access",
-      "instruction": "Enter at the umbilicus with an open technique, place the camera port, and insufflate.",
-      "action": "place_port",
-      "instrumentId": "trocar_12mm",
-      "targets": [
-       "umbilicus"
-      ],
-      "check": {
-       "type": "place_ports",
-       "targets": [
-        "umbilical"
-       ],
-       "count": 1
-      },
-      "next": "working_ports"
-     },
-     {
-      "portIds": [
-       "left_lower",
-       "suprapubic"
-      ],
-      "mistakes": [
-       {
-        "id": "port_into_bladder",
-        "trigger": "touch_structure",
-        "structure": "urinary_bladder",
-        "severity": "high",
-        "feedback": "The suprapubic trocar hit the bladder. It should be emptied before surgery and the trocar watched in."
-       }
-      ],
-      "hints": [],
-      "id": "working_ports",
-      "title": "Place working ports",
-      "instruction": "Place the left lower quadrant and suprapubic ports under vision.",
-      "action": "place_port",
-      "instrumentId": "trocar_5mm",
+      "id": "mark_incision",
+      "title": "Mark McBurney incision",
+      "instrumentId": "skin_marker",
       "targets": [
        "abdominal_wall"
       ],
+      "instruction": "Find the hip bone and belly button. Mark a third.",
+      "action": "dissect",
+      "portIds": [],
       "check": {
-       "type": "place_ports",
+       "type": "body_predicate",
        "targets": [
-        "left_lower",
-        "suprapubic"
+        "abdominal_wall"
        ],
-       "count": 2
+       "count": 1
       },
-      "next": "find_appendix"
+      "mistakes": [],
+      "hints": [
+       "Find the hip bone and belly button. Mark a third.",
+       "Inspect the tissue and the tool position.",
+       "Follow the expected action; other actions still have consequences."
+      ],
+      "next": "incise_skin"
      },
      {
-      "portIds": [
-       "left_lower",
-       "suprapubic"
-      ],
-      "mistakes": [
-       {
-        "id": "grab_appendix",
-        "trigger": "touch_structure",
-        "structure": "appendix",
-        "severity": "moderate",
-        "feedback": "Grasping an inflamed appendix can perforate it. Hold the mesoappendix instead."
-       }
-      ],
-      "hints": [
-       "All three taeniae converge on the appendix base."
-      ],
-      "id": "find_appendix",
-      "title": "Locate the appendix",
-      "instruction": "Tilt head down and left side down, sweep the small bowel away, and follow the taeniae of the cecum to the appendix base.",
-      "action": "identify",
-      "instrumentId": "atraumatic_grasper",
+      "id": "incise_skin",
+      "title": "Incise skin",
+      "instrumentId": "scalpel",
       "targets": [
-       "cecum",
+       "abdominal_wall"
+      ],
+      "instruction": "One smooth stroke along your line. Skin only.",
+      "action": "dissect",
+      "portIds": [],
+      "check": {
+       "type": "body_predicate",
+       "targets": [
+        "abdominal_wall"
+       ],
+       "count": 1
+      },
+      "mistakes": [],
+      "hints": [
+       "One smooth stroke along your line. Skin only.",
+       "Inspect the tissue and the tool position.",
+       "Follow the expected action; other actions still have consequences."
+      ],
+      "next": "open_fascia"
+     },
+     {
+      "id": "open_fascia",
+      "title": "Open fascia",
+      "instrumentId": "metzenbaum_scissors",
+      "targets": [
+       "abdominal_wall"
+      ],
+      "instruction": "Open the aponeurosis along its fibers.",
+      "action": "dissect",
+      "portIds": [],
+      "check": {
+       "type": "body_predicate",
+       "targets": [
+        "abdominal_wall"
+       ],
+       "count": 1
+      },
+      "mistakes": [],
+      "hints": [
+       "Open the aponeurosis along its fibers.",
+       "Inspect the tissue and the tool position.",
+       "Follow the expected action; other actions still have consequences."
+      ],
+      "next": "split_muscle"
+     },
+     {
+      "id": "split_muscle",
+      "title": "Split muscle",
+      "instrumentId": "retractor",
+      "targets": [
+       "abdominal_wall"
+      ],
+      "instruction": "Now split the muscle. Pull, don’t cut.",
+      "action": "dissect",
+      "portIds": [],
+      "check": {
+       "type": "body_predicate",
+       "targets": [
+        "abdominal_wall"
+       ],
+       "count": 1
+      },
+      "mistakes": [],
+      "hints": [
+       "Now split the muscle. Pull, don’t cut.",
+       "Inspect the tissue and the tool position.",
+       "Follow the expected action; other actions still have consequences."
+      ],
+      "next": "open_peritoneum"
+     },
+     {
+      "id": "open_peritoneum",
+      "title": "Open peritoneum",
+      "instrumentId": "toothed_forceps",
+      "targets": [
+       "abdominal_wall"
+      ],
+      "instruction": "Lift the peritoneum first, then nick it.",
+      "action": "dissect",
+      "portIds": [],
+      "check": {
+       "type": "body_predicate",
+       "targets": [
+        "abdominal_wall"
+       ],
+       "count": 1
+      },
+      "mistakes": [],
+      "hints": [
+       "Lift the peritoneum first, then nick it.",
+       "Inspect the tissue and the tool position.",
+       "Follow the expected action; other actions still have consequences."
+      ],
+      "next": "deliver_appendix"
+     },
+     {
+      "id": "deliver_appendix",
+      "title": "Deliver appendix",
+      "instrumentId": "babcock",
+      "targets": [
        "appendix"
       ],
+      "instruction": "Follow the taenia to the appendix. Lift it out gently.",
+      "action": "dissect",
+      "portIds": [],
       "check": {
-       "type": "identify_targets",
+       "type": "body_predicate",
        "targets": [
-        "cecum",
         "appendix"
        ],
-       "count": 2
+       "count": 1
       },
-      "next": "inspect"
+      "mistakes": [],
+      "hints": [
+       "Follow the taenia to the appendix. Lift it out gently.",
+       "Inspect the tissue and the tool position.",
+       "Follow the expected action; other actions still have consequences."
+      ],
+      "next": "divide_mesoappendix"
      },
      {
-      "portIds": [
-       "left_lower"
-      ],
-      "mistakes": [],
-      "hints": [],
-      "id": "inspect",
-      "title": "Assess the appendix",
-      "instruction": "Look for perforation, abscess, or a mass, and run the terminal ileum.",
-      "action": "inspect",
-      "instrumentId": "atraumatic_grasper",
-      "targets": [
-       "appendix",
-       "terminal_ileum"
-      ],
-      "check": {
-       "type": "touch_target",
-       "targets": [
-        "appendix",
-        "terminal_ileum"
-       ],
-       "count": 2
-      },
-      "next": "mesoappendix_window"
-     },
-     {
-      "portIds": [
-       "left_lower"
-      ],
-      "mistakes": [],
-      "hints": [],
-      "id": "mesoappendix_window",
-      "title": "Window the mesoappendix",
-      "instruction": "Create a window in the mesoappendix right at the appendix base.",
-      "action": "dissect",
-      "instrumentId": "maryland_dissector",
+      "id": "divide_mesoappendix",
+      "title": "Secure mesoappendix",
+      "instrumentId": "hemostat",
       "targets": [
        "mesoappendix"
       ],
+      "instruction": "Clamp twice, cut between, then tie.",
+      "action": "dissect",
+      "portIds": [],
       "check": {
-       "type": "touch_target",
+       "type": "body_predicate",
        "targets": [
         "mesoappendix"
        ],
        "count": 1
       },
-      "next": "divide_mesoappendix"
-     },
-     {
-      "portIds": [
-       "left_lower"
-      ],
-      "mistakes": [
-       {
-        "id": "sealer_on_ileum",
-        "trigger": "touch_structure",
-        "structure": "terminal_ileum",
-        "severity": "high",
-        "feedback": "The sealer jaws were on the terminal ileum. Thermal spread can cause a delayed leak."
-       }
-      ],
-      "hints": [],
-      "id": "divide_mesoappendix",
-      "title": "Divide the mesoappendix",
-      "instruction": "Seal and divide the mesoappendix, including the appendicular artery.",
-      "action": "seal",
-      "instrumentId": "vessel_sealer",
-      "targets": [
-       "mesoappendix",
-       "appendicular_artery"
-      ],
-      "check": {
-       "type": "touch_target",
-       "targets": [
-        "appendicular_artery"
-       ],
-       "count": 1
-      },
-      "next": "staple_base"
-     },
-     {
-      "portIds": [
-       "umbilical"
-      ],
-      "mistakes": [
-       {
-        "id": "staple_cecum_wide",
-        "trigger": "touch_structure",
-        "structure": "cecum",
-        "severity": "moderate",
-        "feedback": "Too much cecum in the jaws. Stay at the base."
-       },
-       {
-        "id": "staple_ileum",
-        "trigger": "touch_structure",
-        "structure": "terminal_ileum",
-        "severity": "high",
-        "feedback": "The stapler caught the terminal ileum."
-       }
-      ],
+      "mistakes": [],
       "hints": [
-       "A long stump left behind can cause stump appendicitis later."
+       "Clamp twice, cut between, then tie.",
+       "Inspect the tissue and the tool position.",
+       "Follow the expected action; other actions still have consequences."
       ],
-      "id": "staple_base",
-      "title": "Staple the appendix base",
-      "instruction": "Fire the stapler across the appendix flush with the cecum.",
-      "action": "staple",
-      "instrumentId": "endo_stapler",
+      "next": "ligate_base"
+     },
+     {
+      "id": "ligate_base",
+      "title": "Identify and secure base",
+      "instrumentId": "right_angle_clamp",
       "targets": [
        "appendix"
       ],
+      "instruction": "Crush, tie at the base, cut above your tie.",
+      "action": "dissect",
+      "portIds": [],
       "check": {
-       "type": "touch_target",
+       "type": "body_predicate",
        "targets": [
         "appendix"
        ],
        "count": 1
       },
-      "next": "extract"
+      "mistakes": [],
+      "hints": [
+       "Crush, tie at the base, cut above your tie.",
+       "Inspect the tissue and the tool position.",
+       "Follow the expected action; other actions still have consequences."
+      ],
+      "next": "inspect_clean"
      },
      {
-      "portIds": [
-       "umbilical"
-      ],
-      "mistakes": [],
-      "hints": [],
-      "id": "extract",
-      "title": "Extract the appendix",
-      "instruction": "Bag the appendix and remove it through the umbilical port without touching the wound.",
-      "action": "extract",
-      "instrumentId": "retrieval_bag",
-      "targets": [
-       "appendix"
-      ],
-      "check": {
-       "type": "touch_target",
-       "targets": [
-        "appendix"
-       ],
-       "count": 1
-      },
-      "next": "irrigate"
-     },
-     {
-      "portIds": [
-       "left_lower"
-      ],
-      "mistakes": [],
-      "hints": [],
-      "id": "irrigate",
-      "title": "Suction and inspect",
-      "instruction": "Suction any fluid from the right lower quadrant and pelvis and check the staple line.",
-      "action": "inspect",
+      "id": "inspect_clean",
+      "title": "Inspect and clean",
       "instrumentId": "suction_irrigator",
       "targets": [
-       "cecum"
+       "mesoappendix"
       ],
+      "instruction": "Dry field? Check the stump and the vessels.",
+      "action": "dissect",
+      "portIds": [],
       "check": {
-       "type": "touch_target",
+       "type": "body_predicate",
        "targets": [
-        "cecum"
+        "mesoappendix"
        ],
        "count": 1
       },
+      "mistakes": [],
+      "hints": [
+       "Dry field? Check the stump and the vessels.",
+       "Inspect the tissue and the tool position.",
+       "Follow the expected action; other actions still have consequences."
+      ],
       "next": "close"
      },
      {
-      "portIds": [
-       "umbilical"
-      ],
-      "mistakes": [],
-      "hints": [],
       "id": "close",
-      "title": "Close",
-      "instruction": "Remove ports under vision, release the pneumoperitoneum, and close the umbilical fascia.",
-      "action": "close",
-      "instrumentId": "fascial_closure",
+      "title": "Close wound",
+      "instrumentId": "suture_tie",
       "targets": [
        "abdominal_wall"
       ],
+      "instruction": "Close in layers. Nice work.",
+      "action": "close",
+      "portIds": [],
       "check": {
-       "type": "confirm",
-       "targets": [],
-       "count": 0
+       "type": "body_predicate",
+       "targets": [
+        "abdominal_wall"
+       ],
+       "count": 1
       },
+      "mistakes": [],
+      "hints": [
+       "Close in layers. Nice work.",
+       "Inspect the tissue and the tool position.",
+       "Follow the expected action; other actions still have consequences."
+      ],
       "next": ""
      }
     ],
-    "firstStep": "access_umbilical"
+    "firstStep": "mark_incision"
    },
    "brief": {
     "patientId": "patient-demo-sparse",
@@ -5943,7 +8058,7 @@
     "dataSource": "demo",
     "consentStatus": "simulated",
     "consentReceipts": [],
-    "generatedAt": "2026-10-03T21:53:17.825Z",
+    "generatedAt": "2026-10-04T03:44:32.526Z",
     "dataAsOf": "2026-09-01T00:00:00Z",
     "patient": {
      "name": "Jonah Okoye",
@@ -6004,7 +8119,7 @@
    "considerations": [
     {
      "flagId": "flag_incomplete_chart",
-     "stepId": "access_umbilical",
+     "stepId": "mark_incision",
      "note": "Incomplete chart: confirm identity, allergies, and medications directly with the patient or family at the time out."
     }
    ],
@@ -6036,40 +8151,40 @@
    ],
    "instruments": [
     {
-     "id": "trocar_12mm",
-     "unityPrefab": "inst_trocar_12mm",
-     "displayName": "12 mm trocar",
-     "kind": "access"
+     "id": "scalpel",
+     "unityPrefab": "inst_scalpel",
+     "displayName": "Scalpel",
+     "kind": "cutting"
     },
     {
-     "id": "laparoscope_30",
-     "unityPrefab": "inst_laparoscope_30",
-     "displayName": "30 degree laparoscope",
-     "kind": "visualization"
+     "id": "metzenbaum_scissors",
+     "unityPrefab": "inst_metzenbaum_scissors",
+     "displayName": "Metzenbaum scissors",
+     "kind": "cutting"
     },
     {
-     "id": "endo_stapler",
-     "unityPrefab": "inst_endo_stapler",
-     "displayName": "Endoscopic linear stapler",
-     "kind": "stapler"
+     "id": "skin_marker",
+     "unityPrefab": "inst_skin_marker",
+     "displayName": "Skin marker",
+     "kind": "marking"
     },
     {
-     "id": "retrieval_bag",
-     "unityPrefab": "inst_retrieval_bag",
-     "displayName": "Specimen retrieval bag",
-     "kind": "retrieval"
+     "id": "toothed_forceps",
+     "unityPrefab": "inst_toothed_forceps",
+     "displayName": "Toothed forceps",
+     "kind": "grasper"
     },
     {
-     "id": "fascial_closure",
-     "unityPrefab": "inst_fascial_closure",
-     "displayName": "Fascial closure device",
-     "kind": "closure"
+     "id": "retractor",
+     "unityPrefab": "inst_retractor",
+     "displayName": "Hand retractor",
+     "kind": "retractor"
     },
     {
-     "id": "trocar_5mm",
-     "unityPrefab": "inst_trocar_5mm",
-     "displayName": "5 mm trocar",
-     "kind": "access"
+     "id": "babcock",
+     "unityPrefab": "inst_babcock",
+     "displayName": "Babcock forceps",
+     "kind": "grasper"
     },
     {
      "id": "atraumatic_grasper",
@@ -6078,10 +8193,28 @@
      "kind": "grasper"
     },
     {
-     "id": "maryland_dissector",
-     "unityPrefab": "inst_maryland_dissector",
-     "displayName": "Maryland dissector",
-     "kind": "dissector"
+     "id": "hemostat",
+     "unityPrefab": "inst_hemostat",
+     "displayName": "Hemostat",
+     "kind": "ligation"
+    },
+    {
+     "id": "right_angle_clamp",
+     "unityPrefab": "inst_right_angle_clamp",
+     "displayName": "Right-angle clamp",
+     "kind": "ligation"
+    },
+    {
+     "id": "suture_tie",
+     "unityPrefab": "inst_suture_tie",
+     "displayName": "Suture tie",
+     "kind": "ligation"
+    },
+    {
+     "id": "hook_cautery",
+     "unityPrefab": "inst_hook_cautery",
+     "displayName": "Monopolar hook",
+     "kind": "energy"
     },
     {
      "id": "vessel_sealer",
@@ -6112,13 +8245,6 @@
      "region": "abdominal_wall"
     },
     {
-     "id": "cecum",
-     "unityName": "anat_cecum",
-     "displayName": "Cecum",
-     "system": "digestive",
-     "region": "right_lower_quadrant"
-    },
-    {
      "id": "appendix",
      "unityName": "anat_appendix",
      "displayName": "Vermiform appendix",
@@ -6140,39 +8266,18 @@
      "region": "right_lower_quadrant"
     },
     {
+     "id": "cecum",
+     "unityName": "anat_cecum",
+     "displayName": "Cecum",
+     "system": "digestive",
+     "region": "right_lower_quadrant"
+    },
+    {
      "id": "terminal_ileum",
      "unityName": "anat_terminal_ileum",
      "displayName": "Terminal ileum",
      "system": "digestive",
      "region": "right_lower_quadrant"
-    },
-    {
-     "id": "small_bowel",
-     "unityName": "anat_small_bowel",
-     "displayName": "Small bowel",
-     "system": "digestive",
-     "region": "mid_abdomen"
-    },
-    {
-     "id": "right_ureter",
-     "unityName": "anat_right_ureter",
-     "displayName": "Right ureter",
-     "system": "urinary",
-     "region": "retroperitoneum"
-    },
-    {
-     "id": "urinary_bladder",
-     "unityName": "anat_urinary_bladder",
-     "displayName": "Urinary bladder",
-     "system": "urinary",
-     "region": "pelvis"
-    },
-    {
-     "id": "greater_omentum",
-     "unityName": "anat_greater_omentum",
-     "displayName": "Greater omentum",
-     "system": "digestive",
-     "region": "peritoneal"
     }
    ],
    "actions": [
@@ -6192,7 +8297,7 @@
      "id": "view_procedure",
      "label": "View procedure steps",
      "method": "GET",
-     "route": "/procedures/lap_appendectomy"
+     "route": "/procedures/open_appendectomy"
     },
     {
      "id": "choose_patient",
@@ -6630,7 +8735,7 @@
     "dataSource": "demo",
     "consentStatus": "simulated",
     "consentReceipts": [],
-    "generatedAt": "2026-10-03T21:53:17.825Z",
+    "generatedAt": "2026-10-04T03:44:32.527Z",
     "dataAsOf": "2026-09-01T00:00:00Z",
     "patient": {
      "name": "Dolores Marchetti",
@@ -7065,7 +9170,7 @@
     "dataSource": "",
     "consentStatus": "",
     "consentReceipts": [],
-    "generatedAt": "2026-10-03T21:53:17.822Z",
+    "generatedAt": "2026-10-04T03:44:32.523Z",
     "dataAsOf": "",
     "patient": {
      "name": "",
@@ -7139,7 +9244,7 @@
     "dataSource": "",
     "consentStatus": "",
     "consentReceipts": [],
-    "generatedAt": "2026-10-03T21:53:17.822Z",
+    "generatedAt": "2026-10-04T03:44:32.524Z",
     "dataAsOf": "",
     "patient": {
      "name": "",
@@ -7694,7 +9799,7 @@
     "consentReceipts": [
      "rcpt_demo_consent_partial"
     ],
-    "generatedAt": "2026-10-03T21:53:17.825Z",
+    "generatedAt": "2026-10-04T03:44:32.527Z",
     "dataAsOf": "2026-09-01T00:00:00Z",
     "patient": {
      "name": "",
@@ -8524,7 +10629,7 @@
     "dataSource": "demo",
     "consentStatus": "simulated",
     "consentReceipts": [],
-    "generatedAt": "2026-10-03T21:53:17.825Z",
+    "generatedAt": "2026-10-04T03:44:32.527Z",
     "dataAsOf": "2026-09-01T00:00:00Z",
     "patient": {
      "name": "Ingrid Solano",
@@ -8841,6 +10946,719 @@
      "label": "View procedure steps",
      "method": "GET",
      "route": "/procedures/lap_cholecystectomy"
+    },
+    {
+     "id": "choose_patient",
+     "label": "Choose another patient",
+     "method": "GET",
+     "route": "/patients"
+    }
+   ],
+   "disclaimer": "Synthetic FinchNode demo data. Flags and cases are illustrative teaching material, not clinical guidance."
+  },
+  {
+   "caseId": "case_patient-demo-multi-source_lap_appendectomy",
+   "patientId": "patient-demo-multi-source",
+   "scenarioId": "multi-source-overlap",
+   "status": "needs_review",
+   "statusReason": "The chart has 1 gap to resolve. Practice can proceed; the pre-op check covers them.",
+   "retryAfterSeconds": 0,
+   "patient": {
+    "name": "Priya Ramaswamy",
+    "age": 40,
+    "sex": "female",
+    "displayLabel": "Priya Ramaswamy, 40 F"
+   },
+   "bodyScale": 1,
+   "urgency": "urgent",
+   "indication": "Acute appendicitis",
+   "presentation": "Advanced offline laparoscopic variant. One day of right lower quadrant pain with rebound tenderness and a temperature of 37.9 C. CT shows an 11 mm appendix with periappendiceal fat stranding and no abscess. Her records come from two health systems that disagree in places.",
+   "procedureId": "lap_appendectomy",
+   "procedure": {
+    "id": "lap_appendectomy",
+    "title": "Laparoscopic appendectomy",
+    "shortTitle": "Appendix removal",
+    "approach": "Three-port laparoscopic",
+    "summary": "Find the appendix by following the taeniae of the cecum, divide the mesoappendix with its artery, secure and divide the appendix base, and remove it in a bag.",
+    "typicalMinutes": 45,
+    "structures": [
+     "abdominal_wall",
+     "umbilicus",
+     "cecum",
+     "appendix",
+     "mesoappendix",
+     "appendicular_artery",
+     "terminal_ileum",
+     "small_bowel",
+     "right_ureter",
+     "urinary_bladder",
+     "greater_omentum"
+    ],
+    "focusStructures": [
+     "appendix",
+     "mesoappendix",
+     "appendicular_artery",
+     "cecum"
+    ],
+    "ports": [
+     {
+      "id": "umbilical",
+      "label": "Umbilical camera port",
+      "sizeMm": 12,
+      "position": {
+       "x": 0,
+       "y": 0,
+       "z": 0
+      },
+      "instrumentIds": [
+       "trocar_12mm",
+       "laparoscope_30",
+       "endo_stapler",
+       "retrieval_bag",
+       "fascial_closure"
+      ]
+     },
+     {
+      "id": "left_lower",
+      "label": "Left lower quadrant port",
+      "sizeMm": 5,
+      "position": {
+       "x": 0.07,
+       "y": 0,
+       "z": -0.08
+      },
+      "instrumentIds": [
+       "trocar_5mm",
+       "atraumatic_grasper",
+       "maryland_dissector",
+       "vessel_sealer",
+       "suction_irrigator"
+      ]
+     },
+     {
+      "id": "suprapubic",
+      "label": "Suprapubic port",
+      "sizeMm": 5,
+      "position": {
+       "x": 0,
+       "y": 0,
+       "z": -0.13
+      },
+      "instrumentIds": [
+       "trocar_5mm",
+       "atraumatic_grasper"
+      ]
+     }
+    ],
+    "steps": [
+     {
+      "portIds": [
+       "umbilical"
+      ],
+      "mistakes": [],
+      "hints": [],
+      "id": "access_umbilical",
+      "title": "Open umbilical access",
+      "instruction": "Enter at the umbilicus with an open technique, place the camera port, and insufflate.",
+      "action": "place_port",
+      "instrumentId": "trocar_12mm",
+      "targets": [
+       "umbilicus"
+      ],
+      "check": {
+       "type": "place_ports",
+       "targets": [
+        "umbilical"
+       ],
+       "count": 1
+      },
+      "next": "working_ports"
+     },
+     {
+      "portIds": [
+       "left_lower",
+       "suprapubic"
+      ],
+      "mistakes": [
+       {
+        "id": "port_into_bladder",
+        "trigger": "touch_structure",
+        "structure": "urinary_bladder",
+        "severity": "high",
+        "feedback": "The suprapubic trocar hit the bladder. It should be emptied before surgery and the trocar watched in."
+       }
+      ],
+      "hints": [],
+      "id": "working_ports",
+      "title": "Place working ports",
+      "instruction": "Place the left lower quadrant and suprapubic ports under vision.",
+      "action": "place_port",
+      "instrumentId": "trocar_5mm",
+      "targets": [
+       "abdominal_wall"
+      ],
+      "check": {
+       "type": "place_ports",
+       "targets": [
+        "left_lower",
+        "suprapubic"
+       ],
+       "count": 2
+      },
+      "next": "find_appendix"
+     },
+     {
+      "portIds": [
+       "left_lower",
+       "suprapubic"
+      ],
+      "mistakes": [
+       {
+        "id": "grab_appendix",
+        "trigger": "touch_structure",
+        "structure": "appendix",
+        "severity": "moderate",
+        "feedback": "Grasping an inflamed appendix can perforate it. Hold the mesoappendix instead."
+       }
+      ],
+      "hints": [
+       "All three taeniae converge on the appendix base."
+      ],
+      "id": "find_appendix",
+      "title": "Locate the appendix",
+      "instruction": "Tilt head down and left side down, sweep the small bowel away, and follow the taeniae of the cecum to the appendix base.",
+      "action": "identify",
+      "instrumentId": "atraumatic_grasper",
+      "targets": [
+       "cecum",
+       "appendix"
+      ],
+      "check": {
+       "type": "identify_targets",
+       "targets": [
+        "cecum",
+        "appendix"
+       ],
+       "count": 2
+      },
+      "next": "inspect"
+     },
+     {
+      "portIds": [
+       "left_lower"
+      ],
+      "mistakes": [],
+      "hints": [],
+      "id": "inspect",
+      "title": "Assess the appendix",
+      "instruction": "Look for perforation, abscess, or a mass, and run the terminal ileum.",
+      "action": "inspect",
+      "instrumentId": "atraumatic_grasper",
+      "targets": [
+       "appendix",
+       "terminal_ileum"
+      ],
+      "check": {
+       "type": "touch_target",
+       "targets": [
+        "appendix",
+        "terminal_ileum"
+       ],
+       "count": 2
+      },
+      "next": "mesoappendix_window"
+     },
+     {
+      "portIds": [
+       "left_lower"
+      ],
+      "mistakes": [],
+      "hints": [],
+      "id": "mesoappendix_window",
+      "title": "Window the mesoappendix",
+      "instruction": "Create a window in the mesoappendix right at the appendix base.",
+      "action": "dissect",
+      "instrumentId": "maryland_dissector",
+      "targets": [
+       "mesoappendix"
+      ],
+      "check": {
+       "type": "touch_target",
+       "targets": [
+        "mesoappendix"
+       ],
+       "count": 1
+      },
+      "next": "divide_mesoappendix"
+     },
+     {
+      "portIds": [
+       "left_lower"
+      ],
+      "mistakes": [
+       {
+        "id": "sealer_on_ileum",
+        "trigger": "touch_structure",
+        "structure": "terminal_ileum",
+        "severity": "high",
+        "feedback": "The sealer jaws were on the terminal ileum. Thermal spread can cause a delayed leak."
+       }
+      ],
+      "hints": [],
+      "id": "divide_mesoappendix",
+      "title": "Divide the mesoappendix",
+      "instruction": "Seal and divide the mesoappendix, including the appendicular artery.",
+      "action": "seal",
+      "instrumentId": "vessel_sealer",
+      "targets": [
+       "mesoappendix",
+       "appendicular_artery"
+      ],
+      "check": {
+       "type": "touch_target",
+       "targets": [
+        "appendicular_artery"
+       ],
+       "count": 1
+      },
+      "next": "staple_base"
+     },
+     {
+      "portIds": [
+       "umbilical"
+      ],
+      "mistakes": [
+       {
+        "id": "staple_cecum_wide",
+        "trigger": "touch_structure",
+        "structure": "cecum",
+        "severity": "moderate",
+        "feedback": "Too much cecum in the jaws. Stay at the base."
+       },
+       {
+        "id": "staple_ileum",
+        "trigger": "touch_structure",
+        "structure": "terminal_ileum",
+        "severity": "high",
+        "feedback": "The stapler caught the terminal ileum."
+       }
+      ],
+      "hints": [
+       "A long stump left behind can cause stump appendicitis later."
+      ],
+      "id": "staple_base",
+      "title": "Staple the appendix base",
+      "instruction": "Fire the stapler across the appendix flush with the cecum.",
+      "action": "staple",
+      "instrumentId": "endo_stapler",
+      "targets": [
+       "appendix"
+      ],
+      "check": {
+       "type": "touch_target",
+       "targets": [
+        "appendix"
+       ],
+       "count": 1
+      },
+      "next": "extract"
+     },
+     {
+      "portIds": [
+       "umbilical"
+      ],
+      "mistakes": [],
+      "hints": [],
+      "id": "extract",
+      "title": "Extract the appendix",
+      "instruction": "Bag the appendix and remove it through the umbilical port without touching the wound.",
+      "action": "extract",
+      "instrumentId": "retrieval_bag",
+      "targets": [
+       "appendix"
+      ],
+      "check": {
+       "type": "touch_target",
+       "targets": [
+        "appendix"
+       ],
+       "count": 1
+      },
+      "next": "irrigate"
+     },
+     {
+      "portIds": [
+       "left_lower"
+      ],
+      "mistakes": [],
+      "hints": [],
+      "id": "irrigate",
+      "title": "Suction and inspect",
+      "instruction": "Suction any fluid from the right lower quadrant and pelvis and check the staple line.",
+      "action": "inspect",
+      "instrumentId": "suction_irrigator",
+      "targets": [
+       "cecum"
+      ],
+      "check": {
+       "type": "touch_target",
+       "targets": [
+        "cecum"
+       ],
+       "count": 1
+      },
+      "next": "close"
+     },
+     {
+      "portIds": [
+       "umbilical"
+      ],
+      "mistakes": [],
+      "hints": [],
+      "id": "close",
+      "title": "Close",
+      "instruction": "Remove ports under vision, release the pneumoperitoneum, and close the umbilical fascia.",
+      "action": "close",
+      "instrumentId": "fascial_closure",
+      "targets": [
+       "abdominal_wall"
+      ],
+      "check": {
+       "type": "confirm",
+       "targets": [],
+       "count": 0
+      },
+      "next": ""
+     }
+    ],
+    "firstStep": "access_umbilical"
+   },
+   "brief": {
+    "patientId": "patient-demo-multi-source",
+    "synthetic": true,
+    "dataSource": "demo",
+    "consentStatus": "simulated",
+    "consentReceipts": [],
+    "generatedAt": "2026-10-04T03:44:32.526Z",
+    "dataAsOf": "2026-09-01T00:00:00Z",
+    "patient": {
+     "name": "Priya Ramaswamy",
+     "age": 40,
+     "sex": "female",
+     "displayLabel": "Priya Ramaswamy, 40 F"
+    },
+    "flags": [
+     {
+      "id": "flag_latex",
+      "type": "latex",
+      "severity": "high",
+      "title": "Latex allergy",
+      "spoken": "a latex allergy, so the room must be latex free",
+      "detail": "Latex allergy on file. The operating room, gloves, catheters, and equipment must be latex free before the patient enters.",
+      "structures": [],
+      "evidence": [
+       {
+        "kind": "allergy",
+        "label": "Latex allergy",
+        "value": "low severity",
+        "date": "",
+        "source": "Quillhaven Medical Group (Synthetic)"
+       }
+      ]
+     },
+     {
+      "id": "flag_anemia",
+      "type": "anemia",
+      "severity": "moderate",
+      "title": "Anemia (hemoglobin 11.6)",
+      "spoken": "anemia with a hemoglobin of 11.6",
+      "detail": "Lower tolerance for blood loss. Type and screen, and know the latest hemoglobin before incision.",
+      "structures": [],
+      "evidence": [
+       {
+        "kind": "lab",
+        "label": "Hemoglobin",
+        "value": "11.6 g/dL",
+        "date": "2025-11-20",
+        "source": "Quillhaven Medical Group (Synthetic)"
+       },
+       {
+        "kind": "condition",
+        "label": "Iron deficiency anemia",
+        "value": "active",
+        "date": "",
+        "source": "Quillhaven Medical Group (Synthetic)"
+       }
+      ]
+     },
+     {
+      "id": "flag_incomplete_chart",
+      "type": "incomplete_chart",
+      "severity": "moderate",
+      "title": "Incomplete chart (1 gap)",
+      "spoken": "an incomplete chart",
+      "detail": "No usable creatinine or eGFR on file. Kidney function is unknown.",
+      "structures": [],
+      "evidence": []
+     }
+    ],
+    "highlightStructures": [],
+    "activeMedicationCount": 3,
+    "chart": [
+     {
+      "section": "Patient",
+      "text": "Priya Ramaswamy, 40 F",
+      "flagged": false
+     },
+     {
+      "section": "Problems",
+      "text": "Hypothyroidism",
+      "flagged": false
+     },
+     {
+      "section": "Problems",
+      "text": "Migraine",
+      "flagged": false
+     },
+     {
+      "section": "Problems",
+      "text": "Iron deficiency anemia",
+      "flagged": true
+     },
+     {
+      "section": "Medications",
+      "text": "levothyroxine sodium 0.05 MG Oral Tablet",
+      "flagged": false
+     },
+     {
+      "section": "Medications",
+      "text": "sumatriptan 50 MG Oral Tablet",
+      "flagged": false
+     },
+     {
+      "section": "Medications",
+      "text": "ferrous sulfate 325 MG Oral Tablet",
+      "flagged": false
+     },
+     {
+      "section": "Allergies",
+      "text": "Latex allergy (low)",
+      "flagged": true
+     },
+     {
+      "section": "Key labs",
+      "text": "Hemoglobin: 11.6 g/dL (2025-11-20)",
+      "flagged": true
+     },
+     {
+      "section": "Consent",
+      "text": "FinchNode demo record (consent simulated)",
+      "flagged": false
+     }
+    ],
+    "dataGaps": [
+     {
+      "code": "no_kidney_function",
+      "message": "No usable creatinine or eGFR on file. Kidney function is unknown."
+     }
+    ],
+    "sources": [
+     "Northstar Health System (Synthetic)",
+     "Quillhaven Medical Group (Synthetic)"
+    ],
+    "say": "Priya Ramaswamy, 40. One high priority: a latex allergy, so the room must be latex free. Also anemia with a hemoglobin of 11.6 and an incomplete chart. Synthetic demo patient.",
+    "disclaimer": "Synthetic FinchNode demo data. Flags and cases are illustrative teaching material, not clinical guidance."
+   },
+   "considerations": [
+    {
+     "flagId": "flag_latex",
+     "stepId": "access_umbilical",
+     "note": "Latex allergy: the room, gloves, catheters, and every instrument must be latex free before entry."
+    },
+    {
+     "flagId": "flag_anemia",
+     "stepId": "irrigate",
+     "note": "Preoperative anemia: little reserve for blood loss. Know the latest hemoglobin and whether blood is available."
+    },
+    {
+     "flagId": "flag_incomplete_chart",
+     "stepId": "access_umbilical",
+     "note": "Incomplete chart: confirm identity, allergies, and medications directly with the patient or family at the time out."
+    }
+   ],
+   "checklistOptions": [
+    {
+     "type": "polypharmacy",
+     "label": "Polypharmacy needing reconciliation"
+    },
+    {
+     "type": "incomplete_chart",
+     "label": "Incomplete chart needing confirmation"
+    },
+    {
+     "type": "cardiac",
+     "label": "Heart disease"
+    },
+    {
+     "type": "latex",
+     "label": "Latex allergy"
+    },
+    {
+     "type": "anemia",
+     "label": "Anemia"
+    },
+    {
+     "type": "renal",
+     "label": "Reduced kidney function"
+    }
+   ],
+   "instruments": [
+    {
+     "id": "trocar_12mm",
+     "unityPrefab": "inst_trocar_12mm",
+     "displayName": "12 mm trocar",
+     "kind": "access"
+    },
+    {
+     "id": "laparoscope_30",
+     "unityPrefab": "inst_laparoscope_30",
+     "displayName": "30 degree laparoscope",
+     "kind": "visualization"
+    },
+    {
+     "id": "endo_stapler",
+     "unityPrefab": "inst_endo_stapler",
+     "displayName": "Endoscopic linear stapler",
+     "kind": "stapler"
+    },
+    {
+     "id": "retrieval_bag",
+     "unityPrefab": "inst_retrieval_bag",
+     "displayName": "Specimen retrieval bag",
+     "kind": "retrieval"
+    },
+    {
+     "id": "fascial_closure",
+     "unityPrefab": "inst_fascial_closure",
+     "displayName": "Fascial closure device",
+     "kind": "closure"
+    },
+    {
+     "id": "trocar_5mm",
+     "unityPrefab": "inst_trocar_5mm",
+     "displayName": "5 mm trocar",
+     "kind": "access"
+    },
+    {
+     "id": "atraumatic_grasper",
+     "unityPrefab": "inst_atraumatic_grasper",
+     "displayName": "Atraumatic grasper",
+     "kind": "grasper"
+    },
+    {
+     "id": "maryland_dissector",
+     "unityPrefab": "inst_maryland_dissector",
+     "displayName": "Maryland dissector",
+     "kind": "dissector"
+    },
+    {
+     "id": "vessel_sealer",
+     "unityPrefab": "inst_vessel_sealer",
+     "displayName": "Bipolar vessel sealer",
+     "kind": "energy"
+    },
+    {
+     "id": "suction_irrigator",
+     "unityPrefab": "inst_suction_irrigator",
+     "displayName": "Suction irrigator",
+     "kind": "irrigation"
+    }
+   ],
+   "anatomy": [
+    {
+     "id": "abdominal_wall",
+     "unityName": "anat_abdominal_wall",
+     "displayName": "Anterior abdominal wall",
+     "system": "musculoskeletal",
+     "region": "abdominal_wall"
+    },
+    {
+     "id": "umbilicus",
+     "unityName": "anat_umbilicus",
+     "displayName": "Umbilicus",
+     "system": "integumentary",
+     "region": "abdominal_wall"
+    },
+    {
+     "id": "cecum",
+     "unityName": "anat_cecum",
+     "displayName": "Cecum",
+     "system": "digestive",
+     "region": "right_lower_quadrant"
+    },
+    {
+     "id": "appendix",
+     "unityName": "anat_appendix",
+     "displayName": "Vermiform appendix",
+     "system": "digestive",
+     "region": "right_lower_quadrant"
+    },
+    {
+     "id": "mesoappendix",
+     "unityName": "anat_mesoappendix",
+     "displayName": "Mesoappendix",
+     "system": "digestive",
+     "region": "right_lower_quadrant"
+    },
+    {
+     "id": "appendicular_artery",
+     "unityName": "anat_appendicular_artery",
+     "displayName": "Appendicular artery",
+     "system": "cardiovascular",
+     "region": "right_lower_quadrant"
+    },
+    {
+     "id": "terminal_ileum",
+     "unityName": "anat_terminal_ileum",
+     "displayName": "Terminal ileum",
+     "system": "digestive",
+     "region": "right_lower_quadrant"
+    },
+    {
+     "id": "small_bowel",
+     "unityName": "anat_small_bowel",
+     "displayName": "Small bowel",
+     "system": "digestive",
+     "region": "mid_abdomen"
+    },
+    {
+     "id": "right_ureter",
+     "unityName": "anat_right_ureter",
+     "displayName": "Right ureter",
+     "system": "urinary",
+     "region": "retroperitoneum"
+    },
+    {
+     "id": "urinary_bladder",
+     "unityName": "anat_urinary_bladder",
+     "displayName": "Urinary bladder",
+     "system": "urinary",
+     "region": "pelvis"
+    },
+    {
+     "id": "greater_omentum",
+     "unityName": "anat_greater_omentum",
+     "displayName": "Greater omentum",
+     "system": "digestive",
+     "region": "peritoneal"
+    }
+   ],
+   "actions": [
+    {
+     "id": "view_procedure",
+     "label": "View procedure steps",
+     "method": "GET",
+     "route": "/procedures/lap_appendectomy"
     },
     {
      "id": "choose_patient",

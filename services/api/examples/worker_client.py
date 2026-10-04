@@ -4,7 +4,7 @@ Silas's processor can copy this loop: claim a job, download the clip through
 the signed URL, run reconstruction/retargeting, upload outputs, complete.
 See packages/contracts/worker-api.md for the protocol.
 
-    GATEWAY_URL=http://localhost:8787 WORKER_TOKEN=... python worker_client.py
+    GATEWAY_URL=http://localhost:8788 WORKER_TOKEN=... python worker_client.py
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ import time
 import urllib.error
 import urllib.request
 
-GATEWAY = os.environ.get("GATEWAY_URL", "http://localhost:8787").rstrip("/")
+GATEWAY = os.environ.get("GATEWAY_URL", "http://localhost:8788").rstrip("/")
 TOKEN = os.environ["WORKER_TOKEN"]
 
 

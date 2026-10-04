@@ -39,7 +39,8 @@ namespace Scalpal.Quest.Editor
                 anatomy.RebuildIndex();
                 Assert(workbench.tools.Length == 15 && workbench.tools.All(tool => tool && tool.actionPoint), "15 actual tools with authored tips");
                 Assert(anatomy.Parts.Count == 9, "nine actual practice anatomy parts");
-                var input = session.GetComponent<NativeProcedureInput>() ?? session.gameObject.AddComponent<NativeProcedureInput>();
+                var input = session.GetComponent<NativeProcedureInput>();
+                if (!input) input = session.gameObject.AddComponent<NativeProcedureInput>();
                 input.portMarkers = session.patientFrame.GetComponentsInChildren<NativePortMarker>(true);
                 bool practicing = true;
                 input.Initialize(exercise, workbench, () => practicing);
@@ -52,6 +53,7 @@ namespace Scalpal.Quest.Editor
                 Assert(candidate.brief != null && candidate.brief.synthetic, "explicit synthetic brief acknowledgement");
                 Assert(candidate.procedure.steps.Length == 10, "ten authored appendectomy steps");
                 Assert(exercise.SelectCase(bundle, CaseId, true, out var reason), "case binds actual anatomy: " + reason);
+                Assert(exercise.Body == null, "deserialized legacy case retains port/touch progression rather than empty body model");
                 anatomy.SetRegistrationValid(true);
                 SetReady(workbench, true);
                 Physics.SyncTransforms();

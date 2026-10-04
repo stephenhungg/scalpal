@@ -70,6 +70,8 @@ static class Program
             Check(none.passed == (kase.brief.flags.Length == 0), $"{who}: empty pre-op check scored wrong");
         }
 
+        VerifyOpenBody(bundle);
+
         foreach (var action in AllActions(bundle))
         {
             Check(ScalpalRoutes.Resolve(action.method, action.route) != RouteKind.Unknown, $"action {action.method} {action.route} has no Unity route");
@@ -77,6 +79,69 @@ static class Program
 
         Console.WriteLine($"{bundle.cases.Length} cases, {playable} playable, every step completed in C#.");
         return Report();
+    }
+
+    static void VerifyOpenBody(ScalpalBundle bundle)
+    {
+        var procedure = bundle.procedures.FirstOrDefault(p => p.openBody != null);
+        Check(procedure != null, "open body procedure is present in offline bundle");
+        if (procedure == null) return;
+        BodyAction Action(string id, string verb, string tissue, string instrument, double time = 0, float distance = 0)
+            => new BodyAction { actionId = id, verb = verb, tissueId = tissue, layer = tissue,
+                instrumentId = instrument, instrumentInstanceId = id + "-tool", registered = true,
+                timeMs = time, distanceMm = distance, lengthMm = verb == "cut" ? 4 : 0 };
+        void Expose(CaseRunner runner)
+        {
+            foreach (var step in procedure.steps.Take(5))
+                foreach (var e in CaseRunner.PerfectEvents(step)) runner.Handle(e);
+        }
+        var body = new CaseRunner(procedure);
+        int closeCallbacks = 0;
+        body.StepCompleted += step => { if (step.id == "close") closeCallbacks++; };
+        body.Handle(CaseEvent.Surgery(Action("close-early", "close", "skin", "assistant")));
+        Check(body.Achieved.Contains("close") && body.Current.id == "mark_incision" && closeCallbacks == 1,
+            "out-of-order closure milestone is recognized without gating earlier guidance");
+        Check(body.OrderDeviations.Contains("close"), "out-of-order milestone recorded");
+        body.Handle(CaseEvent.Surgery(Action("close-again", "close", "skin", "assistant")));
+        Check(closeCallbacks == 1, "milestone callback emits only once");
+        Check(!body.Body.Test(new BodyPredicate { tissueId = "appendix", fact = "stumpLengthMm", op = "lte", value = 5 }),
+            "missing stump measurement never passes a threshold");
+        var hidden = body.Handle(CaseEvent.Surgery(Action("hidden", "cut", "terminal_ileum", "scalpel")));
+        Check(body.Body.Get("", "contamination") == 0 && body.Body.Log.Last().outcomes.Contains("not_exposed"),
+            "unexposed organ is physically blocked without invented injury");
+        Expose(body);
+        var injury = body.Handle(CaseEvent.Surgery(Action("bowel", "cut", "terminal_ileum", "scalpel")));
+        Check(body.Body.Get("", "contamination") == 1 && injury.mistake != null,
+            "off-path bowel cut contaminates and raises a guardrail");
+        body.Handle(CaseEvent.Surgery(Action("bleed", "cut", "mesoappendix", "scalpel", 1000)));
+        Check(body.Body.Get("", "activeBleeds") == 1 && body.Mistakes.Any(m => m.id == "cut_before_control"),
+            "cut before clamp produces bleeding and a guardrail");
+        body.Handle(CaseEvent.Surgery(Action("clamp", "clamp", "mesoappendix", "hemostat", 2000)));
+        Check(body.Body.Get("", "activeBleeds") == 0 && body.Body.Get("", "bloodLostMl") == 2,
+            "clamp stops bleeding after time-integrated blood loss");
+        body.Handle(CaseEvent.Surgery(Action("bleed-again", "cut", "appendicular_artery", "scalpel", 3000)));
+        var tied = Action("tie", "tie", "appendicular_artery", "suture_tie", 4000);
+        body.Handle(CaseEvent.Surgery(tied));
+        Check(body.Body.Get("", "activeBleeds") == 0, "tie stops a separate bleeding vessel");
+        int count = body.Body.Log.Count;
+        body.Handle(CaseEvent.Surgery(tied));
+        Check(body.Body.Log.Count == count, "duplicate actions cannot apply twice");
+        tied.position.x = 900;
+        Check(body.Body.Log.Last().action.position.x == 0, "action history snapshots submitted measurements");
+        var dummy = new Procedure { id = "dummy", steps = procedure.steps, firstStep = procedure.firstStep,
+            openBody = new OpenBodyCase { tissues = procedure.openBody.tissues, milestones = procedure.openBody.milestones,
+                guardrails = Array.Empty<BodyGuardrail>(), decisions = Array.Empty<BodyDecision>() } };
+        var second = new CaseRunner(dummy);
+        Expose(second);
+        second.Handle(CaseEvent.Surgery(Action("same-bowel", "cut", "terminal_ileum", "scalpel")));
+        Check(second.Body.Get("", "contamination") == 1 && second.Mistakes.Count == 0,
+            "same verb and tissue consequences hold under a second case with different guardrails");
+        var baseRunner = new CaseRunner(procedure);
+        Expose(baseRunner);
+        foreach (var e in CaseRunner.PerfectEvents(procedure.steps.First(s => s.id == "ligate_base"))) baseRunner.Handle(e);
+        Check(baseRunner.Achieved.Contains("ligate_base") && baseRunner.Body.Get("appendix", "stumpLengthMm") == 4,
+            "base decision and short tied stump milestone can complete before delivery guidance");
+        Check(baseRunner.Body.Get("appendix", "decision_true_base") == 1, "true-base decision persists in body facts");
     }
 
     static IEnumerable<ScalpalAction> AllActions(ScalpalBundle b) =>

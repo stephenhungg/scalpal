@@ -9,8 +9,8 @@ One separate object per row, named exactly as shown, each with a collider.
 
 | Object name | Structure | System | Region | Used by |
 | --- | --- | --- | --- | --- |
-| `anat_abdominal_wall` | Anterior abdominal wall | musculoskeletal | abdominal_wall | Gallbladder removal, Appendix removal, Sigmoid colon resection |
-| `anat_umbilicus` | Umbilicus | integumentary | abdominal_wall | Gallbladder removal, Appendix removal, Sigmoid colon resection |
+| `anat_abdominal_wall` | Anterior abdominal wall | musculoskeletal | abdominal_wall | Gallbladder removal, Appendix removal, Sigmoid colon resection, Open appendix removal |
+| `anat_umbilicus` | Umbilicus | integumentary | abdominal_wall | Gallbladder removal, Appendix removal, Sigmoid colon resection, Open appendix removal |
 | `anat_greater_omentum` | Greater omentum | digestive | peritoneal | Gallbladder removal, Appendix removal, Sigmoid colon resection |
 | `anat_liver` | Liver | digestive | upper_abdomen | Gallbladder removal |
 | `anat_gallbladder` | Gallbladder | digestive | upper_abdomen | Gallbladder removal |
@@ -24,11 +24,11 @@ One separate object per row, named exactly as shown, each with a collider.
 | `anat_pancreas` | Pancreas | digestive | upper_abdomen | not used by a step yet |
 | `anat_transverse_colon` | Transverse colon | digestive | mid_abdomen | Gallbladder removal |
 | `anat_small_bowel` | Small bowel | digestive | mid_abdomen | Appendix removal, Sigmoid colon resection |
-| `anat_terminal_ileum` | Terminal ileum | digestive | right_lower_quadrant | Appendix removal |
-| `anat_cecum` | Cecum | digestive | right_lower_quadrant | Appendix removal |
-| `anat_appendix` | Vermiform appendix | digestive | right_lower_quadrant | Appendix removal |
-| `anat_mesoappendix` | Mesoappendix | digestive | right_lower_quadrant | Appendix removal |
-| `anat_appendicular_artery` | Appendicular artery | cardiovascular | right_lower_quadrant | Appendix removal |
+| `anat_terminal_ileum` | Terminal ileum | digestive | right_lower_quadrant | Appendix removal, Open appendix removal |
+| `anat_cecum` | Cecum | digestive | right_lower_quadrant | Appendix removal, Open appendix removal |
+| `anat_appendix` | Vermiform appendix | digestive | right_lower_quadrant | Appendix removal, Open appendix removal |
+| `anat_mesoappendix` | Mesoappendix | digestive | right_lower_quadrant | Appendix removal, Open appendix removal |
+| `anat_appendicular_artery` | Appendicular artery | cardiovascular | right_lower_quadrant | Appendix removal, Open appendix removal |
 | `anat_right_ureter` | Right ureter | urinary | retroperitoneum | Appendix removal |
 | `anat_descending_colon` | Descending colon | digestive | left_abdomen | Sigmoid colon resection |
 | `anat_sigmoid_colon` | Sigmoid colon | digestive | left_lower_quadrant | Sigmoid colon resection |
@@ -43,13 +43,21 @@ One separate object per row, named exactly as shown, each with a collider.
 | `anat_heart` | Heart | cardiovascular | thorax | not used by a step yet |
 | `anat_lungs` | Lungs | respiratory | thorax | not used by a step yet |
 
-## Instrument prefabs (15)
+## Instrument prefabs (23)
 
 Each prefab needs a trigger collider on a child named `Tip` at the working end.
 
 | Prefab name | Instrument | Kind | Used by |
 | --- | --- | --- | --- |
-| `inst_scalpel` | Scalpel | cutting | not used by a step yet |
+| `inst_skin_marker` | Skin marker | marking | Open appendix removal |
+| `inst_toothed_forceps` | Toothed forceps | grasper | Open appendix removal |
+| `inst_retractor` | Hand retractor | retractor | Open appendix removal |
+| `inst_babcock` | Babcock forceps | grasper | Open appendix removal |
+| `inst_hemostat` | Hemostat | ligation | Open appendix removal |
+| `inst_right_angle_clamp` | Right-angle clamp | ligation | Open appendix removal |
+| `inst_metzenbaum_scissors` | Metzenbaum scissors | cutting | Open appendix removal |
+| `inst_suture_tie` | Suture tie | ligation | Open appendix removal |
+| `inst_scalpel` | Scalpel | cutting | Open appendix removal |
 | `inst_trocar_5mm` | 5 mm trocar | access | Gallbladder removal, Appendix removal, Sigmoid colon resection |
 | `inst_trocar_12mm` | 12 mm trocar | access | Gallbladder removal, Appendix removal, Sigmoid colon resection |
 | `inst_laparoscope_30` | 30 degree laparoscope | visualization | Gallbladder removal, Appendix removal, Sigmoid colon resection |
@@ -61,7 +69,7 @@ Each prefab needs a trigger collider on a child named `Tip` at the working end.
 | `inst_lap_scissors` | Laparoscopic scissors | cutting | Gallbladder removal |
 | `inst_endo_stapler` | Endoscopic linear stapler | stapler | Appendix removal, Sigmoid colon resection |
 | `inst_circular_stapler` | Circular stapler | stapler | Sigmoid colon resection |
-| `inst_suction_irrigator` | Suction irrigator | irrigation | Gallbladder removal, Appendix removal |
+| `inst_suction_irrigator` | Suction irrigator | irrigation | Gallbladder removal, Appendix removal, Open appendix removal |
 | `inst_retrieval_bag` | Specimen retrieval bag | retrieval | Gallbladder removal, Appendix removal, Sigmoid colon resection |
 | `inst_fascial_closure` | Fascial closure device | closure | Gallbladder removal, Appendix removal, Sigmoid colon resection |
 
@@ -100,3 +108,11 @@ Positions are in the torso frame: meters from the umbilicus, +x the participant'
 | `right_lower` | Right lower quadrant port | 12 mm | (-0.08, 0.00, -0.07) |
 | `right_upper` | Right upper quadrant port | 5 mm | (-0.08, 0.00, 0.06) |
 | `left_lower` | Left lower quadrant port | 5 mm | (0.08, 0.00, -0.07) |
+
+### Open appendectomy (`open_appendectomy`)
+
+10 steps, about 45 minutes. Must read clearly up close: `anat_appendix`, `anat_mesoappendix`, `anat_cecum`.
+
+| Port | Label | Size | Torso position (x, y, z) m |
+| --- | --- | --- | --- |
+

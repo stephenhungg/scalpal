@@ -6,8 +6,17 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
+    path: Assets/Scalpal/Shell/Scenes/Launch.unity
+    guid: f7b3d9c8f330142f395f991381790130
+  - enabled: 1
+    path: Assets/Scalpal/EncounterOffice/Scenes/DiagnosisOffice.unity
+    guid: 2bf4feaae31e545c3981bbe752bdb300
+  - enabled: 1
     path: Assets/Scalpal/Quest/Scenes/NativeSession.unity
     guid: 37af3df9aad784070bb6376074de06ed
+  - enabled: 1
+    path: Assets/Scalpal/Recap/Scenes/RunEnding.unity
+    guid: ca3906e19526945aa8144cac9f192cc2
   m_configObjects:
     com.unity.xr.management.loader_settings: {fileID: 11400000, guid: dbd69b20ca3de418588aa0ddd45b66cd, type: 2}
     com.unity.xr.openxr.settings4: {fileID: 11400000, guid: 3320adb87ff3a4a889686b1b3a2964f4, type: 2}

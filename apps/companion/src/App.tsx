@@ -1,7 +1,9 @@
-import { BrandMark, Pill, ToastHost } from './components/ui';
+import { Pill, ToastHost } from './components/ui';
+import { DitherLogo } from './components/DitherLogo';
 import { useLive } from './data/live';
 import { Link, match, usePath } from './lib/router';
 import Home from './pages/Home';
+import Recap from './pages/Recap';
 import Join from './pages/Join';
 import SessionPage from './pages/Session';
 import HeadsetSimulator from './pages/HeadsetSimulator';
@@ -12,7 +14,9 @@ export default function App() {
 
   let page;
   let params: Record<string, string> | null;
-  if ((params = match('/join/:code', path))) page = <Join code={params.code} />;
+  if (path === '/recap') page = <Recap />;
+  else if ((params = match('/s/:id/recap', path))) page = <Recap sessionId={params.id} />;
+  else if ((params = match('/join/:code', path))) page = <Join code={params.code} />;
   else if ((params = match('/s/:id/simulate', path))) page = <HeadsetSimulator sessionId={params.id} />;
   else if ((params = match('/s/:id', path))) page = <SessionPage sessionId={params.id} />;
   else page = <Home />;
@@ -21,11 +25,11 @@ export default function App() {
     <>
       <header className="topbar">
         <Link to="/" className="brand">
-          <BrandMark />
-          Scalpal <small>companion</small>
+          <DitherLogo />
+          <span className="brand-dot" aria-hidden>.</span>
         </Link>
         <div className="spacer" />
-        {connected ? (
+        {path.endsWith('/recap') ? <Pill tone="info">Recap · local result viewer</Pill> : connected ? (
           <Pill tone="ok">Database connected</Pill>
         ) : (
           <Pill tone={connectionError ? 'bad' : 'info'} live>
@@ -38,7 +42,7 @@ export default function App() {
           </span>
         )}
       </header>
-      {connectionError && (
+      {connectionError && !path.endsWith('/recap') && (
         <div className="conn-banner">
           Cannot reach the session database ({connectionError.message || 'connection error'}). Live state will resume
           when the connection returns; reload to retry now.

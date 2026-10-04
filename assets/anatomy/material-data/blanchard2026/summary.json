@@ -1,0 +1,28 @@
+{
+  "doi": "10.1038/s41598-026-42371-9",
+  "source": "https://www.nature.com/articles/s41598-026-42371-9",
+  "license": "CC BY 4.0",
+  "attribution": "Blanchard, Ehrenfeld, Laffore, Nardin and Derail (2026), Scientific Reports 16, 12960",
+  "evidenceKind": "Published representative summary values, not raw specimen traces",
+  "tissue": "Human ex vivo skin explant, epidermis/dermis; hypodermis removed",
+  "temperatureCelsius": 21,
+  "holdEngineeringStrain": 0.18,
+  "holdDurationSecondsApproximate": 120,
+  "initialRelaxationModulusPascals": 36500,
+  "initialUncertaintyPascals": 500,
+  "thirtySecondRelaxationModulusPascals": 25000,
+  "thirtySecondUncertaintyPascals": 500,
+  "totalRelaxationFraction": 0.39,
+  "totalRelaxationUncertainty": 0.03,
+  "initialTensileTangentPascals": 28000,
+  "maximumDeformationTensileTangentPascals": 88400,
+  "tensileSpeedMillimetersPerMinute": 10,
+  "sourceLimitations": [
+    "Relaxation ramp duration, numeric full curve and exact held specimen geometry not recovered",
+    "Total relaxation is over approximately two minutes, not a measured equilibrium modulus",
+    "Tensile tangent values belong to a different loading history; maximum tangent strain is not assigned from the relaxation strain",
+    "Poisson ratio and isotropic behavior are assumptions, not source measurements",
+    "Report nominal-versus-true stress convention before claiming matched specimen mechanics"
+  ],
+  "runtimeImported": false
+}

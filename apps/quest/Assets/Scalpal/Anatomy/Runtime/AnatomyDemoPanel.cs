@@ -10,7 +10,6 @@ namespace Scalpal.Anatomy
     public sealed class AnatomyDemoPanel : MonoBehaviour
     {
         public AnatomyExerciseBinding exercise;
-        public AnatomyCaseSource caseSource;
         public TextAsset caseBundle;
 #if UNITY_EDITOR || (!UNITY_ANDROID && !UNITY_IOS)
         ScalpalBundle bundle;
@@ -40,36 +39,10 @@ namespace Scalpal.Anatomy
             for (int i = 0; i < caseIds.Length; i++)
                 if (GUILayout.Button(labels[i]))
                 {
-                    if (caseSource != null && caseSource.IsLoading)
-                    {
-                        feedback = "Wait for the in-flight case request before changing cases.";
-                        continue;
-                    }
                     exercise.anatomy.SetRegistrationValid(false);
                     exercise.requireCoachSynchronization = false;
                     feedback = exercise.SelectCase(bundle, caseIds[i], true, out var reason) ? "Case loaded. Enable simulated registration to send inputs." : reason;
                 }
-            if (caseSource != null)
-            {
-                GUILayout.Label("Service connection: " + caseSource.Status);
-                if (GUILayout.Button("Load adult appendectomy from case service"))
-                {
-                    exercise.requireCoachSynchronization = false;
-                    caseSource.LoadPatient("patient-demo-multi-source");
-                }
-                if (GUILayout.Button("Load adult appendectomy with fresh Jarvis session"))
-                {
-                    exercise.requireCoachSynchronization = true;
-                    caseSource.LoadPatient("patient-demo-multi-source");
-                }
-                if (caseSource.PendingCase != null)
-                {
-                    GUILayout.Label(caseSource.PendingCase.statusReason ?? "Synthetic case requires review.");
-                    if (GUILayout.Button("Acknowledge case review and start")) caseSource.AcknowledgeReviewAndStart();
-                }
-                if (exercise.requireCoachSynchronization && exercise.coach != null)
-                    GUILayout.Label(exercise.coach.IsSynchronized ? "Jarvis synchronized" : "Jarvis paused: " + exercise.coach.SyncFailureReason);
-            }
             if (exercise.SelectedCase != null)
             {
                 if (GUILayout.Button(exercise.anatomy.RegistrationValid ? "Simulate tracking loss" : "Simulate valid registration"))

@@ -20,7 +20,8 @@ const LEDE = "A mixed reality operating room experience guided by Jarvis, your a
 
 // Loader: only the hands are on screen until the fingertips touch. Then the Scalpal mark dithers
 // in where the title goes, holds, and dithers into "Scalpal."; after that the nav, subtitle
-// and button come in.
+// and button come in. If the hands cannot render (no WebGL2, failed images), launch immediately so
+// the page never stays black.
 
 export function Landing() {
   // Coming back from /explore shows the finished page; a full reload plays the intro again.
@@ -36,7 +37,7 @@ export function Landing() {
   return (
     <main className="relative h-dvh overflow-hidden">
       <div className="absolute inset-0 z-0">
-        <AdamLayer onTouch={launch} introSpeed={3.3} holdAfterTouch startTouched={skip} shiftY={SHIFT_Y} />
+        <AdamLayer onTouch={launch} onUnavailable={launch} introSpeed={3.3} holdAfterTouch startTouched={skip} shiftY={SHIFT_Y} />
       </div>
       {/* Once the page launches, dim the hands so the bright glyphs don't fight the text. */}
       <motion.div
