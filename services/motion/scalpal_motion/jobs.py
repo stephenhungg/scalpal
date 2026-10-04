@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import tempfile
 import time
@@ -23,6 +24,8 @@ from . import ROBOT_MOTION_SCHEMA
 JOB_SCHEMA = "scalpal.motion_job/0"
 RESULT_SCHEMA = "scalpal.motion_result/0"
 DEFAULT_CONFIG = {"hand": "Right", "mirrored": False, "smooth": None}
+# Upper bound for any downloaded input clip (matches the gateway's LOCAL_MAX_BYTES default).
+MAX_INPUT_BYTES = int(os.environ.get("SCALPAL_MOTION_MAX_INPUT_BYTES", str(2 * 1024**3)))
 RUN_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}")
 
 
@@ -53,6 +56,34 @@ def _artifact(kind: str, path: Path, content_type: str) -> dict:
         "bytes": path.stat().st_size,
         "sha256": _sha256(path),
     }
+
+
+class InputTooLarge(Exception):
+    """A download went past its byte cap."""
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *args, **kwargs):  # a 3xx surfaces as HTTPError instead
+        return None
+
+
+def download_capped(url: str, dest: Path, max_bytes: int, headers: dict | None = None,
+                    timeout: float = 120.0, follow_redirects: bool = True) -> tuple[int, str]:
+    """Stream url to dest, stopping past max_bytes. Returns (bytes, sha256 hex)."""
+    handlers = [] if follow_redirects else [_NoRedirect]
+    req = urllib.request.Request(url, headers=headers or {})
+    digest, size = hashlib.sha256(), 0
+    with urllib.request.build_opener(*handlers).open(req, timeout=timeout) as res, dest.open("wb") as f:
+        declared = res.headers.get("Content-Length", "")
+        if declared.isdigit() and int(declared) > max_bytes:
+            raise InputTooLarge(f"input is {declared} bytes, larger than the {max_bytes} byte limit")
+        while chunk := res.read(1 << 20):
+            size += len(chunk)
+            if size > max_bytes:
+                raise InputTooLarge(f"input is larger than the {max_bytes} byte limit")
+            digest.update(chunk)
+            f.write(chunk)
+    return size, digest.hexdigest()
 
 
 def _fetch_input(source: str, workdir: Path) -> Path:

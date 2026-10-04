@@ -211,6 +211,43 @@ def test_unreportable_failure_does_not_kill_the_worker(tmp_path, no_backoff):
     assert any("could not report failure" in line for line in logs)
 
 
+def _run_with_input_meta(tmp_path, meta_for):
+    clip = _blank_clip(tmp_path / "blank.mp4")
+    gw = FakeGateway(clip, input_meta=meta_for(clip.read_bytes()))
+    try:
+        run_worker(gw.url, "tok", once=True, log=lambda *_: None)
+    finally:
+        gw.close()
+    return gw
+
+
+def test_input_with_wrong_sha256_fails_final_before_inference(tmp_path):
+    # M8: a replaced or corrupted object must not be processed as the claimed clip.
+    gw = _run_with_input_meta(tmp_path, lambda data: {"bytes": len(data), "sha256": "0" * 64})
+    assert gw.failed["retryable"] is False and "sha256 mismatch" in gw.failed["error"]
+    assert "hand inference" not in [h["stage"] for h in gw.heartbeats]
+    assert gw.completed is None and not gw.registered
+
+
+def test_input_with_wrong_size_fails_final(tmp_path):
+    gw = _run_with_input_meta(tmp_path, lambda data: {"bytes": len(data) + 1, "sha256": None})
+    assert gw.failed["retryable"] is False and "size mismatch" in gw.failed["error"]
+
+
+def test_input_larger_than_claimed_is_cut_off(tmp_path):
+    # M8: the download stops at the claimed size instead of filling the disk.
+    gw = _run_with_input_meta(tmp_path, lambda data: {"bytes": 16, "sha256": None})
+    assert gw.failed["retryable"] is False and "larger than" in gw.failed["error"]
+
+
+def test_input_matching_its_claim_is_processed(tmp_path):
+    import hashlib
+
+    gw = _run_with_input_meta(tmp_path, lambda data: {"bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()})
+    # Verification passed, so the blank clip reaches inference and fails there.
+    assert "no right hand" in gw.failed["error"]
+
+
 class _StopLoop(BaseException):
     """Ends run_worker's infinite loop from a test (Exception would be caught)."""
 

@@ -51,7 +51,7 @@ For each job it claims, downloads the clip from the signed URL, runs inference, 
 - `hand_estimates`
 - `quality_report`
 
-When no hand is found or the clip won't decode, it fails without retry. Download and processor errors fail with retry. A `409` at any point drops the run without completing.
+When no hand is found or the clip won't decode, it fails without retry. Download and processor errors fail with retry. The download stops at the claim's `bytes` (or `SCALPAL_MOTION_MAX_INPUT_BYTES`, default 2 GiB), and a clip whose size or sha256 differs from the claim fails without retry before inference. Failure reports are retried with backoff on network errors and 5xx; if the gateway stays unreachable the worker logs it, leaves the run to lease expiry and keeps polling. A `409` at any point drops the run without completing.
 
 **Teammate-reported verification against Nathan's real gateway** (`nathan/companion-realtime` at 9bd6517, local SpacetimeDB 2.10.2, local storage). A headset client uploaded the 20 s sample hand clip and the operator requested a job. This worker claimed it, tracked 621/621 frames, and uploaded 4 outputs that the gateway verified. The job became `ready`, and a viewer downloaded a schema-valid trajectory (24 joints × 621 frames). Worker wall time was 17.5 s.
 

@@ -15,6 +15,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+from .jobs import MAX_INPUT_BYTES, InputTooLarge, download_capped
 from .trajectory import to_robot_trajectory
 
 USER_AGENT = "scalpal-motion-worker/0"
@@ -87,13 +88,6 @@ class Heartbeat(threading.Thread):
             self.beat()
 
 
-def _download(url: str, headers: dict, dest: Path) -> None:
-    req = urllib.request.Request(url, headers=headers or {})
-    with urllib.request.urlopen(req, timeout=120) as res, dest.open("wb") as f:
-        while chunk := res.read(1 << 20):
-            f.write(chunk)
-
-
 def _upload(gateway: Gateway, outputs_path: str, kind: str, path: Path, content_type: str) -> str:
     status, out = gateway.call(outputs_path, {"kind": kind, "filename": path.name, "contentType": content_type})
     if status != 200 or not out:
@@ -163,11 +157,21 @@ def process_claim(gateway: Gateway, claim: dict, mirrored: bool = False, hand: s
             tmp = Path(tmp)
             clip = tmp / ("clip" + Path(clip_in.get("filename", "clip.mp4")).suffix)
             hb.update(0.05, "downloading clip")
+            # The claim carries the size and hash the gateway verified at upload.
+            # Never read past them, and never process bytes that do not match.
+            claimed_bytes, claimed_sha = clip_in.get("bytes"), clip_in.get("sha256")
+            cap = MAX_INPUT_BYTES if claimed_bytes is None else min(int(claimed_bytes), MAX_INPUT_BYTES)
             try:
                 dl = clip_in["download"]
-                _download(gateway.resolve(dl["url"]), dl.get("headers", {}), clip)
+                size, sha = download_capped(gateway.resolve(dl["url"]), clip, cap, headers=dl.get("headers", {}))
+            except InputTooLarge as e:
+                return fail(f"input clip rejected: {e} (claimed {claimed_bytes} bytes)", retryable=False)
             except Exception as e:
                 return fail(f"could not download input clip: {e}", retryable=True)
+            if claimed_bytes is not None and size != int(claimed_bytes):
+                return fail(f"input clip size mismatch: got {size} bytes, claimed {claimed_bytes}", retryable=False)
+            if claimed_sha and sha != str(claimed_sha).lower():
+                return fail(f"input clip sha256 mismatch: got {sha}, claimed {claimed_sha}", retryable=False)
 
             hb.update(0.15, "hand inference")
             try:
