@@ -8,6 +8,9 @@ import { buildCase, routes, scorePreopCheck, unavailableCase } from "./case-buil
 import type { StuckPolicy } from "./coach.js";
 import { registerCoachRoutes } from "./coach-routes.js";
 import { registerEncounterRoutes } from "./encounter-routes.js";
+import { registerInterviewRoutes } from "./interview-routes.js";
+import { patientStatusFor } from "./interview-content.js";
+import type { AnswerClassifier, SpeechToText } from "./answer-classifier.js";
 import { ENCOUNTERS_BY_PLAN } from "./catalog/encounters.js";
 import type { RealtimeBridge } from "./realtime-bridge.js";
 import type { SceneVision } from "./scene-vision.js";
@@ -24,7 +27,11 @@ export interface AppOptions {
   simulateAdmissions?: boolean;
   coachTickMs?: number;
   stuckPolicy?: StuckPolicy;
-  elevenLabs?: { apiKey: string; agentId: string; voiceId?: string; patientAgentId?: string };
+  elevenLabs?: { apiKey: string; agentId: string; voiceId?: string; patientAgentId?: string; interviewAgentId?: string };
+  // Choice-based office interview: spoken answers (speech-to-text, then a classifier), and the content root (tests).
+  answerClassifier?: AnswerClassifier | null;
+  speechToText?: SpeechToText | null;
+  interviewContentRoot?: string;
   reflex?: ReflexAudio;
   toolAckWaitMs?: number;
   realtime?: RealtimeBridge | null;
@@ -499,6 +506,21 @@ export function createApp(options: AppOptions = {}) {
     planSubjectFor: async (kase) => (await scenarios()).find((s) => s.id === kase.scenarioId)?.subject ?? kase.patientId,
   });
 
+  // The pre-op office (current flow): committed patient content, choice-based interview, no Jarvis.
+  const interviews = registerInterviewRoutes(app, {
+    now,
+    realtime: options.realtime ?? undefined,
+    classifier: options.answerClassifier ?? null,
+    speechToText: options.speechToText ?? null,
+    elevenLabs: options.elevenLabs,
+    contentRoot: options.interviewContentRoot,
+    loadCase: async (id) => {
+      const target = await resolve(id);
+      return target ? caseOrUnavailable(target.subject, target.scenarioId) : null;
+    },
+    planSubjectFor: async (kase) => (await scenarios()).find((s) => s.id === kase.scenarioId)?.subject ?? kase.patientId,
+  });
+
   registerCoachRoutes(app, {
     now,
     tickMs: options.coachTickMs,
@@ -509,7 +531,8 @@ export function createApp(options: AppOptions = {}) {
     realtime: options.realtime ?? undefined,
     bridge: options.realtime ?? null,
     encounters,
-    encounterFor: (id) => encounters.get(id),
+    encounterFor: (id) => encounters.get(id) ?? interviews.get(id),
+    patientStatus: (id) => patientStatusFor(id, options.interviewContentRoot),
     vision: options.vision ?? null,
     watchMs: options.watchMs,
     detector: options.detector ?? null,

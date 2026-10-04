@@ -33,6 +33,7 @@ export interface CoachRouteOptions {
   bridge?: RealtimeBridge | null; // the live connection, for /realtime status and join
   encounters?: EncounterVoices; // live encounters, so /jarvis/connection can bind a voice to one
   encounterFor?: (id: string) => { kase: SurgicalCase; carryover(): string } | null;
+  patientStatus?: (patientId: string) => string; // authored patient_status.md for Jarvis's OR context
   vision?: SceneVision | null; // Jarvis's eyes; null when no vision model is configured
   watchMs?: number; // minimum gap between background scene summaries (0 disables watching)
   detector?: FrameDetector | null; // real-camera instrument and hand boxes (services/vision); null when not running
@@ -168,7 +169,7 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
         runId,
         snapshot,
         context: renderContext(snapshot), contextKey: contextKey(snapshot),
-        systemPrompt: buildSystemPrompt(kase, mode, preop),
+        systemPrompt: buildSystemPrompt(kase, mode, preop, (options.patientStatus?.(kase.patientId) ?? "")),
         firstMessage: firstMessage(kase, Boolean(preop)),
         actions: coachActions(sid),
       },
@@ -603,7 +604,7 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
       if (!s) return missing(c);
       role = "jarvis";
       const preop = officeCarryover.get(sessionId) ?? "";
-      bound = { role: "coach", prompt: buildSystemPrompt(s.kase, s.mode, preop), firstMessage: firstMessage(s.kase, Boolean(preop)), voiceId: "" };
+      bound = { role: "coach", prompt: buildSystemPrompt(s.kase, s.mode, preop, (options.patientStatus?.(s.kase.patientId) ?? "")), firstMessage: firstMessage(s.kase, Boolean(preop)), voiceId: "" };
     }
     const agentId = role === "patient" ? el?.patientAgentId : el?.agentId;
     if (!el || !agentId) {

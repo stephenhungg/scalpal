@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { DbConnection, tables } from "./module_bindings/index.js";
 import type { EncounterLogEntry, EncounterSession, Scorecard } from "./encounter.js";
+import type { InterviewScorecard, InterviewSession } from "./interview.js";
 
 // Jarvis's connection to the shared SpacetimeDB session (Nathan's module), as the `coach` role.
 // Everything Jarvis does is mirrored there live, so the companion, the headset, and anyone else
@@ -15,6 +16,9 @@ export interface RealtimeSink {
   attachEncounter(e: EncounterSession): void;
   encounterPhase(e: EncounterSession): void;
   encounterResult(e: EncounterSession, card: Scorecard): void;
+  // The choice-based office interview, mirrored through the same encounter tables.
+  attachInterview?(i: InterviewSession): void;
+  interviewResult?(i: InterviewSession, card: InterviewScorecard): void;
   // Resolves to the headset's resolution, or null when the shared session cannot carry the command.
   highlight(targetId: string, timeoutMs?: number): Promise<{ status: string; reason: string } | null>;
 }
@@ -187,6 +191,32 @@ export class RealtimeBridge implements RealtimeSink {
 
   encounterPhase(e: EncounterSession) {
     this.call("setEncounterPhase", (c) => c.reducers.setEncounterPhase({ encounterId: e.id, phase: e.phase }));
+  }
+
+  attachInterview(i: InterviewSession) {
+    if (!this.bound) return;
+    const sessionAtStart = this.sessionId;
+    this.call("startEncounter", (c) =>
+      c.reducers.startEncounter({ encounterId: i.id, sessionId: this.sessionId, patientId: i.kase.patientId, patientName: i.patientName, speaker: "patient", speakerName: i.patientName }),
+    );
+    i.subscribe(({ kind, payload }) => {
+      if (this.sessionId !== sessionAtStart) return;
+      if (kind === "pick") {
+        const { pick, choice } = payload as { pick: { roundId: string; key: string }; choice: { text: string } };
+        this.call("appendEncounterEvent", (c) => c.reducers.appendEncounterEvent({ encounterId: i.id, kind: "choice", itemId: pick.roundId, speaker: "learner", text: `${pick.key}: ${choice.text}`.slice(0, 4000) }));
+      } else if (kind === "transcript") {
+        const line = payload as { speaker: "learner" | "patient"; text: string };
+        this.call("appendEncounterEvent", (c) => c.reducers.appendEncounterEvent({ encounterId: i.id, kind: "transcript", itemId: "", speaker: line.speaker, text: line.text.slice(0, 4000) }));
+        this.coachMessage(line.speaker, line.text);
+      } else if (kind === "phase") {
+        this.call("setEncounterPhase", (c) => c.reducers.setEncounterPhase({ encounterId: i.id, phase: String(payload) }));
+      }
+    });
+  }
+
+  interviewResult(i: InterviewSession, card: InterviewScorecard) {
+    this.call("setEncounterResult", (c) => c.reducers.setEncounterResult({ encounterId: i.id, scoreTotal: card.total, grade: card.grade, scorecardJson: JSON.stringify(card).slice(0, 32000) }));
+    this.coachMessage("system", `Pre-op interview ${card.total}/100 (${card.grade}).`);
   }
 
   encounterResult(e: EncounterSession, card: Scorecard) {

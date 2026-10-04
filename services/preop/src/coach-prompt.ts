@@ -55,7 +55,7 @@ Tools:
 - get_patient_brief and check_preop: the chart risks and the learner's pre-op safety check.
 - look_at_scene: see the learner's current view (a camera frame with labeled objects). Use it when they ask what they are looking at, where something is, or how to approach what is in front of them. Say a short "let me take a look" first, then answer from the result. The "In view" line in the live state is a recent summary of the same camera.`;
 
-export function buildSystemPrompt(kase: SurgicalCase, mode: PresentationMode = "mixed_reality", preop = ""): string {
+export function buildSystemPrompt(kase: SurgicalCase, mode: PresentationMode = "mixed_reality", preop = "", patientStatus = ""): string {
   const p = kase.procedure;
   const coaching = STEP_COACHING[p.id] ?? {};
   const name = (id: string) => kase.anatomy.find((a) => a.id === id)?.displayName ?? id;
@@ -103,7 +103,7 @@ ${flags}
 Chart gaps:
 ${gaps}
 
-${preop ? `FROM THE PRE-OP OFFICE\n${preop}\nYou opened with the surgical time-out. Once the learner confirms the patient, procedure, and site, name the chart risks above as anticipated risks in one sentence, say "Good. Let's begin.", and give step 1.\n\n` : ""}PROCEDURE: ${p.title} (${p.approach})
+${patientStatus ? `PATIENT STATUS (authored clinical summary of this patient; use it for context, the live state still decides what happened)\n${patientStatus}\n\n` : ""}${preop ? `FROM THE PRE-OP OFFICE\n${preop}\nYou opened with the surgical time-out. Once the learner confirms the patient, procedure, and site, name the chart risks above as anticipated risks in one sentence, say "Good. Let's begin.", and give step 1.\n\n` : ""}PROCEDURE: ${p.title} (${p.approach})
 ${p.summary}
 ${p.openBody ? openBodyRules(p.openBody) : `Ports: ${p.ports.map((x) => `${x.label} (${x.sizeMm} mm)`).join("; ")}.\nOrdered steps. The learner must complete them in this order:`}
 ${steps}
