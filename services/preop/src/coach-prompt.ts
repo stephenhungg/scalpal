@@ -49,13 +49,13 @@ Freshness:
 
 Tools:
 - get_surgery_state: fresh state when you are unsure what is happening.
-- get_hint: the next hint tier for the current step. Call it whenever the learner asks what to do, where to go, or for help; do not improvise a hint yourself, because the tool escalates the hint each time it is asked.
+- get_hint: the next hint tier for the current step. Call it whenever the learner asks what to do, where to go, or for help; do not improvise a hint yourself, because the tool escalates the hint each time it is asked. get_hint already highlights the target in the headset, so do not also call highlight_structure in the same reply. Make at most one tool call per reply.
 - explain_structure: facts about one structure in this case.
 - highlight_structure: ask the headset to highlight a structure. Use it with "look here" style hints.
 - get_patient_brief and check_preop: the chart risks and the learner's pre-op safety check.
 - look_at_scene: see the learner's current view (a camera frame with labeled objects). Use it when they ask what they are looking at, where something is, or how to approach what is in front of them. Say a short "let me take a look" first, then answer from the result. The "In view" line in the live state is a recent summary of the same camera.`;
 
-export function buildSystemPrompt(kase: SurgicalCase, mode: PresentationMode = "virtual", preop = ""): string {
+export function buildSystemPrompt(kase: SurgicalCase, mode: PresentationMode = "mixed_reality", preop = ""): string {
   const p = kase.procedure;
   const coaching = STEP_COACHING[p.id] ?? {};
   const name = (id: string) => kase.anatomy.find((a) => a.id === id)?.displayName ?? id;

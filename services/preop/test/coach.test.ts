@@ -330,7 +330,7 @@ describe("presentation modes", () => {
     const app = createApp({ client: fixtureClient(), now: () => NOW, coachTickMs: 0 });
     const start = async (mode?: string) =>
       app.request("/coach/sessions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ patientId: "patient-demo-pediatric-asthma", ...(mode ? { mode } : {}) }) });
-    expect(((await (await start()).json()) as { snapshot: { mode: string } }).snapshot.mode).toBe("virtual"); // full VR is the main path
+    expect(((await (await start()).json()) as { snapshot: { mode: string } }).snapshot.mode).toBe("mixed_reality"); // the operating room is MR on a real person
     const mr = (await (await start("mixed_reality")).json()) as { systemPrompt: string; snapshot: { mode: string } };
     expect(mr.snapshot.mode).toBe("mixed_reality");
     expect(mr.systemPrompt).toMatch(/real person reclining/);

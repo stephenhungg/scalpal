@@ -110,8 +110,8 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
 
   app.post("/coach/sessions", async (c) => {
     const { patientId, mode: rawMode, encounterId } = await body(c);
-    // Full VR is the main path (explore, office, operating room); mixed reality is still supported.
-    const mode = rawMode === undefined ? "virtual" : PRESENTATION_MODES.find((m) => m === rawMode);
+    // The operating room is mixed reality on a real reclining person (latest flow); full VR is still supported.
+    const mode = rawMode === undefined ? "mixed_reality" : PRESENTATION_MODES.find((m) => m === rawMode);
     if (!mode) return bad(c, 400, "invalid_mode", 'mode must be "mixed_reality" or "virtual".', [{ id: "choose_patient", label: "Choose a patient", method: "GET", route: "/patients" }]);
     const kase = typeof patientId === "string" ? await options.loadCase(patientId) : null;
     if (!kase) return bad(c, 404, "patient_not_found", 'Send {"patientId": "<FinchNode subject>"} for a known patient.', [{ id: "choose_patient", label: "Choose a patient", method: "GET", route: "/patients" }]);
