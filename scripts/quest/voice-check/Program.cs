@@ -27,6 +27,8 @@ static class Program
         Check(muted.Length == 2 && muted[0] == 0 && muted[1] == 0, "muted hold-to-talk sends timed zero PCM, never captured words");
         var held = QuestJarvisVoice.DecodePcm(QuestJarvisVoice.EncodeMicrophonePcm(new[] { .75f, .25f }, 2, false));
         Check(held.Length == 1 && Math.Abs(held[0] - .5f) < .00004f, "held microphone uses the normal PCM downmix");
+        var speaking = QuestJarvisVoice.DecodePcm(QuestJarvisVoice.EncodeMicrophonePcm(new[] { .75f, .25f }, 2, false, true));
+        Check(speaking.Length == 1 && speaking[0] == 0, "agent playback gates unmuted microphone to timed zero PCM (half duplex, no AEC)");
         Check(QuestJarvisVoice.MeasurePlaybackLevel(new[] { 0f, 0f }) == 0, "silent playback closes mouth");
         Check(Math.Abs(QuestJarvisVoice.MeasurePlaybackLevel(new[] { .1f, -.1f }) - .552f) < .0001f, "mouth envelope uses RMS, not cancelling signed sample average");
         Check(QuestJarvisVoice.MeasurePlaybackLevel(new[] { 1f, -1f }) == 1, "loud playback envelope remains bounded");
@@ -44,7 +46,7 @@ static class Program
         Check(!QuestJarvisVoice.ValidEncounterId("enc-ABCDEF"), "reject noncanonical encounter identity");
         Check(!QuestJarvisVoice.ValidEncounterId("enc-abc"), "reject truncated encounter identity");
         Check(!QuestJarvisVoice.ValidEncounterId("enc-" + new string('a', 41)), "bounded encounter identity");
-        Console.WriteLine("voice-check passed: PCM negotiation/roundtrip/downmix, muted hold-to-talk silence, actual playback RMS, malformed PCM, nested tool parameters and encounter identity boundaries.");
+        Console.WriteLine("voice-check passed: PCM negotiation/roundtrip/downmix, muted and agent-speaking silence, actual playback RMS, malformed PCM, nested tool parameters and encounter identity boundaries. Production initiation serialization/interruption/lifecycle require verify_session.py --suite voice in real Unity.");
         return 0;
     }
 }

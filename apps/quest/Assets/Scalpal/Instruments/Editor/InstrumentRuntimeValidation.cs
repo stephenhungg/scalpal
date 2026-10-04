@@ -96,12 +96,79 @@ namespace Scalpal.Instruments.Editor
                 VerifyGrasp(patch, hand, interactor, scope.transform);
                 VerifyContinuous("hook_cautery", patch, hand, interactor, scope.transform);
                 VerifyContinuous("suction_irrigator", patch, hand, interactor, scope.transform);
+                VerifyOpenTools(scope.transform);
                 VerifyProjection(scope.transform);
                 VerifyAnatomyContact(scope.transform);
                 Require(AssetDatabase.LoadAssetAtPath<SceneAsset>("Assets/Scalpal/Instruments/Samples/InstrumentSandbox.unity") != null, "sandbox scene exists");
                 Debug.Log("SCALPAL_INSTRUMENT_VALIDATION_OK: " + checks + " checks. Editor physics/contact tests; physical Quest input not tested.");
             }
             finally { UnityEngine.Object.DestroyImmediate(scope); }
+        }
+
+        static void VerifyOpenTools(Transform parent)
+        {
+            var kit = Resources.Load<GameObject>("OpenSurgeryInstruments");
+            Require(kit != null, "open surgery runtime Resources kit exists");
+            var kitTools = kit.GetComponentsInChildren<InstrumentBehaviour>(true);
+            int retractors = 0, hemostats = 0;
+            var ids = new System.Collections.Generic.HashSet<string>();
+            foreach (var item in kitTools)
+            {
+                ids.Add(item.instrumentId);
+                if (item.instrumentId == "retractor") retractors++;
+                if (item.instrumentId == "hemostat") hemostats++;
+            }
+            Require(kitTools.Length == 10 && retractors == 2 && hemostats == 2, "open tray has two independent retractors and two independent hemostats");
+            Require(ids.SetEquals(OpenInstrumentModels.Ids), "open tray contains every open instrument ID");
+            var hand = new GameObject("OpenToolValidationHand");
+            hand.transform.SetParent(parent);
+            var interactor = hand.AddComponent<InstrumentInteractor>();
+            foreach (string id in OpenInstrumentModels.Ids)
+            {
+                var model = UnityEngine.Object.Instantiate(AssetDatabase.LoadAssetAtPath<GameObject>(Root + "inst_" + id + ".prefab"), parent);
+                try
+                {
+                    var tool = model.GetComponent<InstrumentBehaviour>();
+                    Require(model.GetComponentsInChildren<InstrumentTipContact>(true).Length == 1,
+                        id + " uses one distal contact adapter");
+                    foreach (var filter in model.GetComponentsInChildren<MeshFilter>(true))
+                    {
+                        var mesh = filter.sharedMesh;
+                        Require(mesh != null && AssetDatabase.Contains(mesh), id + " mesh persists as an asset");
+                        bool valid = true;
+                        var vertices = mesh.vertices;
+                        var triangles = mesh.triangles;
+                        foreach (var point in vertices)
+                            valid &= !float.IsNaN(point.x) && !float.IsNaN(point.y) && !float.IsNaN(point.z)
+                                && !float.IsInfinity(point.x) && !float.IsInfinity(point.y) && !float.IsInfinity(point.z);
+                        for (int triangle = 0; triangle < triangles.Length; triangle += 3)
+                            valid &= Vector3.Cross(vertices[triangles[triangle + 1]] - vertices[triangles[triangle]],
+                                vertices[triangles[triangle + 2]] - vertices[triangles[triangle]]).sqrMagnitude > 1e-20f;
+                        Require(valid, id + " mesh has finite vertices and no degenerate triangles");
+                    }
+                    interactor.SetTrackedPose(Vector3.zero, Quaternion.identity, true);
+                    Require(interactor.TryPickup(tool), id + " tracked pickup");
+                    interactor.SetTrackedPose(new Vector3(.31f, .52f, -.4f), Quaternion.Euler(20, 30, 40), true);
+                    Require((tool.gripAnchor.position - hand.transform.position).magnitude < .001f, id + " grip follows tracked hand");
+                    tool.SetActivation(0);
+                    Quaternion open = tool.upperJaw ? tool.upperJaw.localRotation : Quaternion.identity;
+                    tool.SetActivation(1);
+                    if (tool.upperJaw) Require(Quaternion.Angle(open, tool.upperJaw.localRotation) > 5, id + " trigger articulates jaws");
+                    if (id == "metzenbaum_scissors")
+                    {
+                        Transform start = null, end = null;
+                        foreach (var anchor in model.GetComponentsInChildren<Transform>())
+                        { if (anchor.name == "CutStart") start = anchor; if (anchor.name == "CutEnd") end = anchor; }
+                        Require(start && end && Vector3.Distance(start.position, end.position) >= .002f && Vector3.Distance(start.position, end.position) <= .06f,
+                            "Metzenbaum supplies one metric blade segment to the tissue driver");
+                    }
+                    interactor.SetTrackedPose(hand.transform.position, hand.transform.rotation, false);
+                    Require(!tool.Held && tool.Activation == 0, id + " tracking loss releases and deactivates");
+                    Require(!tool.GetComponent<Rigidbody>().isKinematic && tool.GetComponent<Rigidbody>().useGravity,
+                        id + " release restores pickup physics");
+                }
+                finally { interactor.Release(); UnityEngine.Object.DestroyImmediate(model); }
+            }
         }
 
         static void VerifyProjection(Transform parent)

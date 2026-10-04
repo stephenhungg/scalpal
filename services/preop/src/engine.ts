@@ -1,3 +1,5 @@
+import { BodyState, type BodyAction } from "./open-body.js";
+import { idealBodyActions } from "./open-body-fixtures.js";
 import type { Procedure, ProcedureStep, StepMistake } from "./types.js";
 
 // Reference step engine. Apps/quest CaseRunner.cs mirrors these semantics exactly; tests here prove
@@ -7,7 +9,8 @@ export type EngineEvent =
   | { type: "place_port"; portId: string }
   | { type: "touch"; structureId: string; instrumentId: string }
   | { type: "identify"; structureId: string }
-  | { type: "confirm" };
+  | { type: "confirm" }
+  | { type: "surgery"; evidence: BodyAction };
 
 export interface EngineResult {
   advanced: boolean;
@@ -20,10 +23,15 @@ export class StepEngine {
   private index = new Map<string, ProcedureStep>();
   private progress = new Set<string>();
   private applied = 0;
+  readonly body: BodyState | null;
+  readonly completedMilestones = new Set<string>();
+  readonly orderDeviations: string[] = [];
+  private seenActions = new Set<string>();
   current: ProcedureStep | null;
   mistakes: StepMistake[] = [];
 
   constructor(readonly procedure: Procedure) {
+    this.body = procedure.openBody ? new BodyState(procedure.openBody.tissues) : null;
     for (const s of procedure.steps) this.index.set(s.id, s);
     this.current = this.index.get(procedure.firstStep) ?? null;
   }
@@ -38,6 +46,7 @@ export class StepEngine {
   }
 
   handle(event: EngineEvent): EngineResult {
+    if (this.body) return this.handleBody(event);
     const step = this.current;
     if (!step) return { advanced: false, completed: true, mistake: null, stepId: "" };
 
@@ -77,6 +86,29 @@ export class StepEngine {
     return { advanced: true, completed: this.current == null, mistake: null, stepId: step.id };
   }
 
+  private handleBody(event: EngineEvent): EngineResult {
+    const previous = this.current;
+    const empty = { advanced: false, completed: this.completed, mistake: null, stepId: previous?.id ?? "" };
+    if (event.type !== "surgery") return empty;
+    const record = this.body!.apply(event.evidence);
+    if (!record) return empty;
+    const plan = this.procedure.openBody!;
+    let mistake: StepMistake | null = null;
+    for (const rule of plan.guardrails) if ((!rule.tissueId || rule.tissueId === record.action.tissueId) && record.outcomes.includes(rule.outcome)) {
+      const detected: StepMistake = { id: rule.id, trigger: "wrong_order", structure: record.action.tissueId, severity: rule.severity, feedback: rule.feedback };
+      this.mistakes.push(detected); mistake ??= detected;
+    }
+    const satisfied = new Set(plan.milestones.filter(m => m.predicates.every(p => this.body!.test(p))).map(m => m.id));
+    let advanced = false;
+    for (const m of plan.milestones) if (satisfied.has(m.id) && !this.completedMilestones.has(m.id)) {
+      if (previous && previous.id !== m.id) this.orderDeviations.push(m.id);
+      this.completedMilestones.add(m.id); advanced = true;
+    }
+    // Live state can invalidate a formerly achieved milestone (e.g. a new bleed).
+    this.current = this.procedure.steps.find(s => !satisfied.has(s.id)) ?? null;
+    return { advanced, completed: this.completed, mistake, stepId: previous?.id ?? "" };
+  }
+
   private isSatisfied(step: ProcedureStep): boolean {
     const { check } = step;
     if (check.type === "confirm") return this.progress.has("confirm");
@@ -98,6 +130,7 @@ export class StepEngine {
 // The ideal event sequence for one step: used by tests and by a "demo autoplay" mode.
 export function perfectEvents(step: ProcedureStep): EngineEvent[] {
   const { check } = step;
+  if (check.type === "body_predicate") return idealBodyActions(step.id).map(evidence => ({ type: "surgery", evidence }));
   switch (check.type) {
     case "place_ports":
       return check.targets.map((portId) => ({ type: "place_port", portId }));
@@ -109,5 +142,6 @@ export function perfectEvents(step: ProcedureStep): EngineEvent[] {
       return Array.from({ length: check.count }, () => ({ type: "touch", structureId: check.targets[0] ?? "", instrumentId: step.instrumentId }));
     case "confirm":
       return [{ type: "confirm" }];
+    default: return [];
   }
 }

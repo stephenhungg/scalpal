@@ -1,3 +1,4 @@
+import { OPEN_BODY, OPEN_STEPS } from "./open-appendectomy.js";
 import type { Port, Procedure, ProcedureStep, Severity, StepMistake, SuccessCheck, Vec3 } from "../types.js";
 
 // Port positions are in the torso frame, meters, for an adult torso (case.bodyScale rescales them):
@@ -495,6 +496,17 @@ const sigmoidColectomy = procedure({
   ]),
 });
 
-export const PROCEDURES: Procedure[] = [cholecystectomy, appendectomy, sigmoidColectomy];
+// Open approach is a separate catalog; the retained lap procedure is not silently reinterpreted.
+const openAppendectomy = procedure({
+  id: "open_appendectomy", title: "Open appendectomy", shortTitle: "Open appendix removal",
+  approach: "Open muscle-splitting incision", typicalMinutes: 45,
+  summary: "Registered incision, layered exposure, delivery, vascular control and base ligation, then dry inspection.",
+  structures: ["abdominal_wall", "umbilicus", "appendix", "mesoappendix", "appendicular_artery", "cecum", "terminal_ileum"],
+  focusStructures: ["appendix", "mesoappendix", "cecum"], ports: [],
+  openBody: OPEN_BODY,
+  steps: OPEN_STEPS,
+});
+
+export const PROCEDURES: Procedure[] = [cholecystectomy, appendectomy, sigmoidColectomy, openAppendectomy];
 
 export const PROCEDURES_BY_ID = new Map(PROCEDURES.map((p) => [p.id, p]));

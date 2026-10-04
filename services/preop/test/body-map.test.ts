@@ -57,6 +57,9 @@ describe("regions", () => {
   // A step target the rig cannot point at stalls that session forever while the coach escalates hints.
   it("lets the camera reach every touched or identified target of every procedure", () => {
     for (const [procedureId, procedure] of PROCEDURES_BY_ID) {
+      // The browser camera harness cannot measure open-body cuts, ties, or layer exposure.
+      // Native open-body events have their own geometry and predicate validation.
+      if (procedure.openBody) continue;
       const allowed = new Set(procedure.structures);
       const touched = new Set(procedure.steps.filter((s) => s.check.type !== "place_ports" && s.check.type !== "confirm").flatMap((s) => s.check.targets));
       for (const id of touched) {

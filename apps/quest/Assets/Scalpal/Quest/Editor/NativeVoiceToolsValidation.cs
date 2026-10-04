@@ -28,6 +28,12 @@ namespace Scalpal.Quest.Editor
         [Serializable] sealed class ToolResult { public string type, tool_call_id, result; public bool is_error; }
         [Serializable] sealed class SelectedArray { public string[] selected; }
         [Serializable] sealed class SelectedString { public string selected; }
+        [Serializable] sealed class Init { public string type; public Variables dynamic_variables; public Config conversation_config_override; }
+        [Serializable] sealed class Variables { public string coach_session_id,encounter_id,session_id,patient_id,mode,context; }
+        [Serializable] sealed class Config { public Agent agent; public Tts tts; }
+        [Serializable] sealed class Agent { public Prompt prompt; public string first_message; }
+        [Serializable] sealed class Prompt { public string prompt; }
+        [Serializable] sealed class Tts { public string voice_id; }
         sealed class Exchange { public string url, method, body; }
 
         [MenuItem("Scalpal/Quest/Validate Native Voice Tools")]
@@ -69,6 +75,8 @@ namespace Scalpal.Quest.Editor
                 fixture = new GameObject("NativeVoiceToolsFixture");
                 fixture.SetActive(false);
                 voice = fixture.AddComponent<QuestJarvisVoice>();
+                ValidateInitiation(voice);
+                ValidateAudioLifecycle(voice,connections);
                 voice.ConfigureEndpoint(endpoint);
                 Set(voice, "generation", 100);
                 Property(voice, "CoachSessionId", sid);
@@ -163,6 +171,75 @@ namespace Scalpal.Quest.Editor
                 && !Get<HashSet<string>>(voice, "pendingTools").Contains(id), "native result receipt matches its call and clears pending ownership");
             return result;
         }
+        static void ValidateInitiation(QuestJarvisVoice voice)
+        {
+            const string authored="Quote \"here\", backslash \\, newline\n tab\t and café";
+            foreach(var role in new[]{"virtual","attending","patient"})
+            {
+                bool encounter=role!="virtual";string id=encounter?"enc-abcdef123456":"coach-abcdef123456";
+                Set(voice,"encounterMode",encounter);Set(voice,"patientId","patient-demo-multi-source");Property(voice,"CoachSessionId",id);
+                if(encounter)voice.ConfigureEncounterConversation(authored,authored,role=="patient"?"patient-voice":"",role);
+                else voice.ConfigureConversation(authored,authored,authored);
+                string json=(string)Call(voice,"BuildInitiation",role);var init=JsonUtility.FromJson<Init>(json);
+                Assert(init.type=="conversation_initiation_client_data"&&init.dynamic_variables.session_id==id&&init.dynamic_variables.patient_id=="patient-demo-multi-source"&&init.dynamic_variables.mode==role,"actual production initiation preserves exact identity and role: "+role);
+                Assert(init.dynamic_variables.coach_session_id==(encounter?"":id)&&init.dynamic_variables.encounter_id==(encounter?id:""),"coach and encounter identifiers stay distinct in actual serialized initiation: "+role);
+                Assert(init.conversation_config_override.agent.prompt.prompt==authored&&init.conversation_config_override.agent.first_message==authored,"actual JsonUtility initiation escapes prompt/greeting and round-trips authored text: "+role);
+                Assert(json.Contains("\"tts\"")==(role=="patient"),"actual surgery/attending serializer omits tts; patient includes explicit voice: "+role);
+                if(role=="patient")Assert(init.conversation_config_override.tts.voice_id=="patient-voice","serialized patient TTS voice matches configured voice");
+                else if(!encounter)Assert(init.dynamic_variables.context==authored,"surgery dynamic context round-trips escaped text");
+                foreach(var optional in new[]{new[]{"",""},new[]{authored,""},new[]{"",authored},new[]{" ","\t"}})
+                {
+                    if(encounter)voice.ConfigureEncounterConversation(optional[0],optional[1],role=="patient"?"patient-voice":"",role);
+                    else voice.ConfigureConversation(optional[0],optional[1]);
+                    json=(string)Call(voice,"BuildInitiation",role);init=JsonUtility.FromJson<Init>(json);
+                    Assert(json.Contains("\"prompt\"")==!string.IsNullOrWhiteSpace(optional[0])&&json.Contains("\"first_message\"")==!string.IsNullOrWhiteSpace(optional[1]),"empty optional prompt/greeting keys are absent rather than synthesized default objects: "+role);
+                    Assert(json.Contains("\"tts\"")==(role=="patient")&&init.dynamic_variables.session_id==id,"optional overrides preserve exact identity and only patient voice TTS: "+role);
+                }
+            }
+            Set(voice,"encounterMode",false);voice.ConfigureConversation("","");voice.Disconnect();
+        }
+        static void ValidateAudioLifecycle(QuestJarvisVoice voice,List<object> connections)
+        {
+            Property(voice,"Status","connected");Set(voice,"outputRate",16000);
+            var connection=NewConnection(voice,Get<int>(voice,"generation"));connections.Add(connection);
+            string pcm=Convert.ToBase64String(QuestJarvisVoice.EncodePcm(new[]{.3f,-.3f,.3f},1));
+            void Audio(int id) => Call(voice,"Handle","{\"type\":\"audio\",\"audio_event\":{\"event_id\":"+id+",\"audio_base_64\":\""+pcm+"\"}}");
+            var queue=Get<Queue<float>>(voice,"outputSamples");Audio(10);
+            Assert(queue.Count==3&&(bool)Call(voice,"AgentOutputPending"),"actual provider audio queues decoded PCM and gates microphone while output is pending");
+            var silence=QuestJarvisVoice.DecodePcm(QuestJarvisVoice.EncodeMicrophonePcm(new[]{.8f},1,false,(bool)Call(voice,"AgentOutputPending")));
+            Assert(silence.Single()==0,"production playback gate sends timed silence for unmuted input during agent speech");
+            Call(voice,"Handle","{\"type\":\"interruption\",\"interruption_event\":{\"event_id\":10}}");Audio(9);Audio(10);
+            Assert(queue.Count==0&&voice.Mode=="listening","provider interruption discards buffered and late audio through the interrupted event ID");
+            Audio(11);Assert(queue.Count==3,"later provider response above the interruption cutoff remains playable");
+            voice.InterruptPlayback();Audio(12);Call(voice,"Handle","{\"type\":\"audio\",\"audio_event\":{\"audio_base_64\":\""+pcm+"\"}}");
+            Call(voice,"Handle","{\"type\":\"interruption\"}");
+            Assert(queue.Count==0&&voice.PlaybackLevel==0&&!(bool)Call(voice,"AgentOutputPending"),"explicit held-talk interruption drops late/idless chunks and opens half-duplex input");
+            Assert(Get<bool>(voice,"awaitingInterruption"),"idless interruption cannot release local suppression before a known server turn boundary");
+            var held=QuestJarvisVoice.DecodePcm(QuestJarvisVoice.EncodeMicrophonePcm(new[]{.8f},1,false,(bool)Call(voice,"AgentOutputPending")));
+            Assert(held.Single()>.79f,"explicit barge-in permits held learner PCM after stopping agent playback");
+            Call(voice,"Handle","{\"type\":\"interruption\",\"interruption_event\":{\"event_id\":12}}");Audio(12);Audio(13);
+            Assert(queue.Count==3,"server turn boundary releases local suppression while retaining interrupted-ID cutoff");
+            voice.InterruptPlayback();Audio(14);
+            Call(voice,"Handle","{\"type\":\"user_transcript\",\"user_transcription_event\":{\"user_transcript\":\"New question\"}}");Audio(14);Audio(15);
+            Assert(queue.Count==3,"finalized learner turn releases local suppression without replaying discarded prior response IDs");
+            Call(voice,"OnApplicationFocus",false);int suspendedGeneration=Get<int>(voice,"generation");
+            Call(voice,"OnApplicationFocus",true);Call(voice,"OnApplicationPause",false);
+            Assert(!voice.PlaybackActive&&voice.Status=="disconnected"&&Get<object>(voice,"active")==null&&Get<int>(voice,"generation")==suspendedGeneration,"focus restoration never reconnects voice or resumes a canceled conversation");
+            Property(voice,"Status","connected");connections.Add(NewConnection(voice,Get<int>(voice,"generation")));Audio(1);
+            Assert(queue.Count==3,"new conversation generation resets the old interruption filter");
+            voice.Disconnect();
+            Property(voice,"Status","connecting");int connectingGeneration=Get<int>(voice,"generation");Call(voice,"OnApplicationFocus",false);Call(voice,"OnApplicationFocus",true);
+            Assert(Get<int>(voice,"generation")>connectingGeneration&&voice.Status=="disconnected"&&Get<object>(voice,"active")==null,"focus loss cancels HTTP/connecting negotiation and restoration cannot finish or restart it");
+            Property(voice,"Status","connecting");connectingGeneration=Get<int>(voice,"generation");Call(voice,"OnApplicationPause",true);Call(voice,"OnApplicationPause",false);
+            Assert(Get<int>(voice,"generation")>connectingGeneration&&voice.Status=="disconnected","pause cancels negotiation even before a socket exists");
+            Property(voice,"Status","connecting");Set(voice,"permissionPending",true);int permissionGeneration=Get<int>(voice,"generation");Call(voice,"OnApplicationPause",true);Call(voice,"OnApplicationFocus",false);
+            Assert(Get<int>(voice,"generation")==permissionGeneration&&voice.Status=="connecting","actual outstanding first-use permission prompt survives OS-dialog focus/pause");
+            voice.Disconnect();Assert(!Get<bool>(voice,"permissionPending"),"explicit stop clears permission request ownership");Call(voice,"OnApplicationFocus",true);Call(voice,"OnApplicationPause",false);
+            Assert(Get<AudioClip>(voice,"microphoneClip")==null,"protocol/lifecycle regression never opened a real microphone");
+            Call(connection,"Dispose");Call(connection,"Dispose");Call(connection,"RequestStop");Call(connection,"Enqueue","ignored-after-disposal");
+            bool disposed=false;try { ((SemaphoreSlim)connection.GetType().GetField("SendSignal").GetValue(connection)).Wait(0); }catch(ObjectDisposedException){disposed=true;}
+            Assert(disposed,"connection signal resources dispose after ownership ends; repeated stop/dispose/queue remain safe");
+        }
 
         static IEnumerator ToolRoutine(QuestJarvisVoice voice, string name, string id, string raw)
         {
@@ -243,6 +320,7 @@ namespace Scalpal.Quest.Editor
         static void Property(object target, string name, object value) => target.GetType().GetProperty(name).GetSetMethod(true).Invoke(target, new[] { value });
         static void Set(object target, string name, object value) => target.GetType().GetField(name, Private).SetValue(target, value);
         static T Get<T>(object target, string name) => (T)target.GetType().GetField(name, Private).GetValue(target);
+        static object Call(object target,string name,params object[] args) => target.GetType().GetMethod(name,BindingFlags.Instance|BindingFlags.NonPublic|BindingFlags.Public).Invoke(target,args);
         static void Assert(bool value, string reason)
         { if (!value) throw new InvalidOperationException("Native voice tools validation failed: " + reason); checks++; }
     }
