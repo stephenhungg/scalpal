@@ -1,6 +1,6 @@
 "use client";
 
-// From MatthewKim323/adam (src/components/AsciiAdam.tsx), unchanged apart from this header, both arms set to white, a green spark, the onTouch / introSpeed props, and pointer reach turned off (glyph scramble kept).
+// From MatthewKim323/adam (src/components/AsciiAdam.tsx), unchanged apart from this header, both arms set to white, the onTouch / introSpeed props, and pointer reach turned off (glyph scramble kept).
 import { useEffect, useRef } from 'react'
 
 /*
@@ -97,8 +97,7 @@ void main() {
   float core = exp(-dist * dist / 0.0012);
   float halo = exp(-dist / 0.075) * rays;
   float spark = glow * flick * (core * 1.4 + halo * 1.4);
-  // Scalpal site: green spark (deep green halo, light green core)
-  col += mix(vec3(0.1, 0.75, 0.25), vec3(0.6, 1.0, 0.55), clamp(core * 1.6, 0.0, 1.0)) * spark;
+  col += mix(vec3(0.95, 0.3, 0.08), vec3(1.0, 0.86, 0.22), clamp(core * 1.6, 0.0, 1.0)) * spark;
   a = max(a, clamp(spark, 0.0, 1.0));
 
   float lum = clamp(dot(col, vec3(0.299, 0.587, 0.114)), 0.0, 1.0) * a;
