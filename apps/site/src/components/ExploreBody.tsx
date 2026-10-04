@@ -28,7 +28,7 @@ export function ExploreBody({ apkUrl, videoUrl }: { apkUrl: string; videoUrl: st
   return (
     <main className="relative">
       <HandsBackdrop />
-      <Shell className="z-10">
+      <Shell className="z-10 flex flex-col">
         <motion.section
           className="relative z-10 flex flex-col items-center px-[15px] pb-16 pt-8 text-center min-[810px]:px-[30px] min-[810px]:pt-12"
           animate={leaving ? { opacity: 0, filter: "blur(6px)", y: -10 } : { opacity: 1, filter: "blur(0px)", y: 0 }}
@@ -65,10 +65,18 @@ export function ExploreBody({ apkUrl, videoUrl }: { apkUrl: string; videoUrl: st
             <p className="text-[14px] leading-[22px] text-white/50">Meta Quest 3 and 3S. Install with SideQuest or adb.</p>
           </FadeIn>
 
-          <FadeIn delay={0.95} className="mt-12 w-full">
+        </motion.section>
+
+        {/* bottom center of the page: pinned to the bottom when the content fits, after it otherwise */}
+        <motion.div
+          className="relative z-10 mt-auto w-full px-[15px] pb-6 min-[810px]:px-[30px]"
+          animate={leaving ? { opacity: 0 } : { opacity: 1 }}
+          transition={EXIT}
+        >
+          <FadeIn delay={0.95}>
             <TrackWheel />
           </FadeIn>
-        </motion.section>
+        </motion.div>
       </Shell>
     </main>
   );
