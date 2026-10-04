@@ -7,7 +7,7 @@
 | Sex | Male |
 | Speaker | Parent: Laura Abernathy, Theo's mother. She relays what Theo says. |
 | Subject id | `patient-demo-pediatric-asthma` |
-| Procedure | Laparoscopic appendectomy (`lap_appendectomy`) |
+| Procedure | Open appendectomy (`open_appendectomy`) |
 | Urgency | Urgent |
 | Voice preset | `parent_female` |
 
