@@ -3,7 +3,7 @@
 import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 
-// A monitor-style ECG sweep that runs behind the "scalpal." title. Simulated, slowly drifting HR.
+// A monitor-style ECG sweep behind the "scalpal." title, reaching a little past it on each side. Simulated, slowly drifting HR.
 function useHeartRate() {
   const [v, setV] = useState({ hr: 72, spo2: 98, sys: 118, dia: 76 });
   useEffect(() => {
@@ -113,7 +113,12 @@ export function TitleHeartbeat({ show, instant = false }: { show: boolean; insta
   return (
     <motion.div
       aria-hidden
-      className="pointer-events-none absolute left-1/2 top-1/2 -z-10 w-screen -translate-x-1/2 -translate-y-1/2"
+      className="pointer-events-none absolute -inset-x-[120px] top-1/2 -z-10 -translate-y-1/2"
+      // just past the title on each side, fading out at the ends
+      style={{
+        maskImage: "linear-gradient(90deg, transparent, black 22%, black 78%, transparent)",
+        WebkitMaskImage: "linear-gradient(90deg, transparent, black 22%, black 78%, transparent)",
+      }}
       initial={instant ? false : { opacity: 0 }}
       animate={{ opacity: show ? 1 : 0 }}
       transition={{ duration: 1, ease: [0.44, 0, 0.56, 1] }}
