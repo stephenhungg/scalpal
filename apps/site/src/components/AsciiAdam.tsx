@@ -1,6 +1,6 @@
 "use client";
 
-// From MatthewKim323/adam (src/components/AsciiAdam.tsx), unchanged apart from this header, both arms set to white, the onTouch / introSpeed / loopSpeed props, and pointer reach turned off (glyph scramble kept).
+// From MatthewKim323/adam (src/components/AsciiAdam.tsx), unchanged apart from this header, both arms set to white, the onTouch / introSpeed / holdAfterTouch props, and pointer reach turned off (glyph scramble kept).
 import { useEffect, useRef } from 'react'
 
 /*
@@ -247,23 +247,24 @@ function aim(arm: Arm, base: Xf, pointer: Vec | null, dt: number): Xf {
 }
 
 // Scalpal site additions: onTouch fires once when the fingertips first meet (spark fully lit),
-// introSpeed speeds up only that first approach so it can work as a loader, and loopSpeed sets
-// the pace of the touch/hold/apart loop that follows.
+// introSpeed speeds up only that first approach so it can work as a loader, and holdAfterTouch
+// keeps the hands together once they meet instead of looping.
 const TOUCH = 6.6
+const CLOSED = 6.8 // arms fully at their touching pose
 
-type Props = { playing?: boolean; time?: number; onTouch?: () => void; introSpeed?: number; loopSpeed?: number }
+type Props = { playing?: boolean; time?: number; onTouch?: () => void; introSpeed?: number; holdAfterTouch?: boolean }
 
-export function AsciiAdam({ playing = true, time, onTouch, introSpeed = 1, loopSpeed = 1 }: Props) {
+export function AsciiAdam({ playing = true, time, onTouch, introSpeed = 1, holdAfterTouch = false }: Props) {
   const ref = useRef<HTMLCanvasElement>(null)
   const playingRef = useRef(playing)
   const onTouchRef = useRef(onTouch)
   const introSpeedRef = useRef(introSpeed)
-  const loopSpeedRef = useRef(loopSpeed)
+  const holdRef = useRef(holdAfterTouch)
   useEffect(() => {
     onTouchRef.current = onTouch
     introSpeedRef.current = introSpeed
-    loopSpeedRef.current = loopSpeed
-  }, [onTouch, introSpeed, loopSpeed])
+    holdRef.current = holdAfterTouch
+  }, [onTouch, introSpeed, holdAfterTouch])
   useEffect(() => {
     playingRef.current = playing
   }, [playing])
@@ -407,8 +408,12 @@ export function AsciiAdam({ playing = true, time, onTouch, introSpeed = 1, loopS
         const rush = 0
         // pointer in the gap: hurry them together, and hold them there on the way back
         const speed = clock < LOOP ? 1 + REACH.rush * rush : 1 - rush
-        const intro = touched ? loopSpeedRef.current : introSpeedRef.current
-        if (live) clock = (clock + dt * speed * intro) % (2 * LOOP)
+        const intro = touched ? 1 : introSpeedRef.current
+        if (live) {
+          clock = (clock + dt * speed * intro) % (2 * LOOP)
+          // finish closing, then stay touching
+          if (touched && holdRef.current) clock = Math.min(clock, CLOSED)
+        }
 
         const lx = aim(leftArm, baseL, null, dt)
         const rx = aim(rightArm, baseR, null, dt)
