@@ -3,7 +3,7 @@ import { INSTRUMENTS_BY_ID } from "./catalog/instruments.js";
 import type { BodyGrade } from "./open-body-grade.js";
 import { StepEngine, perfectEvents, type EngineEvent } from "./engine.js";
 import { bodyAction, isBodyTelemetry, type BodyAction, type BodyPredicate, type BodyState } from "./open-body.js";
-import { CLASS_LINES, DEATH_LINE, PatientCondition, REGIONS, type ConditionView, type RegionId } from "./patient-condition.js";
+import { CLASS_LINES, DEATH_LINE, PatientCondition, REGIONS, selectCondition, type ConditionView, type RegionId } from "./patient-condition.js";
 import type { Baseline } from "./physiology.js";
 import { briefingLines } from "./briefing.js";
 import type { ProcedureStep, Severity, StepAction, SurgicalCase } from "./types.js";
@@ -236,6 +236,10 @@ export class CoachSession {
   private bloodLossMl = 0;
   // Simulated vitals and outcome; the baseline is set from the chart (VR) or Presage (AR) by the route.
   readonly condition = new PatientCondition(() => this.ms());
+  // The authoritative condition from SpacetimeDB (set by the routes when a realtime session is bound).
+  // The local model keeps driving alerts and stays the fallback when no fresh module row exists.
+  conditionFeed: { read(): { view: ConditionView; ageMs: number } | null } | null = null;
+  private conditionSource: ConditionView["source"] | "" = "";
   simulated = false; // laptop demo driver in use: the coach advances bleeding time itself
   private scene = { summary: "", at: "", source: "" }; // latest vision summary of the learner's view
   private commands: CoachCommand[] = [];
@@ -969,8 +973,17 @@ export class CoachSession {
         done: st.id !== step?.id && (this.engine.completedMilestones.has(st.id) || this.completed.some((c) => c.stepId === st.id)),
         current: st.id === step?.id,
       })),
-      condition: this.condition.view(),
+      condition: this.conditionView(),
     };
+  }
+
+  private conditionView(): ConditionView {
+    const view = selectCondition(this.condition.view(), this.conditionFeed?.read() ?? null);
+    if (view.source !== this.conditionSource) {
+      if (this.conditionFeed) console.log(`[condition] ${this.id}: using ${view.source === "spacetime" ? "SpacetimeDB module" : "local coach"} physiology`);
+      this.conditionSource = view.source;
+    }
+    return view;
   }
 
   private stepView(step: ProcedureStep): CoachStepView {

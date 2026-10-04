@@ -2,6 +2,8 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { DbConnection, tables } from "./module_bindings/index.js";
 import type { EncounterLogEntry, EncounterSession, Scorecard } from "./encounter.js";
 import type { InterviewScorecard, InterviewSession } from "./interview.js";
+import { conditionFromRow, type ConditionView, type RegionId } from "./patient-condition.js";
+import type { Baseline } from "./physiology.js";
 
 // Scalpal's connection to the shared SpacetimeDB session (Nathan's module), as the `coach` role.
 // Everything Scalpal does is mirrored there live, so the companion, the headset, and anyone else
@@ -26,6 +28,15 @@ export interface RealtimeSink {
   patientCondition?(update: PatientConditionUpdate): void;
   // The robot learner's verdict for a step, as a robot_result row every member subscribes to. Fire and forget.
   robotResult?(entry: RobotResultEntry): void;
+  // The simulated patient, advanced server-side by the SpacetimeDB module (patient_condition). The coach
+  // starts it, forwards body facts and injuries, and reads the authoritative condition back. Fire and forget.
+  startCondition?(coachSessionId: string, p: ConditionStart): void;
+  setConditionBaseline?(coachSessionId: string, baseline: Baseline): void;
+  reportBody?(coachSessionId: string, bloodLostMl: number, bleeds: { name: string; rateMlPerMin: number }[]): void;
+  reportInjury?(coachSessionId: string, region: RegionId, controlled: boolean): void;
+  endCondition?(coachSessionId: string, result: "completed" | "ended", cause: string): void;
+  // The module's condition for this coach session and how long ago the bridge last received it, or null.
+  readCondition?(coachSessionId: string): { view: ConditionView; ageMs: number } | null;
   // Resolves to the headset's resolution, or null when the shared session cannot carry the command.
   highlight(targetId: string, timeoutMs?: number): Promise<{ status: string; reason: string } | null>;
 }
@@ -36,6 +47,16 @@ export interface SimLogEntry {
   text: string; // one human-readable line
   data?: unknown; // structured payload, JSON-serialized when stored
 }
+
+export interface ConditionStart {
+  baseline: Baseline;
+  spo2: number | null;
+  weightKg: number;
+  mlPerKg: number;
+}
+
+// The module accepts a short lowercase source label ("chart", "chart+authored", "measured", "demo", ...).
+const conditionSource = (b: Baseline) => (b.source ?? "authored").toLowerCase().replace(/[^a-z0-9+_-]/g, "").slice(0, 24) || "authored";
 
 export interface RobotResultEntry {
   stepId: string;
@@ -86,6 +107,8 @@ export class RealtimeBridge implements RealtimeSink {
   private stopped = false;
   private retryMs = 1000;
   private commandSeq = 0;
+  private conditionOwner = ""; // the coach session whose patient the module currently simulates
+  private conditionSeenAt = 0; // local receipt time of the latest patient_condition row
   private readonly log: (msg: string, extra?: unknown) => void;
 
   constructor(private readonly cfg: BridgeConfig) {
@@ -139,6 +162,13 @@ export class RealtimeBridge implements RealtimeSink {
             if (this.cfg.inviteCode && !this.sessionId) void this.join(this.cfg.inviteCode).catch((e) => (this.lastError = String(e)));
           })
           .subscribe([tables.mySessions, tables.myMemberships, tables.sessionExerciseState, tables.sessionCommands, tables.sessionEncounters]);
+        // Separate subscription: a database without the patient_condition module keeps the rest working.
+        const seen = () => (this.conditionSeenAt = Date.now());
+        c.db.sessionPatientCondition.onInsert(seen);
+        c.db.sessionPatientCondition.onUpdate(seen);
+        c.subscriptionBuilder()
+          .onError((_ctx) => this.log("patient_condition subscription failed; the coach computes the condition locally"))
+          .subscribe([tables.sessionPatientCondition]);
       })
       .onDisconnect(() => {
         this.ready = false;
@@ -342,6 +372,56 @@ export class RealtimeBridge implements RealtimeSink {
     }
     this.call("setEncounterResult", (c) => c.reducers.setEncounterResult({ encounterId: e.id, scoreTotal: card.total, grade: card.grade, scorecardJson: JSON.stringify(card).slice(0, 32000) }));
     this.coachMessage("system", `Pre-op score ${card.total}/100 (${card.grade}). ${card.feedback[0] ?? ""}`);
+  }
+
+  startCondition(coachSessionId: string, p: ConditionStart) {
+    if (!this.bound) return;
+    this.conditionOwner = coachSessionId;
+    const b = p.baseline;
+    this.call("startPatientCondition", (c) =>
+      c.reducers.startPatientCondition({
+        sessionId: this.sessionId,
+        coachSessionId: coachSessionId.slice(0, 120),
+        baselineHr: b.hr,
+        baselineRr: b.rr,
+        baselineSys: b.sys,
+        baselineDia: b.dia,
+        baselineSpo2: p.spo2 ?? -1,
+        baselineSource: conditionSource(b),
+        weightKg: p.weightKg,
+        mlPerKg: p.mlPerKg,
+      }),
+    );
+  }
+
+  setConditionBaseline(coachSessionId: string, b: Baseline) {
+    if (coachSessionId !== this.conditionOwner) return;
+    this.call("setPatientBaseline", (c) =>
+      c.reducers.setPatientBaseline({ sessionId: this.sessionId, baselineHr: b.hr, baselineRr: b.rr, baselineSys: b.sys, baselineDia: b.dia, baselineSource: conditionSource(b) }),
+    );
+  }
+
+  reportBody(coachSessionId: string, bloodLostMl: number, bleeds: { name: string; rateMlPerMin: number }[]) {
+    if (coachSessionId !== this.conditionOwner) return;
+    const activeBleedsJson = JSON.stringify(bleeds.slice(0, 32).map((b) => ({ name: b.name.slice(0, 80), rateMlPerMin: Math.max(0, b.rateMlPerMin) })));
+    this.call("reportBodyState", (c) => c.reducers.reportBodyState({ sessionId: this.sessionId, bloodLostMl: Math.max(0, bloodLostMl), activeBleedsJson }));
+  }
+
+  reportInjury(coachSessionId: string, region: RegionId, controlled: boolean) {
+    if (coachSessionId !== this.conditionOwner) return;
+    this.call("reportInjury", (c) => c.reducers.reportInjury({ sessionId: this.sessionId, region, controlled }));
+  }
+
+  endCondition(coachSessionId: string, result: "completed" | "ended", cause: string) {
+    if (coachSessionId !== this.conditionOwner) return;
+    this.call("endPatientCondition", (c) => c.reducers.endPatientCondition({ sessionId: this.sessionId, result, cause: cause.slice(0, 500) }));
+  }
+
+  readCondition(coachSessionId: string): { view: ConditionView; ageMs: number } | null {
+    const conn = this.conn;
+    if (!conn || !this.bound || coachSessionId !== this.conditionOwner) return null;
+    const row = [...conn.db.sessionPatientCondition.iter()].find((r) => r.sessionId === this.sessionId && r.coachSessionId === coachSessionId);
+    return row ? { view: conditionFromRow(row), ageMs: Date.now() - this.conditionSeenAt } : null;
   }
 
   async highlight(targetId: string, timeoutMs = 2000): Promise<{ status: string; reason: string } | null> {

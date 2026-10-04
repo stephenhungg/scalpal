@@ -169,6 +169,7 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
     const chart = await options.baselineFor?.(kase).catch(() => null);
     if (chart) session.setBaseline(chart.baseline, { weightKg: chart.weightKg, spo2: chart.spo2, mlPerKg: chart.mlPerKg, quiet: true });
     forwardLogs(session);
+    forwardCondition(session);
     // Office to operating room: the scored encounter for this patient informs the surgery coaching.
     const office = typeof encounterId === "string" ? options.encounterFor?.(encounterId) : null;
     const preop = office && office.kase.patientId === kase.patientId ? office.carryover() : "";
@@ -547,6 +548,58 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
       if (snapshot.condition.outcome.result !== outcome) {
         outcome = snapshot.condition.outcome.result;
         log("outcome", outcome === "died" ? `Patient died: ${snapshot.condition.outcome.cause}` : outcome === "completed" ? "Case goals reached" : outcome, snapshot.condition.outcome);
+      }
+    });
+  }
+
+  // The simulated patient in SpacetimeDB (patient_condition): started from this session's baseline, fed the
+  // body facts and injuries as they change (bleed set and injuries at once, blood loss at most once a second;
+  // the module accrues between reports), and read back as the snapshot condition while its row is fresh.
+  function forwardCondition(session: CoachSession) {
+    const sink = options.realtime;
+    if (!sink?.startCondition || !sink.readCondition) return;
+    let started = false;
+    let baselineSig = "";
+    let bleedSig = "";
+    let lost = -1;
+    let reportedAt = -Infinity;
+    let ended = false;
+    const regions = new Map<string, boolean>(); // region -> bleeding, as last reported
+    const sig = (b: Baseline) => `${b.hr}/${b.rr}/${b.sys}/${b.dia}/${b.source}`;
+    const start = () => {
+      if (!sink.bound) return false;
+      const p = session.condition.params;
+      sink.startCondition!(session.id, { baseline: p.baseline, spo2: p.spo2, weightKg: p.weightKg, mlPerKg: p.mlPerKg });
+      baselineSig = sig(p.baseline);
+      started = true;
+      return true;
+    };
+    start();
+    session.conditionFeed = { read: () => sink.readCondition!(session.id) };
+    session.subscribe(({ snapshot }) => {
+      if (!started && !start()) return;
+      const local = session.condition.view();
+      const b = session.condition.currentBaseline;
+      if (sig(b) !== baselineSig) {
+        baselineSig = sig(b);
+        sink.setConditionBaseline?.(session.id, b);
+      }
+      for (const r of local.regions) {
+        const prev = regions.get(r.region);
+        if (prev === undefined || prev !== r.bleeding) sink.reportInjury?.(session.id, r.region, prev !== undefined && !r.bleeding);
+        regions.set(r.region, r.bleeding);
+      }
+      const bleeds = snapshot.activeBleeds.map((x) => ({ name: x.structure.name, rateMlPerMin: x.rateMlPerMin }));
+      const now = options.now().getTime();
+      if (JSON.stringify(bleeds) !== bleedSig || (snapshot.bloodLossMl !== lost && now - reportedAt >= 1000)) {
+        bleedSig = JSON.stringify(bleeds);
+        lost = snapshot.bloodLossMl;
+        reportedAt = now;
+        sink.reportBody?.(session.id, snapshot.bloodLossMl, bleeds);
+      }
+      if (!ended && (local.outcome.result === "completed" || local.outcome.result === "ended")) {
+        ended = true;
+        sink.endCondition?.(session.id, local.outcome.result, local.outcome.cause);
       }
     });
   }

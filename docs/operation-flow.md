@@ -54,6 +54,7 @@ Decided by Matthew on October 4, 2026 after a Q&A with the team's coding agents.
   - Displays show "baseline (measured)" plus "simulated change". Simulated values are never presented as the volunteer's.
   - Presage values are wellness data, not diagnosis.
 - **Where shown:** a vitals board rendered in the room (AR and VR), and the dashboard.
+- **Where computed:** inside SpacetimeDB. The coach starts a `patient_condition` row from the baseline and forwards facts (body blood loss, active bleeds, injuries outside the field); the module's 1 Hz scheduled `patientTick` accrues loss, recomputes vitals with the same model (`services/realtime/src/physiology.ts`, parity-tested against the coach) and decides death. The coach snapshot's `condition` (headset monitor, Scalpal) uses that row while it is fresh (3 s) and says `source: "spacetime"`; otherwise the coach's own model is used (`source: "local"`).
 
 ### State tracking (one event log)
 

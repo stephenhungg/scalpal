@@ -48,6 +48,75 @@ export interface ConditionView {
   rawBloodLossMl: number; // body reducer plus regions, unscaled
   regions: RegionInjury[];
   outcome: { result: "in_progress" | "completed" | "ended" | "died"; cause: string; at: string }; // ended: finished early without reaching the goals
+  // Who computed it: the SpacetimeDB module (authoritative, services/realtime/src/physiology.ts) or this
+  // coach's own model (fallback when no fresh module row exists).
+  source: "spacetime" | "local";
+}
+
+// A module row older than this (by local receipt time) is stale while the case is in progress.
+export const CONDITION_FRESH_MS = 3000;
+
+// The condition shown to the headset monitor, Jarvis and the dashboard: the module's while its row is fresh,
+// or final (a finished case no longer ticks), otherwise this coach's local computation.
+export function selectCondition(local: ConditionView, remote: { view: ConditionView; ageMs: number } | null, freshMs = CONDITION_FRESH_MS): ConditionView {
+  if (remote && (remote.ageMs <= freshMs || remote.view.outcome.result !== "in_progress")) return remote.view;
+  return { ...local, source: "local" };
+}
+
+// The fields of a patient_condition row the coach reads (structural, so tests need no bindings).
+export interface PatientConditionRow {
+  baselineHr: number;
+  baselineRr: number;
+  baselineSource: string;
+  weightKg: number;
+  scale: number;
+  hr: number;
+  rr: number;
+  sys: number;
+  dia: number;
+  spo2: number;
+  bloodLossPct: number;
+  hemorrhageClass: number;
+  label: string;
+  bodyLostMl: number;
+  regionLostMl: number;
+  regionInjuriesJson: string;
+  outcomeResult: string;
+  outcomeCause: string;
+  outcomeAt?: { toDate(): Date } | undefined;
+}
+
+export function conditionFromRow(row: PatientConditionRow): ConditionView {
+  let regions: RegionInjury[] = [];
+  try {
+    const list = JSON.parse(row.regionInjuriesJson || "[]");
+    if (Array.isArray(list)) regions = list.filter((r) => r && r.region in REGIONS);
+  } catch {
+    regions = [];
+  }
+  const cls = Math.min(4, Math.max(1, Math.round(row.hemorrhageClass))) as 1 | 2 | 3 | 4;
+  const result = (["in_progress", "completed", "ended", "died"] as const).find((r) => r === row.outcomeResult) ?? "in_progress";
+  return {
+    vitals: {
+      hr: row.hr,
+      rr: row.rr,
+      sys: row.sys,
+      dia: row.dia,
+      hemorrhageClass: cls,
+      bloodLossPct: row.bloodLossPct,
+      baseline: { hr: row.baselineHr, rr: row.baselineRr, source: row.baselineSource },
+      label: row.label,
+      spo2: row.spo2,
+      simulated: true,
+      scale: row.scale,
+    },
+    baselineSource: row.baselineSource,
+    weightKg: row.weightKg,
+    rawBloodLossMl: Math.round(row.bodyLostMl + row.regionLostMl),
+    regions,
+    outcome: { result, cause: row.outcomeCause, at: row.outcomeAt ? row.outcomeAt.toDate().toISOString() : "" },
+    source: "spacetime",
+  };
 }
 
 export type ConditionChange = { kind: "class"; from: number; to: 1 | 2 | 3 | 4 } | { kind: "died"; cause: string };
@@ -75,6 +144,11 @@ export class PatientCondition {
 
   get currentBaseline(): Baseline {
     return { ...this.baseline };
+  }
+
+  // What the SpacetimeDB module needs to start the same patient.
+  get params() {
+    return { baseline: { ...this.baseline }, spo2: this.spo2Baseline, weightKg: this.weightKg, mlPerKg: this.mlPerKg, scale: this.scale };
   }
 
   get died() {
@@ -183,6 +257,7 @@ export class PatientCondition {
       rawBloodLossMl: Math.round(this.body.lostMl + this.regionLostMl),
       regions: [...this.regions.values()].map((r) => ({ ...r })),
       outcome: { ...this.outcome },
+      source: "local",
     };
   }
 }
