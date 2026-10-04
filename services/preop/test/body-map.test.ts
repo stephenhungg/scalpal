@@ -54,6 +54,21 @@ describe("regions", () => {
     for (const id of touched) expect(mapped.has(id), id).toBe(true);
   });
 
+  // A step target the rig cannot point at stalls that session forever while the coach escalates hints.
+  it("lets the camera reach every touched or identified target of every procedure", () => {
+    for (const [procedureId, procedure] of PROCEDURES_BY_ID) {
+      const allowed = new Set(procedure.structures);
+      const touched = new Set(procedure.steps.filter((s) => s.check.type !== "place_ports" && s.check.type !== "confirm").flatMap((s) => s.check.targets));
+      for (const id of touched) {
+        let reachable = false;
+        for (let u = 0; u <= 1 && !reachable; u += 0.005) {
+          for (let v = 0.28; v <= 1.1 && !reachable; v += 0.005) reachable = regionAt({ u, v }, allowed) === id;
+        }
+        expect(reachable, `${procedureId}: ${id}`).toBe(true);
+      }
+    }
+  });
+
   it("resolves the right lower quadrant finely and ignores the chest", () => {
     expect(regionAt({ u: 0.31, v: 0.92 })).toBe("appendicular_artery");
     expect(regionAt({ u: 0.2, v: 0.85 })).toBe("cecum");
