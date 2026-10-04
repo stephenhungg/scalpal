@@ -154,7 +154,10 @@ Reviewed `packages/contracts/realtime-v1.md` on `nathan/companion-realtime` (9bd
 
 Until this is agreed, the HTTP coach routes stay as the working path.
 
-## Blocker for Stephen: HTTP from the headset
+## Resolved: HTTP from the headset
+
+Resolved for the session build: `NativeSessionBuild` sets `InsecureHttpOption.DevelopmentOnly`. The workbench-only build still uses `NotAllowed`, which is fine because it does not talk to the coach. Original note kept below for context.
+
 
 `codex/native-quest-workbench` (a895dab) sets `PlayerSettings.insecureHttpOption = InsecureHttpOption.NotAllowed` in `NativeQuestBuild.cs`. The coach and pre-op service run as plain HTTP on the Mac (`http://<mac-lan-ip>:8787`), so on the Quest every `CoachRelay` and `ScalpalPreopService` request would be refused: no events reach Jarvis, no highlights reach the headset, and cases load only from the offline bundle.
 

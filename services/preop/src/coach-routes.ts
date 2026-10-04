@@ -7,6 +7,7 @@ import { INSTRUMENTS_BY_ID } from "./catalog/instruments.js";
 import { CoachSession, PRESENTATION_MODES, contextKey, reflexLines, renderContext, type CoachEvent, type StuckPolicy } from "./coach.js";
 import { explainStructure, runTool } from "./coach-tools.js";
 import { ReflexAudio } from "./reflex.js";
+import { NO_REALTIME, type RealtimeBridge, type RealtimeSink } from "./realtime-bridge.js";
 import { buildSystemPrompt, firstMessage } from "./coach-prompt.js";
 import type { Action, SurgicalCase } from "./types.js";
 
@@ -19,9 +20,11 @@ export interface CoachRouteOptions {
   now: () => Date;
   stuckPolicy?: StuckPolicy;
   tickMs?: number; // 0 disables the background stuck timer (tests call tick directly)
-  elevenLabs?: { apiKey: string; agentId: string; voiceId?: string };
+  elevenLabs?: { apiKey: string; agentId: string; voiceId?: string; patientAgentId?: string };
   reflex?: ReflexAudio; // injectable for tests; built from elevenLabs when omitted
   toolAckWaitMs?: number; // how long a highlight tool waits for the headset ack (tests shorten it)
+  realtime?: RealtimeSink;
+  bridge?: RealtimeBridge | null; // the live connection, for /realtime status and join
 }
 
 const MAX_SESSIONS = 50;
@@ -183,9 +186,47 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
       renderContext: (x) => renderContext(x.snapshot()),
       resolveStructure,
       ackWaitMs: options.toolAckWaitMs,
+      realtime: options.realtime,
     });
     if (result == null) return bad(c, 404, "unknown_tool", `No Jarvis tool named "${c.req.param("name")}".`, coachActions(s.id));
     return c.json({ result, actions: coachActions(s.id) });
+  });
+
+  // Voice clients mirror what was actually said and the agent's status into the shared session.
+  const SPEAKERS = new Set(["learner", "coach", "system"]);
+  const VOICE_STATUS = new Set(["offline", "connecting", "listening", "thinking", "speaking", "error"]);
+  app.post("/coach/sessions/:sid/transcript", async (c) => {
+    const s = getSession(c);
+    if (!s) return missing(c);
+    const { speaker, text } = await body(c);
+    if (typeof speaker !== "string" || !SPEAKERS.has(speaker) || typeof text !== "string" || !text.trim()) {
+      return bad(c, 400, "invalid_transcript", 'Send {"speaker": "learner" | "coach" | "system", "text": "..."}.', coachActions(s.id));
+    }
+    (options.realtime ?? NO_REALTIME).coachMessage(speaker as "learner" | "coach" | "system", text.trim());
+    return c.json({ ok: true, actions: coachActions(s.id) });
+  });
+
+  app.post("/coach/sessions/:sid/voice-status", async (c) => {
+    const s = getSession(c);
+    if (!s) return missing(c);
+    const { status, detail } = await body(c);
+    if (typeof status !== "string" || !VOICE_STATUS.has(status)) return bad(c, 400, "invalid_status", "Unknown voice status.", coachActions(s.id));
+    (options.realtime ?? NO_REALTIME).coachStatus(status as "listening", typeof detail === "string" ? detail : undefined);
+    return c.json({ ok: true, actions: coachActions(s.id) });
+  });
+
+  // The shared SpacetimeDB session: status, and joining with the session's coach invite code.
+  app.get("/realtime", (c) => c.json({ ...(options.bridge ? options.bridge.status() : { configured: false, connected: false, identity: "", sessionId: "", lastError: "" }), actions: [] }));
+  app.post("/realtime/join", async (c) => {
+    if (!options.bridge) return bad(c, 503, "realtime_unconfigured", "Set SPACETIMEDB_URI (and SPACETIMEDB_DB) for the coach service.", []);
+    const { code } = await body(c);
+    if (typeof code !== "string" || !/^[A-Za-z0-9]{4,12}$/.test(code.trim())) return bad(c, 400, "invalid_code", "Send the session's coach invite code.", []);
+    try {
+      const sessionId = await options.bridge.join(code);
+      return c.json({ ...options.bridge.status(), sessionId, actions: [] });
+    } catch (err) {
+      return bad(c, 409, "join_failed", String(err instanceof Error ? err.message : err), []);
+    }
   });
 
   // Alerts for clients without SSE. Each carries its tier, an optional reflex clip route, and the exact
@@ -335,24 +376,26 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
 
   // Jarvis voice page (laptop browser) and its ElevenLabs connection details.
   app.get("/jarvis", (c) => c.html(readFileSync(new URL("./jarvis/index.html", import.meta.url), "utf8")));
-  for (const file of ["app.js", "arbiter.js"]) {
+  for (const file of ["app.js", "arbiter.js", "encounter.js"]) {
     app.get(`/jarvis/${file}`, (c) =>
       c.body(readFileSync(new URL(`./jarvis/${file}`, import.meta.url), "utf8"), 200, { "Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "no-cache" }),
     );
   }
 
+  // ?agent=patient returns the patient-interview agent instead of Jarvis.
   app.get("/jarvis/connection", async (c) => {
     const el = options.elevenLabs;
-    if (!el?.agentId) {
-      return bad(c, 503, "jarvis_unconfigured", "Set ELEVENLABS_AGENT_ID (and ELEVENLABS_API_KEY for a private agent), then run npm run jarvis:setup.", [{ id: "home", label: "Home", method: "GET", route: "/" }]);
+    const agentId = c.req.query("agent") === "patient" ? el?.patientAgentId : el?.agentId;
+    if (!el || !agentId) {
+      return bad(c, 503, "jarvis_unconfigured", "Set ELEVENLABS_AGENT_ID and PATIENT_AGENT_ID (and ELEVENLABS_API_KEY for private agents), then run npm run jarvis:setup.", [{ id: "home", label: "Home", method: "GET", route: "/" }]);
     }
-    if (!el.apiKey) return c.json({ mode: "public", agentId: el.agentId, signedUrl: "", actions: [] });
-    const res = await fetch(`https://api.elevenlabs.io/v1/convai/conversation/get-signed-url?agent_id=${encodeURIComponent(el.agentId)}`, {
+    if (!el.apiKey) return c.json({ mode: "public", agentId, signedUrl: "", actions: [] });
+    const res = await fetch(`https://api.elevenlabs.io/v1/convai/conversation/get-signed-url?agent_id=${encodeURIComponent(agentId)}`, {
       headers: { "xi-api-key": el.apiKey },
     }).catch(() => null);
     if (!res?.ok) return bad(c, 503, "elevenlabs_unreachable", `ElevenLabs signed URL request failed${res ? ` (${res.status})` : ""}.`, [{ id: "home", label: "Home", method: "GET", route: "/" }]);
     const { signed_url } = (await res.json()) as { signed_url: string };
-    return c.json({ mode: "signed", agentId: el.agentId, signedUrl: signed_url, actions: [] });
+    return c.json({ mode: "signed", agentId, signedUrl: signed_url, actions: [] });
   });
 }
 
