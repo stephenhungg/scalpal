@@ -38,8 +38,15 @@ In a recorded session, headset actions landed in the database in 42–429 ms, an
 
 - **Scalpal, the coach**, is an ElevenLabs Conversational AI agent. You talk to it with push-to-talk on Y. It has client tools (`swap_instrument`, `highlight_instrument`) that act on the operating room through SpacetimeDB, and an urgent-alert queue so it never talks over itself.
 - **The patient** in the diagnosis office is a second voiced agent.
-- **Speech to text** (Scribe) classifies the learner's spoken answers.
+- **Speech to text** (Scribe) transcribes the learner's spoken answers in the office; Claude matches them to a choice.
 - **Text to speech** (Flash v2.5) speaks instant coach reflexes and the end-of-run debrief.
+
+### Anthropic Claude: eyes, answers and patients
+
+- **Vision.** Claude (Haiku 4.5) looks at the learner's point of view on request ("what am I looking at?") and summarizes it in the background, so Scalpal knows what is in view. Labeled boxes from the scene (and an OWLv2 detector on camera frames) are trusted over the model's own guesses.
+- **Spoken answers.** In the office interview, Claude matches what the learner says to one of the four choices, or asks again when it is unclear.
+- **Patients.** Claude (Opus) wrote each patient's `patient.md` (the voice agent's character), `patient_status.md` (Scalpal's clinical context) and the fixed interview from the FinchNode chart and an authored case, checked by the repo's validators and reviewed before commit.
+- **The coach's brain.** Both ElevenLabs agents run on Claude Sonnet.
 
 ### FinchNode: real synthetic charts, cited risks
 
