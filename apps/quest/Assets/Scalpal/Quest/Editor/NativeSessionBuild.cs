@@ -450,6 +450,7 @@ namespace Scalpal.Quest.Editor
             NativeCoachRelayValidation.Run();
             Scalpal.Capture.Editor.CaptureValidation.Run();
             Scalpal.Shell.Editor.DialogueBoxValidation.Run();
+            NativeControllerHands.Validate();
             // Fixtures must not leave temporary poses, offline gates or substituted bindings in the player.
             Validate();
             Debug.Log("SCALPAL_NATIVE_SESSION_VERIFY_OK");

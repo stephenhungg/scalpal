@@ -32,7 +32,6 @@ namespace Scalpal.Quest
         Vector3[] targetPositions;
         Quaternion[] targetRotations;
         Transform[] targetParents;
-        Renderer[] gripMarkers;
         bool aligned, headTracked, paused, resetPressed, retryPressed;
         float nextStatus;
         int effects, frames;
@@ -66,9 +65,6 @@ namespace Scalpal.Quest
                 targetRotations[i] = targets[i].transform.rotation;
                 targetParents[i] = targets[i].transform.parent;
             }
-            gripMarkers = new Renderer[inputs.Length];
-            for (int i = 0; i < inputs.Length; i++)
-                gripMarkers[i] = inputs[i].transform.Find("ControllerGripMarker")?.GetComponent<Renderer>();
             Gate(false);
             sampleStart = Time.unscaledTime;
             Debug.Log("SCALPAL_NATIVE_BOOT version=" + Application.version + " view=" + (presentation && presentation.passthrough ? "passthrough" : "full_vr") + " tools=" + tools.Length);
@@ -163,13 +159,6 @@ namespace Scalpal.Quest
             if (!headCamera) return;
             headTracked = XRInput.TryPose(XRNode.Head, out var pose);
             if (headTracked) headCamera.transform.SetLocalPositionAndRotation(pose.position, pose.rotation);
-        }
-
-        void LateUpdate()
-        {
-            if (gripMarkers == null) return;
-            for (int i = 0; i < gripMarkers.Length; i++)
-                if (gripMarkers[i]) gripMarkers[i].enabled = inputs[i].enabled && inputs[i].GetComponent<InstrumentInteractor>().TrackingValid;
         }
 
         void Gate(bool valid)
