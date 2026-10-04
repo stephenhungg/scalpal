@@ -41,8 +41,8 @@ export function Ecg({ hr, className = "h-[44px]" }: { hr: number; className?: st
     const ctx = canvas.getContext("2d")!;
     const SPEED = 170; // px per second, like a monitor sweep
     const GAP = 28; // erased lead ahead of the write head, px
-    const CW = 7, CH = 11; // glyph cell, CSS px
-    const RADIUS = 46; // hover scramble radius, CSS px
+    const CW = 5, CH = 8; // glyph cell, CSS px (small, so it reads as texture)
+    const RADIUS = 40; // hover scramble radius, CSS px
     let w = 0, h = 0, dpr = 1;
     let ys: Float32Array = new Float32Array(0);
     let head = 0, phase = 0, carry = 0, last = performance.now(), raf = 0;
@@ -99,7 +99,7 @@ export function Ecg({ hr, className = "h-[44px]" }: { hr: number; className?: st
       ctx.clearRect(0, 0, w, h);
       ctx.font = `${CH}px ${font}`;
       ctx.textBaseline = "top";
-      const mid = h * 0.62, amp = h * 0.5;
+      const mid = h * 0.6, amp = h * 0.38;
       const cols = Math.floor(w / CW), rows = Math.floor(h / CH);
       const tick = Math.floor(now / 70);
       const headX = (Math.floor(head) - 1 + ys.length) % ys.length;
@@ -122,14 +122,14 @@ export function Ecg({ hr, className = "h-[44px]" }: { hr: number; className?: st
           // empty cell: a little noise around the pointer, like the hands' hover
           if (near > 0.2 && hash(c, tick) < near * 0.25) {
             const r = Math.floor(hash(c + 7, tick) * rows);
-            ctx.fillStyle = "rgba(255,255,255,0.18)";
+            ctx.fillStyle = "rgba(255,255,255,0.14)";
             ctx.fillText(SCRAMBLE[Math.floor(hash(c, r + tick) * SCRAMBLE.length)], x0, r * CH);
           }
           continue;
         }
         // age behind the write head, for the phosphor fade
         const age = (headX - x0 + ys.length) % ys.length;
-        const alpha = 0.16 + 0.62 * Math.exp(-age / 260);
+        const alpha = 0.12 + 0.45 * Math.exp(-age / 260);
         const r0 = Math.max(0, Math.floor(lo / CH)), r1 = Math.min(rows - 1, Math.floor(hi / CH));
         const slope = lastV - first;
         for (let r = r0; r <= r1; r++) {
@@ -139,7 +139,7 @@ export function Ecg({ hr, className = "h-[44px]" }: { hr: number; className?: st
           else ch = slope < 0 ? "/" : "\\";
           if (age < CW) ch = "@";
           if (near > 0 && hash(c * 31 + r, tick) < near) ch = SCRAMBLE[Math.floor(hash(r, c + tick) * SCRAMBLE.length)];
-          ctx.fillStyle = `rgba(255,255,255,${age < CW ? 0.95 : alpha})`;
+          ctx.fillStyle = `rgba(255,255,255,${age < CW ? 0.75 : alpha})`;
           ctx.fillText(ch, x0, r * CH);
         }
       }
