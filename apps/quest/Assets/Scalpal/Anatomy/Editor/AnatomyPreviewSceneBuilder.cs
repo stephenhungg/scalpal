@@ -3,8 +3,6 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using Scalpal.Exercises.Coach;
-using Scalpal.Exercises.Preop;
 
 namespace Scalpal.Anatomy.EditorTools
 {
@@ -56,18 +54,8 @@ namespace Scalpal.Anatomy.EditorTools
                     var binding = body.AddComponent<AnatomyExerciseBinding>();
                     binding.anatomy = body.GetComponent<AnatomyController>();
                     binding.requireCoachSynchronization = false;
-                    var relay = body.AddComponent<CoachRelay>();
-                    binding.coach = relay;
-                    var coachBinding = body.AddComponent<AnatomyCoachBinding>();
-                    coachBinding.anatomy = binding.anatomy;
-                    coachBinding.relay = relay;
-                    var service = body.AddComponent<ScalpalPreopService>();
-                    var source = body.AddComponent<AnatomyCaseSource>();
-                    source.service = service;
-                    source.exercise = binding;
                     var controls = body.AddComponent<AnatomyDemoPanel>();
                     controls.exercise = binding;
-                    controls.caseSource = source;
                     controls.caseBundle = AssetDatabase.LoadAssetAtPath<TextAsset>("Assets/Scalpal/Exercises/Resources/scalpal_bundle.json");
                     if (controls.caseBundle == null) throw new InvalidOperationException("Missing packaged exercise bundle.");
                 }

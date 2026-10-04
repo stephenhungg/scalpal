@@ -1,7 +1,6 @@
 using System;
 using System.Reflection;
 using Scalpal.Anatomy;
-using Scalpal.Exercises.Coach;
 using UnityEngine;
 
 static class Program
@@ -101,7 +100,13 @@ static class Program
         controller.SetRegistrationValid(false);
         Check(!RendererOf(heart).enabled && !heart.IsHighlighted && !ColliderOf(heart).enabled, "tracking loss clears highlight, renderer, collider");
         controller.SetRegistrationValid(true);
-        Check(RendererOf(heart).enabled && !heart.IsHighlighted, "tracking recovery does not revive stale highlight");
+        Check(RendererOf(heart).enabled && heart.IsHighlighted && controller.HighlightedPartId == "heart",
+            "tracking recovery restores the desired current highlight");
+        controller.SetRegistrationValid(false);
+        Check(controller.HighlightedPartId == "", "hidden anatomy exposes no active highlight");
+        controller.ClearHighlight();
+        controller.SetRegistrationValid(true);
+        Check(!heart.IsHighlighted && controller.HighlightedPartId == "", "explicit clear while hidden prevents resurrection");
         controller.SetPreviewMode(true);
         controller.enabled = false;
         Call(controller, "OnDisable");
@@ -158,37 +163,12 @@ static class Program
         nested.RebuildIndex();
         controller.RebuildIndex();
         Check(!controller.TryGetPart("nested", out _) && nested.TryGetPart("nested", out _), "nested controller owns its parts exclusively");
-        var relay = root.AddComponent<CoachRelay>();
-        var binding = root.AddComponent<AnatomyCoachBinding>();
-        binding.anatomy = controller;
-        binding.relay = relay;
-        binding.Rebind();
-        Check(relay.tracking.Count == 1 && relay.tracking[0], "binding publishes initial registration state");
-        relay.Emit("highlight", "heart");
-        Check(relay.acks.Count == 1 && relay.acks[0].applied && heart.IsHighlighted, "relay acks only applied highlight");
-        relay.Emit("highlight", "liver");
-        Check(!relay.acks[1].applied, "ambiguous highlight ack rejected");
-        relay.Emit("clear_highlight", null);
-        Check(relay.acks[2].applied && !heart.IsHighlighted, "clear command restores highlight state");
-        controller.SetPreviewMode(false);
-        controller.SetRegistrationValid(false);
-        Check(relay.tracking.Count == 2 && !relay.tracking[1], "tracking loss forwarded");
-        relay.Emit("highlight", "heart");
-        Check(!relay.acks[3].applied, "binding rejects highlight with invalid practice registration");
-        relay.Emit("delete", "heart");
-        Check(!relay.acks[4].applied, "unsupported action rejected");
-        binding.Rebind();
-        relay.Emit("clear_highlight", null);
-        Check(relay.acks.Count == 6, "rebind does not duplicate event handlers");
         controller.SetPreviewMode(true);
         Check(controller.SetExerciseParts(new[] { "heart" }), "known exercise filter accepted");
         Check(!controller.Isolate("artery"), "isolation cannot bypass exercise context");
         Check(!controller.SetExerciseParts(new[] { "missing-target" }), "invalid case filter rejected atomically");
         Check(heart.IsVisible && !artery.IsVisible, "invalid filter preserves prior visibility");
         Check(controller.SetExerciseParts(null), "case context can be cleared");
-        Call(binding, "OnDisable");
-        relay.Emit("highlight", "heart");
-        Check(relay.acks.Count == 6, "disabled binding unsubscribes");
 #if UNITY_EDITOR || (!UNITY_ANDROID && !UNITY_IOS)
         var searchRoot = new GameObject();
         var searchController = searchRoot.AddComponent<AnatomyController>();
