@@ -271,13 +271,17 @@ namespace Scalpal.Surgery.Editor
                 s.splits == 0 && s.records.All(r => r.action.separationMm == 0 && r.action.secondaryInstanceId == ""),
                 label + ": a single retractor does not split the muscle");
             s.Park(s.first); s.Step(60);
+            // Isolate this negative from the prior off-centre single-grip strain/material history.
+            // A fresh opened wall must still refuse an along-fiber split in either presentation frame.
+            s.NewAttempt();
+            OpenToMuscle(s, label);
             // Two retractors pulling apart along the fibers (across the would-be split) do not split it.
             Vector3 left = new Vector3(-.015f, 0, .019f), right = new Vector3(-.005f, 0, .019f);
             s.Hold(s.first); s.Hold(s.second); s.Place(s.first, left); s.Place(s.second, right); s.Step(6);
             Pull(s, s.first, left, Vector3.left, s.second, right, Vector3.right, .02f);
             Require(s.records.Count(r => r.action.verb == "retract" && r.action.tissueId == "muscle" && r.action.secondaryInstanceId != "") > 0 &&
                 s.Fact("muscle", "opened") == 0 && s.splits == 0 && !s.records.Any(r => r.action.separationMm >= 15),
-                label + ": pulling apart along the fibers does not split the muscle");
+                label + $": pulling apart along the fibers does not split the muscle (pairedRecords={s.records.Count(r => r.action.verb == "retract" && r.action.tissueId == "muscle" && r.action.secondaryInstanceId != "")}, opened={s.Fact("muscle", "opened")}, fractures={s.splits}, maxSeparationMm={s.records.Select(r => r.action.separationMm).DefaultIfEmpty(0).Max():F3})");
             s.Park(s.first); s.Park(s.second); s.Step(60);
             // Fresh wall: split properly, then nick the membrane the forceps hold without lifting it.
             s.NewAttempt();
