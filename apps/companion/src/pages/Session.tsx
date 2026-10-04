@@ -3,7 +3,6 @@ import Commands from '../components/Commands';
 import Events from '../components/Events';
 import ExerciseState from '../components/ExerciseState';
 import Learning from '../components/Learning';
-import LiveView from '../components/LiveView';
 import Members from '../components/Members';
 import Motion from '../components/Motion';
 import Replay from '../components/Replay';
@@ -71,7 +70,6 @@ export default function SessionPage({ sessionId }: { sessionId: string }) {
 
       <div className="session-grid">
         <div className="col">
-          <LiveView data={data} />
           <Replay data={data} />
           <Motion data={data} />
         </div>

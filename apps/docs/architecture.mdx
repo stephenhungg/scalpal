@@ -10,7 +10,7 @@ flowchart LR
   Q -- camera JPEG over USB --> R[registration<br/>:8790]
   Q -. vitals over USB .-> V[vitals<br/>:8791]
   Phone[phone on a stand] --> V
-  C[companion<br/>browser] --> S
+  C[dashboard<br/>browser] --> S
   C --> V
   G[gateway<br/>:8788] --> S
   M[motion worker] --> G
@@ -29,12 +29,12 @@ flowchart LR
 | [Vitals (Presage)](/components/vitals) | Silas | Mac | 8791 |
 | [Vision](/components/vision) | Matthew | Mac | 8792 |
 | [Realtime (SpacetimeDB)](/components/realtime) | Nathan | local or Maincloud | 3000 |
-| [Companion](/components/companion) | Nathan, styled by Silas | browser | 5173 |
+| [Dashboard](/components/dashboard) | Nathan, styled by Silas | browser | 5173 |
 | [Motion pipeline](/components/motion) | Silas | Mac | |
 
 ## How data moves
 
-- **Shared session state** lives in SpacetimeDB. The headset publishes its exercise state and events. The companion and Scalpal read them. All tables are private, and clients only see sessions they belong to.
+- **Shared session state** lives in SpacetimeDB. The headset publishes its exercise state and events. The dashboard and Scalpal read them. All tables are private, and clients only see sessions they belong to.
 - **Big files**, like video clips, never go through the database. The gateway hands out short-lived signed URLs for uploads and downloads.
 - **Provider keys** stay on the services. The gateway issues ElevenLabs and TURN credentials as grants, so keys never reach a client.
 - **Local services** on the Mac reach the headset over USB with `adb reverse`. On the headset, `localhost` is the headset, so this is how it reaches the Mac.

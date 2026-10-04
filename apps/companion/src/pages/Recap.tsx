@@ -124,7 +124,7 @@ export default function Recap({ sessionId }: { sessionId?: string }) {
       <section className="recap-glass recap-reflect">
         <span className="recap-eyebrow">{stage === 0 ? '01 / REACTION' : stage === 1 ? '02 / SELF-ASSESSMENT' : '03 / YOUR TAKE-AWAY'}</span>
         <h2>{stage === 0 ? 'How did that feel?' : stage === 1 ? 'One thing you’d do differently?' : feedback?.takeaway}</h2>
-        <p>{stage < 2 ? 'Pause and reflect. This response is unscored and is not recorded by the companion.' : 'Based only on the logged facts below.'}</p>
+        <p>{stage < 2 ? 'Pause and reflect. This response is unscored and is not recorded by the dashboard.' : 'Based only on the logged facts below.'}</p>
         {stage < 2 && <button className="recap-button" onClick={() => setStage(stage + 1)}>{stage === 0 ? 'Continue reflection' : 'Reveal scorecards'} <span aria-hidden="true">→</span></button>}
       </section>
       {stage === 2 && <>

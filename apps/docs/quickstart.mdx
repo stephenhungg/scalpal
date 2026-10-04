@@ -1,6 +1,6 @@
 ---
 title: "Run it locally"
-description: "Start the services on a Mac and point the headset and companion at them."
+description: "Start the services on a Mac and point the headset and dashboard at them."
 ---
 
 ## Prerequisites
@@ -17,7 +17,7 @@ description: "Start the services on a Mac and point the headset and companion at
 | Port | Service |
 | --- | --- |
 | 3000 | SpacetimeDB (local) |
-| 5173 | Companion dev server |
+| 5173 | Dashboard dev server |
 | 8787 | Pre-op service and Scalpal coach |
 | 8788 | Gateway |
 | 8790 | Body registration (pose) |
@@ -67,7 +67,7 @@ The landing site's `next dev` also defaults to 3000. Run it with `npm run dev --
     uv run --frozen scalpal-registration serve
     ```
   </Step>
-  <Step title="Companion">
+  <Step title="Dashboard">
     ```sh
     cd apps/companion && npm install && cp .env.example .env.local
     npm run dev
