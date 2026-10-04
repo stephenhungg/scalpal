@@ -41,7 +41,7 @@ export function Ecg({ hr, className = "h-[44px]" }: { hr: number; className?: st
     const ctx = canvas.getContext("2d")!;
     const SPEED = 170; // px per second, like a monitor sweep
     const GAP = 28; // erased lead ahead of the write head, px
-    const CW = 5, CH = 8; // glyph cell, CSS px (small, so it reads as texture)
+    const CW = 3.2, CH = 5; // tiny glyph cells, CSS px: a dense texture rather than readable letters
     const RADIUS = 40; // hover scramble radius, CSS px
     let w = 0, h = 0, dpr = 1;
     let ys: Float32Array = new Float32Array(0);
@@ -101,11 +101,12 @@ export function Ecg({ hr, className = "h-[44px]" }: { hr: number; className?: st
       ctx.textBaseline = "top";
       const mid = h * 0.6, amp = h * 0.38;
       const cols = Math.floor(w / CW), rows = Math.floor(h / CH);
+      const HALO = ".:"; // faint glyphs above and below the trace give it body
       const tick = Math.floor(now / 70);
       const headX = (Math.floor(head) - 1 + ys.length) % ys.length;
 
       for (let c = 0; c < cols; c++) {
-        const x0 = c * CW, x1 = Math.min(ys.length, x0 + CW);
+        const x0 = Math.floor(c * CW), x1 = Math.min(ys.length, Math.floor((c + 1) * CW));
         let lo = Infinity, hi = -Infinity, first = NaN, lastV = NaN;
         for (let x = x0; x < x1; x++) {
           const v = ys[x];
@@ -132,6 +133,11 @@ export function Ecg({ hr, className = "h-[44px]" }: { hr: number; className?: st
         const alpha = 0.12 + 0.45 * Math.exp(-age / 260);
         const r0 = Math.max(0, Math.floor(lo / CH)), r1 = Math.min(rows - 1, Math.floor(hi / CH));
         const slope = lastV - first;
+        for (const r of [r0 - 1, r1 + 1]) {
+          if (r < 0 || r >= rows || hash(c, r) < 0.35) continue;
+          ctx.fillStyle = `rgba(255,255,255,${alpha * 0.45})`;
+          ctx.fillText(HALO[Math.floor(hash(r, c) * HALO.length)], x0, r * CH);
+        }
         for (let r = r0; r <= r1; r++) {
           let ch: string;
           if (r1 > r0) ch = "|";
