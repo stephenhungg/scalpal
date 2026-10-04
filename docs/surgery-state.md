@@ -17,6 +17,6 @@ Approved plan, October 3, 2026. How the operating room knows what is happening s
 | --- | --- | --- |
 | Unity events, `seq`, 1 Hz tick, telemetry events, derived state, hash, golden logs | Surgery Codex thread | Pending (after its open-body build) |
 | State card with unmet milestone facts, hands line, `get_surgery_state` | Matthew (`services/preop/src/coach.ts`) | Landed in `9501b8b` |
-| Full card on structural change or about every 10 s, `[STATE DELTA vN]` lines between (`services/preop/src/jarvis/context-feed.js`); queued bleeding alerts dropped once the state no longer shows the bleed | Matthew | Landed (laptop voice page; the native Quest voice should adopt the same feed) |
+| Full card on structural change or about every 10 s, `[STATE DELTA vN]` lines between (`services/preop/src/jarvis/context-feed.js`); queued bleeding alerts dropped once the state no longer shows the bleed | Matthew; Quest side Stephen | Landed: laptop page in the browser, native Quest voice through `POST /coach/sessions/:id/voice-context` (`916215e`) |
 | Service-side replay checker, hash compare and resync, versioned alert drop, time-window guardrails | Matthew, coordinated with the surgery thread | Pending |
 | Retire the legacy Unity `bleeding` totals for open-body cases (`NativeVesselSimulation` feeding blood loss separately) | Main Codex thread with the surgery thread | Pending |
