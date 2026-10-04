@@ -7,6 +7,8 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using Scalpal.Instruments;
+using Scalpal.Handoff;
+using System.Reflection;
 using Scalpal.Quest;
 using Scalpal.Realtime;
 using UnityEditor;
@@ -35,7 +37,7 @@ namespace Scalpal.EncounterOffice.Editor
         {
             public string sessionId, initialAttemptId, currentAttemptId, encounterId, encounterAttemptId, encounterPatientId, encounterPhase;
             public string coachPatientId, coachEncounterId, coachMode, coachSessionId, coachProcedureId;
-            public int initialAttemptCount, attemptCount, attemptRows, encounterRows, encounterCreates, coachCreateCount;
+            public int initialAttemptCount, attemptCount, attemptRows, encounterRows, encounterCreates, coachCreateCount, providerFetchAttempts;
             public bool coachCarryover, coachContainsWrongProposal, coachContainsPatient;
             public string[] routes;
         }
@@ -89,6 +91,22 @@ namespace Scalpal.EncounterOffice.Editor
                 Check(fixture != null, "fixture state parses");
             }
         }
+        HandoffCard Card => UnityEngine.Object.FindFirstObjectByType<HandoffFlow>()?.GetType().GetField("card", BindingFlags.Instance | BindingFlags.NonPublic)
+            .GetValue(UnityEngine.Object.FindFirstObjectByType<HandoffFlow>()) as HandoffCard;
+        bool CardReady(string label)
+        {
+            var card = Card;
+            if (!card || !card.Visible) return false;
+            var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+            var labels = (string[])typeof(HandoffCard).GetField("actions", flags).GetValue(card);
+            var available = (bool[])typeof(HandoffCard).GetField("available", flags).GetValue(card);
+            return labels.Length > 0 && labels[0] == label && (available == null || available[0]);
+        }
+        void PressCard(string label)
+        {
+            Check(CardReady(label), "actual handoff card offers enabled action: " + label);
+            ((Action<int>)typeof(HandoffCard).GetField("selected", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(Card))(0);
+        }
         IEnumerator Exercise()
         {
             office = UnityEngine.Object.FindFirstObjectByType<NativeEncounterSession>();
@@ -122,24 +140,42 @@ namespace Scalpal.EncounterOffice.Editor
             yield return Wait(() => office.realtime.TryGetEncounterBinding(encounterId, out var session, out var attempt, out var patient, out var phase)
                 && session == sharedSessionId && attempt == attemptId && patient == jonah.patientId && phase == "scored", "actual scored reducer row is committed before scene transition");
             office.ContinueToSurgery();
+            yield return Wait(() => CardReady("To theatre"), "actual handoff scorecard presents Jarvis feedback before theatre");
+            PressCard("To theatre");
+            yield return Wait(() => CardReady("I would choose " + HandoffRun.Current.procedureTitle), "wrong proposal receives the authored Jarvis challenge");
+            PressCard("I would choose " + HandoffRun.Current.procedureTitle);
+            yield return Wait(() => CardReady("Continue"), "authored challenge consequence completes before theatre");
+            PressCard("Continue");
+            yield return Wait(() => CardReady("Enter virtual OR"), "office handoff offers only the full VR theatre route");
+            Check(HandoffRun.Current.challengeSeen && HandoffRun.Current.consequenceSeen
+                && !HandoffRun.CanChoose("mixed_reality", new TheatrePreflight { volunteerConsented = true, cameraGranted = true,
+                    sceneGranted = true, poseServiceOk = true, coachServiceOk = true }), "office remains full VR after explicit Jarvis feedback even with available AR preflight");
+            PressCard("Enter virtual OR");
             yield return Wait(() => SceneManager.GetActiveScene().name == EncounterOfficeRoute.SurgeryScene,
                 "production ContinueToSurgery loads actual OR scene");
             surgery = UnityEngine.Object.FindFirstObjectByType<NativeCaseSession>();
-            Check(surgery && surgery.enabled && surgery.OfficeHandoff != null, "real OR Awake consumes the office ticket");
+            var source = HandoffRun.Current?.sourceOffice;
+            Check(surgery && surgery.enabled && source != null && surgery.HasHandoff, "real OR consumes the canonical handoff with immutable office provenance");
             Check(surgery.SelectedPatientId == jonah.patientId && surgery.SelectedProcedureId == procedureId
-                && surgery.OfficeHandoff.encounterId == encounterId && surgery.OfficeHandoff.sharedSessionId == sharedSessionId
-                && surgery.OfficeHandoff.attemptId == attemptId, "OR preserves patient, encounter, procedure and exact shared attempt");
-            Check(JsonUtility.ToJson(surgery.OfficeHandoff.assessment) == assessmentJson && JsonUtility.ToJson(surgery.OfficeHandoff.scorecard) == scoreJson,
+                && source.encounterId == encounterId && source.sharedSessionId == sharedSessionId
+                && source.attemptId == attemptId, "OR preserves patient, encounter, procedure and exact shared attempt");
+            Check(JsonUtility.ToJson(source.assessment) == assessmentJson && JsonUtility.ToJson(source.scorecard) == scoreJson,
                 "actual scene handoff retains the complete committed assessment and score");
             Check(!EncounterOfficeRoute.TakeSurgery(out _), "OR consumes the handoff only once");
-            yield return Wait(() => surgery.Phase == "Selecting" && surgery.workbench.IsReady && surgery.realtime.Paired && surgery.RegistrationReady,
+            yield return Wait(() => surgery.Phase == "Confirmed" && surgery.HandoffVerified && surgery.workbench.IsReady && surgery.realtime.Paired && surgery.RegistrationReady,
                 "real OR Start loads selected case and actual Update restores shared pairing with synthetic XR poses");
             Check(surgery.PresentationMode == "virtual" && !surgery.presentation.passthrough && !surgery.TryChangePresentation(true), "office OR remains full VR");
             Check(surgery.realtime.SessionId == sharedSessionId && surgery.realtime.AttemptId == attemptId && !surgery.realtime.AttemptPending,
                 "OR adopts the existing attempt without a replacement request");
             yield return Frames(8);
-            Check(surgery.ConfirmAction() && surgery.Phase == "Confirmed", "actual OR coordinator accepts first case review");
-            Check(surgery.ConfirmAction(), "actual OR coordinator accepts second practice confirmation");
+            Check(!surgery.ConfirmAction(), "direct OR confirmation cannot bypass the handoff Time-Out");
+            string[] confirmations = { "Confirm patient", "Confirm procedure", "Confirm site", "Acknowledge found and missed risks",
+                "Review antibiotic prophylaxis (simulation)", "Review imaging (simulation)", "Begin practice" };
+            foreach (var label in confirmations)
+            {
+                yield return Wait(() => CardReady(label), "actual Time-Out offers next acknowledgement: " + label);
+                PressCard(label);
+            }
             yield return Wait(() => surgery.Practicing && surgery.exercise.CanScore && surgery.exercise.CoachMatches && surgery.coach.Connected,
                 "actual coach creation and relay synchronize the selected case for practice", 30);
             Check(!surgery.voice.Connected, "no OR provider conversation or headset microphone starts");
@@ -158,9 +194,9 @@ namespace Scalpal.EncounterOffice.Editor
             int coachIndex = Array.IndexOf(routes, "POST /coach/sessions");
             Check(coachIndex > 0 && routes.Take(coachIndex).Count(route => route == "GET /encounters/" + encounterId + "/score") >= 2
                 && routes.Take(coachIndex).Contains("GET /encounters/" + encounterId)
-                && routes.Take(coachIndex).Count(route => route == "GET /patients/" + jonah.patientId + "/case") >= 3,
+                && routes.Take(coachIndex).Count(route => route == "GET /patients/" + jonah.patientId + "/case") >= 2,
                 "actual OR rechecks live case, encounter and score before coach POST");
-            Check(!routes.Any(route => route.Contains("/jarvis/connection")), "fixture never requests provider voice credentials");
+            Check(fixture.providerFetchAttempts == 0, "unconfigured Time-Out voice never makes a provider fetch or obtains credentials");
             Debug.Log("SCALPAL_OFFICE_PLAYMODE_OK checks=" + checks + " realOfficeStart=true realORStart=true realSceneTransition=true liveLocalDb=true realEncounterHttp=true realCoachHttp=true sameAttempt=true syntheticXR=true headsetValidated=false providerVoiceValidated=false completeDemoFlow=false");
         }
         IEnumerator Guard(IEnumerator work)

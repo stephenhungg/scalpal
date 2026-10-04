@@ -30,6 +30,9 @@ namespace Scalpal.Handoff.Editor
                 Assert(!EncounterOfficeRoute.TakeSurgery(out _), "producer consumes legacy transport pointer exactly once");
                 var ticket = HandoffRun.Begin(state, score, office.baseUrl);
                 HandoffRun.BindOfficeSource(ticket, source);
+                Assert(ticket.presentationMode == "virtual" && !HandoffRun.CanChoose("mixed_reality", new TheatrePreflight
+                    { volunteerConsented = true, cameraGranted = true, sceneGranted = true, poseServiceOk = true, coachServiceOk = true }),
+                    "office source enforces full VR even when standalone AR preflight is available");
                 string snapshot = JsonUtility.ToJson(ticket.sourceOffice);
                 Assert(ticket.attemptId == source.attemptId && ticket.sharedSessionId == source.sharedSessionId, "initial OR attempt adopts original source IDs");
                 source.assessment.procedure = "mutated proposal";

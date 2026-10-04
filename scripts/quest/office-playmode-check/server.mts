@@ -24,7 +24,8 @@ const bridge = new RealtimeBridge({ uri: URI, database: DB, tokenFile: join(dirn
 bridge.start();
 await eventually(() => bridge.bound, 'real coach bridge membership');
 // Provider calls are prohibited. SpacetimeDB uses the loopback ws transport independently.
-globalThis.fetch = async () => { throw new Error('Provider/external fetch is disabled in the office fixture'); };
+let providerFetchAttempts = 0;
+globalThis.fetch = async () => { providerFetchAttempts++; throw new Error('Provider/external fetch is disabled in the office fixture'); };
 const app = createApp({ client: fixtureClient(), now: () => NOW, coachTickMs: 0, realtime: bridge });
 const routes: string[] = [];
 const coachCreates: { body: Record<string, unknown>; reply: Record<string, any> }[] = [];
@@ -36,7 +37,7 @@ app.get('/fixture/state', c => {
   const coach = coachCreates[0];
   return c.json({ sessionId, initialAttemptId, initialAttemptCount, currentAttemptId: session?.currentAttemptId,
     attemptCount: session?.attemptCount, attemptRows: [...operator.conn.db.sessionAttempts.iter()].filter(a => a.sessionId === sessionId).length,
-    encounterRows: encounters.length, encounterCreates, encounterId: encounter?.encounterId ?? '',
+    encounterRows: encounters.length, encounterCreates, providerFetchAttempts, encounterId: encounter?.encounterId ?? '',
     encounterAttemptId: encounter?.attemptId ?? '', encounterPatientId: encounter?.patientId ?? '', encounterPhase: encounter?.phase ?? '',
     coachCreateCount: coachCreates.length, coachPatientId: coach?.body.patientId ?? '', coachEncounterId: coach?.body.encounterId ?? '',
     coachMode: coach?.body.mode ?? '', coachSessionId: coach?.reply.sessionId ?? '',

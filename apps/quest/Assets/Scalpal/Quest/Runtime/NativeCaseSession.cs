@@ -590,7 +590,7 @@ namespace Scalpal.Quest
 
         public bool TryChangePresentation(bool passthrough)
         {
-            if (OfficeHandoff != null && passthrough)
+            if ((OfficeHandoff != null || HandoffRun.Current?.sourceOffice != null) && passthrough)
             { Message = "Practice from the diagnosis office uses full VR."; return false; }
             if (!presentation || busy || (!HasHandoff && Phase != "Selecting" && Phase != "Recap")) return false;
             if (presentation.passthrough == passthrough) return true;

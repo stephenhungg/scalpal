@@ -42,7 +42,8 @@ namespace Scalpal.Handoff
         public static bool NeedsEscalation(EncounterScore score) => score != null && (!score.procedureChosenCorrectly || score.diagnosisResult != "correct");
         public static bool Supported(string procedure) => procedure == "lap_appendectomy";
         public static bool SwitchNeedsNewAttempt(HandoffTicket ticket) => ticket != null && ticket.practiceStarted;
-        public static bool CanChoose(string mode, TheatrePreflight preflight) => mode == "virtual" || mode == "mixed_reality" && preflight != null && preflight.ArAvailable;
+        public static bool CanChoose(string mode, TheatrePreflight preflight) => mode == "virtual" || mode == "mixed_reality"
+            && Current?.sourceOffice == null && preflight != null && preflight.ArAvailable;
         public static HandoffTicket Begin(EncounterState state, EncounterScore score, string endpoint)
         {
             if (state == null || state.phase != "scored" || string.IsNullOrEmpty(state.encounterId) || score == null ||
@@ -61,6 +62,7 @@ namespace Scalpal.Handoff
                 throw new ArgumentException("The scored office shared attempt is required before theatre.");
             ticket.sourceOffice = JsonUtility.FromJson<EncounterSurgeryHandoff>(JsonUtility.ToJson(source));
             ticket.sharedSessionId = source.sharedSessionId; ticket.attemptId = source.attemptId;
+            ticket.presentationMode = "virtual"; ticket.modeChosenBy = "office_full_vr";
         }
         public static bool SourceBindingMatches(HandoffTicket ticket, string session, string attempt, string patient, string phase)
             => ticket?.sourceOffice != null && session == ticket.sourceOffice.sharedSessionId
