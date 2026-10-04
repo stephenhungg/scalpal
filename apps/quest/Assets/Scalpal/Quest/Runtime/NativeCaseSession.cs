@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using Scalpal.Anatomy;
@@ -646,7 +647,18 @@ namespace Scalpal.Quest
         {
             if (handoffVoiceAllowed && CoachPrepared && !voice.Connected && voice.Status != "connecting") ConnectVoice();
         }
-        void ConnectVoice() { if (HasHandoff && !handoffVoiceAllowed) return; voiceContextForce = true; voice.MicrophoneMuted = true; voice.ConfigureConversation(voicePrompt, voiceGreeting, voiceContext); voice.Connect(coachSessionId); }
+        string greetedSession = "";
+        void ConnectVoice()
+        {
+            if (HasHandoff && !handoffVoiceAllowed) return; voiceContextForce = true; voice.MicrophoneMuted = true;
+            // Greet once per coach session. A reconnect (focus loss, pause, Time-Out retry) is a fresh provider
+            // conversation, so it gets what was already said instead of the greeting again.
+            bool greeted = greetedSession == coachSessionId; greetedSession = coachSessionId;
+            voice.ConfigureConversation(voicePrompt, greeted ? "" : voiceGreeting, greeted ? ReconnectContext(voiceContext, voice.RecentLines) : voiceContext);
+            voice.Connect(coachSessionId);
+        }
+        public static string ReconnectContext(string context, IReadOnlyList<string> said) => said == null || said.Count == 0 ? context
+            : context + "\n[EARLIER THIS SESSION YOU SAID] " + string.Join(" | ", said) + "\nYou already said these. Do not greet again or repeat them; continue from the current step.";
         void VoiceTool(QuestJarvisVoice.ToolRequest request)
         {
             voice.ResolveClientTool(request, "This action is unavailable in the native exercise", true);
@@ -733,7 +745,7 @@ namespace Scalpal.Quest
 
             generation++; ResetHandoffRecovery();
             handoffVoiceAllowed = false; voice.Disconnect(); coachSessionId = "";
-            voicePrompt = voiceGreeting = voiceContext = ""; voiceContextForce = true;
+            voicePrompt = voiceGreeting = voiceContext = ""; voiceContextForce = true; greetedSession = ""; voice.ForgetSaid();
             CaptionFallbackAllowed = false;
             coach.Tracking(false); coach.UseSession("");
             exercise.explicitCoachSessionId = ""; exercise.requireCoachSynchronization = true;

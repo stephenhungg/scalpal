@@ -71,6 +71,17 @@ namespace Scalpal.Voice
         public event Action<string> StatusChanged;
         public event Action<string> ModeChanged;
         public event Action<string, string> Transcript; // source: user or agent
+        // What this voice has said in the current coach session (agent turns and simulator-played clips), newest last.
+        // A reconnect starts a fresh provider conversation, so the caller replays these as context to avoid repeats.
+        readonly List<string> recentLines = new List<string>();
+        public IReadOnlyList<string> RecentLines => recentLines;
+        public void RememberSaid(string line)
+        {
+            if (string.IsNullOrWhiteSpace(line)) return;
+            line = line.Trim(); if (recentLines.Count > 0 && recentLines[recentLines.Count - 1] == line) return;
+            recentLines.Add(line); if (recentLines.Count > 8) recentLines.RemoveAt(0);
+        }
+        public void ForgetSaid() => recentLines.Clear();
         public event Action<ToolRequest> ClientToolRequested;
         // Completed agent turns (agent_response events) on the current connection; the office interview waits
         // for one after each pick before it shows the next round.
@@ -491,6 +502,7 @@ namespace Scalpal.Voice
                     // and moved on. Its audio ids follow the suppressed ones, which stay discarded.
                     awaitingInterruption = false;
                     AgentResponses++;
+                    RememberSaid(message.agent_response_event?.agent_response);
                     Transcript?.Invoke("agent", message.agent_response_event?.agent_response ?? "");
                     break;
                 case "client_tool_call":

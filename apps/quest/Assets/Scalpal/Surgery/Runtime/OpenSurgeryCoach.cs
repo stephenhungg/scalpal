@@ -150,6 +150,8 @@ namespace Scalpal.Surgery
                         if (activeClip)
                         {
                             speaker.clip = activeClip; speaker.Play();
+                            // The agent did not say this clip itself: tell it, so it does not repeat the warning.
+                            if (voice && relay && voice.CoachSessionId == relay.SessionId) { voice.RememberSaid(alert.say); voice.SendContext("[JARVIS SAID] \"" + alert.say + "\""); }
                             while (speaker.isPlaying && epoch == generation && Relevant(alert)) yield return null;
                             break;
                         }
