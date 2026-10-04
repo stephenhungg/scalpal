@@ -1,6 +1,6 @@
 "use client";
 
-// From MatthewKim323/adam (src/components/AsciiAdam.tsx), unchanged apart from this header, both arms set to white, the onTouch / introSpeed / holdAfterTouch props, and pointer reach turned off (glyph scramble kept).
+// From MatthewKim323/adam (src/components/AsciiAdam.tsx), unchanged apart from this header, both arms set to white, the onTouch / introSpeed / holdAfterTouch / shiftY props, and pointer reach turned off (glyph scramble kept).
 import { useEffect, useRef } from 'react'
 
 /*
@@ -25,6 +25,7 @@ precision highp float;
 out vec4 outColor;
 
 uniform vec2 u_res;        // canvas px
+uniform float u_shift;     // Scalpal site: scene offset down, as a fraction of canvas height
 uniform float u_cell;      // cell px
 uniform float u_time;      // seconds into the loop
 uniform float u_wall;      // free-running seconds, drives the scramble flicker
@@ -63,7 +64,7 @@ void main() {
 
   // cover-fit the design frame: x in [0, aspect], y in [0, 1]
   float unit = max(u_res.x / u_aspect, u_res.y);
-  vec2 p = (center - u_res * 0.5) / unit + vec2(u_aspect * 0.5, 0.5);
+  vec2 p = (center - u_res * vec2(0.5, 0.5 + u_shift)) / unit + vec2(u_aspect * 0.5, 0.5);
 
   float t = u_time;
   float k = smoothstep(0.0, 6.8, t);
@@ -252,14 +253,16 @@ function aim(arm: Arm, base: Xf, pointer: Vec | null, dt: number): Xf {
 const TOUCH = 6.6
 const CLOSED = 6.8 // arms fully at their touching pose
 
-type Props = { playing?: boolean; time?: number; onTouch?: () => void; introSpeed?: number; holdAfterTouch?: boolean }
+type Props = { playing?: boolean; time?: number; onTouch?: () => void; introSpeed?: number; holdAfterTouch?: boolean; shiftY?: number }
 
-export function AsciiAdam({ playing = true, time, onTouch, introSpeed = 1, holdAfterTouch = false }: Props) {
+export function AsciiAdam({ playing = true, time, onTouch, introSpeed = 1, holdAfterTouch = false, shiftY = 0 }: Props) {
   const ref = useRef<HTMLCanvasElement>(null)
   const playingRef = useRef(playing)
   const onTouchRef = useRef(onTouch)
   const introSpeedRef = useRef(introSpeed)
   const holdRef = useRef(holdAfterTouch)
+  const shiftRef = useRef(shiftY)
+  shiftRef.current = shiftY
   useEffect(() => {
     onTouchRef.current = onTouch
     introSpeedRef.current = introSpeed
@@ -344,7 +347,7 @@ export function AsciiAdam({ playing = true, time, onTouch, introSpeed = 1, holdA
           return
         }
         const unit = Math.max(r.width / ASPECT, r.height)
-        pointer = [(x - r.width / 2) / unit + ASPECT / 2, (y - r.height / 2) / unit + 0.5]
+        pointer = [(x - r.width / 2) / unit + ASPECT / 2, (y - r.height * (0.5 + shiftRef.current)) / unit + 0.5]
       }
       const onLeave = () => {
         pointer = null
@@ -368,6 +371,7 @@ export function AsciiAdam({ playing = true, time, onTouch, introSpeed = 1, holdA
         // cells scale with the covered frame so the grid density never changes
         const cell = Math.max(w / ASPECT, h) * CELL
         gl.uniform2f(u('u_res'), w, h)
+        gl.uniform1f(u('u_shift'), shiftRef.current)
         gl.uniform1f(u('u_cell'), cell)
         if (Math.round(cell) !== atlasCell) {
           atlasCell = Math.round(cell)
