@@ -32,6 +32,7 @@ namespace Scalpal.Surgery
         BodyState body;
         GameObject kit, riskAnatomy;
         Transform woundFrame;
+        readonly Dictionary<XRNode, InstrumentBehaviour> inHand = new Dictionary<XRNode, InstrumentBehaviour>();
         bool premarked;
         int closedLayers;
         float closingClock;
@@ -58,6 +59,7 @@ namespace Scalpal.Surgery
             if (!session || !session.exercise || session.exercise.SelectedCase?.procedure?.openBody?.version != 1) return;
             if (session.exercise.Body != body) ConfigureAttempt();
             if (body == null || !interaction) return;
+            ReportHands();
             bool valid = Ready;
             wound.SetRegistrationValid(valid);
             if (!valid) { interaction.Simulate(0); bleeding.Simulate(0); return; }
@@ -74,7 +76,7 @@ namespace Scalpal.Surgery
         void ConfigureAttempt()
         {
             body = session.exercise.Body; if (body == null) return;
-            premarked = false; closedLayers = 0; closingClock = 0;
+            premarked = false; closedLayers = 0; closingClock = 0; inHand.Clear();
             if (!kit)
             {
                 var prefab = Resources.Load<GameObject>("OpenSurgeryInstruments");
@@ -110,7 +112,7 @@ namespace Scalpal.Surgery
             var plan = session.exercise.SelectedCase.procedure.openBody;
             if (plan.decisions != null && plan.decisions.Length > 0) wound.SetDecisionChoices(plan.decisions[0].choices);
             interaction = GetComponent<OpenBodyInteraction>() ?? gameObject.AddComponent<OpenBodyInteraction>();
-            interaction.Submitted -= Applied; interaction.MarkerChanged -= Marked;
+            interaction.Submitted -= Applied; interaction.MarkerChanged -= Marked; interaction.Contacted -= Touched; interaction.RegionInjured -= Injured;
             interaction.Initialize(session.exercise,session.workbench.tools,session.patientFrame,woundFrame,()=>Ready);
             bool mobile = interaction.ConfigureMobility(mobileOrganGroups,out string mobility);
             bool anatomyBound = OpenSurgeryAnatomy.Bind(session.anatomy,interaction);
@@ -119,7 +121,7 @@ namespace Scalpal.Surgery
             // Wall layer contact, grips, tent lift, muscle split and cut evidence come from this volume.
             interaction.BindWall(volume);
             session.workbench.ToolsReset-=ClearPlacements; session.workbench.ToolsReset+=ClearPlacements;
-            interaction.Submitted += Applied; interaction.MarkerChanged += Marked;
+            interaction.Submitted += Applied; interaction.MarkerChanged += Marked; interaction.Contacted += Touched; interaction.RegionInjured += Injured;
             if(rightAsis && umbilicus) interaction.SetLandmarks(rightAsis.position,umbilicus.position,woundFrame.right);
             // The old vessel demonstration cannot emit a second unrelated blood pool in this case.
             var legacyVessel = GetComponent<NativeVesselSimulation>(); if(legacyVessel) legacyVessel.enabled=false;
@@ -144,6 +146,27 @@ namespace Scalpal.Surgery
             }
         }
         void Marked(IReadOnlyList<Vector3> points) => wound.SetMarker(points);
+        // State tracker facts for Jarvis (never scored): tip contact and region injuries come from the interaction.
+        void Touched(InstrumentBehaviour tool, string tissueId) { if (tool && session.coach) session.coach.Contact(tool.instrumentId, tissueId); }
+        void Injured(string region, InstrumentBehaviour tool, bool controlled) { if (tool && session.coach) session.coach.Injury(region, tool.instrumentId, controlled); }
+        // What each hand holds, sent on change. Until the coach is paired nothing is recorded, so held tools are sent then.
+        void ReportHands()
+        {
+            if (!session.coach || !session.coach.Connected || !session.workbench || session.workbench.inputs == null) { inHand.Clear(); return; }
+            // Every put-down first, then every pick-up, so a tool passed between hands ends up held.
+            for (int pass = 0; pass < 2; pass++)
+                foreach (var input in session.workbench.inputs)
+                {
+                    if (!input || (input.controller != XRNode.LeftHand && input.controller != XRNode.RightHand)) continue;
+                    var grip = input.GetComponent<InstrumentInteractor>(); var tool = grip ? grip.HeldInstrument : null;
+                    inHand.TryGetValue(input.controller, out var previous);
+                    if (tool == previous) continue;
+                    string hand = input.controller == XRNode.LeftHand ? "left" : "right";
+                    if (pass == 0) { if (previous) session.coach.Instrument(previous.instrumentId, hand, false); continue; }
+                    if (tool) session.coach.Instrument(tool.instrumentId, hand, true);
+                    inHand[input.controller] = tool;
+                }
+        }
         void Applied(BodyRecord record, InstrumentBehaviour tool)
         {
             XRNode? hand = null;
@@ -190,7 +213,7 @@ namespace Scalpal.Surgery
         void OnDestroy()
         {
             if(session && session.workbench)session.workbench.ToolsReset-=ClearPlacements;
-            if (interaction) { interaction.Submitted -= Applied; interaction.MarkerChanged -= Marked; }
+            if (interaction) { interaction.Submitted -= Applied; interaction.MarkerChanged -= Marked; interaction.Contacted -= Touched; interaction.RegionInjured -= Injured; }
             if (woundFrame) { if(Application.isPlaying)Destroy(woundFrame.gameObject);else DestroyImmediate(woundFrame.gameObject); }
             // Kit tools are owned by the scene/workbench; do not leave dangling registered entries.
         }

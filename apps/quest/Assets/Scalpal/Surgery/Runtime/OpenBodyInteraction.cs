@@ -19,7 +19,7 @@ namespace Scalpal.Surgery
         {
             public InstrumentBehaviour tool;
             public Transform bladeStart, bladeEnd;
-            public string instance, tissueId = "", clampedTissueId = "";
+            public string instance, tissueId = "", clampedTissueId = "", touched = "";
             public SurgeryTissueTarget target;
             public SurgeryInstrumentLatch latch;
             public OrganMobilization mobile;
@@ -45,6 +45,8 @@ namespace Scalpal.Surgery
         readonly Dictionary<string, BodyAction> pendingTentReleases = new Dictionary<string, BodyAction>();
         readonly List<OrganMobilization> mobility = new List<OrganMobilization>();
         readonly long[] cutFractures = new long[OpenWallLayers.Count];
+        // Regions outside the surgical field reported as injured and not yet controlled.
+        readonly HashSet<string> injuredRegions = new HashSet<string>();
         NativeVolumeSimulation wall;
         // Exposure facts change only when the body appends a record; per-frame reads use this copy.
         BodyState cachedBody;
@@ -64,6 +66,9 @@ namespace Scalpal.Surgery
         Vector3 referenceStart = new Vector3(-.03f, 0, 0), referenceEnd = new Vector3(.03f, 0, 0), markedStart, markedEnd;
         public event Action<BodyRecord, InstrumentBehaviour> Submitted;
         public event Action<IReadOnlyList<Vector3>> MarkerChanged;
+        // State tracker (never scored): a tool tip first touching a tissue, and region injury/control outside the field.
+        public event Action<InstrumentBehaviour, string> Contacted;
+        public event Action<string, InstrumentBehaviour, bool> RegionInjured;
         public string LastRejection { get; private set; } = "";
         public double ActiveSeconds => activeSeconds;
         public double TimeMs => activeSeconds * 1000;
@@ -158,6 +163,7 @@ namespace Scalpal.Surgery
             ClearTransient(); foreach (var state in states) { if (state.latch) state.latch.Clear(); ReleaseRetained(state); state.clampedTissueId = ""; }
             foreach (var group in mobility) group.RestoreRest(); // A retry starts from the authored anatomy.
             pendingTentReleases.Clear(); // A previous attempt's measurements cannot enter its replacement.
+            injuredRegions.Clear();
             attemptBody = exercise ? exercise.Body : null;
             attemptPrefix = Guid.NewGuid().ToString("N"); sequence = 0; activeSeconds = 0; tickClock = 0;
             LastRejection = ""; wasReady = false; hasMarkedLine = false; frameKnown = false;
@@ -253,7 +259,9 @@ namespace Scalpal.Surgery
             if (!state.grasping)
             {
                 if (!FindContact(state, verb, point, out var definition, out var target, out var contact))
-                { FlushStroke(state); ClearContact(state); state.wallEngaged = false; return; }
+                { FlushStroke(state); ClearContact(state); state.wallEngaged = false; state.touched = ""; OutsideField(state, verb, point); return; }
+                // Edge-triggered: one contact per touch of a tissue, not one per frame.
+                if (state.touched != definition.id) { state.touched = definition.id; Contacted?.Invoke(state.tool, definition.id); }
                 // Fracture counts before this blade's first wall contact; LateUpdate cuts follow this Update.
                 if (verb == "cut" && wall && !target && OpenWallLayers.TryGet(definition.id, out _) && !state.wallEngaged)
                 { Array.Copy(cutFractures, state.wallCutBaseline, cutFractures.Length); state.wallEngaged = true; }
@@ -710,7 +718,32 @@ namespace Scalpal.Surgery
             if (state.retainedToken != 0 && wall) wall.ReleaseLayerHandle(state.retainedToken);
             state.retainedToken = 0; state.retainedTissueId = "";
         }
-        void Release(ToolState state) { ClearContact(state); state.active = state.previousValid = state.wallEngaged = false; }
+        void Release(ToolState state) { ClearContact(state); state.active = state.previousValid = state.wallEngaged = false; state.touched = ""; }
+        // Outside the surgical field the body is coarse regions (docs/operation-flow.md). A blade inside one reports it
+        // once; a clamp, tie or seal inside an injured region reports it controlled. The coach owns the consequences.
+        void OutsideField(ToolState state, string verb, Vector3 point)
+        {
+            string region = BodyRegion(torso.InverseTransformPoint(point));
+            if (region == "") return;
+            if (verb == "cut") { if (injuredRegions.Add(region)) RegionInjured?.Invoke(region, state.tool, false); }
+            else if ((verb == "clamp" || verb == "tie" || verb == "seal") && injuredRegions.Remove(region)) RegionInjured?.Invoke(region, state.tool, true);
+        }
+        // Registered torso frame: umbilicus origin, +X patient left, +Y anterior, +Z cranial, source metres. Bounds come
+        // from the imported surface atlas (lying supine, arms at the sides). The abdomen and pelvis between chest and
+        // legs hold the surgical field and are not a region; points above the skin or below the back are not on the body.
+        public static string BodyRegion(Vector3 p)
+        {
+            if (!OpenSurgeryStroke.Finite(p) || p.y < -.26f || p.z > .73f || p.z < -1.02f) return "";
+            float x = Mathf.Abs(p.x); string side = p.x >= 0 ? "left_" : "right_";
+            string region; float skin;
+            if (p.z >= .512f) { if (x > .12f) return ""; region = "head"; skin = 0; }
+            else if (p.z < .45f && p.z >= -.33f && x <= .35f && (x >= .183f || (x >= .158f && p.z >= .082f))) { region = side + "arm"; skin = p.z < -.17f ? -.01f : -.07f; }
+            else if (p.z >= .405f && x < .158f) { region = "neck"; skin = -.03f; }
+            else if (p.z >= .162f && x < .158f) { region = "chest"; skin = .02f; }
+            else if (p.z < -.198f && x <= .2f) { region = side + "leg"; skin = p.z < -.9f ? .035f : -.03f; }
+            else return "";
+            return p.y <= skin ? region : "";
+        }
         void ClearTransient() { foreach (var state in states) Release(state); }
         void OnDisable() { ClearPlacements(); wasReady = false; frameKnown = false; }
     }

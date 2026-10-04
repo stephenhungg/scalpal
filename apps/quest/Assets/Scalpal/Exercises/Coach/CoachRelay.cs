@@ -26,6 +26,9 @@ namespace Scalpal.Exercises.Coach
         public BodyAction evidence;
         public bool active;
         public float rateMlPerMin, totalMl;
+        // State tracker (instrument, contact) and coarse region injury facts; the coach ignores them on other types.
+        public string hand, region;
+        public bool held, controlled;
     }
 
     [Serializable]
@@ -282,6 +285,29 @@ namespace Scalpal.Exercises.Coach
             StartFlush();
         }
 
+        // State tracker facts: never scored. A tool picked up or put down, and a tool tip first touching a structure.
+        public void Instrument(string instrumentId, string hand, bool held)
+        {
+            if (!Connected || failed || string.IsNullOrEmpty(instrumentId) || (hand != "left" && hand != "right")) return;
+            pending.Enqueue(new CoachEventDto { type = "instrument", instrumentId = instrumentId, hand = hand, held = held, eventId = NewEventId(), stepId = "" });
+            StartFlush();
+        }
+
+        public void Contact(string instrumentId, string structureId)
+        {
+            if (string.IsNullOrEmpty(instrumentId) || string.IsNullOrEmpty(structureId)) return;
+            Enqueue("contact", structureId: structureId, instrumentId: instrumentId);
+        }
+
+        // A cutting tool outside the surgical field (services/preop REGION_IDS), then once that region's bleed is controlled.
+        public static readonly string[] Regions = { "head", "neck", "chest", "left_arm", "right_arm", "left_leg", "right_leg" };
+        public void Injury(string region, string instrumentId, bool controlled = false)
+        {
+            if (!Connected || failed || string.IsNullOrEmpty(instrumentId) || Array.IndexOf(Regions, region) < 0) return;
+            pending.Enqueue(new CoachEventDto { type = "injury", region = region, instrumentId = instrumentId, controlled = controlled, eventId = NewEventId(), stepId = "" });
+            StartFlush();
+        }
+
         public void Focus(string structureId)
         {
             if (!Connected || failed) return;
@@ -405,7 +431,9 @@ namespace Scalpal.Exercises.Coach
         {
             if (receipt == null || !receipt.accepted || receipt.reason == null) return false;
             if (receipt.applied) return receipt.reason == "";
-            return receipt.reason == "duplicate" || receipt.reason == "tracking_invalid" || receipt.reason == "case_completed";
+            // After death or the end of the case the coach refuses every event; that is delivered, not a sync failure.
+            return receipt.reason == "duplicate" || receipt.reason == "tracking_invalid" || receipt.reason == "case_completed"
+                || receipt.reason == "patient_died" || receipt.reason == "case_ended";
         }
 
         void FailSync(string reason)
