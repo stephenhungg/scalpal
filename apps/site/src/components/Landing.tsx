@@ -9,6 +9,7 @@ import { BlurWords } from "./BlurWords";
 import { FadeIn } from "./FadeIn";
 import { RollButton } from "./RollButton";
 import { TitleMorph } from "./TitleMorph";
+import { MonitorHud } from "./MonitorHud";
 
 const TITLE = "scalpal.";
 const SHIFT_Y = 0.22; // hands scene offset down, as a fraction of screen height
@@ -60,6 +61,7 @@ export function Landing() {
         animate={{ opacity: launched ? 0.55 : 0 }}
         transition={{ duration: 0.9, ease: [0.44, 0, 0.56, 1] }}
       />
+      <MonitorHud show={titled} instant={skip} />
       {launched && (
         <>
           <motion.nav
