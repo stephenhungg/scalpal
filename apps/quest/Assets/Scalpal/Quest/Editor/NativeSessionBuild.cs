@@ -151,7 +151,7 @@ namespace Scalpal.Quest.Editor
             session.status = workbench.status;
             workbench.status.transform.position = new Vector3(-0.15f, 1.65f, 0.3f);
             workbench.status.characterSize = 0.012f;
-            workbench.status.text = "SCALPAL | APPENDECTOMY REHEARSAL\nReview the case and confirm selection\nGrip: pick up   Trigger: use   B: review / confirm\nX: identify   Y: voice   A: retry";
+            workbench.status.text = "SCALPAL | APPENDECTOMY REHEARSAL\nReview the case and confirm selection\nGrip: pick up   Trigger: use   B: review / confirm\nX: identify   Y: voice   A: reset tools   Left menu: retry";
 
             // AnatomyPart captures these enabled flags as authored defaults at runtime Awake.
             // The practice controller then hides geometry until its explicit validity gate opens.
@@ -406,12 +406,14 @@ namespace Scalpal.Quest.Editor
             NativeCouponValidation.Run();
             NativeSkinCalibrationBenchmark.Run();
             NativeVolumeRuntimeValidation.Run();
+            NativeOpenWallValidation.Run();
             NativeBleedingValidation.Run();
             NativeVesselRuntimeValidation.Run();
             NativeTissueContactValidation.Run();
             NativeAppendectomyValidation.Run();
             NativeSessionBoundaryValidation.Run();
             NativeCoachRelayValidation.Run();
+            Scalpal.Capture.Editor.CaptureValidation.Run();
             // Fixtures must not leave temporary poses, offline gates or substituted bindings in the player.
             Validate();
             Debug.Log("SCALPAL_NATIVE_SESSION_VERIFY_OK");

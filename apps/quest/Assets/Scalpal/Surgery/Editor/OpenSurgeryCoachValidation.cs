@@ -59,6 +59,15 @@ namespace Scalpal.Surgery.Editor
                 Assert(!CoachRelay.ValidAlertFeed(feed, "coach-test", 0), "future alert version rejected");
                 hint.kind = "tracking_lost";
                 Assert(OpenSurgeryCoach.Relevant(hint, "mark", false, false) && !OpenSurgeryCoach.Relevant(hint, "mark", true, false), "tracking warning only survives until recovery");
+                var bleed = new CoachAlertDto { kind = "bleeding", tier = "warning", say = "Bleeding.", highlight = new[] { "mesoappendix" } };
+                var bleeding = new HashSet<string> { "mesoappendix" };
+                Assert(OpenSurgeryCoach.Relevant(bleed, "mark", true, false, bleeding.Contains), "bleeding alert plays while the body still bleeds there");
+                bleeding.Clear();
+                Assert(!OpenSurgeryCoach.Relevant(bleed, "mark", true, false, bleeding.Contains), "queued bleeding alert is dropped once that bleed is controlled");
+                Assert(OpenSurgeryCoach.InterruptsAgent(bleed) && OpenSurgeryCoach.InterruptsAgent(new CoachAlertDto { kind = "mistake", tier = "warning" }),
+                    "safety warnings may interrupt Jarvis");
+                Assert(!OpenSurgeryCoach.InterruptsAgent(new CoachAlertDto { kind = "stuck", tier = "warning" }) &&
+                    !OpenSurgeryCoach.InterruptsAgent(new CoachAlertDto { kind = "step_complete", tier = "caution" }), "non-safety alerts never interrupt Jarvis");
                 Debug.Log("SCALPAL_OPEN_SURGERY_COACH_VALIDATION_OK synthetic relay serialization, gating, stale captions, reset and reflex URL checks; no audio hardware test");
             }
             finally { UnityEngine.Object.DestroyImmediate(fixture); }

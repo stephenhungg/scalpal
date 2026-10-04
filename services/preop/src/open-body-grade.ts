@@ -1,4 +1,4 @@
-import type { BodyState, OpenBodyCase } from './open-body.js';
+import { isBodyTelemetry, type BodyState, type OpenBodyCase } from './open-body.js';
 import type { StepMistake } from './types.js';
 
 export interface BodyGrade {
@@ -40,7 +40,7 @@ export function gradeBody(plan: OpenBodyCase, body: BodyState, mistakes: readonl
     metMilestones:Object.freeze(met), missingMilestones:Object.freeze(missing), guardrailIds:Object.freeze(mistakes.map(m => m.id)),
     correctDecisions:correct, decisionCount:plan.decisions.length, safetyPoints:safety, decisionPoints:decisions,
     tissuePoints:tissue, economyPoints:-1, economyMeasured:false, earnedPoints:safety + decisions + tissue, availablePoints:80,
-    unscoredEconomyWeight:20, actionCount:body.log.length,
+    unscoredEconomyWeight:20, actionCount:body.log.filter(r => !isBodyTelemetry(r.action)).length,
     durationMs:body.log.length ? body.log[body.log.length-1]!.action.timeMs - body.log[0]!.action.timeMs : 0,
     bloodLostMl:blood, activeBleeds:active, contamination:contaminated,
     missingMetrics:Object.freeze(['leftHandPathLengthM','rightHandPathLengthM','calibratedEconomyThresholds','hintsUsed'])});

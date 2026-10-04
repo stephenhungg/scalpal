@@ -49,7 +49,7 @@ namespace Scalpal.Exercises.Engine
                 missingMilestones = missing, guardrailIds = mistakes.Select(m => m.id).ToArray(),
                 correctDecisions = correct, decisionCount = plan.decisions.Length, safetyPoints = safety,
                 decisionPoints = decisions, tissuePoints = tissue, earnedPoints = safety + decisions + tissue,
-                actionCount = body.Log.Count, durationMs = body.Log.Count == 0 ? 0 : body.Log[body.Log.Count-1].action.timeMs - body.Log[0].action.timeMs,
+                actionCount = body.Log.Count(r => !BodyState.IsTelemetry(r.action)), durationMs = body.Log.Count == 0 ? 0 : body.Log[body.Log.Count-1].action.timeMs - body.Log[0].action.timeMs,
                 bloodLostMl = blood, activeBleeds = active, contamination = contaminated,
                 missingMetrics = new[]{ "leftHandPathLengthM", "rightHandPathLengthM", "calibratedEconomyThresholds", "hintsUsed" } };
         }

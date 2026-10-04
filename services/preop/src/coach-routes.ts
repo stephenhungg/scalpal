@@ -10,8 +10,10 @@ import { explainStructure, runTool } from "./coach-tools.js";
 import type { Frame, FrameMark, SceneVision } from "./scene-vision.js";
 import type { FrameDetector } from "./frame-detector.js";
 import { ReflexAudio } from "./reflex.js";
+import { openBodySimulation, restampForBody } from "./open-body-sim.js";
 import { NO_REALTIME, type RealtimeBridge, type RealtimeSink } from "./realtime-bridge.js";
 import { buildSystemPrompt, firstMessage } from "./coach-prompt.js";
+import { createContextFeed, type ContextFeed } from "./jarvis/context-feed.js";
 import type { EncounterVoices } from "./encounter-routes.js";
 import type { Action, SurgicalCase } from "./types.js";
 
@@ -86,6 +88,9 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
   const runSessions = new Map<string, string>();
   // Office context for sessions started from a scored encounter, so a later voice connect keeps it.
   const officeCarryover = new Map<string, string>();
+  // One server-side context feed per session for the native Quest voice, the same feed the laptop
+  // page runs in the browser (jarvis/context-feed.js), so both agents get cards and deltas alike.
+  const voiceFeeds = new Map<string, { feed: ContextFeed; lastKey: string }>();
   const frames = new Map<string, Frame>();
   const watching = new Map<string, { inFlight: boolean; lastAt: number }>();
   // Latest detector boxes per session. Detection runs about once a second, so it trails the newest frame.
@@ -145,6 +150,7 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
       const oldest = sessions.keys().next().value!;
       sessions.delete(oldest);
       officeCarryover.delete(oldest);
+      voiceFeeds.delete(oldest);
       for (const [run, session] of runSessions) if (session === oldest) runSessions.delete(run);
     }
     const sid = `coach-${crypto.randomUUID().replaceAll("-", "").slice(0, 16)}`;
@@ -184,6 +190,25 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
     if (!s) return missing(c);
     const snapshot = s.snapshot();
     return c.json({ snapshot, context: renderContext(snapshot), contextKey: contextKey(snapshot), actions: coachActions(s.id) });
+  });
+
+  // Native voice context, mirroring the laptop page's syncContext: nothing unless contextKey changed
+  // (or force after a voice reconnect), then the feed's full card on structural change or ~10 s, else a
+  // one-line [STATE DELTA vN]. kind "none" means send nothing. The feed state advances on each call.
+  app.post("/coach/sessions/:sid/voice-context", async (c) => {
+    const s = getSession(c);
+    if (!s) return missing(c);
+    const force = (await body(c)).force === true;
+    const snapshot = s.snapshot();
+    const key = contextKey(snapshot);
+    let state = voiceFeeds.get(s.id);
+    if (!state) {
+      state = { feed: createContextFeed({ now: () => options.now().getTime() }), lastKey: "" };
+      voiceFeeds.set(s.id, state);
+    }
+    const update = force || key !== state.lastKey ? state.feed.next(snapshot, renderContext(snapshot), { force }) : null;
+    state.lastKey = key;
+    return c.json({ sessionId: s.id, version: snapshot.version, contextKey: key, kind: update?.kind ?? "none", text: update?.text ?? "", actions: coachActions(s.id) });
   });
 
   // Recap has no conversational agent, client prompt override, or surgery tools.
@@ -438,16 +463,18 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
     const { kind } = await body(c);
     let events: CoachEvent[] = [];
     const stepResults: ReturnType<CoachSession["handle"]>[] = [];
-    switch (kind) {
+    const open = typeof kind === "string" ? openBodySimulation(s, kind) : null;
+    if (open) events = open;
+    else switch (kind) {
       case "correct_action": {
-        const e = s.nextCorrectEvent();
+        const e = restampForBody(s, s.nextCorrectEvent());
         events = e ? [e] : [];
         break;
       }
       case "complete_step": {
         const stepId = s.engine.current?.id;
         for (let i = 0; i < 20 && stepId && s.engine.current?.id === stepId; i++) {
-          const e = s.nextCorrectEvent();
+          const e = restampForBody(s, s.nextCorrectEvent());
           if (!e) break;
           stepResults.push(s.handle(e));
         }

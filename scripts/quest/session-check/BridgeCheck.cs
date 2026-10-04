@@ -29,6 +29,7 @@ static class BridgeCheck
             Connection.Db.MyMemberships.Rows.Add(new Membership { SessionId = "fixture", Role = "headset" });
             Connection.Db.SessionExerciseState.Rows.Add(State);
             Set(Bridge, "connection", Connection); Set(Bridge, "subscribed", true);
+            Set(Bridge, "joinResolved", true); Set(Bridge, "persistedSessionId", Session.SessionId);
             Call(Bridge, "HookReducers", Connection);
             Tick();
         }
@@ -119,7 +120,7 @@ static class BridgeCheck
 
         var attempt = new Fixture(); int started = 0, failed = 0;
         attempt.Bridge.AttemptStarted += id => started++;
-        attempt.Bridge.AttemptFailed += reason => failed++;
+        attempt.Bridge.AttemptFailed += reason => { failed++; Check("lost acknowledgement advertises the actual retry control", reason.Contains("Left menu: retry") && !reason.Contains("A: retry")); };
         Check("attempt request is sent once", attempt.Bridge.BeginAttempt("lap_appendectomy", "0.1.0") && !attempt.Bridge.BeginAttempt("lap_appendectomy", "0.1.0") && attempt.Connection.Reducers.Attempts.Count == 1);
         Check("attempt is not claimed before acknowledgement", started == 0 && attempt.Bridge.AttemptPending);
         attempt.Connection.Reducers.AckAttempt(true); attempt.Tick();
@@ -147,12 +148,14 @@ static class BridgeCheck
         Check("committed result callback fires only after actual reducer callback", committed == 1);
     }
 
-    static DbConnection ConnectThroughCallback(QuestSessionBridge bridge, string role = "headset", string status = "active")
+    static DbConnection ConnectThroughCallback(QuestSessionBridge bridge, string role = "headset", string status = "active",
+        string invite = "REVOKED", bool committed = false, bool deferJoin = false)
     {
-        bridge.joinCode = "REVOKED";
+        bridge.joinCode = invite;
         bridge.Reconnect();
         var conn = DbConnection.LastBuilt;
-        conn.Reducers.JoinCommitted = false;
+        conn.Reducers.JoinCommitted = committed;
+        conn.Reducers.DeferJoin = deferJoin;
         conn.Db.MySessions.Rows.Add(new Session { SessionId = "fixture", CurrentAttemptId = "fixture-a1", Status = status,
             ExerciseId = "lap_appendectomy", ExerciseVersion = "0.1.0" });
         if (role != null) conn.Db.MyMemberships.Rows.Add(new Membership { SessionId = "fixture", Role = role });
@@ -163,7 +166,7 @@ static class BridgeCheck
 
     static void RotatedInviteMembership()
     {
-        var bridge = new QuestSessionBridge { autoConnect = false };
+        var bridge = new QuestSessionBridge { autoConnect = false, preferredSessionId = "fixture" };
         var conn = ConnectThroughCallback(bridge);
         Check("real connect callback subscribes even when revoked invite join fails", conn.Subscriptions.Count == 1 && conn.Reducers.Joins == 1);
         Check("membership subscription includes all authoritative views", conn.SubscriptionQueries.Count == 1 &&
@@ -174,10 +177,10 @@ static class BridgeCheck
         Check("cache rows cannot authorize pairing before subscription applied", !bridge.Paired && !bridge.Status.StartsWith("Pairing rejected:"));
         if (conn.Subscriptions.Count != 0) conn.Subscriptions[0].Apply();
         Call(bridge, "Update");
-        Check("revoked invite preserves existing active headset membership pairing", bridge.Paired && bridge.Status == "Paired");
+        Check("revoked invite preserves explicitly configured active headset session", bridge.Paired && bridge.Status == "Paired");
         conn.Reducers.JoinSession("REVOKED", "Quest");
         Call(bridge, "Update");
-        Check("join response never creates another subscription or unpairs a member", bridge.Paired && conn.Subscriptions.Count == 1);
+        Check("join response never creates another subscription or unpairs a configured member", bridge.Paired && conn.Subscriptions.Count == 1);
 
         var reconnect = ConnectThroughCallback(bridge);
         if (conn.Subscriptions.Count != 0) conn.Subscriptions[0].Apply();
@@ -185,13 +188,13 @@ static class BridgeCheck
         Check("late subscription from old connection cannot authorize reconnect", !bridge.Paired);
         if (reconnect.Subscriptions.Count != 0) reconnect.Subscriptions[0].Apply();
         Call(bridge, "Update");
-        Check("same bridge reconnect pairs from persisted membership despite rotated invite", bridge.Paired && bridge.Status == "Paired");
+        Check("same bridge reconnect pairs only the configured session despite rotated invite", bridge.Paired && bridge.Status == "Paired");
         if (conn.Subscriptions.Count != 0) conn.Subscriptions[0].Fail();
         Check("obsolete subscription error cannot revoke current connection pairing", bridge.Paired);
 
         foreach (string role in new[] { null, "observer" })
         {
-            var denied = new QuestSessionBridge { autoConnect = false };
+            var denied = new QuestSessionBridge { autoConnect = false, preferredSessionId = "fixture" };
             var deniedConn = ConnectThroughCallback(denied, role);
             if (deniedConn.Subscriptions.Count != 0) deniedConn.Subscriptions[0].Apply();
             Call(denied, "Update");
@@ -199,12 +202,51 @@ static class BridgeCheck
                 !denied.Paired && denied.Status.StartsWith("Pairing rejected:"));
             Call(denied, "OnDisable");
         }
-        var ended = new QuestSessionBridge { autoConnect = false };
+        var ended = new QuestSessionBridge { autoConnect = false, preferredSessionId = "fixture" };
         var endedConn = ConnectThroughCallback(ended, "headset", "ended");
         if (endedConn.Subscriptions.Count != 0) endedConn.Subscriptions[0].Apply();
         Call(ended, "Update");
         Check("existing headset membership cannot reactivate an ended session", !ended.Paired);
-        Call(ended, "OnDisable"); Call(bridge, "OnDisable");
+
+        var unknown = new QuestSessionBridge { autoConnect = false };
+        var unknownConn = ConnectThroughCallback(unknown, invite: "NEW-TYPO");
+        unknownConn.Subscriptions[0].Apply(); Call(unknown, "Update");
+        Check("rejected new invite cannot silently pair an old active headset session", !unknown.Paired && unknown.Status.StartsWith("Pairing rejected:"));
+        Check("rejected new invite cannot start an attempt against old membership", !unknown.BeginAttempt("lap_appendectomy", "0.1.0") && unknownConn.Reducers.Attempts.Count == 0);
+
+        var preferredMismatch = new QuestSessionBridge { autoConnect = false, preferredSessionId = "new-session" };
+        var mismatchConn = ConnectThroughCallback(preferredMismatch);
+        mismatchConn.Subscriptions[0].Apply(); Call(preferredMismatch, "Update");
+        Check("rejected invite cannot fall back when preferred session differs from old membership", !preferredMismatch.Paired && preferredMismatch.Status.StartsWith("Pairing rejected:"));
+
+        var pending = new QuestSessionBridge { autoConnect = false };
+        var pendingConn = ConnectThroughCallback(pending, invite: "PENDING-INVITE", deferJoin: true);
+        pendingConn.Subscriptions[0].Apply(); Call(pending, "Update");
+        Check("old cached membership cannot pair while configured join is unresolved", !pending.Paired);
+        pendingConn.Reducers.AckJoin(false); Call(pending, "Update");
+        Check("join rejection remains visible after the pending subscription", !pending.Paired && pending.Status.StartsWith("Pairing rejected:"));
+
+        var known = new QuestSessionBridge { autoConnect = false };
+        var knownConn = ConnectThroughCallback(known, invite: "EXPIRES", committed: true);
+        knownConn.Subscriptions[0].Apply(); Call(known, "Update");
+        Check("successful join persists exactly its invite-scoped active session", known.Paired);
+        Call(known, "OnDisable");
+        var persisted = new QuestSessionBridge { autoConnect = false };
+        var persistedConn = ConnectThroughCallback(persisted, invite: "EXPIRES");
+        persistedConn.Db.MySessions.Rows.Add(new Session { SessionId = "older-other", CurrentAttemptId = "older-a1" });
+        persistedConn.Db.MyMemberships.Rows.Add(new Membership { SessionId = "older-other", Role = "headset" });
+        persistedConn.Subscriptions[0].Apply(); Call(persisted, "Update");
+        Check("same persisted invite reconnects only its known session among multiple old memberships", persisted.Paired && persisted.SessionId == "fixture");
+        var changedInvite = new QuestSessionBridge { autoConnect = false };
+        var changedConn = ConnectThroughCallback(changedInvite, invite: "DIFFERENT-INVITE");
+        changedConn.Subscriptions[0].Apply(); Call(changedInvite, "Update");
+        Check("changing invite cannot reuse persistence from the previously successful invite", !changedInvite.Paired && changedInvite.Status.StartsWith("Pairing rejected:"));
+        var changedEndpoint = new QuestSessionBridge { autoConnect = false, database = "different-db" };
+        var changedEndpointConn = ConnectThroughCallback(changedEndpoint, invite: "EXPIRES");
+        changedEndpointConn.Subscriptions[0].Apply(); Call(changedEndpoint, "Update");
+        Check("changing endpoint cannot reuse another database's known pairing", !changedEndpoint.Paired && changedEndpoint.Status.StartsWith("Pairing rejected:"));
+        foreach (var current in new[] { ended, unknown, preferredMismatch, pending, persisted, changedInvite, changedEndpoint, bridge })
+            Call(current, "OnDisable");
     }
 
     static void AttemptDeadlines()
@@ -227,6 +269,22 @@ static class BridgeCheck
         unacked.Tick();
         Check("late acknowledgement and row cannot revive timed-out request", started == 0 && !unacked.Bridge.AttemptPending);
         Check("timeout permits explicit subsequent attempt request", unacked.Bridge.BeginAttempt("lap_appendectomy", "0.1.0") && unacked.Connection.Reducers.Attempts.Count == 2);
+
+        var deadlineCommit = new Fixture(); int deadlineStarted = 0, deadlineFailed = 0;
+        deadlineCommit.Bridge.AttemptStarted += id => deadlineStarted++;
+        deadlineCommit.Bridge.AttemptFailed += reason => deadlineFailed++;
+        deadlineCommit.Bridge.BeginAttempt("lap_appendectomy", "0.1.0");
+        Time.realtimeSinceStartup += 10.5f;
+        deadlineCommit.Connection.NextFrameTick = () =>
+        {
+            var timestamp = DateTimeOffset.UtcNow;
+            deadlineCommit.ObserveAttempt("deadline-a2", timestamp);
+            deadlineCommit.Connection.Reducers.AckAttempt(true, timestamp);
+        };
+        Call(deadlineCommit.Bridge, "Update");
+        Check("FrameTick confirmation at expired deadline is observed before timeout", deadlineStarted == 1 && deadlineFailed == 0 && !deadlineCommit.Bridge.AttemptPending && deadlineCommit.Bridge.AttemptId == "deadline-a2");
+        deadlineCommit.Tick();
+        Check("deadline confirmation remains single and never fails on following frame", deadlineStarted == 1 && deadlineFailed == 0);
 
         var mismatch = new Fixture(); int mismatchFailed = 0, mismatchStarted = 0;
         mismatch.Bridge.AttemptFailed += reason => mismatchFailed++;

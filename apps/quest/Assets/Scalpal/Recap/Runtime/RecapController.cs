@@ -32,8 +32,9 @@ namespace Scalpal.Recap
             public long expiresAtUnixMs;
         }
         public static bool SafeEndpoint(string url) => Uri.TryCreate(url, UriKind.Absolute, out var u) && (u.Scheme == "https" || (u.Scheme == "http" && u.IsLoopback));
-        void OnEnable() { context = RecapRunContext.Ensure(); context.MotionJobAttached += JobAttached; if (replay) replay.AccessRefreshRequested += RefreshAccess; }
-        void JobAttached() { if (context.result != null) Load(context.result); }
+        void OnEnable() { context = RecapRunContext.Ensure(); context.MotionJobAttached += JobAttached; context.CaptureStateChanged += JobAttached; if (replay) replay.AccessRefreshRequested += RefreshAccess; }
+        // Upload completion can arrive after the learner moved on; never pull them back to replay.
+        void JobAttached() { if (context.result == null) return; if (Result == null || Phase == "replay") Load(context.result); else panel.Refresh(); }
         void Start()
         {
             context = RecapRunContext.Ensure();
@@ -96,6 +97,8 @@ namespace Scalpal.Recap
                 var r = Result;
                 // Resolve an imported ready result once. Never rotate a playing video's URL on a timer.
                 if (r.replay.status == "failed" || (r.replay.status == "ready" && !string.IsNullOrEmpty(r.replay.replayVideoUrl))) yield break;
+                if (string.IsNullOrEmpty(r.replay.jobId) && r.replay.status == "queued" && !string.IsNullOrEmpty(context.captureNotice))
+                { Notice = context.captureNotice; panel.Refresh(); yield break; } // CaptureStateChanged reloads when the upload settles.
                 if (string.IsNullOrEmpty(r.replay.jobId) || string.IsNullOrEmpty(context.clientToken))
                 { Notice = r.isSample ? "" : "No capture job or paired session credential. Labeled sample replay available."; panel.Refresh(); yield break; }
                 yield return Resolve(version, false);
@@ -183,6 +186,6 @@ namespace Scalpal.Recap
             }
             else { Notice = "Scene handoff not connected: " + target + ". Connect the run-context navigation callback."; panel.Refresh(); }
         }
-        void OnDisable() { if (context) context.MotionJobAttached -= JobAttached; if (replay) replay.AccessRefreshRequested -= RefreshAccess; CancelRequests(); if (voice) voice.Disconnect(); if (replay) replay.Pause(); }
+        void OnDisable() { if (context) { context.MotionJobAttached -= JobAttached; context.CaptureStateChanged -= JobAttached; } if (replay) replay.AccessRefreshRequested -= RefreshAccess; CancelRequests(); if (voice) voice.Disconnect(); if (replay) replay.Pause(); }
     }
 }

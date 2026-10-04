@@ -1,12 +1,11 @@
 "use client";
 
 import { useEffect, useRef } from 'react';
+import { BAYER, MARK } from '@/lib/mark';
 
 // Scalpal mark (traced from the team logo). Solid white at rest; on hover a dither wave
 // sweeps across it: cells thin out through a 4x4 Bayer pattern, the wave front glints green,
 // then the mark resolves back to solid.
-const MARK = 'M5.06 81.31 L5.41 81.60 L6.10 81.42 L44.94 58.58 L45.52 57.94 L45.70 57.47 L45.70 50.96 L45.81 50.67 L46.34 50.20 L46.92 50.20 L47.27 50.44 L58.78 62.12 L59.48 62.65 L60.35 62.82 L62.85 61.83 L93.72 47.94 L94.77 47.35 L94.94 47.01 L94.94 45.73 L94.53 45.20 L51.28 45.15 L50.29 44.91 L49.30 44.27 L21.92 18.98 L20.93 18.40 L17.50 18.40 L17.15 18.87 L17.27 19.33 L32.27 44.33 L32.73 44.80 L33.37 45.09 L39.13 45.09 L39.77 45.61 L39.83 46.25 L38.31 47.82 L5.29 78.28 L5.00 79.04 Z';
-const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => (v + 0.5) / 16);
 const DURATION = 750; // ms
 
 export function DitherLogo({ size = 34 }: { size?: number }) {

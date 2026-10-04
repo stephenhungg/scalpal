@@ -219,7 +219,7 @@ export interface SuccessCheck {
 
 export interface StepMistake {
   id: string;
-  trigger: "touch_structure" | "wrong_identification" | "wrong_order" | "excess_energy";
+  trigger: "touch_structure" | "wrong_identification" | "wrong_order" | "excess_energy" | "guardrail";
   structure: string;
   severity: Severity;
   feedback: string;

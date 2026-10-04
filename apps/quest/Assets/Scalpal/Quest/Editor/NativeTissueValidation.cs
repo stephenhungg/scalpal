@@ -225,7 +225,7 @@ namespace Scalpal.Quest.Editor
                     var original = source.vertices;
                     var clone = UnityEngine.Object.Instantiate(authored.gameObject, root.transform);
                     var filter = clone.GetComponent<MeshFilter>(); var collider = clone.GetComponent<MeshCollider>();
-                    var tissue = clone.GetComponent<DeformableTissue>() ?? clone.AddComponent<DeformableTissue>();
+                    if (!clone.TryGetComponent<DeformableTissue>(out var tissue)) tissue = clone.AddComponent<DeformableTissue>();
                     var relativeScale = authored.transform.lossyScale / session.anatomy.transform.lossyScale.x;
                     Assert(relativeScale.x > 0 && Mathf.Abs(relativeScale.x-relativeScale.y) < relativeScale.x*.001f && Mathf.Abs(relativeScale.x-relativeScale.z) < relativeScale.x*.001f,
                         "actual imported target has a uniform source-to-meter conversion: " + id);

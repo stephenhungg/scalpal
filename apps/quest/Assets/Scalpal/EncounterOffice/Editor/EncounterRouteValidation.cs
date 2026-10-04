@@ -36,7 +36,9 @@ namespace Scalpal.EncounterOffice.Editor
                 var asset = AssetDatabase.LoadAssetAtPath<TextAsset>("Assets/Scalpal/Exercises/Resources/scalpal_bundle.json");
                 Check(asset, "packaged service fixture bundle exists");
                 var bundle = JsonUtility.FromJson<ScalpalBundle>(asset.text);
-                var kase = bundle.cases.Single(item => item.patientId == EncounterContract.FemalePatientId);
+                // A patient can have several packaged cases (open primary first, laparoscopic advanced variant later);
+                // the office routes to the case whose procedure the authored scorecard resolves to.
+                var kase = bundle.cases.Single(item => item.patientId == EncounterContract.FemalePatientId && item.procedureId == JsonUtility.FromJson<EncounterReply>(Fixture).scorecard.procedureId);
                 var fixture = JsonUtility.FromJson<EncounterReply>(Fixture);
                 var state = fixture.state; var score = fixture.scorecard;
                 Check(state.phase == "scored" && state.assessment.procedure == "ureteroscopy"

@@ -97,3 +97,29 @@ describe("structured office carryover", () => {
     expect(other.systemPrompt).not.toContain('proposed "ureteroscopy"');
   });
 });
+
+// The OR Time-Out reviews only the carryover risks (flags pinned to procedure steps). Scoring it against the
+// whole chart would mark a learner who addressed every risk on screen as having missed hidden ones.
+describe("Time-Out preop check scope", () => {
+  it("scores only step-pinned risks when scope is surgical", async () => {
+    const { scorePreopCheck } = await import("../src/case-builder.js");
+    for (const subject of [...ENCOUNTERS_BY_PLAN.keys()]) {
+      const s = session(subject);
+      const shown = s.score().carryoverItems.map((item) => item.type);
+      const surgical = scorePreopCheck(s.kase, shown, "surgical");
+      expect(surgical.missed).toEqual([]);
+      expect(surgical.total).toBe(new Set(shown).size);
+      const chart = scorePreopCheck(s.kase, shown);
+      expect(chart.total).toBe(new Set(s.kase.brief.flags.map((f) => f.type)).size);
+    }
+    // Latent with today's fixtures (every flag is pinned), but a live chart can carry a flag with no step:
+    // the Time-Out never shows it, so only the surgical scope may judge the learner's Time-Out answers.
+    const s = session("patient-demo-multi-source");
+    const unpinned = s.kase.brief.flags[0]!;
+    const partial = { ...s.kase, considerations: s.kase.considerations.filter((c) => c.flagId !== unpinned.id) };
+    const shown = buildCarryoverItems(partial, [], []).map((item) => item.type);
+    expect(shown).not.toContain(unpinned.type);
+    expect(scorePreopCheck(partial, shown, "surgical").missed).toEqual([]);
+    expect(scorePreopCheck(partial, shown).missed.map((m) => m.type)).toContain(unpinned.type);
+  });
+});

@@ -1,6 +1,6 @@
 "use client";
 
-// From MatthewKim323/adam (src/components/AsciiAdam.tsx), unchanged apart from this header, both arms set to white, the onTouch / introSpeed / onUnavailable props, and pointer reach turned off (glyph scramble kept).
+// From MatthewKim323/adam (src/components/AsciiAdam.tsx), unchanged apart from this header, both arms set to white, the onTouch / introSpeed / holdAfterTouch (with breathing) / shiftY / startTouched / onUnavailable props, a livelier spark, and pointer reach turned off (glyph scramble kept).
 import { useEffect, useRef } from 'react'
 
 /*
@@ -12,7 +12,7 @@ import { useEffect, useRef } from 'react'
 // dim -> bright; the last entry is the inverted "?" tile
 const RAMP = [' ', '.', ':', '-', '+', '*', '%', '#', '@', 'TILE']
 const LOOP = 9.55 // seconds from apart to touching (and holding); then it plays back in reverse
-const ASPECT = 3696 / 2304 // design frame, covered onto the canvas
+export const ASPECT = 3696 / 2304 // design frame, covered onto the canvas
 const CELL = 21 / 2304 // cell size as a fraction of the covered frame's height
 
 const vert = /* glsl */ `#version 300 es
@@ -25,6 +25,7 @@ precision highp float;
 out vec4 outColor;
 
 uniform vec2 u_res;        // canvas px
+uniform float u_shift;     // Scalpal site: scene offset down, as a fraction of canvas height
 uniform float u_cell;      // cell px
 uniform float u_time;      // seconds into the loop
 uniform float u_wall;      // free-running seconds, drives the scramble flicker
@@ -63,7 +64,7 @@ void main() {
 
   // cover-fit the design frame: x in [0, aspect], y in [0, 1]
   float unit = max(u_res.x / u_aspect, u_res.y);
-  vec2 p = (center - u_res * 0.5) / unit + vec2(u_aspect * 0.5, 0.5);
+  vec2 p = (center - u_res * vec2(0.5, 0.5 + u_shift)) / unit + vec2(u_aspect * 0.5, 0.5);
 
   float t = u_time;
   float k = smoothstep(0.0, 6.8, t);
@@ -92,11 +93,17 @@ void main() {
   float glow = smoothstep(5.0, 6.6, t);
   vec2 d = p - u_spark;
   float ang = atan(d.y, d.x);
-  float rays = 0.6 + 0.4 * pow(abs(sin(ang * 3.0 + 0.4)), 6.0);
-  float flick = 0.85 + 0.15 * sin(t * 23.0 + hash(cell) * 6.28);
-  float core = exp(-dist * dist / 0.0012);
-  float halo = exp(-dist / 0.075) * rays;
-  float spark = glow * flick * (core * 1.4 + halo * 1.4);
+  // Scalpal site: a livelier spark (same size as the original) on the free-running clock, so it keeps moving
+  // while the hands hold: pulsing core, two counter-rotating ray sets, and crackle cells
+  float tw = u_wall;
+  float beat = 0.85 + 0.15 * sin(tw * 2.2) + 0.06 * sin(tw * 5.3);
+  float rays = 0.55 + 0.45 * pow(abs(sin(ang * 4.0 + tw * 0.9)), 5.0)
+             + 0.35 * pow(abs(sin(ang * 7.0 - tw * 1.7)), 9.0);
+  float flick = 0.8 + 0.2 * sin(tw * 21.0 + hash(cell) * 6.28);
+  float core = exp(-dist * dist / (0.0014 * beat));
+  float halo = exp(-dist / (0.07 * beat)) * rays;
+  float crackle = step(hash(cell + floor(tw * 14.0) * 0.37), 0.24 * exp(-dist / 0.045));
+  float spark = glow * flick * (core * 1.6 + halo * 1.5 + crackle * 1.3);
   col += mix(vec3(0.95, 0.3, 0.08), vec3(1.0, 0.86, 0.22), clamp(core * 1.6, 0.0, 1.0)) * spark;
   a = max(a, clamp(spark, 0.0, 1.0));
 
@@ -192,7 +199,7 @@ function texture(gl: WebGL2RenderingContext, src: TexImageSource, unit: number, 
 }
 
 // scene layout in design units (x 0..ASPECT, y 0..1 top-down)
-const SCENE = {
+export const SCENE = {
   leftWidth: 1.15,
   rightWidth: 1.4,
   leftA: [0.052, 0.634, -0.18],
@@ -247,24 +254,35 @@ function aim(arm: Arm, base: Xf, pointer: Vec | null, dt: number): Xf {
 }
 
 // Scalpal site additions: onTouch fires once when the fingertips first meet (spark fully lit),
-// and introSpeed speeds up only that first approach so it can work as a loader.
+// introSpeed speeds up only that first approach so it can work as a loader, and holdAfterTouch
+// keeps the hands together once they meet instead of looping.
 // onUnavailable fires instead when the art cannot render (no WebGL2, failed images or shaders),
 // so a page waiting on onTouch is never left blank.
 const TOUCH = 6.6
+const CLOSED = 6.8 // arms fully at their touching pose
+// once held, the arms breathe: a slow bob (out of phase) and a slight ease apart and back
+const BREATH = { period: 3.4, bob: 0.006, part: 0.007, easeIn: 1.2 }
+// One breathing clock for the whole session (module state survives client-side navigation),
+// so the hands keep the same phase when the page changes instead of snapping back to rest.
+let breathStart: number | null = null
 
-type Props = { playing?: boolean; time?: number; onTouch?: () => void; introSpeed?: number; onUnavailable?: () => void }
+type Props = { playing?: boolean; time?: number; onTouch?: () => void; introSpeed?: number; holdAfterTouch?: boolean; shiftY?: number; startTouched?: boolean; onUnavailable?: () => void }
 
-export function AsciiAdam({ playing = true, time, onTouch, introSpeed = 1, onUnavailable }: Props) {
+export function AsciiAdam({ playing = true, time, onTouch, introSpeed = 1, holdAfterTouch = false, shiftY = 0, startTouched = false, onUnavailable }: Props) {
   const ref = useRef<HTMLCanvasElement>(null)
   const playingRef = useRef(playing)
   const onTouchRef = useRef(onTouch)
   const introSpeedRef = useRef(introSpeed)
+  const holdRef = useRef(holdAfterTouch)
   const onUnavailableRef = useRef(onUnavailable)
+  const shiftRef = useRef(shiftY)
+  shiftRef.current = shiftY
   useEffect(() => {
     onTouchRef.current = onTouch
     introSpeedRef.current = introSpeed
+    holdRef.current = holdAfterTouch
     onUnavailableRef.current = onUnavailable
-  }, [onTouch, introSpeed, onUnavailable])
+  }, [onTouch, introSpeed, holdAfterTouch, onUnavailable])
   useEffect(() => {
     playingRef.current = playing
   }, [playing])
@@ -348,7 +366,7 @@ export function AsciiAdam({ playing = true, time, onTouch, introSpeed = 1, onUna
           return
         }
         const unit = Math.max(r.width / ASPECT, r.height)
-        pointer = [(x - r.width / 2) / unit + ASPECT / 2, (y - r.height / 2) / unit + 0.5]
+        pointer = [(x - r.width / 2) / unit + ASPECT / 2, (y - r.height * (0.5 + shiftRef.current)) / unit + 0.5]
       }
       const onLeave = () => {
         pointer = null
@@ -372,6 +390,7 @@ export function AsciiAdam({ playing = true, time, onTouch, introSpeed = 1, onUna
         // cells scale with the covered frame so the grid density never changes
         const cell = Math.max(w / ASPECT, h) * CELL
         gl.uniform2f(u('u_res'), w, h)
+        gl.uniform1f(u('u_shift'), shiftRef.current)
         gl.uniform1f(u('u_cell'), cell)
         if (Math.round(cell) !== atlasCell) {
           atlasCell = Math.round(cell)
@@ -382,8 +401,9 @@ export function AsciiAdam({ playing = true, time, onTouch, introSpeed = 1, onUna
       const ro = new ResizeObserver(resize)
       ro.observe(canvas)
 
-      let clock = 0
-      let touched = false
+      // startTouched: open already at the touching pose (no reach, no onTouch)
+      let clock = startTouched ? CLOSED : 0
+      let touched = startTouched
       let last = performance.now()
       let drawn = false
       const frame = (now: number) => {
@@ -413,10 +433,25 @@ export function AsciiAdam({ playing = true, time, onTouch, introSpeed = 1, onUna
         // pointer in the gap: hurry them together, and hold them there on the way back
         const speed = clock < LOOP ? 1 + REACH.rush * rush : 1 - rush
         const intro = touched ? 1 : introSpeedRef.current
-        if (live) clock = (clock + dt * speed * intro) % (2 * LOOP)
+        if (live) {
+          clock = (clock + dt * speed * intro) % (2 * LOOP)
+          // finish closing, then stay touching
+          if (touched && holdRef.current) clock = Math.min(clock, CLOSED)
+        }
 
         const lx = aim(leftArm, baseL, null, dt)
         const rx = aim(rightArm, baseR, null, dt)
+        if (touched && holdRef.current && clock >= CLOSED) {
+          if (breathStart === null) breathStart = now
+          const held = (now - breathStart) / 1000
+          const w = Math.min(1, held / BREATH.easeIn) // fade the breathing in
+          const ph = (held / BREATH.period) * Math.PI * 2
+          const apart = BREATH.part * (0.5 - 0.5 * Math.cos(ph)) * w
+          lx[0] -= apart
+          rx[0] += apart
+          lx[1] += BREATH.bob * Math.sin(ph) * w
+          rx[1] += BREATH.bob * Math.sin(ph + 0.9) * w
+        }
         const a = pointOf(lx, leftArm.size, SCENE.leftTip)
         const b = pointOf(rx, rightArm.size, SCENE.rightTip)
 

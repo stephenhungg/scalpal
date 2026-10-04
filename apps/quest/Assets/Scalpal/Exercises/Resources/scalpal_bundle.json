@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-10-04T03:38:59.910Z",
+ "generatedAt": "2026-10-04T03:44:32.527Z",
  "anatomy": [
   {
    "id": "abdominal_wall",
@@ -1664,7 +1664,8 @@
       "hollow": false,
       "critical": false,
       "tentable": false,
-      "flowMlPerSecond": 0
+      "flowMlPerSecond": 0,
+      "fiberAxis": ""
      },
      {
       "id": "fat",
@@ -1676,7 +1677,8 @@
       "hollow": false,
       "critical": false,
       "tentable": false,
-      "flowMlPerSecond": 0
+      "flowMlPerSecond": 0,
+      "fiberAxis": ""
      },
      {
       "id": "fascia",
@@ -1688,7 +1690,8 @@
       "hollow": false,
       "critical": false,
       "tentable": false,
-      "flowMlPerSecond": 0
+      "flowMlPerSecond": 0,
+      "fiberAxis": "incision_line"
      },
      {
       "id": "muscle",
@@ -1700,7 +1703,8 @@
       "hollow": false,
       "critical": false,
       "tentable": false,
-      "flowMlPerSecond": 0.3
+      "flowMlPerSecond": 0.3,
+      "fiberAxis": ""
      },
      {
       "id": "peritoneum",
@@ -1712,7 +1716,8 @@
       "hollow": false,
       "critical": false,
       "tentable": true,
-      "flowMlPerSecond": 0
+      "flowMlPerSecond": 0,
+      "fiberAxis": ""
      },
      {
       "id": "appendix",
@@ -1724,7 +1729,8 @@
       "hollow": true,
       "critical": false,
       "tentable": false,
-      "flowMlPerSecond": 0
+      "flowMlPerSecond": 0,
+      "fiberAxis": ""
      },
      {
       "id": "mesoappendix",
@@ -1736,7 +1742,8 @@
       "hollow": false,
       "critical": false,
       "tentable": false,
-      "flowMlPerSecond": 2
+      "flowMlPerSecond": 2,
+      "fiberAxis": ""
      },
      {
       "id": "appendicular_artery",
@@ -1748,7 +1755,8 @@
       "hollow": false,
       "critical": false,
       "tentable": false,
-      "flowMlPerSecond": 2
+      "flowMlPerSecond": 2,
+      "fiberAxis": ""
      },
      {
       "id": "cecum",
@@ -1760,7 +1768,8 @@
       "hollow": true,
       "critical": true,
       "tentable": false,
-      "flowMlPerSecond": 0
+      "flowMlPerSecond": 0,
+      "fiberAxis": ""
      },
      {
       "id": "terminal_ileum",
@@ -1772,7 +1781,8 @@
       "hollow": true,
       "critical": true,
       "tentable": false,
-      "flowMlPerSecond": 0
+      "flowMlPerSecond": 0,
+      "fiberAxis": ""
      },
      {
       "id": "iliac_vessels",
@@ -1785,6 +1795,7 @@
       "critical": true,
       "tentable": false,
       "flowMlPerSecond": 8,
+      "fiberAxis": "",
       "structureIds": [
        "cardiovascular__common_iliac_artery_r",
        "cardiovascular__common_iliac_vein_r"
@@ -1801,6 +1812,7 @@
       "critical": true,
       "tentable": false,
       "flowMlPerSecond": 0,
+      "fiberAxis": "",
       "structureIds": [
        "right_ureter"
       ]
@@ -1896,12 +1908,6 @@
         "fact": "splitWidthMm",
         "op": "gte",
         "value": 15
-       },
-       {
-        "tissueId": "muscle",
-        "fact": "bladeUsed",
-        "op": "eq",
-        "value": 0
        }
       ]
      },
@@ -1936,12 +1942,6 @@
      {
       "id": "divide_mesoappendix",
       "predicates": [
-       {
-        "tissueId": "mesoappendix",
-        "fact": "clampCount",
-        "op": "gte",
-        "value": 2
-       },
        {
         "tissueId": "mesoappendix",
         "fact": "cutBetweenClamps",
@@ -2549,12 +2549,12 @@
    "scenarioId": "rate-limited",
    "kind": "behavior",
    "title": "Rate limited reads",
-   "displayLabel": "Samir Haddad, 46 M",
-   "procedureId": "lap_cholecystectomy",
-   "procedureTitle": "Laparoscopic cholecystectomy",
-   "urgency": "elective",
-   "status": "ready",
-   "flagCount": 1,
+   "displayLabel": "Unavailable patient",
+   "procedureId": "",
+   "procedureTitle": "",
+   "urgency": "",
+   "status": "retry",
+   "flagCount": 0,
    "encounterAvailable": false,
    "actions": [
     {
@@ -3200,7 +3200,7 @@
     "dataSource": "demo",
     "consentStatus": "simulated",
     "consentReceipts": [],
-    "generatedAt": "2026-10-04T03:38:59.910Z",
+    "generatedAt": "2026-10-04T03:44:32.524Z",
     "dataAsOf": "2026-08-25T17:00:00Z",
     "patient": {
      "name": "Morgan Rivera",
@@ -4075,7 +4075,7 @@
     "dataSource": "demo",
     "consentStatus": "simulated",
     "consentReceipts": [],
-    "generatedAt": "2026-10-04T03:38:59.788Z",
+    "generatedAt": "2026-10-04T03:44:32.525Z",
     "dataAsOf": "2026-09-01T00:00:00Z",
     "patient": {
      "name": "Harriet Lindqvist",
@@ -4974,7 +4974,8 @@
        "hollow": false,
        "critical": false,
        "tentable": false,
-       "flowMlPerSecond": 0
+       "flowMlPerSecond": 0,
+       "fiberAxis": ""
       },
       {
        "id": "fat",
@@ -4986,7 +4987,8 @@
        "hollow": false,
        "critical": false,
        "tentable": false,
-       "flowMlPerSecond": 0
+       "flowMlPerSecond": 0,
+       "fiberAxis": ""
       },
       {
        "id": "fascia",
@@ -4998,7 +5000,8 @@
        "hollow": false,
        "critical": false,
        "tentable": false,
-       "flowMlPerSecond": 0
+       "flowMlPerSecond": 0,
+       "fiberAxis": "incision_line"
       },
       {
        "id": "muscle",
@@ -5010,7 +5013,8 @@
        "hollow": false,
        "critical": false,
        "tentable": false,
-       "flowMlPerSecond": 0.3
+       "flowMlPerSecond": 0.3,
+       "fiberAxis": ""
       },
       {
        "id": "peritoneum",
@@ -5022,7 +5026,8 @@
        "hollow": false,
        "critical": false,
        "tentable": true,
-       "flowMlPerSecond": 0
+       "flowMlPerSecond": 0,
+       "fiberAxis": ""
       },
       {
        "id": "appendix",
@@ -5034,7 +5039,8 @@
        "hollow": true,
        "critical": false,
        "tentable": false,
-       "flowMlPerSecond": 0
+       "flowMlPerSecond": 0,
+       "fiberAxis": ""
       },
       {
        "id": "mesoappendix",
@@ -5046,7 +5052,8 @@
        "hollow": false,
        "critical": false,
        "tentable": false,
-       "flowMlPerSecond": 2
+       "flowMlPerSecond": 2,
+       "fiberAxis": ""
       },
       {
        "id": "appendicular_artery",
@@ -5058,7 +5065,8 @@
        "hollow": false,
        "critical": false,
        "tentable": false,
-       "flowMlPerSecond": 2
+       "flowMlPerSecond": 2,
+       "fiberAxis": ""
       },
       {
        "id": "cecum",
@@ -5070,7 +5078,8 @@
        "hollow": true,
        "critical": true,
        "tentable": false,
-       "flowMlPerSecond": 0
+       "flowMlPerSecond": 0,
+       "fiberAxis": ""
       },
       {
        "id": "terminal_ileum",
@@ -5082,7 +5091,8 @@
        "hollow": true,
        "critical": true,
        "tentable": false,
-       "flowMlPerSecond": 0
+       "flowMlPerSecond": 0,
+       "fiberAxis": ""
       },
       {
        "id": "iliac_vessels",
@@ -5095,6 +5105,7 @@
        "critical": true,
        "tentable": false,
        "flowMlPerSecond": 8,
+       "fiberAxis": "",
        "structureIds": [
         "cardiovascular__common_iliac_artery_r",
         "cardiovascular__common_iliac_vein_r"
@@ -5111,6 +5122,7 @@
        "critical": true,
        "tentable": false,
        "flowMlPerSecond": 0,
+       "fiberAxis": "",
        "structureIds": [
         "right_ureter"
        ]
@@ -5206,12 +5218,6 @@
          "fact": "splitWidthMm",
          "op": "gte",
          "value": 15
-        },
-        {
-         "tissueId": "muscle",
-         "fact": "bladeUsed",
-         "op": "eq",
-         "value": 0
         }
        ]
       },
@@ -5246,12 +5252,6 @@
       {
        "id": "divide_mesoappendix",
        "predicates": [
-        {
-         "tissueId": "mesoappendix",
-         "fact": "clampCount",
-         "op": "gte",
-         "value": 2
-        },
         {
          "tissueId": "mesoappendix",
          "fact": "cutBetweenClamps",
@@ -5732,7 +5732,7 @@
     "dataSource": "demo",
     "consentStatus": "simulated",
     "consentReceipts": [],
-    "generatedAt": "2026-10-04T03:38:59.909Z",
+    "generatedAt": "2026-10-04T03:44:32.526Z",
     "dataAsOf": "2026-09-01T00:00:00Z",
     "patient": {
      "name": "Theo Abernathy",
@@ -6156,7 +6156,8 @@
        "hollow": false,
        "critical": false,
        "tentable": false,
-       "flowMlPerSecond": 0
+       "flowMlPerSecond": 0,
+       "fiberAxis": ""
       },
       {
        "id": "fat",
@@ -6168,7 +6169,8 @@
        "hollow": false,
        "critical": false,
        "tentable": false,
-       "flowMlPerSecond": 0
+       "flowMlPerSecond": 0,
+       "fiberAxis": ""
       },
       {
        "id": "fascia",
@@ -6180,7 +6182,8 @@
        "hollow": false,
        "critical": false,
        "tentable": false,
-       "flowMlPerSecond": 0
+       "flowMlPerSecond": 0,
+       "fiberAxis": "incision_line"
       },
       {
        "id": "muscle",
@@ -6192,7 +6195,8 @@
        "hollow": false,
        "critical": false,
        "tentable": false,
-       "flowMlPerSecond": 0.3
+       "flowMlPerSecond": 0.3,
+       "fiberAxis": ""
       },
       {
        "id": "peritoneum",
@@ -6204,7 +6208,8 @@
        "hollow": false,
        "critical": false,
        "tentable": true,
-       "flowMlPerSecond": 0
+       "flowMlPerSecond": 0,
+       "fiberAxis": ""
       },
       {
        "id": "appendix",
@@ -6216,7 +6221,8 @@
        "hollow": true,
        "critical": false,
        "tentable": false,
-       "flowMlPerSecond": 0
+       "flowMlPerSecond": 0,
+       "fiberAxis": ""
       },
       {
        "id": "mesoappendix",
@@ -6228,7 +6234,8 @@
        "hollow": false,
        "critical": false,
        "tentable": false,
-       "flowMlPerSecond": 2
+       "flowMlPerSecond": 2,
+       "fiberAxis": ""
       },
       {
        "id": "appendicular_artery",
@@ -6240,7 +6247,8 @@
        "hollow": false,
        "critical": false,
        "tentable": false,
-       "flowMlPerSecond": 2
+       "flowMlPerSecond": 2,
+       "fiberAxis": ""
       },
       {
        "id": "cecum",
@@ -6252,7 +6260,8 @@
        "hollow": true,
        "critical": true,
        "tentable": false,
-       "flowMlPerSecond": 0
+       "flowMlPerSecond": 0,
+       "fiberAxis": ""
       },
       {
        "id": "terminal_ileum",
@@ -6264,7 +6273,8 @@
        "hollow": true,
        "critical": true,
        "tentable": false,
-       "flowMlPerSecond": 0
+       "flowMlPerSecond": 0,
+       "fiberAxis": ""
       },
       {
        "id": "iliac_vessels",
@@ -6277,6 +6287,7 @@
        "critical": true,
        "tentable": false,
        "flowMlPerSecond": 8,
+       "fiberAxis": "",
        "structureIds": [
         "cardiovascular__common_iliac_artery_r",
         "cardiovascular__common_iliac_vein_r"
@@ -6293,6 +6304,7 @@
        "critical": true,
        "tentable": false,
        "flowMlPerSecond": 0,
+       "fiberAxis": "",
        "structureIds": [
         "right_ureter"
        ]
@@ -6388,12 +6400,6 @@
          "fact": "splitWidthMm",
          "op": "gte",
          "value": 15
-        },
-        {
-         "tissueId": "muscle",
-         "fact": "bladeUsed",
-         "op": "eq",
-         "value": 0
         }
        ]
       },
@@ -6428,12 +6434,6 @@
       {
        "id": "divide_mesoappendix",
        "predicates": [
-        {
-         "tissueId": "mesoappendix",
-         "fact": "clampCount",
-         "op": "gte",
-         "value": 2
-        },
         {
          "tissueId": "mesoappendix",
          "fact": "cutBetweenClamps",
@@ -6914,7 +6914,7 @@
     "dataSource": "demo",
     "consentStatus": "simulated",
     "consentReceipts": [],
-    "generatedAt": "2026-10-04T03:38:59.791Z",
+    "generatedAt": "2026-10-04T03:44:32.526Z",
     "dataAsOf": "2026-09-01T00:00:00Z",
     "patient": {
      "name": "Priya Ramaswamy",
@@ -7300,7 +7300,8 @@
        "hollow": false,
        "critical": false,
        "tentable": false,
-       "flowMlPerSecond": 0
+       "flowMlPerSecond": 0,
+       "fiberAxis": ""
       },
       {
        "id": "fat",
@@ -7312,7 +7313,8 @@
        "hollow": false,
        "critical": false,
        "tentable": false,
-       "flowMlPerSecond": 0
+       "flowMlPerSecond": 0,
+       "fiberAxis": ""
       },
       {
        "id": "fascia",
@@ -7324,7 +7326,8 @@
        "hollow": false,
        "critical": false,
        "tentable": false,
-       "flowMlPerSecond": 0
+       "flowMlPerSecond": 0,
+       "fiberAxis": "incision_line"
       },
       {
        "id": "muscle",
@@ -7336,7 +7339,8 @@
        "hollow": false,
        "critical": false,
        "tentable": false,
-       "flowMlPerSecond": 0.3
+       "flowMlPerSecond": 0.3,
+       "fiberAxis": ""
       },
       {
        "id": "peritoneum",
@@ -7348,7 +7352,8 @@
        "hollow": false,
        "critical": false,
        "tentable": true,
-       "flowMlPerSecond": 0
+       "flowMlPerSecond": 0,
+       "fiberAxis": ""
       },
       {
        "id": "appendix",
@@ -7360,7 +7365,8 @@
        "hollow": true,
        "critical": false,
        "tentable": false,
-       "flowMlPerSecond": 0
+       "flowMlPerSecond": 0,
+       "fiberAxis": ""
       },
       {
        "id": "mesoappendix",
@@ -7372,7 +7378,8 @@
        "hollow": false,
        "critical": false,
        "tentable": false,
-       "flowMlPerSecond": 2
+       "flowMlPerSecond": 2,
+       "fiberAxis": ""
       },
       {
        "id": "appendicular_artery",
@@ -7384,7 +7391,8 @@
        "hollow": false,
        "critical": false,
        "tentable": false,
-       "flowMlPerSecond": 2
+       "flowMlPerSecond": 2,
+       "fiberAxis": ""
       },
       {
        "id": "cecum",
@@ -7396,7 +7404,8 @@
        "hollow": true,
        "critical": true,
        "tentable": false,
-       "flowMlPerSecond": 0
+       "flowMlPerSecond": 0,
+       "fiberAxis": ""
       },
       {
        "id": "terminal_ileum",
@@ -7408,7 +7417,8 @@
        "hollow": true,
        "critical": true,
        "tentable": false,
-       "flowMlPerSecond": 0
+       "flowMlPerSecond": 0,
+       "fiberAxis": ""
       },
       {
        "id": "iliac_vessels",
@@ -7421,6 +7431,7 @@
        "critical": true,
        "tentable": false,
        "flowMlPerSecond": 8,
+       "fiberAxis": "",
        "structureIds": [
         "cardiovascular__common_iliac_artery_r",
         "cardiovascular__common_iliac_vein_r"
@@ -7437,6 +7448,7 @@
        "critical": true,
        "tentable": false,
        "flowMlPerSecond": 0,
+       "fiberAxis": "",
        "structureIds": [
         "right_ureter"
        ]
@@ -7532,12 +7544,6 @@
          "fact": "splitWidthMm",
          "op": "gte",
          "value": 15
-        },
-        {
-         "tissueId": "muscle",
-         "fact": "bladeUsed",
-         "op": "eq",
-         "value": 0
         }
        ]
       },
@@ -7572,12 +7578,6 @@
       {
        "id": "divide_mesoappendix",
        "predicates": [
-        {
-         "tissueId": "mesoappendix",
-         "fact": "clampCount",
-         "op": "gte",
-         "value": 2
-        },
         {
          "tissueId": "mesoappendix",
          "fact": "cutBetweenClamps",
@@ -8058,7 +8058,7 @@
     "dataSource": "demo",
     "consentStatus": "simulated",
     "consentReceipts": [],
-    "generatedAt": "2026-10-04T03:38:59.742Z",
+    "generatedAt": "2026-10-04T03:44:32.526Z",
     "dataAsOf": "2026-09-01T00:00:00Z",
     "patient": {
      "name": "Jonah Okoye",
@@ -8735,7 +8735,7 @@
     "dataSource": "demo",
     "consentStatus": "simulated",
     "consentReceipts": [],
-    "generatedAt": "2026-10-04T03:38:59.784Z",
+    "generatedAt": "2026-10-04T03:44:32.527Z",
     "dataAsOf": "2026-09-01T00:00:00Z",
     "patient": {
      "name": "Dolores Marchetti",
@@ -9134,817 +9134,69 @@
    "disclaimer": "Synthetic FinchNode demo data. Flags and cases are illustrative teaching material, not clinical guidance."
   },
   {
-   "caseId": "case_patient-demo-rate-limited_lap_cholecystectomy",
+   "caseId": "case_patient-demo-rate-limited_unavailable",
    "patientId": "patient-demo-rate-limited",
    "scenarioId": "rate-limited",
-   "status": "ready",
-   "statusReason": "Chart reviewed. Ready for the pre-op safety check.",
-   "retryAfterSeconds": 0,
+   "status": "retry",
+   "statusReason": "The health record is temporarily unavailable (rate_limited). Try again in 1 seconds.",
+   "retryAfterSeconds": 1,
    "patient": {
-    "name": "Samir Haddad",
-    "age": 46,
-    "sex": "male",
-    "displayLabel": "Samir Haddad, 46 M"
+    "name": "",
+    "age": -1,
+    "sex": "",
+    "displayLabel": "Unavailable patient"
    },
    "bodyScale": 1,
-   "urgency": "elective",
-   "indication": "Symptomatic cholelithiasis",
-   "presentation": "Recurrent biliary colic with gallstones on ultrasound. (Generated scenario.)",
-   "procedureId": "lap_cholecystectomy",
+   "urgency": "",
+   "indication": "",
+   "presentation": "",
+   "procedureId": "",
    "procedure": {
-    "id": "lap_cholecystectomy",
-    "title": "Laparoscopic cholecystectomy",
-    "shortTitle": "Gallbladder removal",
-    "approach": "Four-port laparoscopic, American position",
-    "summary": "Remove the gallbladder after establishing the critical view of safety: clear the hepatocystic triangle until only the cystic duct and cystic artery enter the gallbladder, then clip, divide, and dissect it off the liver bed.",
-    "typicalMinutes": 60,
-    "structures": [
-     "abdominal_wall",
-     "umbilicus",
-     "liver",
-     "gallbladder",
-     "cystic_duct",
-     "cystic_artery",
-     "common_hepatic_duct",
-     "common_bile_duct",
-     "right_hepatic_artery",
-     "duodenum",
-     "stomach",
-     "transverse_colon",
-     "greater_omentum"
-    ],
-    "focusStructures": [
-     "gallbladder",
-     "cystic_duct",
-     "cystic_artery",
-     "common_bile_duct"
-    ],
-    "ports": [
-     {
-      "id": "umbilical",
-      "label": "Umbilical camera port",
-      "sizeMm": 12,
-      "position": {
-       "x": 0,
-       "y": 0,
-       "z": 0
-      },
-      "instrumentIds": [
-       "trocar_12mm",
-       "laparoscope_30",
-       "retrieval_bag",
-       "fascial_closure"
-      ]
-     },
-     {
-      "id": "epigastric",
-      "label": "Epigastric operating port",
-      "sizeMm": 12,
-      "position": {
-       "x": -0.02,
-       "y": 0.01,
-       "z": 0.16
-      },
-      "instrumentIds": [
-       "trocar_12mm",
-       "maryland_dissector",
-       "hook_cautery",
-       "clip_applier",
-       "lap_scissors",
-       "suction_irrigator",
-       "fascial_closure"
-      ]
-     },
-     {
-      "id": "right_mcl",
-      "label": "Right midclavicular port",
-      "sizeMm": 5,
-      "position": {
-       "x": -0.07,
-       "y": 0,
-       "z": 0.11
-      },
-      "instrumentIds": [
-       "trocar_5mm",
-       "atraumatic_grasper"
-      ]
-     },
-     {
-      "id": "right_aal",
-      "label": "Right anterior axillary port",
-      "sizeMm": 5,
-      "position": {
-       "x": -0.13,
-       "y": -0.02,
-       "z": 0.07
-      },
-      "instrumentIds": [
-       "trocar_5mm",
-       "atraumatic_grasper"
-      ]
-     }
-    ],
-    "steps": [
-     {
-      "portIds": [
-       "umbilical"
-      ],
-      "mistakes": [],
-      "hints": [
-       "The camera goes in first so every other port is placed under direct vision."
-      ],
-      "id": "access_umbilical",
-      "title": "Open umbilical access",
-      "instruction": "Enter the peritoneum at the umbilicus with an open technique, place the 12 mm camera port, and insufflate.",
-      "action": "place_port",
-      "instrumentId": "trocar_12mm",
-      "targets": [
-       "umbilicus"
-      ],
-      "check": {
-       "type": "place_ports",
-       "targets": [
-        "umbilical"
-       ],
-       "count": 1
-      },
-      "next": "working_ports"
-     },
-     {
-      "portIds": [
-       "epigastric",
-       "right_mcl",
-       "right_aal"
-      ],
-      "mistakes": [
-       {
-        "id": "port_into_liver",
-        "trigger": "touch_structure",
-        "structure": "liver",
-        "severity": "moderate",
-        "feedback": "The trocar tip contacted the liver. Watch each trocar enter under the camera."
-       }
-      ],
-      "hints": [
-       "Spread the ports so instruments triangulate on the gallbladder instead of clashing."
-      ],
-      "id": "working_ports",
-      "title": "Place working ports",
-      "instruction": "Under vision, place the epigastric port and two right subcostal 5 mm ports.",
-      "action": "place_port",
-      "instrumentId": "trocar_5mm",
-      "targets": [
-       "abdominal_wall"
-      ],
-      "check": {
-       "type": "place_ports",
-       "targets": [
-        "epigastric",
-        "right_mcl",
-        "right_aal"
-       ],
-       "count": 3
-      },
-      "next": "retract_fundus"
-     },
-     {
-      "portIds": [
-       "right_aal"
-      ],
-      "mistakes": [],
-      "hints": [
-       "Cephalad fundus retraction lifts the liver edge and exposes the gallbladder neck."
-      ],
-      "id": "retract_fundus",
-      "title": "Retract the fundus",
-      "instruction": "Grasp the gallbladder fundus through the lateral port and push it cephalad over the liver.",
-      "action": "retract",
-      "instrumentId": "atraumatic_grasper",
-      "targets": [
-       "gallbladder"
-      ],
-      "check": {
-       "type": "touch_target",
-       "targets": [
-        "gallbladder"
-       ],
-       "count": 1
-      },
-      "next": "retract_infundibulum"
-     },
-     {
-      "portIds": [
-       "right_mcl"
-      ],
-      "mistakes": [
-       {
-        "id": "infundibulum_medial",
-        "trigger": "wrong_order",
-        "structure": "common_bile_duct",
-        "severity": "high",
-        "feedback": "Medial traction aligns the cystic duct with the common bile duct, the classic setup for misidentification. Pull lateral."
-       }
-      ],
-      "hints": [
-       "Lateral traction widens the angle between the cystic duct and the common bile duct."
-      ],
-      "id": "retract_infundibulum",
-      "title": "Retract the infundibulum laterally",
-      "instruction": "Grasp the infundibulum and pull laterally and inferiorly to open the hepatocystic triangle.",
-      "action": "retract",
-      "instrumentId": "atraumatic_grasper",
-      "targets": [
-       "gallbladder"
-      ],
-      "check": {
-       "type": "touch_target",
-       "targets": [
-        "gallbladder"
-       ],
-       "count": 1
-      },
-      "next": "dissect_triangle"
-     },
-     {
-      "portIds": [
-       "epigastric"
-      ],
-      "mistakes": [
-       {
-        "id": "cautery_on_cbd",
-        "trigger": "touch_structure",
-        "structure": "common_bile_duct",
-        "severity": "high",
-        "feedback": "Energy touched the common bile duct. Stay on the gallbladder side, high on the neck."
-       },
-       {
-        "id": "cautery_on_rha",
-        "trigger": "touch_structure",
-        "structure": "right_hepatic_artery",
-        "severity": "high",
-        "feedback": "Energy touched the right hepatic artery. It can loop close to the triangle."
-       }
-      ],
-      "hints": [
-       "Dissect close to the gallbladder, both anterior and posterior, before naming any structure."
-      ],
-      "id": "dissect_triangle",
-      "title": "Clear the hepatocystic triangle",
-      "instruction": "Open the peritoneum on both sides of the gallbladder neck and clear fat and fibrous tissue from the triangle.",
-      "action": "dissect",
-      "instrumentId": "hook_cautery",
-      "targets": [
-       "gallbladder",
-       "cystic_duct",
-       "cystic_artery"
-      ],
-      "check": {
-       "type": "touch_target",
-       "targets": [
-        "cystic_duct",
-        "cystic_artery"
-       ],
-       "count": 2
-      },
-      "next": "critical_view"
-     },
-     {
-      "portIds": [
-       "epigastric"
-      ],
-      "mistakes": [
-       {
-        "id": "cbd_as_cystic",
-        "trigger": "wrong_identification",
-        "structure": "common_bile_duct",
-        "severity": "high",
-        "feedback": "That is the common bile duct. Clipping it here is the classic bile duct injury. Return to dissection."
-       },
-       {
-        "id": "cha_as_cystic",
-        "trigger": "wrong_identification",
-        "structure": "common_hepatic_duct",
-        "severity": "high",
-        "feedback": "That is the common hepatic duct, not the cystic duct."
-       }
-      ],
-      "hints": [
-       "Two and only two structures should enter the gallbladder. If you cannot see that, keep dissecting or bail out."
-      ],
-      "id": "critical_view",
-      "title": "Confirm the critical view of safety",
-      "instruction": "Name the two structures entering the gallbladder. Only the cystic duct and cystic artery should remain, with the lower gallbladder lifted off the liver.",
-      "action": "identify",
-      "instrumentId": "maryland_dissector",
-      "targets": [
-       "cystic_duct",
-       "cystic_artery"
-      ],
-      "check": {
-       "type": "identify_targets",
-       "targets": [
-        "cystic_duct",
-        "cystic_artery"
-       ],
-       "count": 2
-      },
-      "next": "clip_artery"
-     },
-     {
-      "portIds": [
-       "epigastric"
-      ],
-      "mistakes": [
-       {
-        "id": "clip_rha",
-        "trigger": "touch_structure",
-        "structure": "right_hepatic_artery",
-        "severity": "high",
-        "feedback": "That clip caught the right hepatic artery."
-       }
-      ],
-      "hints": [],
-      "id": "clip_artery",
-      "title": "Clip the cystic artery",
-      "instruction": "Apply clips to the cystic artery: two on the patient side, one on the gallbladder side.",
-      "action": "clip",
-      "instrumentId": "clip_applier",
-      "targets": [
-       "cystic_artery"
-      ],
-      "check": {
-       "type": "apply_count",
-       "targets": [
-        "cystic_artery"
-       ],
-       "count": 3
-      },
-      "next": "clip_duct"
-     },
-     {
-      "portIds": [
-       "epigastric"
-      ],
-      "mistakes": [
-       {
-        "id": "clip_cbd",
-        "trigger": "touch_structure",
-        "structure": "common_bile_duct",
-        "severity": "high",
-        "feedback": "That clip is on the common bile duct."
-       }
-      ],
-      "hints": [
-       "Clips should cross the full width of the duct without catching surrounding tissue."
-      ],
-      "id": "clip_duct",
-      "title": "Clip the cystic duct",
-      "instruction": "Apply clips to the cystic duct: two on the patient side, one on the gallbladder side.",
-      "action": "clip",
-      "instrumentId": "clip_applier",
-      "targets": [
-       "cystic_duct"
-      ],
-      "check": {
-       "type": "apply_count",
-       "targets": [
-        "cystic_duct"
-       ],
-       "count": 3
-      },
-      "next": "divide_structures"
-     },
-     {
-      "portIds": [
-       "epigastric"
-      ],
-      "mistakes": [],
-      "hints": [
-       "Leave two clips on the patient side of every cut."
-      ],
-      "id": "divide_structures",
-      "title": "Divide the duct and artery",
-      "instruction": "Cut the cystic artery and cystic duct between the clips with scissors.",
-      "action": "divide",
-      "instrumentId": "lap_scissors",
-      "targets": [
-       "cystic_artery",
-       "cystic_duct"
-      ],
-      "check": {
-       "type": "touch_target",
-       "targets": [
-        "cystic_artery",
-        "cystic_duct"
-       ],
-       "count": 2
-      },
-      "next": "liver_bed"
-     },
-     {
-      "portIds": [
-       "epigastric"
-      ],
-      "mistakes": [
-       {
-        "id": "into_liver",
-        "trigger": "touch_structure",
-        "structure": "liver",
-        "severity": "moderate",
-        "feedback": "You entered the liver bed. Too deep bleeds; too shallow perforates the gallbladder."
-       }
-      ],
-      "hints": [],
-      "id": "liver_bed",
-      "title": "Dissect off the liver bed",
-      "instruction": "Separate the gallbladder from the cystic plate with the hook, staying in the plane against the gallbladder wall.",
-      "action": "dissect",
-      "instrumentId": "hook_cautery",
-      "targets": [
-       "gallbladder"
-      ],
-      "check": {
-       "type": "touch_target",
-       "targets": [
-        "gallbladder"
-       ],
-       "count": 1
-      },
-      "next": "hemostasis"
-     },
-     {
-      "portIds": [
-       "epigastric"
-      ],
-      "mistakes": [],
-      "hints": [],
-      "id": "hemostasis",
-      "title": "Check hemostasis",
-      "instruction": "Inspect the liver bed and clips, irrigate, and suction until clear.",
-      "action": "inspect",
-      "instrumentId": "suction_irrigator",
-      "targets": [
-       "liver"
-      ],
-      "check": {
-       "type": "touch_target",
-       "targets": [
-        "liver"
-       ],
-       "count": 1
-      },
-      "next": "extract"
-     },
-     {
-      "portIds": [
-       "umbilical"
-      ],
-      "mistakes": [],
-      "hints": [],
-      "id": "extract",
-      "title": "Extract the gallbladder",
-      "instruction": "Place the gallbladder in a retrieval bag and remove it through the umbilical port.",
-      "action": "extract",
-      "instrumentId": "retrieval_bag",
-      "targets": [
-       "gallbladder"
-      ],
-      "check": {
-       "type": "touch_target",
-       "targets": [
-        "gallbladder"
-       ],
-       "count": 1
-      },
-      "next": "close"
-     },
-     {
-      "portIds": [
-       "umbilical",
-       "epigastric"
-      ],
-      "mistakes": [],
-      "hints": [],
-      "id": "close",
-      "title": "Close",
-      "instruction": "Remove ports under vision, release the pneumoperitoneum, and close the fascia at the 12 mm sites.",
-      "action": "close",
-      "instrumentId": "fascial_closure",
-      "targets": [
-       "abdominal_wall"
-      ],
-      "check": {
-       "type": "confirm",
-       "targets": [],
-       "count": 0
-      },
-      "next": ""
-     }
-    ],
-    "firstStep": "access_umbilical"
+    "id": "",
+    "title": "",
+    "shortTitle": "",
+    "approach": "",
+    "summary": "",
+    "typicalMinutes": 0,
+    "structures": [],
+    "focusStructures": [],
+    "ports": [],
+    "steps": [],
+    "firstStep": ""
    },
    "brief": {
     "patientId": "patient-demo-rate-limited",
     "synthetic": true,
-    "dataSource": "demo",
-    "consentStatus": "simulated",
+    "dataSource": "",
+    "consentStatus": "",
     "consentReceipts": [],
-    "generatedAt": "2026-10-04T03:38:59.770Z",
-    "dataAsOf": "2026-09-01T00:00:00Z",
+    "generatedAt": "2026-10-04T03:44:32.523Z",
+    "dataAsOf": "",
     "patient": {
-     "name": "Samir Haddad",
-     "age": 46,
-     "sex": "male",
-     "displayLabel": "Samir Haddad, 46 M"
+     "name": "",
+     "age": -1,
+     "sex": "",
+     "displayLabel": "Unavailable patient"
     },
-    "flags": [
-     {
-      "id": "flag_allergy",
-      "type": "allergy",
-      "severity": "moderate",
-      "title": "Allergies: penicillin",
-      "spoken": "an allergy to penicillin",
-      "detail": "Allergies on file: penicillin. Prophylactic antibiotics and perioperative drugs must be chosen around them.",
-      "structures": [],
-      "evidence": [
-       {
-        "kind": "allergy",
-        "label": "Allergy to penicillin",
-        "value": "low severity",
-        "date": "",
-        "source": "Northstar Health System (Synthetic)"
-       }
-      ]
-     }
-    ],
+    "flags": [],
     "highlightStructures": [],
-    "activeMedicationCount": 2,
-    "chart": [
-     {
-      "section": "Patient",
-      "text": "Samir Haddad, 46 M",
-      "flagged": false
-     },
-     {
-      "section": "Problems",
-      "text": "Essential hypertension",
-      "flagged": false
-     },
-     {
-      "section": "Problems",
-      "text": "Hyperlipidemia",
-      "flagged": false
-     },
-     {
-      "section": "Medications",
-      "text": "lisinopril 10 MG Oral Tablet",
-      "flagged": false
-     },
-     {
-      "section": "Medications",
-      "text": "atorvastatin 20 MG Oral Tablet",
-      "flagged": false
-     },
-     {
-      "section": "Allergies",
-      "text": "Allergy to penicillin (low)",
-      "flagged": true
-     },
-     {
-      "section": "Key labs",
-      "text": "Hemoglobin A1c: 5.9 % (2026-02-10)",
-      "flagged": true
-     },
-     {
-      "section": "Key labs",
-      "text": "Creatinine: 0.9 mg/dL (2026-02-10)",
-      "flagged": false
-     },
-     {
-      "section": "Consent",
-      "text": "FinchNode demo record (consent simulated)",
-      "flagged": false
-     }
-    ],
+    "activeMedicationCount": 0,
+    "chart": [],
     "dataGaps": [],
-    "sources": [
-     "Northstar Health System (Synthetic)"
-    ],
-    "say": "Samir Haddad, 46. Watch for an allergy to penicillin. Synthetic demo patient.",
+    "sources": [],
+    "say": "I couldn't reach this patient's record right now. Try again in a moment.",
     "disclaimer": "Synthetic FinchNode demo data. Flags and cases are illustrative teaching material, not clinical guidance."
    },
-   "considerations": [
-    {
-     "flagId": "flag_allergy",
-     "stepId": "access_umbilical",
-     "note": "Allergy on file: confirm the prophylactic antibiotic was chosen around it before incision."
-    }
-   ],
-   "checklistOptions": [
-    {
-     "type": "renal",
-     "label": "Reduced kidney function"
-    },
-    {
-     "type": "airway",
-     "label": "Airway or lung disease"
-    },
-    {
-     "type": "anemia",
-     "label": "Anemia"
-    },
-    {
-     "type": "elderly",
-     "label": "Older adult with reduced reserve"
-    },
-    {
-     "type": "allergy",
-     "label": "Drug allergy affecting antibiotic choice"
-    },
-    {
-     "type": "latex",
-     "label": "Latex allergy"
-    }
-   ],
-   "instruments": [
-    {
-     "id": "trocar_12mm",
-     "unityPrefab": "inst_trocar_12mm",
-     "displayName": "12 mm trocar",
-     "kind": "access"
-    },
-    {
-     "id": "laparoscope_30",
-     "unityPrefab": "inst_laparoscope_30",
-     "displayName": "30 degree laparoscope",
-     "kind": "visualization"
-    },
-    {
-     "id": "retrieval_bag",
-     "unityPrefab": "inst_retrieval_bag",
-     "displayName": "Specimen retrieval bag",
-     "kind": "retrieval"
-    },
-    {
-     "id": "fascial_closure",
-     "unityPrefab": "inst_fascial_closure",
-     "displayName": "Fascial closure device",
-     "kind": "closure"
-    },
-    {
-     "id": "maryland_dissector",
-     "unityPrefab": "inst_maryland_dissector",
-     "displayName": "Maryland dissector",
-     "kind": "dissector"
-    },
-    {
-     "id": "hook_cautery",
-     "unityPrefab": "inst_hook_cautery",
-     "displayName": "Monopolar hook",
-     "kind": "energy"
-    },
-    {
-     "id": "clip_applier",
-     "unityPrefab": "inst_clip_applier",
-     "displayName": "Clip applier",
-     "kind": "ligation"
-    },
-    {
-     "id": "lap_scissors",
-     "unityPrefab": "inst_lap_scissors",
-     "displayName": "Laparoscopic scissors",
-     "kind": "cutting"
-    },
-    {
-     "id": "suction_irrigator",
-     "unityPrefab": "inst_suction_irrigator",
-     "displayName": "Suction irrigator",
-     "kind": "irrigation"
-    },
-    {
-     "id": "trocar_5mm",
-     "unityPrefab": "inst_trocar_5mm",
-     "displayName": "5 mm trocar",
-     "kind": "access"
-    },
-    {
-     "id": "atraumatic_grasper",
-     "unityPrefab": "inst_atraumatic_grasper",
-     "displayName": "Atraumatic grasper",
-     "kind": "grasper"
-    }
-   ],
-   "anatomy": [
-    {
-     "id": "abdominal_wall",
-     "unityName": "anat_abdominal_wall",
-     "displayName": "Anterior abdominal wall",
-     "system": "musculoskeletal",
-     "region": "abdominal_wall"
-    },
-    {
-     "id": "umbilicus",
-     "unityName": "anat_umbilicus",
-     "displayName": "Umbilicus",
-     "system": "integumentary",
-     "region": "abdominal_wall"
-    },
-    {
-     "id": "liver",
-     "unityName": "anat_liver",
-     "displayName": "Liver",
-     "system": "digestive",
-     "region": "upper_abdomen"
-    },
-    {
-     "id": "gallbladder",
-     "unityName": "anat_gallbladder",
-     "displayName": "Gallbladder",
-     "system": "digestive",
-     "region": "upper_abdomen"
-    },
-    {
-     "id": "cystic_duct",
-     "unityName": "anat_cystic_duct",
-     "displayName": "Cystic duct",
-     "system": "digestive",
-     "region": "upper_abdomen"
-    },
-    {
-     "id": "cystic_artery",
-     "unityName": "anat_cystic_artery",
-     "displayName": "Cystic artery",
-     "system": "cardiovascular",
-     "region": "upper_abdomen"
-    },
-    {
-     "id": "common_hepatic_duct",
-     "unityName": "anat_common_hepatic_duct",
-     "displayName": "Common hepatic duct",
-     "system": "digestive",
-     "region": "upper_abdomen"
-    },
-    {
-     "id": "common_bile_duct",
-     "unityName": "anat_common_bile_duct",
-     "displayName": "Common bile duct",
-     "system": "digestive",
-     "region": "upper_abdomen"
-    },
-    {
-     "id": "right_hepatic_artery",
-     "unityName": "anat_right_hepatic_artery",
-     "displayName": "Right hepatic artery",
-     "system": "cardiovascular",
-     "region": "upper_abdomen"
-    },
-    {
-     "id": "duodenum",
-     "unityName": "anat_duodenum",
-     "displayName": "Duodenum",
-     "system": "digestive",
-     "region": "upper_abdomen"
-    },
-    {
-     "id": "stomach",
-     "unityName": "anat_stomach",
-     "displayName": "Stomach",
-     "system": "digestive",
-     "region": "upper_abdomen"
-    },
-    {
-     "id": "transverse_colon",
-     "unityName": "anat_transverse_colon",
-     "displayName": "Transverse colon",
-     "system": "digestive",
-     "region": "mid_abdomen"
-    },
-    {
-     "id": "greater_omentum",
-     "unityName": "anat_greater_omentum",
-     "displayName": "Greater omentum",
-     "system": "digestive",
-     "region": "peritoneal"
-    }
-   ],
+   "considerations": [],
+   "checklistOptions": [],
+   "instruments": [],
+   "anatomy": [],
    "actions": [
     {
-     "id": "submit_preop_check",
-     "label": "Submit pre-op safety check",
-     "method": "POST",
-     "route": "/patients/patient-demo-rate-limited/preop-check"
-    },
-    {
-     "id": "view_brief",
-     "label": "View pre-op brief",
+     "id": "open_case",
+     "label": "Try again",
      "method": "GET",
-     "route": "/patients/patient-demo-rate-limited/brief"
-    },
-    {
-     "id": "view_procedure",
-     "label": "View procedure steps",
-     "method": "GET",
-     "route": "/procedures/lap_cholecystectomy"
+     "route": "/patients/patient-demo-rate-limited/case"
     },
     {
      "id": "choose_patient",
@@ -9992,7 +9244,7 @@
     "dataSource": "",
     "consentStatus": "",
     "consentReceipts": [],
-    "generatedAt": "2026-10-04T03:38:59.907Z",
+    "generatedAt": "2026-10-04T03:44:32.524Z",
     "dataAsOf": "",
     "patient": {
      "name": "",
@@ -10547,7 +9799,7 @@
     "consentReceipts": [
      "rcpt_demo_consent_partial"
     ],
-    "generatedAt": "2026-10-04T03:38:59.908Z",
+    "generatedAt": "2026-10-04T03:44:32.527Z",
     "dataAsOf": "2026-09-01T00:00:00Z",
     "patient": {
      "name": "",
@@ -11377,7 +10629,7 @@
     "dataSource": "demo",
     "consentStatus": "simulated",
     "consentReceipts": [],
-    "generatedAt": "2026-10-04T03:38:59.793Z",
+    "generatedAt": "2026-10-04T03:44:32.527Z",
     "dataAsOf": "2026-09-01T00:00:00Z",
     "patient": {
      "name": "Ingrid Solano",
@@ -12087,7 +11339,7 @@
     "dataSource": "demo",
     "consentStatus": "simulated",
     "consentReceipts": [],
-    "generatedAt": "2026-10-04T03:38:59.791Z",
+    "generatedAt": "2026-10-04T03:44:32.526Z",
     "dataAsOf": "2026-09-01T00:00:00Z",
     "patient": {
      "name": "Priya Ramaswamy",

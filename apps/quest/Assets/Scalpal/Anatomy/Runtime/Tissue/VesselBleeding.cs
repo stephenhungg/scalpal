@@ -41,6 +41,47 @@ namespace Scalpal.Anatomy.Tissue
             DischargeCoefficient * InjuryAreaSquareMeters * Math.Sqrt(2 * PressureDifferencePascals / DensityKgPerCubicMeter);
         public double FlowMillilitersPerSecond => FlowCubicMetersPerSecond * MillilitersPerCubicMeter;
 
+        // A value copy of the actual fluid model at acquisition time. It retains no model reference
+        // and cannot change as Step, suction, occlusion or Reset advance the source model.
+        public readonly struct Snapshot
+        {
+            // Model validity only: this does not establish tracking, registration or assessment validity.
+            public bool IsValid { get; }
+            public bool IsFaulted { get; }
+            public bool IsInjured { get; }
+            public bool IsOccluded { get; }
+            public bool HasActiveFlow { get; }
+            public double InjuryAreaSquareMeters { get; }
+            public double InitialSourceMilliliters { get; }
+            public double RemainingSourceMilliliters { get; }
+            public double CumulativeLossMilliliters { get; }
+            public double PooledMilliliters { get; }
+            public double RemovedMilliliters { get; }
+            // Available rate at capture, not the previous step's finite-source-limited emission rate.
+            public double FlowMillilitersPerSecond { get; }
+            // The existing bounded injury-model clock, not full session or wall-clock elapsed time.
+            public double ElapsedSeconds { get; }
+
+            internal Snapshot(VesselBleeding model)
+            {
+                IsFaulted = model.IsFaulted; IsValid = !IsFaulted;
+                InjuryAreaSquareMeters = model.InjuryAreaSquareMeters;
+                IsInjured = InjuryAreaSquareMeters > 0;
+                IsOccluded = model.IsOccluded;
+                InitialSourceMilliliters = model.InitialSourceMilliliters;
+                RemainingSourceMilliliters = model.RemainingSourceMilliliters;
+                CumulativeLossMilliliters = model.CumulativeLossMilliliters;
+                PooledMilliliters = model.PooledMilliliters;
+                RemovedMilliliters = model.RemovedMilliliters;
+                FlowMillilitersPerSecond = model.FlowMillilitersPerSecond;
+                HasActiveFlow = FlowMillilitersPerSecond > 0;
+                ElapsedSeconds = model.ElapsedSeconds;
+            }
+        }
+
+        // Evidence for an external consumer; no scored event or independent fluid ledger is created.
+        public Snapshot CaptureSnapshot() => new Snapshot(this);
+
         public VesselBleeding(double pressureDifferencePascals = 12000, double densityKgPerCubicMeter = 1060,
             double dischargeCoefficient = .6, double sourceMilliliters = 500,
             double maximumInjuryAreaSquareMeters = .00001, double maximumSimulationSeconds = 3600)

@@ -8,6 +8,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Threading;
+using Scalpal.Exercises.Coach;
 using Scalpal.Exercises.Data;
 using Scalpal.Voice;
 using UnityEditor;
@@ -34,6 +35,7 @@ namespace Scalpal.Quest.Editor
         [Serializable] sealed class Agent { public Prompt prompt; public string first_message; }
         [Serializable] sealed class Prompt { public string prompt; }
         [Serializable] sealed class Tts { public string voice_id; }
+        [Serializable] sealed class ContextUpdate { public string type, text; }
         sealed class Exchange { public string url, method, body; }
 
         [MenuItem("Scalpal/Quest/Validate Native Voice Tools")]
@@ -64,7 +66,7 @@ namespace Scalpal.Quest.Editor
                     throw new InvalidOperationException("Voice fixture must use an ephemeral loopback endpoint");
 
                 var candidate = JsonUtility.FromJson<SurgicalCase>(Http(endpoint, "GET", "/patients/" + NativeCaseSession.PatientId + "/case"));
-                Assert(candidate.procedureId == NativeCaseSession.ProcedureId, "isolated actual service supplies native appendectomy case");
+                Assert(candidate.procedureId == NativeCaseSession.ProcedureId || candidate.procedureId == "open_appendectomy", "isolated actual service supplies native appendectomy case");
                 string sid = JsonUtility.FromJson<Created>(Http(endpoint, "POST", "/coach/sessions",
                     "{\"patientId\":\"" + candidate.patientId + "\",\"mode\":\"virtual\"}")).sessionId;
                 // Make another case the global latest session. Native calls must still use sid.
@@ -77,6 +79,7 @@ namespace Scalpal.Quest.Editor
                 voice = fixture.AddComponent<QuestJarvisVoice>();
                 ValidateInitiation(voice);
                 ValidateAudioLifecycle(voice,connections);
+                ValidateSilentBargeIn(voice,connections);
                 voice.ConfigureEndpoint(endpoint);
                 Set(voice, "generation", 100);
                 Property(voice, "CoachSessionId", sid);
@@ -138,6 +141,7 @@ namespace Scalpal.Quest.Editor
                 interrupted.Run();
                 Assert(outgoing.IsEmpty && Outgoing(replacement).IsEmpty, "late response emits no tool outcome into old or replacement voice connection");
                 Assert(!Get<HashSet<string>>(voice, "pendingTools").Contains(oldId), "disconnect clears abandoned tool ownership");
+                ValidateContextFeed(voice, connections, endpoint, fixture);
                 UnityEngine.Debug.Log("SCALPAL_NATIVE_VOICE_TOOLS_VALIDATION_OK checks=" + checks + " calls=" + calls
                     + " actual ExecuteTool/UnityWebRequest + isolated Hono; synthetic outgoing connection only; no WSS/microphone/provider");
             }
@@ -239,6 +243,103 @@ namespace Scalpal.Quest.Editor
             Call(connection,"Dispose");Call(connection,"Dispose");Call(connection,"RequestStop");Call(connection,"Enqueue","ignored-after-disposal");
             bool disposed=false;try { ((SemaphoreSlim)connection.GetType().GetField("SendSignal").GetValue(connection)).Wait(0); }catch(ObjectDisposedException){disposed=true;}
             Assert(disposed,"connection signal resources dispose after ownership ends; repeated stop/dispose/queue remain safe");
+        }
+
+        // Learner presses talk while the agent speaks, then says nothing (or ASR is empty, or the provider's
+        // interruption carries no id). The interrupted tail must stay discarded, but the next agent
+        // reply must be audible; before the bounded release the agent stayed mute until reconnect.
+        static void ValidateSilentBargeIn(QuestJarvisVoice voice,List<object> connections)
+        {
+            string pcm=Convert.ToBase64String(QuestJarvisVoice.EncodePcm(new[]{.3f,-.3f,.3f},1));
+            void Audio(int id) => Call(voice,"Handle","{\"type\":\"audio\",\"audio_event\":{\"event_id\":"+id+",\"audio_base_64\":\""+pcm+"\"}}");
+            Queue<float> Fresh()
+            {
+                voice.Disconnect();Property(voice,"Status","connected");Set(voice,"outputRate",16000);
+                connections.Add(NewConnection(voice,Get<int>(voice,"generation")));
+                return Get<Queue<float>>(voice,"outputSamples");
+            }
+            int grace=(int)(QuestJarvisVoice.InterruptionGraceSeconds*1000)+150;
+
+            // Press, release at once, silence.
+            var queue=Fresh();voice.MicrophoneMuted=true;Audio(20);
+            Assert(queue.Count==3&&voice.Mode=="speaking","agent reply is playing before the talk press");
+            voice.MicrophoneMuted=false;voice.InterruptPlayback();Audio(20);
+            Assert(queue.Count==0,"talk press discards the interrupted response's buffered and late audio");
+            voice.MicrophoneMuted=true;Call(voice,"Handle","{\"type\":\"interruption\"}");Call(voice,"Update");Audio(20);
+            Assert(queue.Count==0,"interrupted tail still arriving right after release stays discarded");
+            Thread.Sleep(grace);Call(voice,"Update");Audio(20);
+            Assert(queue.Count==0,"interrupted response's ids stay discarded after the silent release");
+            Audio(21);
+            Assert(queue.Count==3,"silent talk press: next agent reply is audible after release and the grace period");
+
+            // Press and hold silently past the grace: still suppressed while held, audible after release.
+            queue=Fresh();voice.MicrophoneMuted=true;Audio(40);voice.MicrophoneMuted=false;voice.InterruptPlayback();
+            Thread.Sleep(grace);Call(voice,"Update");
+            Assert(Get<bool>(voice,"awaitingInterruption"),"a held talk keeps suppression without a turn boundary");
+            voice.MicrophoneMuted=true;Call(voice,"Update");Audio(41);
+            Assert(queue.Count==3,"silent hold: release after the tail went quiet makes the next reply audible");
+
+            // Microphone left open (surgery warnings call InterruptPlayback without a talk control): a new
+            // agent turn is the boundary.
+            queue=Fresh();voice.MicrophoneMuted=false;Audio(30);voice.InterruptPlayback();Audio(30);Audio(31);
+            Assert(queue.Count==0,"open-microphone interruption suppresses audio until a turn boundary");
+            Call(voice,"Handle","{\"type\":\"agent_response\",\"agent_response_event\":{\"agent_response\":\"Next turn.\"}}");
+            Audio(30);Audio(31);
+            Assert(queue.Count==0,"new agent turn keeps every suppressed response id discarded");
+            Audio(32);
+            Assert(queue.Count==3,"new agent turn after an interruption is audible without learner speech");
+            voice.Disconnect();voice.MicrophoneMuted=false;
+        }
+
+        // Production NativeCaseSession.RefreshVoiceContext against the isolated service: the laptop's
+        // context feed semantics (full card on structural change or ~10 s, one-line deltas between,
+        // nothing while unchanged) instead of the whole state card on every change.
+        static void ValidateContextFeed(QuestJarvisVoice voice, List<object> connections, string endpoint, GameObject fixture)
+        {
+            string sid = JsonUtility.FromJson<Created>(Http(endpoint, "POST", "/coach/sessions",
+                "{\"patientId\":\"" + NativeCaseSession.PatientId + "\",\"mode\":\"virtual\"}")).sessionId;
+            var session = fixture.AddComponent<NativeCaseSession>();
+            var relay = fixture.AddComponent<CoachRelay>();
+            session.voice = voice; session.coach = relay; session.coachBaseUrl = endpoint;
+            Property(relay, "SessionId", sid);
+            voice.Disconnect(); Property(voice, "Status", "connected");
+            object connection = NewConnection(voice, Get<int>(voice, "generation")); connections.Add(connection);
+            var outgoing = Outgoing(connection);
+            var sent = new List<string>();
+            int Poll()
+            {
+                var routine = (IEnumerator)typeof(NativeCaseSession).GetMethod("RefreshVoiceContext", Private).Invoke(session, new object[] { Get<int>(session, "generation"), sid });
+                var pump = new Pump(routine); pump.Run();
+                Assert(pump.exchanges.Count == 1, "one context request per poll");
+                int count = 0;
+                while (outgoing.TryDequeue(out string json))
+                {
+                    var update = JsonUtility.FromJson<ContextUpdate>(json);
+                    Assert(update.type == "contextual_update", "native context reaches the agent as a contextual update");
+                    sent.Add(update.text); count++;
+                }
+                return count;
+            }
+            void Event(string json) => Http(endpoint, "POST", Session(sid) + "/events", json);
+            bool Full(string text) => text.StartsWith("[LIVE SURGERY STATE v", StringComparison.Ordinal);
+            bool Delta(string text) => text.StartsWith("[STATE DELTA v", StringComparison.Ordinal) && !text.Contains("[LIVE SURGERY STATE");
+
+            Assert(Poll() == 1 && Full(sent.Last()), "a connected voice first receives the full state card");
+            for (int i = 0; i < 3; i++) Assert(Poll() == 0, "unchanged state is never resent on later polls");
+            Event("{\"event\":{\"type\":\"instrument\",\"instrumentId\":\"scalpel\",\"hand\":\"right\",\"held\":true}}");
+            Assert(Poll() == 1 && Delta(sent.Last()) && sent.Last().Contains("Picked up the scalpel"), "a non-structural event is sent as a one-line state delta, not the full card");
+            Assert(Poll() == 0, "a delta is sent once");
+            Event("{\"event\":{\"type\":\"instrument\",\"instrumentId\":\"scalpel\",\"hand\":\"right\",\"held\":false}}");
+            Assert(Poll() == 1 && Delta(sent.Last()), "consecutive events between full cards stay deltas");
+            Http(endpoint, "POST", Session(sid) + "/simulate", "{\"kind\":\"correct_action\"}");
+            Assert(Poll() == 1 && Full(sent.Last()), "a milestone is structural and sends a fresh full card at once");
+            Event("{\"event\":{\"type\":\"instrument\",\"instrumentId\":\"scalpel\",\"hand\":\"left\",\"held\":true}}");
+            Assert(Poll() == 1 && Delta(sent.Last()), "events after a full card are deltas again");
+            Set(session, "voiceContextForce", true);
+            Assert(Poll() == 1 && Full(sent.Last()), "a reconnected voice is forced one full card");
+            Assert(sent.Count(Full) == 3 && sent.Count(Delta) == 3, "full cards only first, on structural change and on reconnect");
+            voice.Disconnect();
+            UnityEngine.Object.DestroyImmediate(session); UnityEngine.Object.DestroyImmediate(relay);
         }
 
         static IEnumerator ToolRoutine(QuestJarvisVoice voice, string name, string id, string raw)

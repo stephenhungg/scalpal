@@ -17,7 +17,7 @@ UNITY_DEFAULT = "/Applications/Unity/Hub/Editor/6000.0.66f2/Unity.app/Contents/M
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--suite", choices=("all", "services", "unity", "voice", "encounter", "motion", "registration", "playmode"), default="all")
+    parser.add_argument("--suite", choices=("all", "services", "unity", "player", "voice", "encounter", "motion", "registration", "playmode"), default="all")
     parser.add_argument("--headset", action="store_true", help="Also check the installed player over USB.")
     parser.add_argument("--config", type=Path, help="Private development pairing JSON for --headset.")
     args = parser.parse_args()
@@ -136,6 +136,23 @@ def main():
             if line.startswith("SCALPAL_") or "error CS" in line:
                 print(line)
         print("Unity diagnostic log:", log)
+
+    if args.suite in {"all", "player"}:
+        unity = environment.get("SCALPAL_UNITY", UNITY_DEFAULT)
+        player_log = Path(tempfile.gettempdir()) / ("scalpal-player-verify-" + uuid.uuid4().hex + ".log")
+        passed = check("unified Shell/Office/AR-VR OR/Replay-Recap Editor gates", [unity,
+                       "-batchmode", "-nographics", "-projectPath", str(REPO / "apps/quest"),
+                       "-buildTarget", "Android", "-executeMethod",
+                       "Scalpal.Handoff.Editor.ScalpalPlayerBuild.Verify", "-quit", "-logFile", str(player_log)], timeout=360)
+        output = player_log.read_text(errors="replace") if player_log.exists() else ""
+        if passed and "SCALPAL_PLAYER_VERIFY_OK" not in output:
+            failures.append("unified player verification marker absent")
+        if "Leak Detected : Persistent allocates" in output:
+            failures.append("unified player persistent native allocation leak")
+        for line in output.splitlines():
+            if line.startswith("SCALPAL_") or "error CS" in line:
+                print(line)
+        print("Unified player diagnostic log:", player_log)
 
     if args.suite in {"all", "playmode"}:
         check("real NativeSession Play Mode lifecycle/buttons/physics + isolated backend",

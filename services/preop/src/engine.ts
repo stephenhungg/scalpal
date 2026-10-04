@@ -108,7 +108,7 @@ export class StepEngine {
         const p=rule.eventPredicate, value=record.action[p.fact as keyof BodyAction];
         return typeof value === "number" && (p.op === "gte" ? value >= p.value : p.op === "lte" ? value <= p.value : p.op === "eq" && value === p.value);
       })())) {
-      const detected: StepMistake = { id: rule.id, trigger: "wrong_order", structure: record.action.tissueId, severity: rule.severity, feedback: rule.feedback };
+      const detected: StepMistake = { id: rule.id, trigger: "guardrail", structure: record.action.tissueId, severity: rule.severity, feedback: rule.feedback };
       this.mistakes.push(detected); mistake ??= detected;
     }
     const satisfied = new Set(plan.milestones.filter(m => m.predicates.every(p => this.body!.test(p))).map(m => m.id));

@@ -18,6 +18,10 @@ namespace Scalpal.Surgery
     {
         public Transform rightAsis, umbilicus;
         public bool judgeFastPath;
+        // Scene-authored mobilization for this atlas: the cecum is delivered with its appendix,
+        // mesentery and artery into the wound. The mechanic itself is organ-agnostic.
+        public MobileOrganGroup[] mobileOrganGroups = { new MobileOrganGroup {
+            partIds = new[]{ "cecum", "appendix", "mesoappendix", "appendicular_artery" }, deliveryPartId = "appendix" } };
         NativeCaseSession session;
         OpenBodyInteraction interaction;
         OpenWoundView wound;
@@ -108,9 +112,12 @@ namespace Scalpal.Surgery
             interaction = GetComponent<OpenBodyInteraction>() ?? gameObject.AddComponent<OpenBodyInteraction>();
             interaction.Submitted -= Applied; interaction.MarkerChanged -= Marked;
             interaction.Initialize(session.exercise,session.workbench.tools,session.patientFrame,woundFrame,()=>Ready);
+            bool mobile = interaction.ConfigureMobility(mobileOrganGroups,out string mobility);
             bool anatomyBound = OpenSurgeryAnatomy.Bind(session.anatomy,interaction);
             var volume = GetComponent<NativeVolumeSimulation>();
             if(volume)volume.Initialize(woundFrame,session.workbench,()=>Ready,true);
+            // Wall layer contact, grips, tent lift, muscle split and cut evidence come from this volume.
+            interaction.BindWall(volume);
             session.workbench.ToolsReset-=ClearPlacements; session.workbench.ToolsReset+=ClearPlacements;
             interaction.Submitted += Applied; interaction.MarkerChanged += Marked;
             if(rightAsis && umbilicus) interaction.SetLandmarks(rightAsis.position,umbilicus.position,woundFrame.right);
@@ -128,8 +135,13 @@ namespace Scalpal.Surgery
             bleeding.Initialize(interaction,session.exercise,woundFrame);
             Status = rightAsis && umbilicus ? "Registered landmarks bound" : "Authored landmark proxies; ASIS/umbilicus calibration pending";
             if(!anatomyBound)Status+="; one or more surgical base references missing";
+            if(!mobile)Status+="; organ mobilization unavailable: "+mobility;
             if(OpenSurgeryAnatomy.DeliveryReachBound(session.anatomy,woundFrame,out float needed,out float maximum))
-            { Status+=$"; delivery needs {needed:F1} mm, cage bound {maximum:F1} mm";Debug.Log("SCALPAL_OPEN_DELIVERY_BOUND "+Status); }
+            {
+                float tether=0;
+                foreach(var group in interaction.Mobility) if(group.Contains(session.anatomy.TryGetPart("appendix",out var part)?part.transform:null)) tether=Mathf.Max(tether,group.Definition.maxTravelMm);
+                Status+=$"; delivery needs {needed:F1} mm, cage bound {maximum:F1} mm, mobilization tether {tether:F1} mm";Debug.Log("SCALPAL_OPEN_DELIVERY_BOUND "+Status);
+            }
         }
         void Marked(IReadOnlyList<Vector3> points) => wound.SetMarker(points);
         void Applied(BodyRecord record, InstrumentBehaviour tool)

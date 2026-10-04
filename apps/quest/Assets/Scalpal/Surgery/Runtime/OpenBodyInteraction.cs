@@ -5,6 +5,7 @@ using Scalpal.Anatomy.Tissue;
 using Scalpal.Exercises.Data;
 using Scalpal.Exercises.Engine;
 using Scalpal.Instruments;
+using Scalpal.Quest;
 using UnityEngine;
 
 namespace Scalpal.Surgery
@@ -18,21 +19,38 @@ namespace Scalpal.Surgery
         {
             public InstrumentBehaviour tool;
             public Transform bladeStart, bladeEnd;
-            public string instance, tissueId = "";
+            public string instance, tissueId = "", clampedTissueId = "";
             public SurgeryTissueTarget target;
             public SurgeryInstrumentLatch latch;
+            public OrganMobilization mobile;
             public readonly OpenSurgeryStroke stroke = new OpenSurgeryStroke();
             public readonly List<Vector3> marker = new List<Vector3>();
-            public Vector3 previous, anchor, contact, rawSurface, handleOffset;
+            public Vector3 previous, contact, rawSurface, handleOffset, speedOrigin;
             public bool active, previousValid, committed, grasping, ownsHandle;
-            public float strokeSent, dwell, sinceSent, speed;
+            public float strokeSent, dwell, sinceSent, speed, speedClock;
             public BodyAction lastTentMeasurement;
+            // Physical wall material grip (0 = none). A latched retractor keeps holding its tissue
+            // after the hand lets go, as retainedToken, until it is picked up or unlatched.
+            public int layerToken, retainedToken, splitTriedWith;
+            public string retainedTissueId = "";
+            public Vector3 layerOffset;
+            // Wall fracture counts when this blade engaged the wall: a stroke scores only the layer it opened.
+            public bool wallEngaged;
+            public readonly long[] wallCutBaseline = new long[OpenWallLayers.Count];
         }
-        static readonly string[] WallIds = { "skin", "fat", "fascia", "muscle", "peritoneum" };
-        static readonly float[] WallDepths = { 0, .004f, .014f, .019f, .027f };
+        // Authored teaching thresholds for coupling paired retraction to the volume, not measured mechanics.
+        const float SplitOnsetMm = .5f, SplitHalfLengthMeters = .03f, SplitDepthMarginMeters = .0005f, BladeContactMeters = .003f;
         readonly List<ToolState> states = new List<ToolState>();
         readonly List<SurgeryTissueTarget> targets = new List<SurgeryTissueTarget>();
         readonly Dictionary<string, BodyAction> pendingTentReleases = new Dictionary<string, BodyAction>();
+        readonly List<OrganMobilization> mobility = new List<OrganMobilization>();
+        readonly long[] cutFractures = new long[OpenWallLayers.Count];
+        NativeVolumeSimulation wall;
+        // Exposure facts change only when the body appends a record; per-frame reads use this copy.
+        BodyState cachedBody;
+        int cachedLogCount = -1;
+        bool[] tissueOpened = Array.Empty<bool>();
+        double activeBleeds;
         AnatomyExerciseBinding exercise;
         Transform torso, wound;
         Func<bool> gate;
@@ -51,11 +69,29 @@ namespace Scalpal.Surgery
         public double TimeMs => activeSeconds * 1000;
         public bool Ready => isActiveAndEnabled && exercise && exercise.CanScore && exercise.Body != null && torso && wound && gate != null && gate();
         public IReadOnlyList<SurgeryTissueTarget> Targets => targets;
+        public IReadOnlyList<OrganMobilization> Mobility => mobility;
+
+        // The open-wall volume supplies layer contact, grips, lift/split measurements and cut evidence.
+        // Without one, wall layers keep authored contact planes but can never be tented or split.
+        public void BindWall(NativeVolumeSimulation volume)
+        {
+            if (wall == volume) return;
+            ClearTransient();
+            if (wall) wall.LayerFractured -= Fractured;
+            wall = volume;
+            if (wall) wall.LayerFractured += Fractured;
+        }
+        void Fractured(NativeVolumeSimulation.LayerFracture fracture)
+        {
+            if (fracture.verb == "cut" && fracture.newlyBrokenFaces > 0 && OpenWallLayers.TryGet(fracture.layerId, out var layer))
+                cutFractures[layer.index] += fracture.newlyBrokenFaces;
+        }
 
         public void Initialize(AnatomyExerciseBinding binding, InstrumentBehaviour[] tools, Transform torsoFrame, Transform woundFrame, Func<bool> canInteract)
         {
-            ClearTransient(); foreach (var state in states) if (state.latch) state.latch.Clear();
-            states.Clear(); targets.Clear();
+            ClearTransient(); foreach (var state in states) { if (state.latch) state.latch.Clear(); ReleaseRetained(state); }
+            foreach (var group in mobility) group.RestoreRest();
+            states.Clear(); targets.Clear(); mobility.Clear();
             exercise = binding; torso = torsoFrame; wound = woundFrame; gate = canInteract;
             foreach (var tool in tools ?? Array.Empty<InstrumentBehaviour>())
             {
@@ -96,6 +132,22 @@ namespace Scalpal.Surgery
             if (!target || targets.Contains(target)) return;
             target.Refresh(); targets.Add(target);
         }
+        // Groups come from scene/case data. Each attempt starts with every group at its authored rest pose.
+        public bool ConfigureMobility(IEnumerable<MobileOrganGroup> groups, out string status)
+        {
+            ClearTransient(); foreach (var group in mobility) group.RestoreRest();
+            mobility.Clear(); status = "";
+            bool all = true;
+            foreach (var definition in groups ?? Array.Empty<MobileOrganGroup>())
+            {
+                var group = OrganMobilization.Create(exercise ? exercise.anatomy : null, definition, out var reason);
+                if (group == null) { all = false; status += (status.Length > 0 ? "; " : "") + reason; continue; }
+                if (mobility.Exists(other => { foreach (var part in group.Parts) if (other.Contains(part)) return true; return false; }))
+                { all = false; status += (status.Length > 0 ? "; " : "") + "mobile groups overlap"; continue; }
+                mobility.Add(group);
+            }
+            return all;
+        }
         public void SetTargets(SurgeryTissueTarget[] supplied)
         {
             ClearTransient(); targets.Clear();
@@ -103,7 +155,8 @@ namespace Scalpal.Surgery
         }
         public void ResetInteractions()
         {
-            ClearTransient(); foreach (var state in states) if (state.latch) state.latch.Clear();
+            ClearTransient(); foreach (var state in states) { if (state.latch) state.latch.Clear(); ReleaseRetained(state); state.clampedTissueId = ""; }
+            foreach (var group in mobility) group.RestoreRest(); // A retry starts from the authored anatomy.
             pendingTentReleases.Clear(); // A previous attempt's measurements cannot enter its replacement.
             attemptBody = exercise ? exercise.Body : null;
             attemptPrefix = Guid.NewGuid().ToString("N"); sequence = 0; activeSeconds = 0; tickClock = 0;
@@ -113,7 +166,7 @@ namespace Scalpal.Surgery
         public void ClearPlacements()
         {
             ClearTransient();
-            foreach (var state in states) if (state.latch) state.latch.Clear();
+            foreach (var state in states) { if (state.latch) state.latch.Clear(); ReleaseRetained(state); }
         }
         // The owner calls this once per update, after tracked tool poses are refreshed.
         public void Simulate(float seconds)
@@ -127,25 +180,61 @@ namespace Scalpal.Surgery
             Matrix4x4 torsoFrame = torso.localToWorldMatrix, woundFrame = wound.localToWorldMatrix;
             bool frameChanged = frameKnown && (torsoFrame != lastTorsoFrame || woundFrame != lastWoundFrame);
             lastTorsoFrame = torsoFrame; lastWoundFrame = woundFrame; frameKnown = true;
-            if (frameChanged) ClearTransient();
+            // A stroke measured before a fit correction is still one real stroke; commit it, then restart.
+            if (frameChanged) { foreach (var state in states) FlushStroke(state); ClearTransient(); }
             wasReady = true; activeSeconds += seconds; tickClock += seconds;
             // Release invalid grasps before processing any blade, regardless of tool array order.
             foreach (var state in states)
                 if (state.grasping && (!ValidTool(state) || !OpenSurgeryStroke.Finite(state.tool.actionPoint.position)
                     || (state.previousValid && Vector3.Distance(state.tool.actionPoint.position, state.previous) > .05f))) Release(state);
             DrainTentReleases();
+            // A placed clamp that was picked up again or put away no longer occludes anything.
+            foreach (var state in states)
+                if (state.clampedTissueId != "" && (!state.latch || !state.latch.Attached)) ReleaseClamp(state);
+            // A latched retractor that is picked up again or unlatched stops holding its tissue.
+            foreach (var state in states)
+                if (state.retainedToken != 0 && (!state.latch || !state.latch.Attached || !state.tool || state.tool.Held)) ReleaseRetained(state);
             // A fit correction is not tool travel. The next stable sample starts new anchors and
             // stroke history with zero speed; the registered active-time clock still advances.
-            if (!frameChanged) foreach (var state in states) SampleTool(state, seconds);
-            if (tickClock >= .25f)
+            if (!frameChanged)
             {
-                tickClock %= .25f;
+                foreach (var state in states) SampleTool(state, seconds);
+                // Released groups ease back unless delivered; held groups moved with their tool above.
+                // A fit correction is not organ motion, so a correction frame never settles a group.
+                foreach (var group in mobility) group.Settle(seconds, wound);
+            }
+            // Blood loss accrues during stalls through a 1 Hz tick, only while a bleed is active.
+            RefreshBodyFacts();
+            if (activeBleeds <= 0) tickClock = 0;
+            else if (tickClock >= 1)
+            {
+                tickClock %= 1;
                 var tissue = FirstTissue();
                 if (tissue != null) SubmitMeasured(Action("assistant", "clock", "tick", tissue, wound.position), null);
             }
         }
+        void RefreshBodyFacts()
+        {
+            var body = exercise.Body;
+            if (body == cachedBody && body.Log.Count == cachedLogCount) return;
+            cachedBody = body; cachedLogCount = body.Log.Count;
+            if (tissueOpened.Length != body.Tissues.Length) tissueOpened = new bool[body.Tissues.Length];
+            for (int i = 0; i < tissueOpened.Length; i++) tissueOpened[i] = body.Get(body.Tissues[i].id, "opened") > 0;
+            activeBleeds = body.Get("", "activeBleeds");
+        }
+        bool Opened(TissueDefinition tissue)
+        {
+            RefreshBodyFacts();
+            for (int i = 0; i < tissueOpened.Length; i++) if (cachedBody.Tissues[i] == tissue) return tissueOpened[i];
+            return false;
+        }
         TissueDefinition FirstTissue() => exercise?.Body?.Tissues.Length > 0 ? exercise.Body.Tissues[0] : null;
-        TissueDefinition Definition(string id) => Array.Find(exercise.Body.Tissues, t => t.id == id);
+        TissueDefinition Definition(string id)
+        {
+            // Per-frame lookup without a capturing lambda (no Quest GC allocation).
+            foreach (var tissue in exercise.Body.Tissues) if (tissue.id == id) return tissue;
+            return null;
+        }
         bool ValidTool(ToolState state) => state.tool && state.tool.isActiveAndEnabled && state.tool.Held && state.tool.TrackingValid && state.tool.Activation >= .7f && state.tool.actionPoint;
 
         void SampleTool(ToolState state, float seconds)
@@ -158,16 +247,23 @@ namespace Scalpal.Surgery
             Vector3 point = state.tool.actionPoint.position;
             if (!OpenSurgeryStroke.Finite(point)) { Release(state); return; }
             state.speed = state.previousValid ? Vector3.Distance(point, state.previous) / seconds : 0;
-            if (state.previousValid && Vector3.Distance(point, state.previous) > .05f) { Release(state); return; }
+            if (state.previousValid && Vector3.Distance(point, state.previous) > .05f) { FlushStroke(state); Release(state); return; }
             state.previous = point; state.previousValid = true; state.active = true;
             string verb = BodyState.ToolVerbs[state.tool.instrumentId][0];
             if (!state.grasping)
             {
                 if (!FindContact(state, verb, point, out var definition, out var target, out var contact))
-                { FlushStroke(state); ClearContact(state); return; }
+                { FlushStroke(state); ClearContact(state); state.wallEngaged = false; return; }
+                // Fracture counts before this blade's first wall contact; LateUpdate cuts follow this Update.
+                if (verb == "cut" && wall && !target && OpenWallLayers.TryGet(definition.id, out _) && !state.wallEngaged)
+                { Array.Copy(cutFractures, state.wallCutBaseline, cutFractures.Length); state.wallEngaged = true; }
                 if (state.tissueId != definition.id)
                 {
-                    FlushStroke(state); ClearContact(state);
+                    // Passing through an already opened layer to reach a deeper one is not another cut of it.
+                    bool passThrough = verb == "cut" && wall && !state.target && !target && OpenWallLayers.TryGet(state.tissueId, out var from)
+                        && OpenWallLayers.TryGet(definition.id, out var to) && to.index > from.index && Opened(Definition(state.tissueId));
+                    if (!passThrough) FlushStroke(state);
+                    ClearContact(state);
                     state.tissueId = definition.id; state.target = target; state.contact = contact;
                     Vector3 local = wound.InverseTransformPoint(contact);
                     Vector3 axis = target ? wound.InverseTransformDirection(target.LongitudinalWorld).normalized : Vector3.right;
@@ -182,11 +278,12 @@ namespace Scalpal.Surgery
             if (verb == "cut" || verb == "mark")
             {
                 Vector3 local = wound.InverseTransformPoint(point);
-                int layer = Array.IndexOf(WallIds, tissue.id);
-                if (state.stroke.Sample(local, seconds, layer >= 0 ? WallDepths[layer] : local.z))
+                bool wallLayer = OpenWallLayers.TryGet(tissue.id, out var layer);
+                if (state.stroke.Sample(local, seconds, wallLayer ? layer.startDepthMeters : local.z))
                 {
+                    // One committed action per stroke (per layer): FlushStroke runs when contact ends,
+                    // so guardrails see the finished stroke once instead of every millimetre.
                     if (verb == "mark" && (state.marker.Count == 0 || Vector3.Distance(state.marker[state.marker.Count - 1], local) > .001f)) state.marker.Add(local);
-                    if (state.stroke.PathLengthMm >= 1 && (state.target ? state.stroke.PathLengthMm : state.stroke.LengthMm) - state.strokeSent >= (verb == "mark" ? 5 : 1)) FlushStroke(state);
                 }
                 return;
             }
@@ -204,12 +301,21 @@ namespace Scalpal.Surgery
             }
             if (state.committed) return;
             var action = Action(state.tool.instrumentId, state.instance, verb, tissue, point);
-            if ((verb == "clamp" || verb == "tie") && state.target && !state.target.DistanceFromBase(point, out action.distanceMm))
-                action.choice = "longitudinal_unmeasured";
+            // Hemostasis is positional, so a seal's place along the structure is measured like a clamp's.
+            if ((verb == "clamp" || verb == "tie" || verb == "seal") && state.target)
+            {
+                bool measured = state.target.DistanceFromBase(point, out float along); action.distanceMm = along;
+                if (!measured) action.choice = "longitudinal_unmeasured";
+            }
             if (SubmitMeasured(action, state.tool))
             {
                 state.committed = true;
-                if (verb == "clamp" && EffectApplied(action.actionId)) Latch(state);
+                if (verb == "clamp" && EffectApplied(action.actionId))
+                {
+                    // One physical clamp: applying it to another tissue first takes it off the previous one.
+                    if (state.clampedTissueId != "" && state.clampedTissueId != state.tissueId) ReleaseClamp(state);
+                    Latch(state); state.clampedTissueId = state.tissueId;
+                }
             }
         }
 
@@ -219,12 +325,20 @@ namespace Scalpal.Surgery
             var tissue = Definition(state.tissueId); if (tissue == null) return;
             string verb = BodyState.ToolVerbs[state.tool.instrumentId][0];
             if (verb != "cut" && verb != "mark") return;
+            OpenWallLayers.Layer layer = default;
+            bool wallLayer = !state.target && OpenWallLayers.TryGet(tissue.id, out layer);
+            // With a wall volume, a blade stroke counts only if it actually opened that material.
+            if (verb == "cut" && wallLayer && wall && (!state.wallEngaged || cutFractures[layer.index] <= state.wallCutBaseline[layer.index]))
+            { LastRejection = "Blade stroke did not open the " + tissue.id + " tissue."; return; }
             Vector3 point = wound.TransformPoint(state.stroke.End);
             var action = Action(state.tool.instrumentId, state.instance, verb, tissue, point);
             action.lengthMm = state.target ? state.stroke.PathLengthMm : state.stroke.LengthMm; action.distanceMm = state.stroke.ErrorMm;
             action.angleDegrees = state.stroke.AngleDegrees; action.depthMm = state.stroke.DepthMm;
+            // Fibered layers report the stroke against their authored fiber axis, not the skin line.
+            if (verb == "cut" && wallLayer && layer.hasFibers && OpenWallLayers.TryFiberAngle(tissue.id, state.stroke.End - state.stroke.Start, out float fiberAngle))
+                action.angleDegrees = fiberAngle;
             action.durationMs = state.stroke.DurationMs; action.speedMps = state.speed;
-            if (state.target && !state.target.DistanceFromBase(point, out action.distanceMm)) action.choice = "longitudinal_unmeasured";
+            if (state.target) { bool measured = state.target.DistanceFromBase(point, out float along); action.distanceMm = along; if (!measured) action.choice = "longitudinal_unmeasured"; }
             if (verb == "mark")
             {
                 Vector3 midpoint = (state.stroke.Start + state.stroke.End) * .5f;
@@ -232,6 +346,7 @@ namespace Scalpal.Surgery
             }
             if (SubmitMeasured(action, state.tool))
             {
+                if (verb == "cut" && wallLayer && wall) state.wallCutBaseline[layer.index] = cutFractures[layer.index];
                 state.strokeSent = state.target ? state.stroke.PathLengthMm : state.stroke.LengthMm;
                 if (verb == "mark")
                 {
@@ -247,7 +362,7 @@ namespace Scalpal.Surgery
             // A hidden layer may generate an attempted event, but cannot acquire a physical handle.
             foreach (var barrier in exercise.Body.Tissues)
             {
-                if (barrier.order < 0 || (tissue.order >= 0 && barrier.order >= tissue.order) || exercise.Body.Get(barrier.id, "opened") > 0) continue;
+                if (barrier.order < 0 || (tissue.order >= 0 && barrier.order >= tissue.order) || Opened(barrier)) continue;
                 if (!state.committed)
                 {
                     SubmitMeasured(Action(state.tool.instrumentId, state.instance, BodyState.ToolVerbs[state.tool.instrumentId][0], tissue, point), state.tool);
@@ -257,8 +372,19 @@ namespace Scalpal.Surgery
             }
             if (!state.grasping)
             {
-                state.grasping = true; state.anchor = point;
+                state.grasping = true; state.speedOrigin = point; state.speedClock = 0;
+                if (state.target)
+                {
+                    var group = mobility.Find(candidate => !candidate.Held && candidate.Contains(state.target.transform));
+                    if (group != null && group.BeginHold(state.contact)) state.mobile = group;
+                }
                 if (state.target) state.rawSurface = state.target.transform.InverseTransformPoint(state.contact);
+                // A wall layer is held by an actual material patch at its current exposed surface.
+                else if (wall && wall.TryBeginLayerHandle(tissue.id, point, Mathf.Min(state.tool.contactRadius, .006f), out int token))
+                {
+                    state.layerToken = token; state.splitTriedWith = 0;
+                    state.layerOffset = wall.TryMeasureLayerHandle(token, out var grip) ? grip.worldPosition - point : Vector3.zero;
+                }
                 var deformable = state.target ? state.target.Deformable : null;
                 if (deformable && deformable.Cage != null)
                 {
@@ -271,6 +397,8 @@ namespace Scalpal.Surgery
                 }
             }
             Vector3 measuredPoint = point;
+            // The mobilized group follows the tool first; the cage then deforms about its new pose.
+            if (state.mobile != null) state.mobile.Follow(point, seconds);
             if (state.target)
             {
                 var deformable = state.target.Deformable;
@@ -286,31 +414,38 @@ namespace Scalpal.Surgery
                 }
                 else measuredPoint = state.target.transform.TransformPoint(state.rawSurface);
             }
+            else
+            {
+                // Request the hand's pose; measure only geometry the solver accepted (read after its LateUpdate step).
+                measuredPoint = state.contact;
+                if (state.layerToken != 0 && (!wall || !wall.TrySetLayerHandleTarget(state.layerToken, point + state.layerOffset)))
+                    state.layerToken = 0; // Gate, frame or topology loss released the grip; it is not resurrected.
+                if (state.layerToken != 0 && wall.TryMeasureLayerHandle(state.layerToken, out var grip)) measuredPoint = grip.worldPosition;
+                // Checked every frame: the split must be requested as soon as the pair actually parts.
+                if (tissue.splittable && state.layerToken != 0) RequestSplit(state, tissue.id);
+            }
+            state.speedClock += seconds;
             if (state.sinceSent < .1f) return;
             var action = Action(state.tool.instrumentId, state.instance, BodyState.ToolVerbs[state.tool.instrumentId][0], tissue, measuredPoint);
-            action.speedMps = state.speed;
-            action.depthMm = tissue.tentable ? Mathf.Max(0, -Vector3.Dot(measuredPoint - state.anchor, wound.forward)) * 1000
-                : Mathf.Max(0, -wound.InverseTransformPoint(measuredPoint).z) * 1000;
-            if (tissue.tentable) action.depthMm = Mathf.Max(action.depthMm, CurrentTentLift(tissue.id));
-            if (tissue.splittable)
-            {
-                foreach (var other in states)
-                {
-                    if (other == state || !other.grasping || other.tissueId != tissue.id || !ValidTool(other)) continue;
-                    Vector3 a = wound.InverseTransformPoint(point), b = wound.InverseTransformPoint(other.tool.actionPoint.position);
-                    Vector3 initial = wound.InverseTransformPoint(state.anchor) - wound.InverseTransformPoint(other.anchor);
-                    Vector3 spread = a - b - initial;
-                    action.separationMm = Mathf.Max(0, Mathf.Abs(a.y - b.y) - Mathf.Abs(initial.y)) * 1000;
-                    action.angleDegrees = spread.sqrMagnitude < .0000001f ? 0 : Mathf.Min(Vector3.Angle(spread, Vector3.up), Vector3.Angle(spread, Vector3.down));
-                    action.secondaryInstanceId = other.instance; break;
-                }
-            }
+            // Net hand travel over at least 100 ms, so per-frame tracking jitter cancels instead of reading as speed.
+            action.speedMps = Vector3.Distance(point, state.speedOrigin) / Mathf.Max(state.speedClock, .1f);
+            state.speedOrigin = point; state.speedClock = 0;
+            // Tenting is the gripped membrane's accepted outward lift, never the controller's travel.
+            action.depthMm = tissue.tentable ? CurrentTentLift(tissue.id) : Mathf.Max(0, -wound.InverseTransformPoint(measuredPoint).z) * 1000;
+            if (tissue.splittable && state.layerToken != 0) MeasureSplit(state, tissue.id, action);
             if (SubmitMeasured(action, state.tool))
             {
                 if (tissue.tentable && EffectApplied(action.actionId)) state.lastTentMeasurement = action.Copy();
                 if (tissue.splittable && action.separationMm >= 15 && EffectApplied(action.actionId)) Latch(state);
             }
             state.sinceSent = 0;
+        }
+        void ReleaseClamp(ToolState state)
+        {
+            var tissue = Definition(state.clampedTissueId); state.clampedTissueId = "";
+            if (tissue == null || !state.tool) return;
+            Vector3 point = state.tool.actionPoint && OpenSurgeryStroke.Finite(state.tool.actionPoint.position) ? state.tool.actionPoint.position : wound.position;
+            SubmitMeasured(Action(state.tool.instrumentId, state.instance, "release", tissue, point), state.tool);
         }
         bool EffectApplied(string actionId)
         {
@@ -346,11 +481,14 @@ namespace Scalpal.Surgery
             }
             // The teaching wall is finite. Selecting a layer depends only on geometry and exposure.
             Vector3 local = wound.InverseTransformPoint(point);
+            if (wall) return WallContact(state, verb, point, local, ref nearest, ref tissue, ref target, ref contact) || tissue != null;
+            // No volume: authored OpenWallLayers contact planes (no tenting or splitting is measurable).
             if (Mathf.Abs(local.x) > .065f || Mathf.Abs(local.y) > .04f) return tissue != null;
-            for (int i = 0; i < WallIds.Length; i++)
+            for (int i = 0; i < OpenWallLayers.Count; i++)
             {
-                var definition = Definition(WallIds[i]); if (definition == null) continue;
-                float distance = Mathf.Abs(local.z - WallDepths[i]);
+                var layer = OpenWallLayers.Get(i);
+                var definition = Definition(layer.id); if (definition == null) continue;
+                float depth = layer.startDepthMeters, distance = Mathf.Abs(local.z - depth);
                 bool segment = false;
                 if (verb == "cut" && state.bladeStart && state.bladeEnd)
                 {
@@ -358,22 +496,60 @@ namespace Scalpal.Surgery
                     float dz = b.z - a.z;
                     if (Mathf.Abs(dz) > .000001f)
                     {
-                        float t = (WallDepths[i] - a.z) / dz;
+                        float t = (depth - a.z) / dz;
                         Vector3 hit = Vector3.LerpUnclamped(a, b, t);
                         segment = t >= 0 && t <= 1 && Mathf.Abs(hit.x) <= .065f && Mathf.Abs(hit.y) <= .04f;
                         if (segment) distance = 0;
                     }
                 }
                 if (distance > .004f && !segment) continue;
-                bool opened = exercise.Body.Get(definition.id, "opened") > 0;
+                bool opened = Opened(definition);
                 // Once opened, the center gap exposes the deeper layer; its lips remain interactable.
                 if (opened && Mathf.Abs(local.y) < .007f && verb != "mark" && state.tissueId != definition.id) continue;
                 float squared = distance * distance;
                 if (squared >= nearest) continue;
-                tissue = definition; target = null; contact = wound.TransformPoint(new Vector3(local.x, local.y, WallDepths[i])); nearest = squared;
+                tissue = definition; target = null; contact = wound.TransformPoint(new Vector3(local.x, local.y, depth)); nearest = squared;
             }
             return tissue != null;
         }
+        // Volume contact: each layer's current exposed boundary/cut faces near the tool (blade edge or tip).
+        // The shallowest touched layer the body has not opened is engaged. Once every touched layer is open,
+        // a stroke in progress keeps its layer (a blade outruns the faces it has just cut); otherwise the
+        // deepest one is engaged (extending or re-entering a wound). A marker takes the nearest surface.
+        bool WallContact(ToolState state, string verb, Vector3 point, Vector3 local, ref float nearest, ref TissueDefinition tissue, ref SurgeryTissueTarget target, ref Vector3 contact)
+        {
+            bool blade = verb == "cut" && state.bladeStart && state.bladeEnd;
+            Vector3 a = local, b = local;
+            if (blade) { a = wound.InverseTransformPoint(state.bladeStart.position); b = wound.InverseTransformPoint(state.bladeEnd.position); }
+            // Broad phase against the 160 x 100 x 28 mm wall plus its bounded material excursion.
+            if (!NearWall(a) && !NearWall(b)) return false;
+            float radius = blade ? BladeContactMeters : Mathf.Min(state.tool.contactRadius, .006f);
+            int samples = blade ? Mathf.Clamp(Mathf.CeilToInt(Vector3.Distance(a, b) / .004f) + 1, 2, 6) : 1;
+            int chosen = -1, deepest = -1; float chosenSquared = 0, deepestSquared = 0; Vector3 chosenHit = default, deepestHit = default;
+            for (int i = 0; i < OpenWallLayers.Count; i++)
+            {
+                var definition = Definition(OpenWallLayers.Get(i).id); if (definition == null) continue;
+                float best = float.PositiveInfinity; Vector3 bestHit = default;
+                for (int sample = 0; sample < samples; sample++)
+                {
+                    Vector3 world = samples == 1 ? point : wound.TransformPoint(Vector3.Lerp(a, b, sample / (float)(samples - 1)));
+                    if (!wall.TryContactLayer(definition.id, world, radius, out Vector3 hit)) continue;
+                    float squared = (world - hit).sqrMagnitude;
+                    if (squared < best) { best = squared; bestHit = hit; }
+                }
+                if (float.IsPositiveInfinity(best)) continue;
+                if (verb == "mark") { if (chosen < 0 || best < chosenSquared) { chosen = i; chosenSquared = best; chosenHit = bestHit; } continue; }
+                deepest = i; deepestSquared = best; deepestHit = bestHit;
+                if (chosen < 0 && !Opened(definition)) { chosen = i; chosenSquared = best; chosenHit = bestHit; }
+            }
+            if (chosen < 0 && deepest >= 0 && verb != "mark" && !state.target && OpenWallLayers.TryGet(state.tissueId, out var current))
+            { chosen = current.index; chosenHit = state.contact; chosenSquared = (point - state.contact).sqrMagnitude; }
+            if (chosen < 0) { chosen = deepest; chosenSquared = deepestSquared; chosenHit = deepestHit; }
+            if (chosen < 0 || chosenSquared >= nearest) return false;
+            tissue = Definition(OpenWallLayers.Get(chosen).id); target = null; contact = chosenHit; nearest = chosenSquared;
+            return true;
+        }
+        static bool NearWall(Vector3 local) => Mathf.Abs(local.x) <= .09f && Mathf.Abs(local.y) <= .06f && local.z >= -.03f && local.z <= .06f;
         // Registration owner supplies the landmark provenance; this never derives depth from images.
         public bool SetLandmarks(Vector3 worldRightAsis, Vector3 worldUmbilicus, Vector3 worldLineDirection, float lineLengthMeters = .06f)
         {
@@ -414,6 +590,7 @@ namespace Scalpal.Surgery
         {
             if (!Ready || !BodyState.ValidBodyAction(action) || !action.registered || action.timeMs > activeSeconds * 1000 + .01)
             { LastRejection = "Practice unavailable or invalid measured body action."; return false; }
+            action.Quantize(); // Event boundary: the body applies exactly the rounded values the coach receives.
             if (action.verb == "cut") DrainTentReleases();
             int count = exercise.Body.Log.Count;
             if (!exercise.Submit(CaseEvent.Surgery(action), out _, out var reason)) { LastRejection = reason; return false; }
@@ -437,6 +614,8 @@ namespace Scalpal.Surgery
                 pendingTentReleases[state.lastTentMeasurement.tissueId] = state.lastTentMeasurement.Copy();
             state.lastTentMeasurement = null;
             if (state.ownsHandle && state.target && state.target.Deformable?.Cage != null) state.target.Deformable.Cage.ReleaseHandle();
+            if (state.mobile != null) { state.mobile.EndHold(); state.mobile = null; }
+            ReleaseGrip(state);
             state.tissueId = ""; state.target = null; state.grasping = state.ownsHandle = state.committed = false;
             state.stroke.Reset(); state.marker.Clear(); state.strokeSent = state.dwell = state.sinceSent = 0;
         }
@@ -455,27 +634,83 @@ namespace Scalpal.Surgery
                 if (SubmitMeasured(release, null)) pendingTentReleases.Remove(id);
             }
         }
+        // Accepted outward lift of any live grip on this membrane, including a latched one.
         float CurrentTentLift(string tissueId)
         {
             float maximum = 0;
+            if (!wall) return maximum;
             foreach (var state in states)
             {
-                if (!state.grasping || state.tissueId != tissueId || !ValidTool(state)) continue;
-                Vector3 point = state.tool.actionPoint.position;
-                if (!OpenSurgeryStroke.Finite(point)) continue;
-                if (state.target)
-                {
-                    var deformable = state.target.Deformable;
-                    point = deformable && deformable.Cage != null
-                        ? deformable.transform.TransformPoint(deformable.DeformSurfacePoint(state.rawSurface))
-                        : state.target.transform.TransformPoint(state.rawSurface);
-                }
-                float lift = Mathf.Max(0, -Vector3.Dot(point - state.anchor, wound.forward)) * 1000;
-                if (float.IsFinite(lift)) maximum = Mathf.Max(maximum, lift);
+                int token = GripToken(state, tissueId);
+                if (token == 0 || !wall.TryMeasureLayerHandle(token, out var grip) || !grip.hasAcceptedStep) continue;
+                if (float.IsFinite(grip.outwardLiftMillimeters)) maximum = Mathf.Max(maximum, grip.outwardLiftMillimeters);
             }
             return maximum;
         }
-        void Release(ToolState state) { ClearContact(state); state.active = state.previousValid = false; }
+        int GripToken(ToolState state, string tissueId) => state.layerToken != 0 && state.tissueId == tissueId ? state.layerToken
+            : state.retainedToken != 0 && state.retainedTissueId == tissueId ? state.retainedToken : 0;
+        // Accepted material positions of two grips in wall-local metres and the line their opening runs along.
+        bool PairGeometry(int first, int second, out Vector3 a, out Vector3 b, out Vector3 along)
+        {
+            a = b = along = Vector3.zero;
+            if (!wall.TryMeasureLayerHandle(first, out var one) || !wall.TryMeasureLayerHandle(second, out var two)) return false;
+            Transform frame = wall.Wall.transform;
+            a = frame.InverseTransformPoint(one.worldPosition); b = frame.InverseTransformPoint(two.worldPosition);
+            Vector3 across = new Vector3(b.x - a.x, b.y - a.y, 0);
+            if (across.sqrMagnitude < 1e-10f) return false;
+            along = Vector3.Cross(Vector3.forward, across).normalized; return true;
+        }
+        // Two distinct material grips that actually pull apart request one finite split surface through
+        // their midpoint. The volume refuses one that runs across the fibers, so only a pull across the
+        // fibers (an opening along them) can split the muscle; a single grip never requests one.
+        void RequestSplit(ToolState state, string tissueId)
+        {
+            foreach (var other in states)
+            {
+                int token = other == state ? 0 : GripToken(other, tissueId);
+                if (token == 0) continue;
+                if (state.splitTriedWith == token || other.splitTriedWith == state.layerToken) return;
+                if (!wall.TryMeasureMuscleSplit(state.layerToken, token, out float increase) || increase < SplitOnsetMm
+                    || !PairGeometry(state.layerToken, token, out var a, out var b, out var along) || !OpenWallLayers.TryGet(tissueId, out var layer)) continue;
+                // One request per grip pair; the length is an authored gridiron-opening extent.
+                state.splitTriedWith = token; other.splitTriedWith = state.layerToken;
+                Transform frame = wall.Wall.transform;
+                Vector3 middle = (a + b) * .5f, reach = along * SplitHalfLengthMeters;
+                Vector3 top = new Vector3(middle.x, middle.y, layer.startDepthMeters - SplitDepthMarginMeters);
+                Vector3 bottom = new Vector3(middle.x, middle.y, layer.endDepthMeters + SplitDepthMarginMeters);
+                wall.TrySplitMuscle(frame.TransformPoint(top - reach), frame.TransformPoint(top + reach), frame.TransformPoint(bottom + reach), out _);
+                wall.TrySplitMuscle(frame.TransformPoint(top - reach), frame.TransformPoint(bottom + reach), frame.TransformPoint(bottom - reach), out _);
+                return;
+            }
+        }
+        // The volume's measured separation increase across the fibers, and the opening line's fiber angle.
+        void MeasureSplit(ToolState state, string tissueId, BodyAction action)
+        {
+            foreach (var other in states)
+            {
+                int token = other == state ? 0 : GripToken(other, tissueId);
+                if (token == 0 || !wall.TryMeasureMuscleSplit(state.layerToken, token, out float increase)
+                    || !PairGeometry(state.layerToken, token, out _, out _, out var along)) continue;
+                action.separationMm = Mathf.Max(0, increase);
+                action.angleDegrees = OpenWallLayers.TryFiberAngle(tissueId, along, out float angle) ? angle : 90;
+                action.secondaryInstanceId = other.instance; return;
+            }
+        }
+        void ReleaseGrip(ToolState state)
+        {
+            if (state.layerToken == 0) return;
+            // A latched retractor let go by the hand keeps its tissue held open.
+            if (wall && state.latch && state.latch.Attached && state.tool && !state.tool.Held && state.tissueId != "")
+            { ReleaseRetained(state); state.retainedToken = state.layerToken; state.retainedTissueId = state.tissueId; }
+            else if (wall) wall.ReleaseLayerHandle(state.layerToken);
+            state.layerToken = 0;
+        }
+        void ReleaseRetained(ToolState state)
+        {
+            if (state.retainedToken != 0 && wall) wall.ReleaseLayerHandle(state.retainedToken);
+            state.retainedToken = 0; state.retainedTissueId = "";
+        }
+        void Release(ToolState state) { ClearContact(state); state.active = state.previousValid = state.wallEngaged = false; }
         void ClearTransient() { foreach (var state in states) Release(state); }
         void OnDisable() { ClearPlacements(); wasReady = false; frameKnown = false; }
     }
