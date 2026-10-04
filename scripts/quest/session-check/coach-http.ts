@@ -2,6 +2,7 @@
 // No live FinchNode client, voice provider, environment keys, or operator session.
 import { createRequire } from 'node:module';
 import { createApp } from '../../../services/preop/src/app.js';
+import { legacyAppendectomyApp } from '../../../services/preop/test/legacy-appendectomy-fixture.js';
 import { fixtureClient, NOW } from '../../../services/preop/test/helpers.js';
 
 const requirePreop = createRequire(new URL('../../../services/preop/package.json', import.meta.url));
@@ -18,18 +19,21 @@ function check(name: string, valid: boolean, observed = '') {
 async function main() {
   let milliseconds = NOW.getTime();
   const app = createApp({ client: fixtureClient(), now: () => new Date(milliseconds), coachTickMs: 0 });
+  // The port/clip mechanics below are the retained advanced procedure, never the default open case.
+  app.route('/advanced', legacyAppendectomyApp({ now: () => new Date(milliseconds) }));
   const server = serve({ fetch: app.fetch, hostname: '127.0.0.1', port: 0 });
   if (!server.listening) await new Promise<void>(resolve => server.once('listening', resolve));
   const address = server.address();
   if (!address || typeof address === 'string') throw new Error('missing local listening port');
-  const base = `http://127.0.0.1:${address.port}`;
+  const productionBase = `http://127.0.0.1:${address.port}`;
+  const base = productionBase + '/advanced';
   const call = async (method: string, route: string, body?: unknown): Promise<Json> => {
     const response = await fetch(base + route, {
       method, headers: { 'content-type': 'application/json', connection: 'close' },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
     const json = await response.json() as Json;
-    if (!response.ok) throw new Error(`${method} coach route failed with ${response.status}`);
+    if (!response.ok) throw new Error(`${method} ${route} failed with ${response.status}: ${json.error?.code ?? "unknown"}`);
     return json;
   };
   const start = async () => (await call('POST', '/coach/sessions', {
@@ -43,6 +47,18 @@ async function main() {
   const ack = async (sid: string, cid: string, status: string, reason: string) =>
     (await call('POST', `/coach/sessions/${sid}/commands/${cid}/ack`, { status, reason })).command as Json;
   try {
+    const normal = await fetch(productionBase + '/coach/sessions', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ patientId: 'patient-demo-pediatric-asthma', mode: 'virtual' }),
+    });
+    const normalSession = await normal.json() as Json;
+    check('normal patient keeps the main-path open procedure', normal.ok && normalSession.snapshot?.procedureId === 'open_appendectomy');
+    if (!normal.ok) throw new Error('normal coach session unavailable');
+    const obsolete = await fetch(productionBase + `/coach/sessions/${normalSession.sessionId}/events`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ event: { type: 'place_port', portId: 'umbilical' } }),
+    });
+    check('main-path open procedure refuses obsolete port mechanics', obsolete.status === 400);
     const paused = await start();
     await event(paused, { type: 'tracking', valid: false });
     const rejectedInput = await event(paused, { type: 'place_port', portId: 'umbilical',
