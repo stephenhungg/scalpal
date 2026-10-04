@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { BAYER, MARK } from "@/lib/mark";
+import { MARK } from "@/lib/mark";
 
 // The headline's entrance: the Scalpal mark fades in where the title sits, holds, then dithers
 // into the "Scalpal." text. The real <h1> text stays in the layout (invisible) so the canvas can
@@ -83,13 +83,24 @@ export function TitleMorph({ text, onDone, instant = false }: { text: string; on
       const ink = getComputedStyle(heading).color || "#fff";
       const alphaAt = (data: Uint8ClampedArray, x: number, y: number) => data[(Math.min(H - 1, y) * W + Math.min(W - 1, x)) * 4 + 3];
 
+      // Per-cell thresholds (a stable hash) instead of a 4x4 Bayer: every cell flips at its own
+      // moment, so the dissolve moves in hundreds of tiny steps rather than 16 visible clicks.
+      const cols = Math.ceil(W / cell), rows = Math.ceil(H / cell);
+      const thresh = new Float32Array(cols * rows);
+      for (let i = 0; i < thresh.length; i++) {
+        let h = Math.imul(i ^ 0x9e3779b9, 0x85ebca6b);
+        h ^= h >>> 13;
+        h = Math.imul(h, 0xc2b2ae35);
+        h ^= h >>> 16;
+        thresh[i] = (h >>> 0) / 4294967296;
+      }
       const draw = (logoLevel: number, textLevel: number) => {
         ctx.clearRect(0, 0, W, H);
         ctx.fillStyle = ink;
         for (let y = 0; y < H; y += cell) {
           for (let x = 0; x < W; x += cell) {
             const cx = x + (cell >> 1), cy = y + (cell >> 1);
-            const t = BAYER[(((y / cell) | 0) & 3) * 4 + (((x / cell) | 0) & 3)];
+            const t = thresh[((y / cell) | 0) * cols + ((x / cell) | 0)];
             const onText = alphaAt(tData, cx, cy) > 110 && t < textLevel;
             const onMark = alphaAt(mData, cx, cy) > 110 && t < logoLevel;
             if (onText || onMark) ctx.fillRect(x, y, cell, cell);
@@ -117,16 +128,26 @@ export function TitleMorph({ text, onDone, instant = false }: { text: string; on
           const p = (t - APPEAR - HOLD) / MORPH;
           const e = p * p * (3 - 2 * p);
           draw(1 - e, e);
-          // over the last stretch, fade the blocky cells into crisp letters so the swap to the
-          // real text has nothing left to change
-          const crisp = Math.max(0, (p - 0.55) / 0.45);
+          // Both ends hand over between the crisp shapes and the blocky cells gradually, so the
+          // morph never jumps: the crisp mark fades into the cells at the start, and the cells
+          // fade into crisp letters at the end.
+          const smooth = (x: number) => x * x * (3 - 2 * x);
+          const fromMark = smooth(Math.max(0, 1 - p / 0.3));
+          const toText = smooth(Math.max(0, (p - 0.55) / 0.45));
+          const crisp = fromMark + toText;
           if (crisp > 0) {
             ctx.globalAlpha = 1 - crisp;
             ctx.globalCompositeOperation = "destination-in";
             ctx.fillRect(0, 0, W, H);
             ctx.globalCompositeOperation = "source-over";
-            ctx.globalAlpha = crisp * crisp * (3 - 2 * crisp);
-            ctx.drawImage(textMask, 0, 0);
+            if (fromMark > 0) {
+              ctx.globalAlpha = fromMark;
+              ctx.drawImage(markMask, 0, 0);
+            }
+            if (toText > 0) {
+              ctx.globalAlpha = toText;
+              ctx.drawImage(textMask, 0, 0);
+            }
             ctx.globalAlpha = 1;
           }
         } else {
