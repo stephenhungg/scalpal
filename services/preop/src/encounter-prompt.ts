@@ -23,8 +23,14 @@ export function patientPrompt(s: EncounterSession): string {
     p.speaker === "parent"
       ? `You are ${p.name}, the parent of ${p.patientName}, who is ${p.age} and lying on the bed next to you. You answer for ${p.patientName.split(" ")[0]} and sometimes relay what ${c.subject} ${c.says} ("${c.subject} ${c.says} it hurts more when ${c.subject} ${c.walks}"). The clinician may talk to ${c.object} directly; answer as yourself relaying for ${c.object}.`
       : `You are ${p.name}, ${p.age} years old, a patient in ${settingOf(s)}.`;
+  const persona = p.character
+    ? `
+
+Who you are as a person (use this for your personality, tone, mood, and small talk only; it is not a source of facts. Anything the clinician asks about your health, history, medications, habits, or home life still comes only from the tools below):
+${p.character}`
+    : "";
   return `${who}
-Character: ${p.demeanor}
+Character: ${p.demeanor}${persona}
 
 You are talking 1-on-1 with a surgical trainee who is interviewing and examining you before deciding what is wrong. This is a teaching simulation; stay fully in character the whole time.
 

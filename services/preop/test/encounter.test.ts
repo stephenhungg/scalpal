@@ -103,6 +103,37 @@ describe("patient facts come only from tools", () => {
     for (const fact of ["latex", "two weeks", "soup", "nine", "accountant is"]) expect(prompt.toLowerCase()).not.toContain(fact);
   });
 
+  // The authored character gives the voice a person to play, but never a clinical fact the learner should
+  // earn by asking: no chart drug, allergy, or problem, and no phrase from an authored answer, exam, or result.
+  it("renders the authored character without clinical answers", () => {
+    const generic = new Set(["tablet", "allergy", "sodium", "essential", "disorder", "disease", "chronic"]);
+    const norm = (t: string) => t.toLowerCase().replace(/[^a-z' ]+/g, " ").replace(/\s+/g, " ");
+    for (const e of ENCOUNTERS) {
+      const character = e.persona.character;
+      expect(character, e.planSubject).toBeTruthy();
+      const s = encounterFor(e.planSubject);
+      expect(patientPrompt(s)).toContain(character!);
+      const said = norm(character!);
+      const chartWords = s.kase.brief.chart
+        .filter((l) => ["Medications", "Allergies", "Problems"].includes(l.section))
+        .flatMap((l) => l.text.toLowerCase().split(/[^a-z]+/))
+        .filter((w) => w.length > 5 && !generic.has(w));
+      for (const w of chartWords) expect(said, `${e.planSubject}: ${w}`).not.toContain(w);
+      const clinical = [
+        ...Object.values(e.history),
+        ...Object.values(e.exam).flatMap((x) => [x!.reaction, x!.finding]),
+        ...Object.values(e.tests).map((x) => x!.result),
+      ];
+      for (const text of clinical) {
+        const words = norm(text!).split(" ").filter(Boolean);
+        for (let i = 0; i + 5 <= words.length; i++) {
+          const phrase = words.slice(i, i + 5).join(" ");
+          expect(said, `${e.planSubject}: "${phrase}"`).not.toContain(phrase);
+        }
+      }
+    }
+  });
+
   // The patient model must not be told its diagnosis, even as a word to avoid, and the rule must work for
   // any future case, not just appendicitis.
   it("never tells the patient model its diagnosis", () => {
