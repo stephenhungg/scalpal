@@ -1,17 +1,20 @@
 """Short OWLv2 head fine-tune on the synthetic instrument records, with before/after metrics.
 
     uv run python scripts/prepare_finetune.py --dataset data/synthetic
-    uv run python scripts/finetune_owlv2.py --data data/synthetic/finetune --epochs 8 --out runs/owlv2-synth
+    uv run python scripts/finetune_owlv2.py --data data/synthetic/finetune --epochs 6 --out runs/owlv2-synth
 
-What it trains: the vision and text towers are frozen; the class head, box head,
-objectness head and final layer norm are trained. Text embeddings for the 15 catalog prompts
-are computed by the frozen text tower each step (cheap at this size).
+What it trains: only the class head (the patch-embedding projection and per-patch logit
+shift/scale that score patches against prompt embeddings). The vision and text towers and
+the box head stay frozen: zero-shot OWLv2 already localizes these renders (mean IoU 0.68
+on held-out views); what it lacks is telling 15 similar instruments apart.
 
-Loss, per image (DETR-style, one-to-one matching):
-- each ground-truth box is matched to one patch by the Hungarian algorithm on
-  cost = -p(class) + 5 * L1 + 2 * (1 - GIoU);
-- sigmoid focal loss over every patch x prompt, target 1 only at matched (patch, class);
-- 5 * L1 + 2 * (1 - GIoU) on matched boxes.
+Targets, per image: every patch whose frozen predicted box has IoU >= 0.5 with a
+ground-truth box is a positive for that box's prompt (the single best patch if none
+reaches 0.5); every other patch x prompt pair is a negative. Loss is sigmoid focal loss
+normalized by the number of positives.
+
+An earlier variant that also trained the box head with DETR-style one-to-one Hungarian
+matching made localization worse (held-out mean IoU 0.68 -> 0.26) and is not kept.
 
 Boxes are in OWLv2's space: normalized cx, cy, w, h relative to the image padded to a
 square at the bottom/right (divide pixels by the long side).
@@ -36,7 +39,6 @@ from pathlib import Path
 import torch
 import torch.nn.functional as F
 from PIL import Image
-from scipy.optimize import linear_sum_assignment
 from transformers import Owlv2ForObjectDetection, Owlv2Processor
 
 from scalpal_vision.detector import OWLV2_NATIVE, OWLV2_SIZE, owlv2_pixels
@@ -129,7 +131,7 @@ class Runner:
     def train(self, records: list[dict], epochs: int, lr: float, log_every: int = 25) -> list[float]:
         model = self.model
         for name, param in model.named_parameters():
-            param.requires_grad = not name.startswith("owlv2.")
+            param.requires_grad = name.startswith("class_head.")
         trainable = [p for p in model.parameters() if p.requires_grad]
         print(f"trainable params: {sum(p.numel() for p in trainable):,}", flush=True)
         optimizer = torch.optim.AdamW(trainable, lr=lr, weight_decay=1e-4)
@@ -142,40 +144,27 @@ class Runner:
             random.shuffle(order)
             for record in order:
                 pixel = cache[record["image"]].to(self.device)
-                if random.random() < 0.5:  # horizontal flip; boxes flip in padded-square space
+                flipped = random.random() < 0.5
+                if flipped:  # horizontal flip; the padded square is 1.0 wide in box space
                     pixel = pixel.flip(-1)
-                    flipped = True
-                else:
-                    flipped = False
                 out = self.forward(pixel)
                 logits = out.logits[0]
-                pred = out.pred_boxes[0]
                 side = max(record["width"], record["height"])
-                targets = []
-                for box in record["boxes"]:
-                    cx, cy, w, h = to_cxcywh(box["xyxy"], side)
-                    if flipped:
-                        # The padded square is 1.0 wide; the image occupies its left part.
-                        cx = 1.0 - cx
-                    targets.append([cx, cy, w, h])
-                gt = torch.tensor(targets, device=self.device)
-                classes = [b["class"] for b in record["boxes"]]
+                target = torch.zeros_like(logits)
                 with torch.no_grad():
-                    cost_class = -logits.sigmoid()[:, classes]
-                    cost_l1 = torch.cdist(pred, gt, p=1)
-                    cost_giou = -giou(cxcywh_to_xyxy(pred), cxcywh_to_xyxy(gt))[0]
-                    cost = (cost_class + 5 * cost_l1 + 2 * cost_giou).float().cpu()
-                    rows, cols = linear_sum_assignment(cost.numpy())
-                rows_t = torch.as_tensor(rows, device=self.device)
-                cols_t = torch.as_tensor(cols, device=self.device)
-                target_cls = torch.zeros_like(logits)
-                target_cls[rows_t, torch.as_tensor(classes, device=self.device)[cols_t]] = 1.0
-                matched_pred, matched_gt = pred[rows_t], gt[cols_t]
-                loss_cls = focal(logits, target_cls) / max(len(classes), 1)
-                loss_l1 = F.l1_loss(matched_pred, matched_gt, reduction="sum") / len(classes)
-                g, _ = giou(cxcywh_to_xyxy(matched_pred), cxcywh_to_xyxy(matched_gt))
-                loss_giou = (1 - g.diagonal()).sum() / len(classes)
-                loss = loss_cls + 5 * loss_l1 + 2 * loss_giou
+                    pred = cxcywh_to_xyxy(out.pred_boxes[0].float())
+                    for box in record["boxes"]:
+                        cx, cy, w, h = to_cxcywh(box["xyxy"], side)
+                        if flipped:
+                            cx = 1.0 - cx
+                        gt = cxcywh_to_xyxy(torch.tensor([[cx, cy, w, h]], device=self.device))
+                        _, overlap = giou(pred, gt)
+                        overlap = overlap[:, 0]
+                        positive = overlap >= 0.5
+                        if not positive.any():
+                            positive = overlap == overlap.max()
+                        target[positive, box["class"]] = 1.0
+                loss = focal(logits, target) / target.sum().clamp(min=1)
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
@@ -183,7 +172,7 @@ class Runner:
                 step += 1
                 if step % log_every == 0:
                     recent = losses[-log_every:]
-                    print(f"epoch {epoch} step {step} loss {sum(recent) / len(recent):.3f}", flush=True)
+                    print(f"epoch {epoch} step {step} loss {sum(recent) / len(recent):.4f}", flush=True)
         model.eval()
         return losses
 
