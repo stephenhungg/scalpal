@@ -14,7 +14,10 @@ export function Footer({ show, instant = false }: { show: boolean; instant?: boo
       animate={{ opacity: show ? 1 : 0 }}
       transition={{ duration: 0.8, ease: [0.44, 0, 0.56, 1] }}
     >
-      <p className={text}>Bloomed at MHacks 2026</p>
+      <p className={text}>
+        {/* MHacks 2026's theme is a bloom; same sprout green as the logo's hover glint */}
+        <span className="text-[#8ef08a]">Bloomed</span> at MHacks 2026
+      </p>
       <nav aria-label="Project links" className={`pointer-events-auto flex gap-5 ${text}`}>
         {LINKS.map((l) => (
           <a key={l.label} href={l.href} target="_blank" rel="noreferrer" className="transition-colors hover:text-white">
