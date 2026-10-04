@@ -172,7 +172,8 @@ namespace Scalpal.Shell.Editor
                 foreach (var status in new[] { "ready", "needs_review", "blocked", "retry" })
                     Check(patients.patients.Any(p => p.status == status), "actual fixture returns renderable " + status + " status");
                 var getBundle = Send(client, "/unity/bundle"); getBundle.Run();
-                Check(getBundle.paths.SequenceEqual(new[] { "/unity/bundle" }) && bundle?.cases?.Length == 10, "production bundle route supplies all 10 patient cases and reused DTOs");
+                // Case count may grow (alternate procedures per patient); every playable patient must still be covered.
+                Check(getBundle.paths.SequenceEqual(new[] { "/unity/bundle" }) && bundle?.cases != null && bundle.cases.Select(item => item.patientId).Distinct().Count() == 10, "production bundle route covers all 10 patients with reused DTOs");
                 var liveHub = UnityEngine.Object.FindFirstObjectByType<HubController>();
                 Check(liveHub != null, "live HTTP boundary binds real generated hub controller");
                 liveHub.service = client; liveHub.Initialize(); liveHub.Enter();
