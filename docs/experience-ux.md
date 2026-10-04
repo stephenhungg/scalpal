@@ -91,7 +91,7 @@ Evidence: productive failure beats instruction-first on conceptual knowledge and
 
 ## 5. Operating Room (AR or VR)
 
-The learner picks AR (real participant) or VR (virtual patient) at the handoff; both share the same tools, steps, coaching and scoring. In VR the office fades into the virtual OR. In AR the office fades into passthrough. The participant reclines on the table; the app detects their body with MediaPipe, shows registration progress and quality, and overlays the case's anatomy once the fit is stable. The operator confirms the fit. Lost registration hides the anatomy and pauses scoring until it reacquires; tools freeze rather than drop. The detailed handoff spec lives in the office-to-OR handoff document once written.
+The learner picks AR (real participant) or VR (virtual patient) at the handoff; both share the same tools, steps, coaching and scoring. In VR the office fades into the virtual OR. In AR the office fades into passthrough. The participant reclines on the table; the app detects their body with MediaPipe, shows registration progress and quality, and overlays the case's anatomy once the fit is stable. The operator confirms the fit. Lost registration hides the anatomy and pauses scoring until it reacquires; tools freeze rather than drop. The detailed handoff spec is [office to OR handoff](office-to-or-handoff.md).
 
 
 - **Onboarding, 60–90 s, skippable after the first run:** before the case, touch a target with each instrument; learn grip, trigger and the camera/trocar. A ghost hand demonstrates each.
