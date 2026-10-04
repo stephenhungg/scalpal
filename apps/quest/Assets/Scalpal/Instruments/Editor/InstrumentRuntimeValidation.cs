@@ -201,8 +201,14 @@ namespace Scalpal.Instruments.Editor
                         Require(start && end && Vector3.Distance(start.position, end.position) >= .002f && Vector3.Distance(start.position, end.position) <= .06f,
                             "Metzenbaum supplies one metric blade segment to the tissue driver");
                     }
-                    interactor.SetTrackedPose(hand.transform.position, hand.transform.rotation, false);
-                    Require(!tool.Held && tool.Activation == 0, id + " tracking loss releases and deactivates");
+                    double lostAt = Time.unscaledTimeAsDouble;
+                    Vector3 frozen = tool.transform.position;
+                    interactor.SetTrackedPose(hand.transform.position, hand.transform.rotation, false, lostAt);
+                    Require(tool.Held && !tool.TrackingValid && tool.Activation == 0 && tool.GetComponent<Rigidbody>().isKinematic,
+                        id + " brief tracking loss freezes held equipment and deactivates");
+                    Require((tool.transform.position-frozen).sqrMagnitude < 1e-8f, id + " lost pose does not move tool");
+                    interactor.AdvanceTrackingLoss(lostAt + interactor.trackingGraceSeconds + .01);
+                    Require(!tool.Held && tool.Activation == 0, id + " sustained tracking loss returns equipment");
                     Require(!tool.GetComponent<Rigidbody>().isKinematic && tool.GetComponent<Rigidbody>().useGravity,
                         id + " release restores pickup physics");
                 }
