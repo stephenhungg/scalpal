@@ -13,6 +13,7 @@ import { FadeIn } from "./FadeIn";
 import { RollButton } from "./RollButton";
 import { TitleMorph } from "./TitleMorph";
 import { Footer } from "./Footer";
+import { TitleHeartbeat } from "./TitleHeartbeat";
 
 const TITLE = "scalpal.";
 const LEDE = "A mixed reality operating room experience guided by Jarvis, your all-knowing assistant.";
@@ -70,7 +71,9 @@ export function Landing() {
                 session.introPlayed = true;
                 setTitled(true);
               }}
-            />
+            >
+              <TitleHeartbeat show={titled && !leaving} instant={skip} />
+            </TitleMorph>
             <p className="lede mt-4 max-w-[660px] min-h-[56px]">{titled && <BlurWords text={LEDE} start={-3} instant={skip} />}</p>
             <div className="mt-[26px] min-h-[50px] min-[810px]:mt-9">
               {titled && (

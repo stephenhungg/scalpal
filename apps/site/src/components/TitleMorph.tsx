@@ -12,7 +12,7 @@ const MORPH = 800; // ms, mark dithers into the text
 const CELL = 3; // dither cell, CSS px
 const PAD = 40; // canvas bleed around the heading, CSS px
 
-export function TitleMorph({ text, onDone, instant = false }: { text: string; onDone: () => void; instant?: boolean }) {
+export function TitleMorph({ text, onDone, instant = false, children }: { text: string; onDone: () => void; instant?: boolean; children?: React.ReactNode }) {
   const h1 = useRef<HTMLHeadingElement>(null);
   const textRef = useRef<HTMLSpanElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -170,7 +170,8 @@ export function TitleMorph({ text, onDone, instant = false }: { text: string; on
   }, [text, instant]);
 
   return (
-    <h1 ref={h1} className="display relative">
+    <h1 ref={h1} className="display relative isolate">
+      {children}
       <span ref={textRef} style={{ visibility: done ? "visible" : "hidden" }}>
         {text}
       </span>
