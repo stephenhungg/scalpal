@@ -16,7 +16,7 @@ def main(argv: list[str] | None = None) -> None:
 
     serve = sub.add_parser("serve", help="run the HTTP service")
     serve.add_argument("--host", default="127.0.0.1")
-    serve.add_argument("--port", type=int, default=8791)
+    serve.add_argument("--port", type=int, default=8792)
     detect = sub.add_parser("detect", help="detect on one image file and print JSON")
     detect.add_argument("image", type=Path)
     detect.add_argument("--labels", nargs="+", default=list(DEFAULT_LABELS))

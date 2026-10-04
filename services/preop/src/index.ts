@@ -15,7 +15,7 @@ export default createApp({
   // Jarvis's eyes (ANTHROPIC_API_KEY): the look_at_scene tool and the background scene watcher.
   vision: sceneVisionFromEnv(process.env),
   watchMs: Number(process.env.JARVIS_WATCH_MS ?? 4000),
-  // Real-camera instrument and hand boxes from services/vision (VISION_DETECT_URL, e.g. http://127.0.0.1:8791).
+  // Real-camera instrument and hand boxes from services/vision (VISION_DETECT_URL, e.g. http://127.0.0.1:8792).
   detector: frameDetectorFromEnv(process.env),
   // Office interview: spoken answers are transcribed (ElevenLabs) and matched to a choice (Claude Haiku).
   speechToText: process.env.ELEVENLABS_API_KEY ? new ElevenLabsSpeechToText(process.env.ELEVENLABS_API_KEY) : null,
