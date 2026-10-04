@@ -1,5 +1,20 @@
 # Current Direction
 
+## Latest Experience Flow
+
+The user replaced the selection and presentation flow on October 3, 2026. This section takes precedence over the conversational selection, rotating-preview and two-mode material below and in older documents.
+
+**Launch → press Enter → patient explore page → choose a case → diagnosis office → decide the surgery → full-VR operating room → robot replay.**
+
+1. **Launch.** The Quest app opens on a start screen. Pressing Enter (or the equivalent controller confirm) opens the explore page.
+2. **Explore page.** A large browsable view of synthetic patients built from FinchNode demo data (`services/preop` `GET /patients`, `GET /patients/:id/brief`). Each patient is a case card with chart context. Choosing one opens that patient's encounter.
+3. **Diagnosis office.** A full-VR doctor's office where the learner has a voice back-and-forth with the patient (voice agent grounded in the FinchNode chart plus authored presentation), examines and orders tests, then presents to the attending (Jarvis), who scores the diagnosis.
+4. **Choose the surgery.** The assessment fixes which procedure the patient needs. That decision, not a separate selection conversation, determines the surgical case.
+5. **Surgery simulation.** Full-VR operating room with a virtual patient, the shared tool/anatomy/exercise core and Jarvis coaching. The real-person MR body fit is no longer on the main path.
+6. **Robot replay (required ending).** Raw passthrough video recorded during the surgery segment is processed into hand motion and replayed on the simulated robot hand. Every run ends with this step.
+
+Every FinchNode demo patient needs an authored diagnosis encounter. Surgical simulations must exist for each procedure a diagnosis can lead to. See the [demo flow](demo-flow.md) for acceptance details and the [integration map](system-integration.md#explore--office--or-route) for the current gaps.
+
 ## Abdominal Tissue Direction
 
 The user selected appendectomy/abdomen for the material/physics expansion. The focused tissue milestone adds39 shared-frame exterior, abdominal wall, skeletal and vascular references (81 preview structures total). The current feature revision adds a connected three-layer tetrahedral abdominal wall, finite blade-driven topology cuts, sampled organ contact, per-cell material memory and geometry-driven bleeding controls. Editor mechanics and session-boundary checks passed. Contact preserves authored rest attachments; imported FBX coordinates explicitly convert to meters. These are uncalibrated teaching mechanics: measured material fits, broader contact coverage, vessel wall/lumen mechanics, high-fidelity tissue appearance and actual Quest performance remain unfinished. See [tissue simulation](tissue-simulation.md) and the [physics goal](physics-implementation-plan.md) for routing and evidence.
@@ -19,13 +34,15 @@ Solana, wallets, onchain challenge programs, Devnet payouts, and money for compl
 
 AI guides people through mixed-reality learning and practice. Recorded passthrough video can supply estimated hand movements that are mapped onto a simulated robot hand for replay. The longer-term hypothesis is that useful demonstrations could support robot learning. Replay does not itself demonstrate a learned autonomous policy.
 
-The working experience is: open the Quest app → discuss an exercise with Jarvis → explore a rotating 3D anatomy preview → confirm the exercise and fit generic anatomy to a real reclining participant → practice with simulated tools → receive feedback → process/replay the recorded motion → recap or retry. The exact shared exercise and component adapters still need reconciliation; see the [current demo flow](demo-flow.md) and [system integration map](system-integration.md).
+The working experience is the [latest experience flow](#latest-experience-flow) above. The earlier sequence (discuss an exercise with Jarvis → rotating anatomy preview → fit anatomy to a real reclining participant → practice → replay) is superseded.
 
 ## Latest Body Overlay Direction
 
 The user explicitly requests MediaPipe detection of a person lying on a table and generic virtual anatomy attached to the body landmarks. The current implementation uses an opt-in ephemeral local pose service, calibrated Quest camera rays, an automatically measured anterior torso surface and stable acquisition; it does not infer metric body depth from MediaPipe z. Native presentation now defaults to AR, with a 42-part organ overview and the shared nine-target scored exercise. Physical detection/alignment remains the acceptance checkpoint. See [body registration](body-registration.md).
 
 ## Two Presentation Modes
+
+**Superseded for the main flow:** surgery now runs in full VR only. The MR real-person route and its registration work remain in the repository but are not required by the current flow.
 
 The user now explicitly wants both **mixed reality with a real reclining participant and virtual organs** and **full VR with a virtual patient and operating room**. Both use one coach, tool system and authored exercise flow. Surface detection, body landmarks and validated anatomy registration are separate jobs; a table/person box does not determine organ placement. See [mode engineering](environment-modes.md) and [environment-source research](research/surgery-environments.md).
 

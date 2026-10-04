@@ -76,6 +76,21 @@ flowchart LR
 
 Immediate rendering, registration, tool physics and input stay local. SpacetimeDB coordinates small confirmed state and commands. Video bytes travel through WebRTC or private storage, never a subscription table. The existing laptop mirror supplies spectator media; raw passthrough supplies the proposed motion input. Those sources have different contents.
 
+## Explore → Office → OR Route
+
+Target for the [latest experience flow](current-direction.md#latest-experience-flow). Status as of October 3, 2026; nothing below is an end-to-end result.
+
+| Stage | Producer / consumer | Exists | Missing |
+| --- | --- | --- | --- |
+| Launch screen | Unity start scene | Nothing dedicated | Start scene with Enter/controller confirm that loads the explore page |
+| Explore page | `services/preop` `GET /patients`, `/patients/:id/brief`, `/unity/bundle` → Unity | Service returns every FinchNode demo patient with procedure, urgency, status and actions; Unity DTOs exist in `Assets/Scalpal/Exercises/Data/` | Explore scene/UI that renders the list and status states and routes a choice into the office |
+| Diagnosis office | Encounter engine (`/encounters`, tools, `/attending`, `/score`) → `Assets/Scalpal/EncounterOffice/` | On the unmerged `codex/diagnosis-office` branch (draft, stacked on tissue work): encounter engine, patient/attending voice routing through `QuestJarvisVoice`, office art in progress | Authored encounters exist for only 3 of 12 FinchNode patients (`patient-demo-multi-source`, `patient-demo-pediatric-asthma`, `patient-demo-sparse`); office scene, lifecycle checks and merge |
+| Assessment → surgery | `record_assessment` / scorecard → `GET /patients/:id/case` → OR | Case plans fix the procedure for the 8 authored FinchNode patients; the other 4 use the age-based `fallbackPlan` | Handoff from the encounter result to the OR scene with the same patient/attempt; decision on forced vs learner-chosen procedure |
+| Operating room | Native session (`NativeSession.unity`) + shared tool/anatomy/exercise core | Full-VR appendectomy rehearsal with nine anatomy meshes and tools | Cholecystectomy (4 authored patients) and sigmoid colectomy (1) surgery scenes; loading a case by patient ID rather than a fixed appendectomy |
+| Robot replay | Raw passthrough capture → gateway → Silas worker → companion/headset playback | Gateway worker and left/right Shadow-hand kinematic replay merged on main | Recording raw camera video while the app renders full VR (unverified); in-headset replay view; physical clip run |
+
+MR body-registration work remains in the repository but is off the main path.
+
 ## Where the Current Code Routes
 
 ### Case selection, practice and Jarvis
