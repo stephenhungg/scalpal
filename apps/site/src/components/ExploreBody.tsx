@@ -42,7 +42,7 @@ export function ExploreBody({ apkUrl, videoUrl }: { apkUrl: string; videoUrl: st
             <BlurWords text={LEDE} start={wordCount(TITLE)} />
           </p>
 
-          <FadeIn delay={0.55} className="mt-6 w-full max-w-[min(800px,calc((100dvh-530px)*16/9))]">
+          <FadeIn delay={0.55} className="mt-6 w-full max-w-[min(800px,calc((100dvh-430px)*16/9))]">
             {videoUrl ? (
                 <video className="block aspect-video w-full bg-black" src={videoUrl} controls playsInline preload="metadata" />
               ) : (
@@ -61,13 +61,9 @@ export function ExploreBody({ apkUrl, videoUrl }: { apkUrl: string; videoUrl: st
                   Download soon
                 </span>
               )}
-              <RollButton href="/" variant="secondary" label="Back" hoverLabel="Home" onClick={go("/")} />
+              <RollButton href="#" variant="secondary" copy={AGENT_PROMPT} label="Build your own case" hoverLabel="Copy agent prompt" />
             </div>
             <p className="text-[14px] leading-[22px] text-white/50">Meta Quest 3 and 3S. Install with SideQuest or adb.</p>
-            <div className="mt-3 flex flex-col items-center gap-3">
-              <RollButton href="#" variant="secondary" copy={AGENT_PROMPT} label="Build your own case" hoverLabel="Copy agent prompt" />
-              <p className="max-w-[420px] text-[14px] leading-[22px] text-white/50">Paste into Claude Code, Cursor or any coding agent to turn a synthetic patient into a playable case.</p>
-            </div>
           </FadeIn>
 
         </motion.section>
