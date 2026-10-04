@@ -18,7 +18,26 @@ Surgical robot datasets record the surgeon: tool paths, video, kinematics. They 
 
 - Real (buildable): breathing-synced overlay motion; breathing/pulse in the capture manifest and event log on the session clock; a comfort guard with thresholds.
 - Aspirational: no robot policy is trained on this data; the demo shows the dataset structure plus kinematic replay.
-- Never claim: the volunteer's vitals do not respond to the virtual surgery. Do not present them as a live patient monitor for simulated events (a simulated bleed with a calm real pulse is a contradiction). Generic teaching anatomy is not the volunteer's organs. Presage SDK metrics are wellness information, not diagnosis.
+- Never claim: the volunteer's real vitals do not respond to the virtual surgery. The OR monitor therefore shows **simulated vitals anchored to a measured baseline** (below), never bare "real vitals" during surgery. Generic teaching anatomy is not the volunteer's organs. Presage SDK metrics are wellness information, not diagnosis.
+
+## OR Monitor: Measured Baseline + Simulated Delta
+
+**Displayed vitals = real baseline (Presage) + simulated delta (surgery state).**
+
+1. **Baseline (real).** At Time-Out, Presage spot-measures the volunteer (pulse, breathing rate, with confidence). That becomes this patient's starting physiology. If confidence is low, fall back to an authored baseline, labeled as authored.
+2. **Delta (simulated).** A small deterministic physiology model maps open-body state (blood lost, active bleeds and rates, contamination, critical injuries) to vitals changes, using hemorrhage classes (ATLS) against an estimated blood volume of about 70 mL/kg (assumed weight, or the FinchNode chart weight if present):
+
+| Blood loss (% of EBV) | Pulse | Breathing | Blood pressure |
+| --- | --- | --- | --- |
+| < 15% | baseline to +10 | baseline | normal |
+| 15–30% | ~100–120 | 20–30 | narrowing pulse pressure |
+| 30–40% | ~120–140 | 30–40 | falling |
+| > 40% | > 140 | > 35 | crashing |
+
+   Active bleeding pushes toward the next class; hemostasis lets values recover with 10–30 s smoothing; a critical injury adds an acute spike. The model is a pure function of logged body state and time, so the recap and Jarvis can reproduce it exactly.
+3. **Display.** The OR monitor shows the combined values and a pulse trace drawn at the simulated rate, labeled for example "HR 118 · simulated from baseline 72 (measured)". The AR overlay's breathing motion still follows the volunteer's **real** breathing waveform; only the monitor numbers carry the simulated delta.
+
+Why: the monitor agrees with the simulation (an uncontrolled bleed makes the patient tachycardic; control brings recovery), every run starts from a real person's physiology, Jarvis coaches from model facts ("HR 118 and rising, blood loss 600 mL, find the bleeder"), and the grader can score response time to hemodynamic deterioration. The physiology model is authored teaching content, not validated clinical simulation.
 
 ## How Presage works (short)
 
@@ -45,7 +64,8 @@ phone on a stand ──(Continuity Camera)──▶ Mac: services/vitals (Node +
 2. Breathing phase drives a small, bounded vertical motion of the AR anatomy root between registration updates; disabled in VR and when confidence is low.
 3. Write breathing/pulse samples into the event log and the hand-capture manifest on the same clock; recap shows a breathing track under the surgery timeline.
 4. Comfort guard: operator pause prompt on sustained pulse spike or erratic breathing.
-5. Validations that can fail: low-confidence values never displayed or logged as real; demo mode always labeled; overlay motion bounded and off in VR.
+5. Physiology model (`baseline + delta`) as a pure function of body state, mirrored in Unity and the coach, with golden tests per hemorrhage class and recovery; buildable before the API key using an authored baseline.
+6. Validations that can fail: low-confidence values never displayed or logged as real; demo mode always labeled; overlay motion bounded and off in VR.
 
 ## Needed from the team
 
