@@ -39,7 +39,7 @@ The start screen *is* the explore hub environment: one world-locked panel about 
 
 ## 2. Explore Patients
 
-**Layout.** All 12 FinchNode patients at once: a 4×3 grid of cards (~0.22 × 0.16 m) on a panel about 1.3 m away, within the ~41° comfort zone. No carousel, no paging. Flat is fine; if it curves, the radius equals the viewing distance.
+**Layout.** All 12 FinchNode demo scenarios at once: 10 patient cards plus the 2 connection-only scenarios (`connect-cancelled`, `connect-failed`), which have no patient and show as connect-state cards. A 4×3 grid of cards (~0.22 × 0.16 m) on a panel about 1.3 m away, within the ~41° comfort zone. No carousel, no paging. Flat is fine; if it curves, the radius equals the viewing distance.
 
 **Card.** Name, age/sex, one-line presenting complaint, procedure badge, urgency, status. Synthetic data is labeled "Synthetic record" once in the header, not on every card.
 
@@ -133,7 +133,7 @@ A "Demo mode" toggle preselects the best-tuned case, shows suggested-question ch
 | Recap | 60–90 s | 30 s |
 | **Total** | **~13–18 min** | **~5–6 min** |
 
-Show the depth explicitly: the 12-patient wall from synthetic chart data; a patient who will not name their diagnosis; "the model never invents labs"; a second run that deliberately misses the diagnosis to show the consequence branch; the dual scorecard; the robot replay. Cast the headset view to a laptop with captions on. Keep fallbacks: a prerecorded full run, offline TTS fillers and canned patient answers if the network fails. Meta's health guidance (sessions ≤30 min) also favors the short run.
+Show the depth explicitly: the 12-card wall (10 patients) from synthetic chart data; a patient who will not name their diagnosis; "the model never invents labs"; a second run that deliberately misses the diagnosis to show the consequence branch; the dual scorecard; the robot replay. Cast the headset view to a laptop with captions on. Keep fallbacks: a prerecorded full run, offline TTS fillers and canned patient answers if the network fails. Meta's health guidance (sessions ≤30 min) also favors the short run.
 
 ## Open Items
 
