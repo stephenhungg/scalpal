@@ -101,8 +101,8 @@ namespace Scalpal.Surgery
             Quiet(guide.GetComponent<MeshRenderer>(), markMaterial); GuideLine = guide.transform;
             instructionAnchor = new GameObject("MarkingInstructionAnchor").transform; instructionAnchor.SetParent(root.transform, false);
             // Beside the guide on the side away from the belly button, so the line never sits on a landmark.
-            Vector3 away = Vector3.Cross(end - start, Vector3.forward).normalized * .065f;
-            instructionAnchor.localPosition = Surface((start + end) * .5f + away, true) + Vector3.back * .03f;
+            Vector3 away = Vector3.Cross(end - start, Vector3.forward).normalized * .045f;
+            instructionAnchor.localPosition = Surface((start + end) * .5f + away, true) + Vector3.back * .04f;
             // Landmarks come from registration when bound; the virtual patient shows its authored proxies; otherwise none.
             bool registered = rightAsis && umbilicus;
             if (registered || !passthrough)
