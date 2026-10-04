@@ -18,7 +18,8 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.19.0",
-    "hono": "^4.13.0"
+    "hono": "^4.13.0",
+    "spacetimedb": "2.10.2"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

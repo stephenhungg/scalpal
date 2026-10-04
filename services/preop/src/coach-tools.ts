@@ -2,6 +2,7 @@ import { ANATOMY_BY_ID } from "./catalog/anatomy.js";
 import { STRUCTURE_FACTS } from "./catalog/coach-knowledge.js";
 import { scorePreopCheck } from "./case-builder.js";
 import type { CoachSession } from "./coach.js";
+import type { RealtimeSink } from "./realtime-bridge.js";
 import type { SurgicalCase } from "./types.js";
 
 // Jarvis's client tools, implemented once on the server. Any voice client (the laptop page, the native
@@ -18,6 +19,7 @@ export interface ToolDeps {
   resolveStructure: (query: string, kase: SurgicalCase) => Resolution;
   ackWaitMs?: number;
   sleep?: (ms: number) => Promise<void>;
+  realtime?: RealtimeSink;
 }
 
 export function explainStructure(s: CoachSession, query: string, resolve: ToolDeps["resolveStructure"]): { found: boolean; structureId: string; say: string } {
@@ -34,6 +36,14 @@ export function explainStructure(s: CoachSession, query: string, resolve: ToolDe
 async function highlight(s: CoachSession, structure: string, deps: ToolDeps): Promise<string> {
   const match = deps.resolveStructure(structure, s.kase);
   if (match.kind !== "case") return `${structure} is not part of this case's anatomy.`;
+  const name = s.kase.anatomy.find((a) => a.id === match.id)?.displayName.toLowerCase() ?? structure;
+  // Wired session: the command goes through SpacetimeDB and the headset resolves it there.
+  const shared = await deps.realtime?.highlight(match.id, deps.ackWaitMs);
+  if (shared) {
+    if (shared.status === "applied") return `Highlighted the ${name} in the headset.`;
+    if (shared.status === "pending") return `Highlight requested for ${structure}; the headset has not confirmed it yet.`;
+    return `The headset could not highlight it: ${shared.reason || shared.status}.`;
+  }
   const command = s.requestCommand("highlight", match.id);
   if ("error" in command) return command.error;
   // The headset acknowledges asynchronously; only claim what it actually applied.

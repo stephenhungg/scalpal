@@ -1,8 +1,14 @@
 import { createApp } from "./app.js";
 import { createFinchNodeClient } from "./finchnode.js";
+import { realtimeFromEnv } from "./realtime-bridge.js";
+
+// Optional: the shared SpacetimeDB session (SPACETIMEDB_URI). Without it the HTTP coach API works alone.
+const realtime = realtimeFromEnv(process.env);
+realtime?.start();
 
 // Vercel and other Hono hosts pick up the default export.
 export default createApp({
+  realtime,
   client: createFinchNodeClient({
     baseUrl: process.env.FINCHNODE_BASE_URL || undefined,
     // Optional ck_test_ sandbox key: enables real Connect admissions. Without it, demo records only.

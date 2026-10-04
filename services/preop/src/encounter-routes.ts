@@ -2,6 +2,7 @@ import type { Context, Hono } from "hono";
 import { ENCOUNTERS_BY_PLAN, type Encounter } from "./catalog/encounters.js";
 import { DEFAULT_PATIENT_VOICES, EncounterSession } from "./encounter.js";
 import { attendingFirstMessage, attendingPrompt, patientFirstMessage, patientPrompt } from "./encounter-prompt.js";
+import { NO_REALTIME, type RealtimeSink } from "./realtime-bridge.js";
 import type { Action, SurgicalCase } from "./types.js";
 
 // Pre-op encounter API: patient interview (patient agent), case presentation (Jarvis as attending),
@@ -12,6 +13,7 @@ export interface EncounterRouteOptions {
   planSubjectFor: (kase: SurgicalCase) => Promise<string>;
   now: () => Date;
   patientVoices?: Partial<Record<Encounter["persona"]["voiceKey"], string>>;
+  realtime?: RealtimeSink;
 }
 
 const ENCOUNTER_ID = /^enc-[a-z0-9]{6,40}$/;
@@ -25,6 +27,7 @@ const encounterActions = (id: string): Action[] => [
 export function registerEncounterRoutes(app: Hono, options: EncounterRouteOptions) {
   const sessions = new Map<string, EncounterSession>();
   const voices = { ...DEFAULT_PATIENT_VOICES, ...(options.patientVoices ?? {}) };
+  const realtime = options.realtime ?? NO_REALTIME;
 
   const bad = (c: Context, status: 400 | 404 | 409, code: string, message: string, actions: Action[]) => c.json({ error: { code, message }, actions }, status);
   const get = (c: Context) => {
@@ -48,6 +51,7 @@ export function registerEncounterRoutes(app: Hono, options: EncounterRouteOption
     const id = `enc-${crypto.randomUUID().replaceAll("-", "").slice(0, 16)}`;
     const s = new EncounterSession(id, kase, encounter, options.now);
     sessions.set(id, s);
+    realtime.attachEncounter(s);
     return c.json(
       {
         encounterId: id,
@@ -74,7 +78,10 @@ export function registerEncounterRoutes(app: Hono, options: EncounterRouteOption
   app.post("/encounters/:id/attending", (c) => {
     const s = get(c);
     if (!s) return missing(c);
-    if (s.phase === "interview") s.phase = "attending";
+    if (s.phase === "interview") {
+      s.phase = "attending";
+      realtime.encounterPhase(s);
+    }
     return c.json({ phase: s.phase, attendingPrompt: attendingPrompt(s), attendingFirstMessage: attendingFirstMessage(s), state: s.state(), actions: encounterActions(s.id) });
   });
 
@@ -118,6 +125,7 @@ export function registerEncounterRoutes(app: Hono, options: EncounterRouteOption
         s.recordAssessment({ diagnosis: str("diagnosis"), differential: p.differential as string[], procedure: str("procedure"), urgency: str("urgency") });
         s.phase = "scored";
         const card = s.score();
+        realtime.encounterResult(s, card);
         result = `Recorded. Score ${card.total} of 100 (${card.grade}). Key feedback, most important first: ${card.feedback.slice(0, 4).join(" ")} Tell them the score and the most important one or two points in your own words, briefly.`;
         break;
       }

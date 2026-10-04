@@ -22,3 +22,6 @@ __pycache__/
 
 # Pre-rendered Jarvis warning audio
 services/preop/.cache/
+
+# SpacetimeDB coach identity token (services/preop)
+.coach-token

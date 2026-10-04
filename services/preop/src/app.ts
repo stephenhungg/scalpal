@@ -8,6 +8,7 @@ import { buildCase, routes, scorePreopCheck, unavailableCase } from "./case-buil
 import type { StuckPolicy } from "./coach.js";
 import { registerCoachRoutes } from "./coach-routes.js";
 import { registerEncounterRoutes } from "./encounter-routes.js";
+import type { RealtimeBridge } from "./realtime-bridge.js";
 import type { ReflexAudio } from "./reflex.js";
 import { FinchNodeError, createFinchNodeClient, type FinchNodeClient } from "./finchnode.js";
 import type { Action, AdmissionStatus, DataGap, Scenario, SandboxSession, SurgicalCase } from "./types.js";
@@ -23,6 +24,7 @@ export interface AppOptions {
   elevenLabs?: { apiKey: string; agentId: string; voiceId?: string; patientAgentId?: string };
   reflex?: ReflexAudio;
   toolAckWaitMs?: number;
+  realtime?: RealtimeBridge | null;
 }
 
 export interface PatientListEntry {
@@ -447,6 +449,7 @@ export function createApp(options: AppOptions = {}) {
 
   registerEncounterRoutes(app, {
     now,
+    realtime: options.realtime ?? undefined,
     loadCase: async (id) => {
       const target = await resolve(id);
       return target ? caseOrUnavailable(target.subject, target.scenarioId) : null;
@@ -462,6 +465,8 @@ export function createApp(options: AppOptions = {}) {
     elevenLabs: options.elevenLabs,
     reflex: options.reflex,
     toolAckWaitMs: options.toolAckWaitMs,
+    realtime: options.realtime ?? undefined,
+    bridge: options.realtime ?? null,
     loadCase: async (id) => {
       const target = await resolve(id);
       return target ? caseOrUnavailable(target.subject, target.scenarioId) : null;

@@ -95,6 +95,35 @@ export const Connection = __t.object("Connection", {
 });
 export type Connection = __Infer<typeof Connection>;
 
+export const Encounter = __t.object("Encounter", {
+  encounterId: __t.string(),
+  sessionId: __t.string(),
+  attemptId: __t.string(),
+  patientId: __t.string(),
+  patientName: __t.string(),
+  speaker: __t.string(),
+  speakerName: __t.string(),
+  phase: __t.string(),
+  scoreTotal: __t.option(__t.u32()),
+  grade: __t.option(__t.string()),
+  scorecardJson: __t.option(__t.string()),
+  startedAt: __t.timestamp(),
+  updatedAt: __t.timestamp(),
+});
+export type Encounter = __Infer<typeof Encounter>;
+
+export const EncounterEvent = __t.object("EncounterEvent", {
+  eventId: __t.u64(),
+  sessionId: __t.string(),
+  encounterId: __t.string(),
+  kind: __t.string(),
+  itemId: __t.string(),
+  speaker: __t.option(__t.string()),
+  text: __t.string(),
+  at: __t.timestamp(),
+});
+export type EncounterEvent = __Infer<typeof EncounterEvent>;
+
 export const ExerciseEvent = __t.object("ExerciseEvent", {
   eventId: __t.u64(),
   sessionId: __t.string(),
@@ -282,6 +311,12 @@ export type SessionCoachStatus = __Infer<typeof SessionCoachStatus>;
 export const SessionCommands = __t.object("SessionCommands", {});
 export type SessionCommands = __Infer<typeof SessionCommands>;
 
+export const SessionEncounterEvents = __t.object("SessionEncounterEvents", {});
+export type SessionEncounterEvents = __Infer<typeof SessionEncounterEvents>;
+
+export const SessionEncounters = __t.object("SessionEncounters", {});
+export type SessionEncounters = __Infer<typeof SessionEncounters>;
+
 export const SessionEvents = __t.object("SessionEvents", {});
 export type SessionEvents = __Infer<typeof SessionEvents>;
 
@@ -349,3 +384,4 @@ export const VerifiedOutput = __t.object("VerifiedOutput", {
   verifiedBytes: __t.u64(),
 });
 export type VerifiedOutput = __Infer<typeof VerifiedOutput>;
+
