@@ -81,7 +81,9 @@ namespace Scalpal.Surgery
             // The separate tool table holds nothing in the open case: the instrument stand is the tool surface in both modes.
             if (toolTable && toolTable.activeSelf) toolTable.SetActive(false);
             bool valid = Ready;
-            if (finishRequested && valid) { finishRequested = false; FinishAttempt(); }
+            // Ending is allowed without a valid body fit (AR tracking may be lost); scoring just needs a running attempt.
+            if (finishRequested && session.Practicing && session.exercise.CanScore && !session.exercise.Completed)
+            { finishRequested = false; session.exercise.Submit(CaseEvent.Finish(), out _, out _); }
             wound.SetRegistrationValid(valid);
             if (!valid) { interaction.Simulate(0); bleeding.Simulate(0); incisions.Simulate(0); blood.Simulate(0); return; }
             float dt=Time.deltaTime;

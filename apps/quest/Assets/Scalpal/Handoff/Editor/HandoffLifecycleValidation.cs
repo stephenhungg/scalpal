@@ -52,6 +52,7 @@ namespace Scalpal.Handoff.Editor
                 ("F13 unified scene order is checked against the product order", SceneOrderIsIndependent),
                 ("F15 OR entry shows no connection error while the case loads or the session joins", EntryShowsNoConnectionErrorWhileLoading),
                 ("F18 the instrument table and tools stay out of view until practice begins", ToolsHiddenUntilPractice),
+                ("F19 End surgery from the pause menu resumes into the finish, not the Paused card", EndSurgerySkipsPausedCard),
             };
             try
             {
@@ -260,6 +261,17 @@ namespace Scalpal.Handoff.Editor
                     "the tools and table appear when practice begins");
             }
             finally { UnityEngine.Object.DestroyImmediate(tool.gameObject); UnityEngine.Object.DestroyImmediate(table); }
+        }
+
+        static void EndSurgerySkipsPausedCard()
+        {
+            var flow = Flow(out var card); var native = Native(flow.gameObject);
+            var ticket = Ticket("virtual"); ReadyForTimeOut(flow, native);
+            ticket.practiceStarted = true; Set(flow, "phase", "practice");
+            Call(flow, "ResumeGate");
+            Assert(Get<string>(flow, "phase") == "paused", "a plain resume after the pause menu shows the Paused card");
+            Set(flow, "phase", "practice"); flow.RequestEndSurgery(); Call(flow, "ResumeGate");
+            Assert(Get<string>(flow, "phase") == "practice" && !card.Visible, "End surgery resumes straight into practice so the finish can run");
         }
 
         static void NewRunResetsState()

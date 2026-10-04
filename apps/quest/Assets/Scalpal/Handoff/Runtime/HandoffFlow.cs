@@ -472,10 +472,21 @@ namespace Scalpal.Handoff
             briefingDone = false; EndBriefing();
         }
         // Return from a headset/shell interruption. Practice only resumes through the paused card.
+        // Pause menu "End surgery": closing the menu must not land on the Paused card; resume practice just long enough
+        // for the case to finish and hand off to the recap.
+        bool endAfterPause;
+        public void RequestEndSurgery() => endAfterPause = true;
         void ResumeGate()
         {
             rendered = "";
             if (phase == "stopped" || phase == "recap" || phase == "transition" || phase == "ending") return;
+            if (endAfterPause && Ticket != null && Ticket.practiceStarted && surgery)
+            {
+                endAfterPause = false;
+                surgery.ResumeHandoffPractice(); SetPhase("practice"); card.Hide();
+                var open = FindFirstObjectByType<Scalpal.Surgery.OpenSurgerySession>(); if (open) open.RequestFinish();
+                return;
+            }
             fitConfirmed = false;
             SetPhase(Ticket.practiceStarted || phase == "practice" || phase == "paused" ? "paused" : "register");
         }

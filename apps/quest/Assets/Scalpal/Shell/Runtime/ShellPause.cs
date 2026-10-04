@@ -158,8 +158,10 @@ namespace Scalpal.Shell
         {
             if (!confirmingEnd) { confirmingEnd = true; BuildMenu(); return; }
             var surgery = FindFirstObjectByType<Scalpal.Surgery.OpenSurgerySession>();
+            var flow = FindFirstObjectByType<Scalpal.Handoff.HandoffFlow>();
+            if (flow) flow.RequestEndSurgery(); // the flow resumes practice and finishes instead of showing Paused
             Resume();
-            if (surgery) surgery.RequestFinish();
+            if (surgery && !flow) surgery.RequestFinish();
         }
         static void Discard(GameObject value) { if (Application.isPlaying) Destroy(value); else DestroyImmediate(value); }
         // Office pause: "Skip to surgery" asks once, then leaves the interview for the Theatre card.
