@@ -19,6 +19,7 @@
     "demo:session": "tsx scripts/demo-session.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "0.131.0",
     "@hono/node-server": "^1.19.0",
     "hono": "^4.13.0",
     "spacetimedb": "2.10.2"

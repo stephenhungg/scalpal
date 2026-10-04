@@ -135,6 +135,7 @@ export interface CoachSnapshot {
   recentMistakes: CoachMistakeView[];
   completedSteps: StepCheckpoint[];
   bloodLossMl: number;
+  scene: { summary: string; at: string; source: string };
   activeBleeds: { structure: StructureRef; rateMlPerMin: number }[];
   mistakeCount: number;
   highSeverityMistakeCount: number;
@@ -200,6 +201,7 @@ export class CoachSession {
   private stepHints = 0;
   private bleeds = new Map<string, number>(); // structureId -> ml/min
   private bloodLossMl = 0;
+  private scene = { summary: "", at: "", source: "" }; // latest vision summary of the learner's view
   private commands: CoachCommand[] = [];
   private alertSeq = 0;
   private commandSeq = 0;
@@ -607,6 +609,13 @@ export class CoachSession {
     return { alerts: this.alertLog.filter((a) => a.seq > seq), latestSeq: this.alertLogSeq };
   }
 
+  // A one-line description of what the learner can see, from the scene watcher.
+  setScene(summary: string, source: string) {
+    if (!summary || summary === this.scene.summary) return;
+    this.scene = { summary: summary.slice(0, 300), at: this.clock().toISOString(), source };
+    this.changed([]);
+  }
+
   pendingCommands(): CoachCommand[] {
     return this.commands.filter((c) => c.status === "pending");
   }
@@ -681,6 +690,7 @@ export class CoachSession {
       recentMistakes: this.mistakes.slice(-5),
       completedSteps: [...this.completed],
       bloodLossMl: Math.round(this.bloodLossMl),
+      scene: { ...this.scene },
       activeBleeds: [...this.bleeds].map(([id, rate]) => ({ structure: this.ref(id), rateMlPerMin: Math.round(rate * 10) / 10 })),
       mistakeCount: this.mistakes.length,
       highSeverityMistakeCount: highSeverity,
@@ -800,7 +810,7 @@ function describeOffTarget(event: EngineEvent, name: (id: string) => string, too
 export function contextKey(s: CoachSnapshot): string {
   const parts = [
     s.status, s.step.id, s.step.progressText, s.completedCount, s.mistakeCount, s.focusStructure.id, s.stuckLevel,
-    s.trackingValid, s.hintTier, s.desynced, s.bloodLossMl, s.activeBleeds.map((b) => b.structure.id).join(","), s.commands.map((c) => `${c.commandId}:${c.status}`).join(","),
+    s.trackingValid, s.hintTier, s.desynced, s.bloodLossMl, s.activeBleeds.map((b) => b.structure.id).join(","), s.scene.summary, s.commands.map((c) => `${c.commandId}:${c.status}`).join(","),
   ];
   let h = 2166136261;
   for (const ch of JSON.stringify(parts)) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
@@ -835,6 +845,7 @@ export function renderContext(s: CoachSnapshot): string {
   if (rough.length) lines.push(`Earlier: ${rough.map((c) => `${c.title} (${c.mistakes} mistake${c.mistakes === 1 ? "" : "s"}${c.hints ? `, ${c.hints} hint${c.hints === 1 ? "" : "s"}` : ""})`).join("; ")}.`);
     if (st.dangers.length) lines.push(`Danger structures this step: ${st.dangers.map((d) => d.name).join(", ")}.`);
   if (st.patientNotes.length) lines.push(`Patient-specific: ${st.patientNotes.join(" ")}`);
+  if (s.scene.summary) lines.push(`In view (${s.scene.source || "camera"}): ${s.scene.summary}`);
   if (s.focusStructure.id) lines.push(`Learner is looking at: ${s.focusStructure.name}.`);
   lines.push(`Last event: ${s.lastEvent}`);
   lines.push(`Time on step ${s.secondsOnStep}s, ${s.secondsSinceProgress}s since progress, ${s.offTargetAttempts} off-target attempts. Coaching level: ${s.stuckLabel} (hint tier ${s.hintTier}).`);

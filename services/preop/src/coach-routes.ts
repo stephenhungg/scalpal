@@ -6,6 +6,7 @@ import { STRUCTURE_FACTS } from "./catalog/coach-knowledge.js";
 import { INSTRUMENTS_BY_ID } from "./catalog/instruments.js";
 import { CoachSession, PRESENTATION_MODES, bleedingStructures, contextKey, reflexLines, renderContext, type CoachEvent, type StuckPolicy } from "./coach.js";
 import { explainStructure, runTool } from "./coach-tools.js";
+import type { Frame, FrameMark, SceneVision } from "./scene-vision.js";
 import { ReflexAudio } from "./reflex.js";
 import { NO_REALTIME, type RealtimeBridge, type RealtimeSink } from "./realtime-bridge.js";
 import { buildSystemPrompt, firstMessage } from "./coach-prompt.js";
@@ -26,6 +27,28 @@ export interface CoachRouteOptions {
   realtime?: RealtimeSink;
   bridge?: RealtimeBridge | null; // the live connection, for /realtime status and join
   encounterFor?: (id: string) => { kase: SurgicalCase; carryover(): string } | null;
+  vision?: SceneVision | null; // Jarvis's eyes; null when no vision model is configured
+  watchMs?: number; // minimum gap between background scene summaries (0 disables watching)
+}
+
+const MAX_FRAME_CHARS = 4_000_000; // about 3 MB of JPEG
+const FRAME_FRESH_MS = 8000;
+
+function parseMarks(raw: unknown): FrameMark[] {
+  if (!Array.isArray(raw)) return [];
+  const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? Math.min(Math.max(v, 0), 1) : 0);
+  return raw.slice(0, 50).flatMap((m) => {
+    if (!m || typeof m !== "object") return [];
+    const o = m as Record<string, unknown>;
+    const box = (o.box ?? {}) as Record<string, unknown>;
+    if (typeof o.label !== "string" || !o.label.trim()) return [];
+    return [{
+      label: o.label.slice(0, 80),
+      id: typeof o.id === "string" ? o.id.slice(0, 120) : "",
+      source: o.source === "scene" ? "scene" : "detector",
+      box: { x: num(box.x), y: num(box.y), w: num(box.w), h: num(box.h) },
+    }];
+  });
 }
 
 const MAX_SESSIONS = 50;
@@ -52,6 +75,9 @@ const coachActions = (sid: string): Action[] => [
 
 export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
   const sessions = new Map<string, CoachSession>();
+  const frames = new Map<string, Frame>();
+  const watching = new Map<string, { inFlight: boolean; lastAt: number }>();
+  const watchMs = options.watchMs ?? 4000;
   const reflex =
     options.reflex ?? (options.elevenLabs?.apiKey && options.elevenLabs.voiceId ? new ReflexAudio({ apiKey: options.elevenLabs.apiKey, voiceId: options.elevenLabs.voiceId }) : null);
   let ticker: ReturnType<typeof setInterval> | null = null;
@@ -183,10 +209,46 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
     });
   });
 
+  // Point-of-view frames from the camera rig or the Quest (passthrough plus overlay), with labeled boxes.
+  app.post("/coach/sessions/:sid/frame", async (c) => {
+    const s = getSession(c);
+    if (!s) return missing(c);
+    const b = await body(c);
+    const image = typeof b.image === "string" ? b.image.replace(/^data:image\/jpeg;base64,/, "") : "";
+    if (!image || image.length > MAX_FRAME_CHARS || !/^[A-Za-z0-9+/=]+$/.test(image.slice(0, 200))) {
+      return bad(c, 400, "invalid_frame", 'Send {"image": "<base64 JPEG>", "marks": [...]} under about 3 MB.', coachActions(s.id));
+    }
+    const frame: Frame = { jpegBase64: image, marks: parseMarks(b.marks), source: b.source === "quest" ? "quest" : "camera", at: options.now().getTime() };
+    frames.set(s.id, frame);
+    // Background watcher: a fresh one-line summary at most every watchMs, never two at once.
+    const w = watching.get(s.id) ?? { inFlight: false, lastAt: 0 };
+    watching.set(s.id, w);
+    const due = Boolean(options.vision) && watchMs > 0 && !w.inFlight && frame.at - w.lastAt >= watchMs;
+    if (due && options.vision) {
+      w.inFlight = true;
+      w.lastAt = frame.at;
+      void options.vision
+        .watch(frame, s.snapshot())
+        .then((summary) => s.setScene(summary, frame.source))
+        .catch(() => {})
+        .finally(() => (w.inFlight = false));
+    }
+    return c.json({ stored: true, marks: frame.marks.length, watching: due, actions: coachActions(s.id) });
+  });
+
   // One implementation of Jarvis's client tools for every voice client (laptop page, Quest native voice).
   app.post("/coach/sessions/:sid/tools/:name", async (c) => {
     const s = getSession(c);
     if (!s) return missing(c);
+    if (c.req.param("name") === "look_at_scene") {
+      const { question } = await body(c);
+      const frame = frames.get(s.id);
+      let result: string;
+      if (!options.vision) result = "My vision isn't set up yet, so I can only go by the simulator's state.";
+      else if (!frame || options.now().getTime() - frame.at > FRAME_FRESH_MS) result = "I can't see your view right now. Make sure the camera feed is on.";
+      else result = await options.vision.look(frame, s.snapshot(), typeof question === "string" ? question : "");
+      return c.json({ result, actions: coachActions(s.id) });
+    }
     const result = await runTool(s, c.req.param("name") ?? "", await body(c), {
       renderContext: (x) => renderContext(x.snapshot()),
       resolveStructure,

@@ -9,6 +9,7 @@ import type { StuckPolicy } from "./coach.js";
 import { registerCoachRoutes } from "./coach-routes.js";
 import { registerEncounterRoutes } from "./encounter-routes.js";
 import type { RealtimeBridge } from "./realtime-bridge.js";
+import type { SceneVision } from "./scene-vision.js";
 import type { ReflexAudio } from "./reflex.js";
 import { FinchNodeError, createFinchNodeClient, type FinchNodeClient } from "./finchnode.js";
 import type { Action, AdmissionStatus, DataGap, Scenario, SandboxSession, SurgicalCase } from "./types.js";
@@ -25,6 +26,8 @@ export interface AppOptions {
   reflex?: ReflexAudio;
   toolAckWaitMs?: number;
   realtime?: RealtimeBridge | null;
+  vision?: SceneVision | null;
+  watchMs?: number;
 }
 
 export interface PatientListEntry {
@@ -468,6 +471,8 @@ export function createApp(options: AppOptions = {}) {
     realtime: options.realtime ?? undefined,
     bridge: options.realtime ?? null,
     encounterFor: (id) => encounters.get(id),
+    vision: options.vision ?? null,
+    watchMs: options.watchMs,
     loadCase: async (id) => {
       const target = await resolve(id);
       return target ? caseOrUnavailable(target.subject, target.scenarioId) : null;

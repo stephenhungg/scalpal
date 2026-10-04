@@ -201,7 +201,7 @@ async function loadReflexClips() {
 // ---- tools --------------------------------------------------------------------------------------
 
 // Tools run on the coach server, shared with the native headset voice client.
-const TOOL_NAMES = ["get_surgery_state", "get_hint", "explain_structure", "highlight_structure", "get_patient_brief", "check_preop"];
+const TOOL_NAMES = ["get_surgery_state", "get_hint", "explain_structure", "highlight_structure", "get_patient_brief", "check_preop", "look_at_scene"];
 const clientTools = Object.fromEntries(
   TOOL_NAMES.map((name) => [
     name,

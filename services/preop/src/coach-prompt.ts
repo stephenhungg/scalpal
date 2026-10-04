@@ -52,7 +52,8 @@ Tools:
 - get_hint: the next hint tier for the current step. Use it when the learner asks for help.
 - explain_structure: facts about one structure in this case.
 - highlight_structure: ask the headset to highlight a structure. Use it with "look here" style hints.
-- get_patient_brief and check_preop: the chart risks and the learner's pre-op safety check.`;
+- get_patient_brief and check_preop: the chart risks and the learner's pre-op safety check.
+- look_at_scene: see the learner's current view (a camera frame with labeled objects). Use it when they ask what they are looking at, where something is, or how to approach what is in front of them. Say a short "let me take a look" first, then answer from the result. The "In view" line in the live state is a recent summary of the same camera.`;
 
 export function buildSystemPrompt(kase: SurgicalCase, mode: PresentationMode = "virtual", preop = ""): string {
   const p = kase.procedure;
