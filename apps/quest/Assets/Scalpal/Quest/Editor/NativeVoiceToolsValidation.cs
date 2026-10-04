@@ -77,6 +77,7 @@ namespace Scalpal.Quest.Editor
                 voice = fixture.AddComponent<QuestJarvisVoice>();
                 ValidateInitiation(voice);
                 ValidateAudioLifecycle(voice,connections);
+                ValidateSilentBargeIn(voice,connections);
                 voice.ConfigureEndpoint(endpoint);
                 Set(voice, "generation", 100);
                 Property(voice, "CoachSessionId", sid);
@@ -239,6 +240,52 @@ namespace Scalpal.Quest.Editor
             Call(connection,"Dispose");Call(connection,"Dispose");Call(connection,"RequestStop");Call(connection,"Enqueue","ignored-after-disposal");
             bool disposed=false;try { ((SemaphoreSlim)connection.GetType().GetField("SendSignal").GetValue(connection)).Wait(0); }catch(ObjectDisposedException){disposed=true;}
             Assert(disposed,"connection signal resources dispose after ownership ends; repeated stop/dispose/queue remain safe");
+        }
+
+        // Learner presses talk while the agent speaks, then says nothing (or ASR is empty, or the provider's
+        // interruption carries no id). The interrupted tail must stay discarded, but the next agent
+        // reply must be audible; before the bounded release the agent stayed mute until reconnect.
+        static void ValidateSilentBargeIn(QuestJarvisVoice voice,List<object> connections)
+        {
+            string pcm=Convert.ToBase64String(QuestJarvisVoice.EncodePcm(new[]{.3f,-.3f,.3f},1));
+            void Audio(int id) => Call(voice,"Handle","{\"type\":\"audio\",\"audio_event\":{\"event_id\":"+id+",\"audio_base_64\":\""+pcm+"\"}}");
+            Queue<float> Fresh()
+            {
+                voice.Disconnect();Property(voice,"Status","connected");Set(voice,"outputRate",16000);
+                connections.Add(NewConnection(voice,Get<int>(voice,"generation")));
+                return Get<Queue<float>>(voice,"outputSamples");
+            }
+            int grace=(int)(QuestJarvisVoice.InterruptionGraceSeconds*1000)+150;
+
+            // Press, release at once, silence.
+            var queue=Fresh();voice.MicrophoneMuted=true;Audio(20);
+            Assert(queue.Count==3&&voice.Mode=="speaking","agent reply is playing before the talk press");
+            voice.MicrophoneMuted=false;voice.InterruptPlayback();Audio(20);
+            Assert(queue.Count==0,"talk press discards the interrupted response's buffered and late audio");
+            voice.MicrophoneMuted=true;Call(voice,"Handle","{\"type\":\"interruption\"}");Call(voice,"Update");Audio(20);
+            Assert(queue.Count==0,"interrupted tail still arriving right after release stays discarded");
+            Thread.Sleep(grace);Call(voice,"Update");Audio(20);
+            Assert(queue.Count==0,"interrupted response's ids stay discarded after the silent release");
+            Audio(21);
+            Assert(queue.Count==3,"silent talk press: next agent reply is audible after release and the grace period");
+
+            // Press and hold silently past the grace: still suppressed while held, audible after release.
+            queue=Fresh();voice.MicrophoneMuted=true;Audio(40);voice.MicrophoneMuted=false;voice.InterruptPlayback();
+            Thread.Sleep(grace);Call(voice,"Update");
+            Assert(Get<bool>(voice,"awaitingInterruption"),"a held talk keeps suppression without a turn boundary");
+            voice.MicrophoneMuted=true;Call(voice,"Update");Audio(41);
+            Assert(queue.Count==3,"silent hold: release after the tail went quiet makes the next reply audible");
+
+            // Microphone left open (surgery warnings call InterruptPlayback without a talk control): a new
+            // agent turn is the boundary.
+            queue=Fresh();voice.MicrophoneMuted=false;Audio(30);voice.InterruptPlayback();Audio(30);Audio(31);
+            Assert(queue.Count==0,"open-microphone interruption suppresses audio until a turn boundary");
+            Call(voice,"Handle","{\"type\":\"agent_response\",\"agent_response_event\":{\"agent_response\":\"Next turn.\"}}");
+            Audio(30);Audio(31);
+            Assert(queue.Count==0,"new agent turn keeps every suppressed response id discarded");
+            Audio(32);
+            Assert(queue.Count==3,"new agent turn after an interruption is audible without learner speech");
+            voice.Disconnect();voice.MicrophoneMuted=false;
         }
 
         static IEnumerator ToolRoutine(QuestJarvisVoice voice, string name, string id, string raw)
