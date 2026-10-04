@@ -1,5 +1,23 @@
 # System Integration Map
 
+## Latest Quest Integration Checkpoint — October 4, 2026, 12:23 AM EDT
+
+Quest integration owner checkpoint Q1. Source `b1d57c1`; Unity6000.0.66f2; development ARM64 IL2CPP APK **`0.6.0-flow` / Android code11**. The single player contains **Launch → DiagnosisOffice → NativeSession (AR or VR) → RunEnding**. APK80,398,944 bytes; SHA256 `8e4d5f2aa01711d51d7404c8fc95cb4cb3523ac2e3b7e153b161f43be2af7e69`. Local artifact: `../work/builds/scalpal-unified-0.6.0-flow-b1d57c1.apk` (outside Git). No raw footage, private session configuration or device logs are committed.
+
+| Check | Result / actual evidence |
+| --- | --- |
+| Full player compile/Editor gate | Passed `verify_session.py --suite player`, and again inside the unified Android build. Office425 + route52; Shell225 + input25; native registration111/mode220/wall10,696; Surgery367 interaction/fluid/delivery; recap47/integration56 plus grade/video/review checks; handoff215 plus lifecycle60/source-binding36. Synthetic poses/fixtures and isolated HTTP are explicitly component evidence. |
+| Real Play Mode boundaries | Native73 (both AR/VR, lifecycle/buttons/PhysX, throwaway local DB/isolated coach); Office73 (actual scene transition, shared same attempt, canonical handoff, wrong-plan and Time-Out risk review); Shell22 (actual Start/Explore/office/back controls and isolated HTTP, realtime disabled). Tracking/card inputs are synthetic; no provider voice or complete open-body run claimed. |
+| Coach and smoke tooling | Production C#/isolated-Hono coach173 checks passed. Stage-aware USB smoke10 Python regressions passed, including stale telemetry, wrong scenes, faults and tracking loss. OR keeps its stricter floor/alignment gate. |
+| Android package/install | Build succeeded; `aapt` confirms package `com.scalpal.nativeworkbench`, version/code and arm64-v8a. `adb install -r` succeeded. Private configuration equality checked before/after; existing data preserved and local USB service forwards restored. |
+| Physical headset smoke | **Blocked at Quest's controllers-required launch dialog.** No running app process was observed in the20-second smoke window; scene rendering/XR readiness and Explore → Office → OR → Recap were not established physically. Owner: headset/operator input; wear headset, wake both controllers and accept the OS prompt. No participant acquisition or recording was started. |
+
+Build-owner fixes in this checkpoint: `ScalpalPlayerBuild.Verify` now runs the omitted full Surgery and Recap/Handoff gates and returns to the committed startup scene before packaging. `verify_session.py --suite player` exposes that repeatable gate. Android-only read-only `QuestFlowTelemetry` reports current allowlisted scene and XR/head/focus; the USB helper no longer misclassifies a healthy Shell/Office/Recap as missing OR status. These additions never advance scenes, manufacture case results or enable capture.
+
+Remaining owner boundaries: **Surgery/content** still needs accepted-wall-geometry consumer hookup and broader procedure coverage (handoff currently admits open/laparoscopic appendectomy; other procedures show “Surgery coming soon”). **Office/Jarvis** owns live patient/attending provider and audio acceptance. **Capture/robot/Recap** own a consented actual hand clip during full VR, successful worker/replay and headset decoding; labeled synthetic fallback is not learner replay. **Quest integration** owns minimal blocking merge/compile fixes, packaging/install and actual smoke evidence; AR body fit and tissue performance also need hardware checks.
+
+Recurring checkpoint is active hourly through noon Eastern October4 (16:00 UTC), with additional checkpoints after observed major teammate pushes. Work directly on main, never force-push, and preserve private app/demo data. Run the unified Editor gate, affected boundary checks, then `Scalpal.Handoff.Editor.ScalpalPlayerBuild.Build` with an absolute `SCALPAL_QUEST_APK` and isolated `GRADLE_USER_HOME`. Component fixture logs and Editor-generated backups are outside Git; unrelated preexisting local files were preserved. This heading supersedes older build/flow summaries below; history remains for source-specific evidence.
+
 Audited October 3, 2026. This is the starting point for understanding the actual repository, routing, and work remaining to assemble one surgery environment. Read [current direction](current-direction.md) for product scope and [integration contracts](integration-contracts.md) for boundary requirements. A component working on its own is not a working session.
 
 ## Diagnosis Office Component
