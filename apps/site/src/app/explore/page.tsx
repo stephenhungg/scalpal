@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { BlurWords } from "@/components/BlurWords";
+import { ExploreTitle } from "@/components/ExploreTitle";
 import { wordCount } from "@/lib/text";
 import { FadeIn } from "@/components/FadeIn";
 import { RollButton } from "@/components/RollButton";
@@ -17,7 +18,7 @@ export default function Explore() {
       <Shell>
         <section className="relative z-10 flex flex-col items-center px-[15px] pb-16 pt-8 text-center min-[810px]:px-[30px] min-[810px]:pt-12">
           <h1 className="display !text-[clamp(44px,5vw,72px)]">
-            <BlurWords text={TITLE} />
+            <ExploreTitle />
           </h1>
           <p className="lede mt-3 max-w-[560px]">
             <BlurWords text={LEDE} start={wordCount(TITLE)} />
