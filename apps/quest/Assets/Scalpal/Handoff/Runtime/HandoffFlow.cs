@@ -155,13 +155,6 @@ namespace Scalpal.Handoff
                     new[] { ReturnLabel }, _ => BackToExplore()); return;
             }
             var preflight = HandoffRun.Preflight;
-            if (Ticket.sourceOffice != null)
-            {
-                Show("To theatre", Ticket.scorecard.patientName + "\n" + Ticket.procedureTitle + " · " + Ticket.scorecard.urgency
-                    + "\nVirtual organs are generic teaching anatomy.", new[] { "Enter virtual OR", ReturnLabel },
-                    i => { if (i == 0) ChooseMode("virtual"); else BackToExplore(); });
-                return;
-            }
             var summary = Ticket.scorecard.patientName + "\n" + Ticket.procedureTitle + " · " + Ticket.scorecard.urgency + "\n" +
                 (preflight.ArAvailable ? "Volunteer ready. AR recommended." : "AR unavailable: " + preflight.UnavailableReason + ". Virtual OR recommended.") +
                 "\nVirtual organs are generic teaching anatomy.";
@@ -311,11 +304,6 @@ namespace Scalpal.Handoff
         }
         void SetupCard()
         {
-            if (Ticket?.sourceOffice != null)
-            {
-                Show("Theatre setup", "This encounter continues in the virtual OR.", new[] { "Back to scorecard" }, _ => SetPhase("score"));
-                return;
-            }
             var p = HandoffRun.Preflight;
             Show("Theatre setup · Operator", "Volunteer present and consented: " + p.volunteerConsented + "\nCamera permission: " + p.cameraGranted + " · Spatial permission: " + p.sceneGranted +
                 "\nBody detection: " + (p.poseServiceOk ? "Online" : "Offline") + " · Coach: " + (p.coachServiceOk ? "Online" : "Offline") + "\nAR is available only when every check is green. Participant images are used for local detection, not saved.",

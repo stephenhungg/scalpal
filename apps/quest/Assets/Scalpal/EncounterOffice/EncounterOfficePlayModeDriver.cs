@@ -164,11 +164,11 @@ namespace Scalpal.EncounterOffice.Editor
             yield return SelectCard("Case escalated", "Continue");
             Check(ticket.consequenceSeen && FlowPhase == "theatre", "actual consequence delay completes before theatre");
             yield return Wait(() => card.Visible && Read<string>(card, "heading") == "To theatre", "theatre card renders");
-            Check(Read<string[]>(card, "actions")[0] == "Enter virtual OR"
-                && !HandoffRun.CanChoose("mixed_reality", new TheatrePreflight { volunteerConsented = true, cameraGranted = true,
+            Check(Read<string[]>(card, "actions")[0] == "Volunteer patient (AR)" && !Read<bool[]>(card, "available")[0]
+                && HandoffRun.CanChoose("mixed_reality", new TheatrePreflight { volunteerConsented = true, cameraGranted = true,
                     sceneGranted = true, poseServiceOk = true, coachServiceOk = true }),
-                "office offers only full VR even when standalone AR preflight is available");
-            yield return SelectCard("To theatre", "Enter virtual OR");
+                "office offers AR with green preflight and disables it with the current red preflight");
+            yield return SelectCard("To theatre", "Virtual OR (VR)", 1);
             yield return Wait(() => SceneManager.GetActiveScene().name == EncounterOfficeRoute.SurgeryScene,
                 "actual theatre callback loads OR through canonical transition");
             surgery = UnityEngine.Object.FindFirstObjectByType<NativeCaseSession>();
@@ -182,7 +182,7 @@ namespace Scalpal.EncounterOffice.Editor
             Check(!EncounterOfficeRoute.TakeSurgery(out _), "canonical import consumes the legacy producer snapshot once");
             yield return Wait(() => surgery.HandoffVerified && surgery.workbench.IsReady && surgery.realtime.Paired && surgery.RegistrationReady,
                 "real OR Start revalidates office source and loads case with synthetic XR poses");
-            Check(surgery.PresentationMode == "virtual" && !surgery.TryChangePresentation(true), "office theatre enforces the shared virtual OR core");
+            Check(surgery.PresentationMode == "virtual" && !surgery.TryChangePresentation(true), "chosen virtual OR core refuses AR while operator preflight is red");
             Check(surgery.realtime.SessionId == sharedSessionId && surgery.realtime.AttemptId == attemptId && !surgery.realtime.AttemptPending,
                 "OR adopts the existing attempt without a replacement request");
             yield return Wait(() => surgery.CoachPrepared && !surgery.Busy && FlowPhase == "timeout",
