@@ -86,6 +86,7 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
   // Latest detector boxes per session. Detection runs about once a second, so it trails the newest frame.
   const detected = new Map<string, { marks: FrameMark[]; at: number; inFlight: boolean }>();
   const DETECT_FRESH_MS = 4000;
+  const DETECT_GENERIC_LABELS = ["hand", "gloved hand", "scissors", "scalpel", "forceps", "clamp", "needle holder", "suture"];
   const withDetections = (sid: string, frame: Frame): Frame => {
     const d = detected.get(sid);
     if (!d || !d.marks.length || frame.at - d.at > DETECT_FRESH_MS) return frame;
@@ -243,7 +244,8 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
     detected.set(s.id, d);
     if (options.detector && !d.inFlight) {
       d.inFlight = true;
-      const labels = [...s.kase.instruments.map((i) => i.id), "hand"].slice(0, 32);
+      // Generic tools too, so a wrong instrument in hand still gets named.
+      const labels = [...new Set([...DETECT_GENERIC_LABELS, ...s.kase.instruments.map((i) => i.id)])].slice(0, 32);
       void options.detector
         .detect(image, labels)
         .then((marks) => Object.assign(d, { marks, at: frame.at }))
