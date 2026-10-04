@@ -72,6 +72,12 @@ namespace Scalpal.Surgery.Editor
                     "safety warnings may interrupt Jarvis");
                 Assert(!OpenSurgeryCoach.InterruptsAgent(new CoachAlertDto { kind = "stuck", tier = "warning" }) &&
                     !OpenSurgeryCoach.InterruptsAgent(new CoachAlertDto { kind = "step_complete", tier = "caution" }), "non-safety alerts never interrupt Jarvis");
+                // Jarvis must not talk constantly: a burst of the same caution plays once, and cautions are spaced out.
+                var paced = new System.Collections.Generic.Queue<CoachAlertDto>();
+                for (int i = 0; i < 6; i++) OpenSurgeryCoach.Enqueue(paced, new CoachAlertDto { kind = "stuck", say = "hint " + i, tier = "caution" });
+                OpenSurgeryCoach.Enqueue(paced, new CoachAlertDto { kind = "wrong_tool", say = "tool", tier = "caution" });
+                Assert(paced.Count == 2 && paced.Peek().say == "hint 5", "repeated cautions collapse to the newest of each kind");
+                Assert(OpenSurgeryCoach.CautionGapSeconds >= 10, "cautions leave a quiet gap of at least 10 s between them");
                 Debug.Log("SCALPAL_OPEN_SURGERY_COACH_VALIDATION_OK synthetic relay serialization, gating, stale captions, reset and reflex URL checks; no audio hardware test");
             }
             finally { UnityEngine.Object.DestroyImmediate(fixture); }

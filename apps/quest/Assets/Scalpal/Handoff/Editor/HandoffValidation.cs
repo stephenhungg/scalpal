@@ -248,6 +248,20 @@ namespace Scalpal.Handoff.Editor
                 card.Show("To theatre", "Priya Ramaswamy, 40\nLaparoscopic appendectomy · Urgent\nVolunteer patient: virtual organs on a real person.\nVirtual OR: a virtual patient in the operating room.",
                     new[] { "Volunteer patient (AR) · Recommended", "Virtual OR (VR)" }, index => chosen = index);
                 Assert(ScalpalPlacement.IsLevel(card.transform), "Theatre card spawns level with the horizon even when the head is pitched and rolled");
+                // The learner can move a card out of the way: grip while pointing at it grabs it, it follows the ray, release drops it.
+                card.Recenter(); var start = card.transform.position;
+                var aim = new Ray(camera.transform.position, (start - camera.transform.position).normalized);
+                card.DragWith(1, aim, 0); Assert(!card.Dragging, "pointing at a card without grip does not grab it");
+                var away = new Ray(aim.origin, Quaternion.Euler(0, -80, 0) * aim.direction);
+                card.DragWith(0, away, 1); Assert(!card.Dragging, "grip while pointing away from the card does not grab it"); card.DragWith(0, away, 0);
+                card.DragWith(1, aim, 1); Assert(card.Dragging, "grip while pointing at the card grabs it");
+                var moved = new Ray(aim.origin, Quaternion.Euler(0, 30, 0) * aim.direction);
+                card.DragWith(1, moved, 1);
+                Assert((card.transform.position - start).magnitude > .3f && ScalpalPlacement.IsLevel(card.transform), "a grabbed card follows the controller ray and stays level");
+                card.DragWith(1, moved, 0); var dropped = card.transform.position;
+                Assert(!card.Dragging, "releasing grip drops the card");
+                card.DragWith(1, aim, 0); Assert(card.transform.position == dropped, "a dropped card stays where it was put");
+                card.Recenter();
                 var brand = ScalpalBrand.Active;
                 var texts = card.GetComponentsInChildren<TMPro.TextMeshPro>();
                 Assert(texts.Single(text => text.name == "Title").font == brand.display && texts.Where(text => text.name != "Title").All(text => text.font == brand.body || text.font == brand.label), "card title is Instrument Serif; copy and actions are Geist Mono");

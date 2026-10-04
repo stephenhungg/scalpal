@@ -5,6 +5,7 @@ using Scalpal.Brand;
 using TMPro;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.XR;
 
 namespace Scalpal.Handoff
 {
@@ -66,7 +67,9 @@ namespace Scalpal.Handoff
         {
             if (content) content.SetActive(false);
             foreach (var pointer in pointers) pointer.Clear();
-            positioned = false; selected = null;
+            // A card the learner dragged into place stays there for the next card.
+            if (!dragged) positioned = false;
+            selected = null; dragHand = -1;
         }
 
         public void Recenter()
@@ -220,6 +223,8 @@ namespace Scalpal.Handoff
             if (!viewer) return;
             if (!positioned) Recenter();
             StepPointers();
+            for (int hand = 0; hand < pointers.Length; hand++)
+                DragWith(hand, pointers[hand].LastRay, pointers[hand].LastSample.Valid ? GripSource(hand) : 0);
 #if UNITY_EDITOR
             if (Mouse.current!=null && Mouse.current.leftButton.wasPressedThisFrame && Physics.Raycast(viewer.ScreenPointToRay(Mouse.current.position.ReadValue()),out var hit,8))
                 hit.collider.GetComponent<HandoffCardTarget>()?.Press();
@@ -237,6 +242,40 @@ namespace Scalpal.Handoff
                 if (pointer.Hovered is HandoffCardTarget target && focus<0) focus=target.index;
             }
             if (focus!=hovered) { hovered=focus; for(int i=0;i<targets.Count;i++) Tint(targets[i].renderer,!targets[i].enabled ? ScalpalBrand.ButtonDisabledTint : i==focus ? ScalpalBrand.ButtonHoverTint : ScalpalBrand.ButtonTint,targets[i].enabled && i==focus); }
+        }
+        // Grip while pointing at the card grabs it; it follows that controller's ray at the grab distance until release.
+        public static Func<int, float> GripSource { get; set; } = hand =>
+        {
+            InputDevices.GetDeviceAtXRNode(hand == 0 ? XRNode.LeftHand : XRNode.RightHand).TryGetFeatureValue(UnityEngine.XR.CommonUsages.grip, out float value);
+            return value;
+        };
+        public bool Dragging => dragHand >= 0;
+        int dragHand = -1; float dragDistance; Vector3 dragOffset; bool dragged;
+        readonly bool[] gripDown = new bool[2];
+        public void DragWith(int hand, Ray ray, float grip)
+        {
+            if (hand < 0 || hand >= gripDown.Length || !Visible || !viewer) return;
+            bool down = grip > .7f, wasDown = gripDown[hand]; gripDown[hand] = grip > .35f && (down || wasDown);
+            if (dragHand == hand)
+            {
+                if (!gripDown[hand]) { dragHand = -1; return; }
+                Vector3 position = ray.origin + ray.direction * dragDistance + dragOffset, facing = position - viewer.transform.position; facing.y = 0;
+                transform.SetPositionAndRotation(position, facing.sqrMagnitude > 1e-6f ? Quaternion.LookRotation(facing) : transform.rotation);
+                Physics.SyncTransforms(); // button colliders move with the card for the next press
+                return;
+            }
+            if (dragHand >= 0 || !down || wasDown || !OnCard(ray, out float distanceAlong)) return;
+            dragHand = hand; dragDistance = distanceAlong; dragOffset = transform.position - (ray.origin + ray.direction * distanceAlong);
+            dragged = positioned = true;
+        }
+        bool OnCard(Ray ray, out float distanceAlong)
+        {
+            distanceAlong = 0;
+            if (!content || !new Plane(transform.forward, transform.position).Raycast(ray, out distanceAlong)) return false;
+            var point = ray.GetPoint(distanceAlong);
+            foreach (var renderer in content.GetComponentsInChildren<Renderer>())
+            { var bounds = renderer.bounds; bounds.Expand(.02f); if (bounds.Contains(point)) return true; }
+            return false;
         }
         internal bool CanPress(int index) => Visible && index>=0 && index<targets.Count && targets[index].enabled;
         internal void PressTarget(int index)

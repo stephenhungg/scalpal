@@ -563,8 +563,9 @@ namespace Scalpal.Quest
             { Publish(); return; }
             if (result.mistake != null)
             {
+                // The coach's alert feed voices mistakes (instant clips, paced cautions); prompting the agent on every
+                // mistake as well made Jarvis talk constantly.
                 mistakes++; Message = result.mistake.feedback;
-                voice.SendUserMessage("Simulator feedback: " + Message);
             }
             else if (result.advanced) { completedSteps++; Message = "Step completed"; }
             else Message = "Action recorded; complete the remaining targets";
