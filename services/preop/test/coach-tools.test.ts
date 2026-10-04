@@ -54,8 +54,8 @@ describe("shared Jarvis tools", () => {
     await req("POST", `/coach/sessions/${sid}/simulate`, { kind: "complete_step" });
     const first = (await req("POST", `/coach/sessions/${sid}/tools/get_hint`, {})).json.result;
     const second = (await req("POST", `/coach/sessions/${sid}/tools/get_hint`, {})).json.result;
-    expect(first).toMatch(/^Hint tier 1 of 3/);
-    expect(second).toMatch(/^Hint tier 2 of 3: .*fascia/i);
+    expect(first).toMatch(/^Hint tier 1 of 4/);
+    expect(second).toMatch(/^Hint tier 2 of 4: .*fascia/i);
   });
 });
 

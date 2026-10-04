@@ -69,7 +69,7 @@ export async function runTool(s: CoachSession, name: string, params: Record<stri
     case "get_hint": {
       const hint = s.requestHint();
       const lit = hint.highlight[0] ? ` ${await highlight(s, hint.highlight[0], deps)}` : "";
-      return `Hint tier ${hint.tier} of 3: ${hint.say}${lit}`;
+      return `Hint tier ${hint.tier} of ${s.snapshot().openBody ? 4 : 3}: ${hint.say}${lit}`;
     }
     case "explain_structure":
       return explainStructure(s, text("structure"), deps.resolveStructure).say;
