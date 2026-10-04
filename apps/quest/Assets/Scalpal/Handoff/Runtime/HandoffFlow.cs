@@ -157,7 +157,7 @@ namespace Scalpal.Handoff
             }, new[] { true, Ticket.presentationMode != "virtual", true });
             else if (phase == "stopped") Show("Volunteer stopped · Practice paused", "The volunteer can get up. Continue in the virtual OR with a new attempt; your office score is kept.", new[] { "Virtual OR (new attempt)", ReturnLabel }, i => { if (i == 0) SwitchToVirtual(); else BackToExplore(); });
             else if (phase == "recap") Show("Practice complete", surgery.Message + "\nClinical reasoning: " + Ticket.scorecard.total + "/100 · " + Ticket.scorecard.grade +
-                "\nReplay unavailable: native hand recording is not connected.", new[] { "Retry surgery", ReturnLabel }, i => { if (i == 1) BackToExplore(); else { surgery.Retry(); fitConfirmed = false; SetPhase("register"); } });
+                "\n" + Scalpal.Capture.HandCaptureRecorder.StatusLine(), new[] { "Retry surgery", ReturnLabel }, i => { if (i == 1) BackToExplore(); else { surgery.Retry(); fitConfirmed = false; SetPhase("register"); } });
         }
         void Theatre()
         {
@@ -263,7 +263,7 @@ namespace Scalpal.Handoff
             { nextCoachRetry = Time.unscaledTime + 10; coachTried |= surgery.PrepareTimeOut(); }
             string voice = surgery.voice.Status == "error" ? "Voice unavailable. Continue with captions." : surgery.CoachPrepared ? "Jarvis: Scrubbed in with you. Confirm the patient, procedure and site." : "Connecting Jarvis. Captions and authored local scoring are available if the coach is offline.";
             string body = "Patient: " + Ticket.scorecard.patientName + "\nProcedure: " + Ticket.procedureTitle + "\nSite: " + Ticket.scorecard.site + "\nUrgency: " + Ticket.verifiedCase.urgency + "\n" + RiskText(Ticket.scorecard) +
-                "\n" + voice + "\nMistakes are expected; this is practice.\nRecording unavailable: no hand clip is being saved; robot replay will be unavailable.";
+                "\n" + voice + "\nMistakes are expected; this is practice.\n" + Scalpal.Capture.HandCaptureRecorder.PlannedNotice(Ticket, HandoffRun.Preflight);
             var risks = ReviewRisks(Ticket.scorecard);
             if (Ticket.patientConfirmed && Ticket.procedureConfirmed && Ticket.siteConfirmed && !Ticket.risksConfirmed && risks.Length > 0)
             {
@@ -349,9 +349,10 @@ namespace Scalpal.Handoff
         {
             var p = HandoffRun.Preflight;
             Show("Theatre setup · Operator", "Volunteer present and consented: " + p.volunteerConsented + "\nCamera permission: " + p.cameraGranted + " · Spatial permission: " + p.sceneGranted +
-                "\nBody detection: " + (p.poseServiceOk ? "Online" : "Offline") + " · Coach: " + (p.coachServiceOk ? "Online" : "Offline") + "\nAR is available only when every check is green. Participant images are used for local detection, not saved.",
-                new[] { p.volunteerConsented ? "Withdraw volunteer consent" : "Volunteer present and agreed", "Grant camera and spatial permission", "Back to theatre" }, i =>
-                { if (i == 0) p.volunteerConsented = !p.volunteerConsented; else if (i == 1) RequestPermissions(); else if (Ticket == null) { SetPhase("office"); card.Hide(); } else SetPhase(Ticket.escalated && !Ticket.consequenceSeen ? "score" : "theatre"); });
+                "\nBody detection: " + (p.poseServiceOk ? "Online" : "Offline") + " · Coach: " + (p.coachServiceOk ? "Online" : "Offline") + "\nAR is available only when every check is green. Participant images are used for local detection, not saved." +
+                "\nLearner agreed to hand recording for robot replay: " + p.learnerCaptureConsented + " (in AR the volunteer is in frame; their consent must cover the clip).",
+                new[] { p.volunteerConsented ? "Withdraw volunteer consent" : "Volunteer present and agreed", "Grant camera and spatial permission", "Back to theatre", p.learnerCaptureConsented ? "Withdraw hand-recording consent" : "Learner agreed to hand recording" }, i =>
+                { if (i == 3) p.learnerCaptureConsented = !p.learnerCaptureConsented; else if (i == 0) p.volunteerConsented = !p.volunteerConsented; else if (i == 1) RequestPermissions(); else if (Ticket == null) { SetPhase("office"); card.Hide(); } else SetPhase(Ticket.escalated && !Ticket.consequenceSeen ? "score" : "theatre"); });
         }
         static void RequestPermissions()
         {

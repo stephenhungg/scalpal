@@ -9,6 +9,9 @@ namespace Scalpal.Handoff
     [Serializable] public sealed class TheatrePreflight
     {
         public bool volunteerConsented, cameraGranted, sceneGranted, poseServiceOk, coachServiceOk, demoMode;
+        // Learner agreed that the headset camera records their hands for the robot replay.
+        // Independent of AR availability; capture checks it (and volunteer consent in AR).
+        public bool learnerCaptureConsented;
         public string UnavailableReason => !volunteerConsented ? "No volunteer checked in and consented" :
             !cameraGranted || !sceneGranted ? "Camera and spatial permissions are off" :
             !poseServiceOk ? "Body detection offline" : !coachServiceOk ? "Coach service offline" : "";

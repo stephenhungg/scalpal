@@ -220,6 +220,7 @@ namespace Scalpal.Quest
             if (sharedAttemptReady && realtime.Paired && !SharedMatches)
             {
                 generation++; ResetHandoffRecovery();
+                AbandonCapture("The shared attempt changed before the case ended; recording discarded.");
                 sharedAttemptReady = false; attemptFailed = true;
                 exercise.StopAttempt(); voice.Disconnect(); coachSessionId = ""; Phase = "Selecting";
                 preview.gameObject.SetActive(true);
@@ -449,6 +450,7 @@ namespace Scalpal.Quest
         public void Retry()
         {
             if (busy || ending) return;
+            AbandonCapture("Practice restarted before the case ended; recording discarded.");
             if (OfficeHandoff != null && candidate != null)
             {
                 ReturnToOffice();
@@ -488,6 +490,9 @@ namespace Scalpal.Quest
             if (!SharedMatches || candidate == null) return false;
             try
             {
+                // Subscribe the capture owner before Begin opens the segment.
+                var capture = Scalpal.Capture.HandCaptureRecorder.Ensure();
+                capture.realtimeUri = realtime.uri; capture.realtimeDatabase = realtime.database;
                 if (HasHandoff)
                     RecapSessionIntegration.Ensure().Begin(HandoffRun.Current, candidate, boundSharedSession, boundSharedAttempt,
                         coachSessionId, coachBaseUrl, realtime.GetClientAccessToken());
@@ -499,6 +504,12 @@ namespace Scalpal.Quest
                 return true;
             }
             catch (ArgumentException) { Message = "Run context does not match this attempt. Start a fresh attempt."; return false; }
+        }
+        // No-op once EndSurgery closed the segment, or when no recap run is active.
+        static void AbandonCapture(string reason)
+        {
+            var run = RecapRunContext.Current;
+            if (run && run.result != null) run.AbandonSegment(run.result.attemptId, reason);
         }
         void ResultCommitted(string attempt) { if (attempt == boundSharedAttempt) resultCommitted = true; }
         void CompleteRecapRun()
@@ -772,6 +783,7 @@ namespace Scalpal.Quest
         void OnDestroy()
         {
             generation++;
+            AbandonCapture("Left the operating room before the case ended; recording discarded.");
             if (workbench) workbench.RetryRequested -= WorkbenchRetry;
             if (exercise) exercise.EventHandled -= EventHandled;
             if (coach) coach.CommandRequested -= CoachCommand;
