@@ -49,7 +49,7 @@ namespace Scalpal.Handoff.Editor
                 ("F12 waiting card has a way back and does not import every frame", WaitingCardReturnsAndThrottles),
                 ("F13 voice gate follows the actual phase transitions", VoiceGateFollowsPhases),
                 ("F13 unified scene order is checked against the product order", SceneOrderIsIndependent),
-                ("F14 OR entry shows no connection error while the case loads or the session joins", EntryShowsNoConnectionErrorWhileLoading),
+                ("F15 OR entry shows no connection error while the case loads or the session joins", EntryShowsNoConnectionErrorWhileLoading),
             };
             try
             {
