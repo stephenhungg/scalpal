@@ -81,6 +81,7 @@ namespace Scalpal.Surgery
             // The separate tool table holds nothing in the open case: the instrument stand is the tool surface in both modes.
             if (toolTable && toolTable.activeSelf) toolTable.SetActive(false);
             bool valid = Ready;
+            if (finishRequested && valid) { finishRequested = false; FinishAttempt(); }
             wound.SetRegistrationValid(valid);
             if (!valid) { interaction.Simulate(0); bleeding.Simulate(0); incisions.Simulate(0); blood.Simulate(0); return; }
             float dt=Time.deltaTime;
@@ -100,7 +101,7 @@ namespace Scalpal.Surgery
             body = session.exercise.Body; if (body == null) return;
             // Release presentation-only closure overrides before resetting the shared attempt.
             if (closureAppearance) closureAppearance.Dispose();
-            premarked = false; closedLayers = 0; closingClock = 0; inHand.Clear();
+            premarked = false; closedLayers = 0; closingClock = 0; inHand.Clear(); finishRequested = false;
             if (!kit)
             {
                 var prefab = Resources.Load<GameObject>("OpenSurgeryInstruments");
@@ -381,6 +382,10 @@ namespace Scalpal.Surgery
         }
         public bool ChooseBase(string choice) => interaction && interaction.Choose(wound.decisionTissueId,choice);
         public bool FinishAttempt() => Ready && session.exercise.Submit(CaseEvent.Finish(),out _,out _);
+        // The pause menu's End surgery: finish as soon as practice is running again after the menu closes.
+        bool finishRequested;
+        public bool FinishRequested => finishRequested;
+        public void RequestFinish() => finishRequested = true;
         void OnDestroy()
         {
             if(session && session.workbench)session.workbench.ToolsReset-=ClearPlacements;

@@ -25,7 +25,7 @@ namespace Scalpal.Shell
         string transitionFailure;
         bool failureCanResume;
         // Office: voice on/off is chosen here (the room has no control panel); it applies on Resume.
-        bool officeVoiceCaptured, voiceOnResume, confirmingSkip;
+        bool officeVoiceCaptured, voiceOnResume, confirmingSkip, confirmingEnd;
         readonly List<XRInputSubsystem> inputs = new List<XRInputSubsystem>();
         readonly List<XRInputSubsystem> subscribed = new List<XRInputSubsystem>();
         public static ShellPause Ensure()
@@ -97,7 +97,7 @@ namespace Scalpal.Shell
             // Focus/headset return alone never resumes. A deliberate menu action is required.
             if (!IsPaused || !focused || suspended || !wasPresent || (!string.IsNullOrEmpty(transitionFailure) && !failureCanResume)) return;
             transitionFailure=null;
-            IsPaused = false; confirming = confirmingSkip = false; Time.timeScale = savedScale; AudioListener.pause=savedAudioPause;
+            IsPaused = false; confirming = confirmingSkip = confirmingEnd = false; Time.timeScale = savedScale; AudioListener.pause=savedAudioPause;
             var office = FindFirstObjectByType<NativeEncounterSession>();
             if (office && officeVoiceCaptured && voiceOnResume && office.State?.phase == "interview") office.ToggleVoice();
             officeVoiceCaptured = false;
@@ -142,9 +142,20 @@ namespace Scalpal.Shell
                     ShellView.Button(panel,voiceOnResume?"Voice on · select for off":"Voice off · select for on",new Vector3(-.17f,-.28f,-.014f),new Vector2(.32f,.075f),()=>{voiceOnResume=!voiceOnResume;BuildMenu();});
                     ShellView.Button(panel,confirmingSkip?"Confirm skip":"Skip to surgery",new Vector3(.17f,-.28f,-.014f),new Vector2(.32f,.075f),SkipToSurgery,!ShellTransition.Busy,false,true);
                 }
+                // Operating room (AR or VR) once practice has started: end the case and go to the recap. Asks once.
+                var surgery = FindFirstObjectByType<Scalpal.Surgery.OpenSurgerySession>();
+                if (surgery && Scalpal.Handoff.HandoffRun.Current?.practiceStarted == true)
+                    ShellView.Button(panel,confirmingEnd?"Confirm end surgery":"End surgery",new Vector3(0,-.28f,-.014f),new Vector2(.66f,.075f),EndSurgery,!ShellTransition.Busy,false,true);
             }
             pauseInput.head = head; pauseInput.origin = officeRig ? officeRig.origin : hubInput ? hubInput.origin : head.transform.parent;
             pauseInput.allowedRoot = panel; pauseInput.content = null; pauseInput.enabled = true; pauseInput.Release(); PlaceMenu(head);
+        }
+        void EndSurgery()
+        {
+            if (!confirmingEnd) { confirmingEnd = true; BuildMenu(); return; }
+            var surgery = FindFirstObjectByType<Scalpal.Surgery.OpenSurgerySession>();
+            Resume();
+            if (surgery) surgery.RequestFinish();
         }
         static void Discard(GameObject value) { if (Application.isPlaying) Destroy(value); else DestroyImmediate(value); }
         // Office pause: "Skip to surgery" asks once, then leaves the interview for the Theatre card.
