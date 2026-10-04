@@ -9,8 +9,8 @@
 //   POST /v1/worker/jobs/:job/runs/:run/complete
 //   POST /v1/worker/jobs/:job/runs/:run/fail
 //
-// Browsers and the Quest never call the worker routes; they talk to
-// SpacetimeDB directly and receive signed URLs through grant rows.
+// Browsers and the Quest never call worker routes. Replay reads verify the
+// existing SpacetimeDB client token and return scoped short-lived signed URLs.
 
 import { randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
@@ -21,6 +21,7 @@ import type { Config } from './config';
 import { log } from './log';
 import { Unavailable, waitFor, type Realtime } from './realtime';
 import { LocalStorage, type Storage } from './storage';
+import { registerRecapRoutes, type AuthorizeSession } from './recap';
 
 type WorkerVars = { Variables: { workerId: string } };
 
@@ -35,7 +36,7 @@ function reducerError(c: Context, err: unknown) {
   return c.json({ error: message }, 400);
 }
 
-export function createApp(config: Config, rt: Realtime, storage: Storage) {
+export function createApp(config: Config, rt: Realtime, storage: Storage, authorizeSession?: AuthorizeSession) {
   const app = new Hono();
 
   app.use(
@@ -46,7 +47,8 @@ export function createApp(config: Config, rt: Realtime, storage: Storage) {
         return config.corsOrigins.includes(origin) ? origin : null;
       },
       allowMethods: ['GET', 'PUT', 'POST', 'HEAD', 'OPTIONS'],
-      allowHeaders: ['content-type', 'authorization'],
+      allowHeaders: ['content-type', 'authorization', 'range'],
+      exposeHeaders: ['content-length', 'content-range', 'accept-ranges'],
       maxAge: 600,
     })
   );
@@ -116,9 +118,30 @@ export function createApp(config: Config, rt: Realtime, storage: Storage) {
         'content-type': 'application/octet-stream',
       };
       if (dl) headers['content-disposition'] = `inline; filename="${dl.replace(/"/g, '')}"`;
-      if (c.req.method === 'HEAD') return new Response(null, { headers });
-      const stream = Readable.toWeb(createReadStream(storage.pathFor(key))) as ReadableStream;
-      return new Response(stream, { headers });
+      // VideoPlayer and browser scrubbing require single byte ranges. A signed
+      // GET capability covers the same object whether read fully or in ranges.
+      if (key.toLowerCase().endsWith('.mp4')) headers['content-type'] = 'video/mp4';
+      else if (key.toLowerCase().endsWith('.webm')) headers['content-type'] = 'video/webm';
+      headers['accept-ranges'] = 'bytes';
+      const range = c.req.header('range');
+      let start = 0, end = size - 1;
+      if (range) {
+        const match = /^bytes=(\d*)-(\d*)$/.exec(range);
+        if (!match || (!match[1] && !match[2])) {
+          return new Response(null, { status: 416, headers: { 'content-range': `bytes */${size}` } });
+        }
+        start = match[1] ? Number(match[1]) : Math.max(0, size - Number(match[2]));
+        end = match[1] && match[2] ? Math.min(Number(match[2]), size - 1) : size - 1;
+        if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || start > end || start >= size) {
+          return new Response(null, { status: 416, headers: { 'content-range': `bytes */${size}` } });
+        }
+        headers['content-range'] = `bytes ${start}-${end}/${size}`;
+        headers['content-length'] = String(end - start + 1);
+      }
+      const status = range ? 206 : 200;
+      if (c.req.method === 'HEAD') return new Response(null, { status, headers });
+      const stream = Readable.toWeb(createReadStream(storage.pathFor(key), range ? { start, end } : undefined)) as ReadableStream;
+      return new Response(stream, { status, headers });
     });
   }
 
@@ -364,6 +387,7 @@ export function createApp(config: Config, rt: Realtime, storage: Storage) {
   });
 
   app.route('/v1/worker', worker);
+  registerRecapRoutes(app, config, rt, storage, authorizeSession);
 
   app.notFound(c => c.json({ error: 'not found' }, 404));
   app.onError((err, c) => {

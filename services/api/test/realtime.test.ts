@@ -17,6 +17,7 @@ import {
   worker,
   WORKER_TOKEN,
   WORKER_TOKEN_2,
+  GATEWAY,
   type Client,
   type Gateway,
 } from './harness';
@@ -395,6 +396,37 @@ describe('motion jobs', () => {
       await worker(WORKER_TOKEN, res.json.endpoints.fail, { error: 'drained', retryable: false });
     }
   }
+
+  test('client replay endpoint verifies real membership and scopes signed source URLs', async () => {
+    const r = await sessionWithRoles();
+    const outsider = await connect();
+    try {
+      const clip = await availableClip(r);
+      const jobId = uid('job');
+      await r.operator.conn.reducers.requestMotionJob({ jobId, inputArtifactId: clip, extraArtifactIds: [], configVersion: 'motion-v1' });
+      await eventually(() => jobsOf(r.viewer, r.sessionId).some(j => j.jobId === jobId), 'job visible');
+      const url = `${GATEWAY}/v1/sessions/${r.sessionId}/replay/${jobId}`;
+      assert.equal((await fetch(url)).status, 401);
+      assert.equal((await fetch(url, { headers: { authorization: `Bearer ${outsider.token}` } })).status, 403);
+      for (const client of [r.viewer, r.headset]) {
+        const res = await fetch(url, { headers: { authorization: `Bearer ${client.token}` } });
+        assert.equal(res.status, 200, await res.clone().text());
+        const body = await res.json() as any;
+        assert.equal(body.status, 'queued');
+        assert.equal(body.replayVideoUrl, '');
+        assert.equal(body.sessionId, r.sessionId);
+        assert.equal((await fetch(body.sourceVideoUrl)).status, 200);
+      }
+      const membership = [...r.operator.conn.db.sessionMembers.iter()].find(m => m.identity.isEqual(r.viewer.identity));
+      assert.ok(membership);
+      await r.operator.conn.reducers.removeMember({ membershipId: membership.membershipId });
+      assert.equal((await fetch(url, { headers: { authorization: `Bearer ${r.viewer.token}` } })).status, 403);
+    } finally {
+      await drainQueue();
+      r.closeAll();
+      outsider.close();
+    }
+  });
 
   test('duplicate job requests produce one job', async () => {
     const r = await sessionWithRoles();
