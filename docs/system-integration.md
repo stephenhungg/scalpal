@@ -1,5 +1,24 @@
 # System Integration Map
 
+## AR Surgery Audit Checkpoint — October 4, 2026
+
+**Outcome:** AR has an integrated entry and automatic generic body fit, but no complete physical reclining-participant surgery is verified. Read the [deep AR audit and acceptance matrix](ar-surgery-audit.md) before describing it as complete. Source inspected through **`0c4d04b`** / backend `12c930c`; subsequent main `6bb4d37` changes only site text. Test repair **`9d94a47`** updates standalone transport doubles for the production shared-command sender and adds eight request/outcome regressions. Runtime behavior is unchanged by this audit.
+
+No new APK was built or installed for this audit. Last independently verified package remains **`0.6.8-exposure` / code 19 / `0cd8b1d`**, actual 88,280,259 bytes, SHA256 `2a133c069d1b945dd4ca7e95c7e4c87399f9f848425a3daaa8dbe5bd35b16ee6`. That package's physical evidence is **Launch startup**, not an AR playthrough. The newer source's automatic coach opening is not retroactively included in code 19 evidence.
+
+| Check run now | Result and limit |
+| --- | --- |
+| `verify_session.py --suite registration` | **33 passed**; real blank-image CPU inference and loopback protocol, synthetic positive/multiple-person observations. No participant pixels. |
+| `verify_session.py --suite unity` | First attempt failed standalone transport compilation because its doubles lacked the newer generated request types; the Editor scene/mechanics gate independently reached its success marker. After repair, the **entire suite passed**, `failed: []`, `physical_playthrough_verified: false`; production bridge 85, body registration 111, both-mode native checks and `SCALPAL_NATIVE_SESSION_VERIFY_OK`. No new Play Mode or Android build. |
+| Request regression control | A temporary production-copy mutation increments expected step version; the real sender payload assertion fails with exit 1. Restored production remains unchanged and 85/85 pass. No SDK connection/reducer commit/provider call. |
+| Loaded wall fixture | 33 placements: 30 accepted/3 refused, 0 failures; 2,871 samples, maximum active nodes 1,278/cut faces 530. Fresh Editor volume p95 42.164 ms / max 327.394 ms exceeds 30 Hz fixture budget; not Quest timing. |
+| Read-only readiness | Host pose :8790 health HTTP 200 with correct ready/schema; coach :8787 health HTTP 200. ADB port 5037 reported 0 authorized devices at the snapshot, so no fresh grants/USB-route/OR check was claimed. This does not establish a disconnect cause. No camera/voice/participant capture or scene advance. |
+
+**Actionable findings / owners:** Quest registration/tissue: 221-ray / 8 ms budget and real fit unmeasured; local McBurney surface remains authored proxy; stroke source-mm versus split/tent world-mm disagreement. Quest presentation/Surgery: AR tray copies the VR location and can duplicate after fallback, no real-hand occlusion or off-field AR skin wound painting. Handoff: show actual registration failure and acquisition readiness. Quest session/Surgery/Recap: monitor death does not terminate the native attempt. Vitals/preop: baseline request ignores response; stale samples can retain measured provenance. Preop/realtime/companion: matched condition/death/pause authority and acknowledged attempt-scoped transport remain incomplete. Robotics/motion/Recap: fixed VR capture frame is wrong for registered AR; failed upload loses data and first ready baseline can hide the learner result. Full event seq/hash/resync remains pending in the surgery-state design.
+
+**Required physical acceptance:** Theatre→automatic real fit→right-sided field/both-eye alignment→reachable tray→briefing/spoken Time-Out with honest baseline→persistent injury/tool steps→fit loss/recovery→success/death recap→matched controller replay, plus simultaneous depth/tissue/render timing. Technical-pause physiological-time policy and measurement units require explicit contract decisions. No physical/provider/replay evidence is manufactured by these fixtures. Logs/backups remain outside Git under `../work/surgery-visual-audit/`.
+
+
 ## Latest Quest Integration Checkpoint — October 4, 2026, Q7: Wrist Exposure, Lighting and Persistent Aim
 
 Packaged Quest source **`0cd8b1d`**, including visual/contact work `0c6009d`, aim laser `e1e47c4`, shared instrument command producer/consumer `03318b8`, spoken Time-Out `4eae505` / `c25dff7`, auto-start handoff `8ddb30b`, demo exports `6e8e40d`, condition bindings `0299dbb` and feed `fa8d680`. Backend later synchronized through **`12c930c`** (condition source `fbf107b`, duplicate-feed removal `12c930c`, module source-label fix `6038702`); these contain no Quest source/ABI change. The existing coach condition JSON now carries the matched fresh database view or local fallback. The latest [operation flow](operation-flow.md) remains the direction; handoff selects AR or VR over one shared attempt/core.

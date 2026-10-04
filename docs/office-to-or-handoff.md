@@ -1,5 +1,7 @@
 # Scalpal: Diagnosis Office to Operating Room Handoff (UX spec)
 
+> **Runtime audit update (October4):** Theatre offers both AR and VR, checks existing grants silently, and automatically starts AR registration. Current integrated ordering is fit → briefing → automatic spoken Time-Out; there is no manual Time-Out confirmation panel. Replay input is controller motion only. Read the [AR surgery audit](ar-surgery-audit.md) for implemented boundaries and remaining work; older panel/video proposals below are historical.
+
 **October 4 setup correction (Stephen):** remove the volunteer-confirmation checkbox from AR availability and detection. Four capability checks remain; measured fit still gates practice. The AR flow silently checks existing OS grants and does not request permissions. Missing grants are restored in Quest settings. The participant permission control appears only under optional hand recording and applies only to recording an AR clip. Historical medical Sign In guidance below describes the simulated checklist, not a new mode-selection gate.
 
 

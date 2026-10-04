@@ -2,15 +2,15 @@
 
 **AI-guided VR surgical practice that can become demonstrations for robots.**
 
-> **Scope notice:** the current product flow is the [latest experience flow](docs/current-direction.md#latest-experience-flow): launch → explore patients → diagnosis office → full-VR surgery → required robot replay. Mixed reality with a real participant, conversational selection and the rotating preview are off the main path. Where an older document disagrees, current direction wins.
+> **Current scope:** launch → explore patients → full-VR diagnosis office → operating room chosen as AR on a reclining volunteer or VR with a virtual patient → recap → controller-motion robot replay. Both OR modes share one surgery core. See the [latest operation flow](docs/operation-flow.md) and [AR implementation audit](docs/ar-surgery-audit.md) for implemented routes, gaps and physical acceptance limits. Conversational case selection and the rotating selection preview are historical.
 
-Scalpal is an MHacks project for Meta Quest 3S. The learner launches the app, browses a large explore page of synthetic FinchNode patients, picks a case, diagnoses the patient in a full-VR doctor's office through a voice back-and-forth, then performs the surgery that patient needs in a full-VR operating room. A recording of the passthrough camera during the surgery supplies input for estimating human hand motion, retargeting it to a simulated robot hand, and replaying the demonstration. See the [latest experience flow](docs/current-direction.md#latest-experience-flow).
+Scalpal is an MHacks project for Meta Quest 3S. The learner browses synthetic FinchNode cases, interviews the patient in a full-VR doctor's office, and chooses an AR volunteer overlay or virtual OR for the operation. Controller motion and inputs supply the robot demonstration; passthrough video is not replay input. Physical end-to-end verification remains pending.
 
-The long-term thesis is that human learning can supply useful robot demonstrations. The proposed demo proves a smaller chain: **one guided exercise → feedback → one video-derived movement sequence → one simulated robot replay.** Replay is not autonomous robot learning.
+The long-term thesis is that human learning can supply useful robot demonstrations. The proposed demo proves a smaller chain: **one guided exercise → feedback → one controller-motion demonstration → one simulated robot replay.** Replay is not autonomous robot learning.
 
 **Latest direction: Solana and monetary completion rewards are removed. Nathan owns the companion website + SpacetimeDB/routing lane; Matthew continues to own Scalpal.** Read [current direction](docs/current-direction.md) and the [system integration map](docs/system-integration.md) first. They supersede older payout work and the prior blanket wait instruction for this assigned lane.
 
-The backend uses [SpacetimeDB for shared state plus private file storage for video](docs/data-and-realtime.md). Main now includes the native session, full anatomy sources, Scalpal service, companion/realtime/gateway and video-motion processor. Physical end-to-end verification is pending. Live headset video and motion processing still need capture/worker adapters. The integration map records exact source snapshots and routing gaps.
+The backend uses SpacetimeDB for shared state and separate storage/worker routes for robot artifacts. Main includes the native session, anatomy sources, Scalpal service, companion/realtime/gateway and motion worker. The current controller capture and replay adapters exist, with unresolved AR coordinates, delivery and physical acceptance. The [integration map](docs/system-integration.md) records the actual source snapshots and gaps; older video-storage proposals are historical.
 
 ## Architecture
 

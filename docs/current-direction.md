@@ -23,7 +23,7 @@ The user selected appendectomy/abdomen for the material/physics expansion. The f
 
 ## Latest Body Registration Correction
 
-The user requires automatic detection and calibration of a real reclining participant. The active revision replaces the previous three-controller-point plane with opt-in MediaPipe image landmarks plus acquisition-time MRUK85 native environment raycasting. After three stable observations the generic organ overlay aligns automatically. B confirms the case. Lost landmarks/depth pause the patient overlay and scoring; valid stable observations automatically reacquire. This remains generic teaching anatomy, not participant-specific organs. Exact depth/image sensor synchronization and physical fit are unverified; see [body registration](body-registration.md).
+The user requires automatic detection and calibration of a real reclining participant. The active revision replaces the previous three-controller-point plane with MediaPipe image landmarks plus acquisition-time MRUK85 native environment raycasting. Integrated AR entry automatically starts detection after silent capability checks. After three stable observations the generic organ overlay aligns automatically; the handoff asks the learner whether it looks right. Lost landmarks/depth pause the patient overlay and scoring; valid stable observations automatically reacquire. This remains generic teaching anatomy, not participant-specific organs. Exact depth/image sensor synchronization and physical fit are unverified; see [body registration](body-registration.md).
 
 
 Updated October 3, 2026 after the user removed the monetary/onchain component. This page takes precedence over older architecture, flow, research, and team-plan documents where they disagree.
@@ -34,13 +34,13 @@ Solana, wallets, onchain challenge programs, Devnet payouts, and money for compl
 
 ## Remaining Thesis
 
-AI guides people through mixed-reality learning and practice. Recorded passthrough video can supply estimated hand movements that are mapped onto a simulated robot hand for replay. The longer-term hypothesis is that useful demonstrations could support robot learning. Replay does not itself demonstrate a learned autonomous policy.
+AI guides people through mixed-reality learning and practice. Recorded controller motion and inputs supply demonstrations that are mapped onto a simulated robot hand for replay. The longer-term hypothesis is that useful demonstrations could support robot learning. Replay does not itself demonstrate a learned autonomous policy.
 
 The working experience is the [latest experience flow](#latest-experience-flow) above. The earlier sequence (discuss an exercise with Scalpal → rotating anatomy preview → fit anatomy to a real reclining participant → practice → replay) is superseded.
 
 ## Latest Body Overlay Direction
 
-The user explicitly requests MediaPipe detection of a person lying on a table and generic virtual anatomy attached to the body landmarks. The current implementation uses an opt-in ephemeral local pose service, calibrated Quest camera rays, an automatically measured anterior torso surface and stable acquisition; it does not infer metric body depth from MediaPipe z. Native presentation now defaults to AR, with a 42-part organ overview and the shared nine-target scored exercise. Physical detection/alignment remains the acceptance checkpoint. See [body registration](body-registration.md).
+The user explicitly requests MediaPipe detection of a person lying on a table and generic virtual anatomy attached to the body landmarks. The current implementation uses an ephemeral local pose service, calibrated Quest camera rays, an approximate anterior torso plane from live depth and stable acquisition; it does not infer metric body depth from MediaPipe z. The handoff chooses AR or VR; the standalone OR defaults to AR. Current native validation reports an 81-part overview and the shared scored targets. See the [AR audit](ar-surgery-audit.md) for source and physical acceptance limits. Physical detection/alignment remains the acceptance checkpoint. See [body registration](body-registration.md).
 
 ## Two Presentation Modes
 
