@@ -32,6 +32,4 @@ The visual system follows the aeterna Framer template, measured from the live si
 
 The reaching arms are Matthew's ASCII Adam (`src/components/AsciiAdam.tsx` plus `public/hero/ascii/`, from [MatthewKim323/adam](https://github.com/MatthewKim323/adam)), unchanged. It was built for a black page, so `AdamLayer` inverts it with a hue turn and multiplies it onto the light background. It's placed below the button.
 
-The landing background is ReactBits [Pattern Waves](https://reactbits.dev/backgrounds/pattern-waves) (`src/components/PatternWaves.tsx`, via `ogl`), set to faint black dots on a transparent background. A backdrop-blur layer, masked to soft ovals over the arms, blurs the waves wherever they pass behind them.
-
 No template assets or code are used. Fonts are Google Fonts (OFL).
