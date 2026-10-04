@@ -1,30 +1,71 @@
 # Native Diagnosis Office
 
-This separate full-VR encounter experience uses Matthew's existing patient-interview and attending assessment engine. It does not install a second local scorer or change the surgery scene, tissue mechanics, registration, or scored instrument path.
+The separate full-VR botanical clinic uses Matthew’s patient-interview and attending assessment engine. It preserves the surgery scene, tissue mechanics, registration and scored instrument path. Its dedicated Android package can coexist with the surgery player.
 
 ## Source and Ownership
 
-The isolated branch starts at `0145544` (the stable abdominal tissue checkpoint, based on main `fc69836`). It merges Matthew's actual encounter/browser/realtime producer at `f61b1ceb96bd0ae46a8ff5771a48b745fa610c0f`, including interview `1ed5f76`, patient voice tools `94b399e`, clean summary `00926a9`, and browser flow `988d825`. The draft PR is stacked on `codex/abdominal-tissue-physics` so its diff contains the encounter dependencies and office work rather than repeating the prior AR/tissue changes.
+The isolated branch starts at `0145544` (the stable abdominal tissue checkpoint, based on main `fc69836`). It merges Matthew’s encounter/browser/realtime producer through `dda34d9`: interview `1ed5f76`, patient voice tools `94b399e`, clean summary `00926a9`, browser flow `988d825`, realtime producer `f61b1ce`, three-identity helper `ff93cac`, exact coach membership binding `dda34d9`. Final remote audit inspected Matthew `e409c22` (browser camera additions without affected encounter/realtime contract changes), Nathan `0d28d43` (documentation-only versus merged `aa182cd`) and unchanged Silas `a901a50`; unrelated newer additions are not merged. The draft PR is stacked on `codex/abdominal-tissue-physics` to keep the office diff separate from prior AR/tissue work.
 
-Owned art: `assets/environments/doctor-office/` and `Assets/Scalpal/EncounterOffice/Art/`. Owned runtime and dedicated scene: `Assets/Scalpal/EncounterOffice/`. The working built-in renderer and Android OpenXR configuration are reused. The floral direction follows the user's request for a flowery MHacks theme; flowers and pastel botanical styling are original art, without claiming official branding.
+Office art lives in `assets/environments/doctor-office/`, with native exports under `apps/quest/Assets/Scalpal/EncounterOffice/Art/`. Runtime, editor tools, materials, fonts and the dedicated scene live under `EncounterOffice/`. The built-in renderer and existing Android OpenXR configuration are reused. The botanical direction follows the requested flowery MHacks theme; [MHacks 2026 describes its theme as Digital Garden](https://www.mhacks.org/). Original flowers, pastel colors and decorative arrangements interpret that direction without claiming official branding.
+
+## Art and Licensing
+
+The room, flowers and furnishings are original Blender geometry. The two patient models replace the initial primitive characters with MakeHuman core CC0 data, authored using MPFB2 2.0.17 at `afb9f530a7c2741dedb8df0ebae2e0b183caec21`. The addon code is GPLv3; the bundled/exported core character data is CC0. The selected official [MakeHuman system asset pack](https://static.makehumancommunity.org/assets/assetpacks/makehuman_system_assets.html) supplies skin, hair, clothes, shoes, eyes and brows. Asset-specific source, legal text and hashes live beside the editable source under `assets/environments/doctor-office/`; the addon itself is not bundled into the player.
+
+`doctor-office.blend` contains editable room and seated characters with packed images. The room contains 42,600 triangles in 17 render meshes; Priya 27,180 and Jonah 36,906 triangles, each in six skinned meshes. Runtime diffuse maps are capped at 1,024 pixels. Only one patient renders at a time. These are measured asset budgets rather than headset frame-time measurements.
+
+Independent FBX re-import checks passed mesh counts, material assignments, node identities and actual weighted head/jaw deformations. Five-degree head rotations moved sampled skin by 12.5/13.6 mm, and jaw rotations by 7.7/9.1 mm for Priya/Jonah. Motion remains decorative listening/speaking feedback, without phoneme or clinically meaningful expression claims. Their appearances are artistic choices for fictional cases, not likenesses of real patients. See the [art README](../assets/environments/doctor-office/README.md) for editable sources and rebuild commands.
 
 ## Authoritative Encounter Route
 
-`POST /encounters` creates a fresh authored encounter. The office shows Priya Ramaswamy (female, 40, `patient-demo-multi-source`) or Jonah Okoye (male, 30, `patient-demo-sparse`). These are approved fictional synthetic demo cases. They must not be silently substituted with real FinchNode records or different case demographics.
+`POST /encounters` creates a fresh authored encounter. The office supports Priya Ramaswamy (female, 40, `patient-demo-multi-source`) and Jonah Okoye (male, 30, `patient-demo-sparse`). These are fictional synthetic demo cases. Source and demographic guards reject real records and mismatched case demographics.
 
-Patient questions, selected examination maneuvers, and orders call `/encounters/:id/tools/answer`, `examine`, and `order_test`. Examination findings and test results render exclusively from the returned encounter state. Selecting an examination is an authored simulated action; it does not measure a learner's real physical examination technique.
+Patient questions, selected examination maneuvers and orders call `/encounters/:id/tools/answer`, `examine` and `order_test`. Findings and results render from returned server state. Selecting an examination is an authored simulated action; it does not measure a learner’s physical examination technique. Unknown maneuvers remain unavailable instead of claiming a normal finding.
 
-`POST /encounters/:id/attending` changes the role to Jarvis. `get_encounter_summary` exposes what the learner actually gathered. `record_assessment` records the learner's diagnosis, differential, procedure and urgency; `/encounters/:id/score` supplies the deterministic attending scorecard. There is one authoritative server encounter engine. The clinical wording and rubric are authored teaching content, not a validated medical assessment.
+`POST /encounters/:id/attending` changes the role to Jarvis. `get_encounter_summary` exposes facts the learner gathered. `record_assessment` accepts the learner’s diagnosis, differential, procedure and urgency; `/encounters/:id/score` exposes the deterministic attending scorecard after assessment. Interview tools cannot mutate an attending/scored encounter, and scored evidence remains fixed. The attending prompt excludes uncollected answer-key facts. Clinical content is an authored teaching exercise, not a validated medical assessment.
 
-The native voice transport reuses `QuestJarvisVoice`. `ConnectEncounter` verifies exact encounter/patient/phase identity. Patient connections use `/jarvis/connection?agent=patient`, the server's patient prompt/greeting and selected TTS voice. Attending connections use the existing Jarvis agent and attending prompt. Encounter tools reach the office's bounded handler; coach-session tools keep the existing surgery route. Changing role or case must disconnect the previous conversation and invalidate pending responses.
+There is one authoritative server encounter engine. Unity presents the encounter and forwards actions. The existing optional `RealtimeBridge` mirrors actions/results into its explicitly joined shared session; the native office does not create a second scorer or media producer. The service’s additive `display` response supplies learner text while provider `result` retains voice instructions.
 
-## Delivery Checklist
+## Voice and Visual Controls
 
-- [x] Isolated checkout and fixed source audit; preserved active volumetric checkout.
-- [x] Native transport extension compiles against installed Unity Android assemblies; PCM and encounter identity checks pass.
-- [ ] Original floral Blender office, editable sources, optimized exports, provenance and preview.
-- [ ] Dedicated native encounter scene and usable visual fallback.
-- [ ] Scene/client exchanges, lifecycle/role failures, scorecard and service gates.
-- [ ] Verified commits, draft PR, concise final source and evidence handoff.
+The office reuses `QuestJarvisVoice`. `ConnectEncounter` verifies exact encounter, patient and expected role/phase identity before connecting. Patient connections use `/jarvis/connection?agent=patient`, the server’s patient prompt/greeting and selected TTS voice. Attending connections use the existing Jarvis agent and attending prompt. Empty TTS overrides are omitted for attending and surgery. Encounter tools use the office’s bounded handler; the existing six surgery tools retain their coach routes.
 
-Physical headset comfort, XR controller usability, frame time, microphone/speaker behavior and live provider conversation are separate acceptance checkpoints. No participant capture is started by this experience. Provider credentials remain on the service. The final handoff records only checks actually run.
+Role/case changes disconnect the previous conversation and invalidate pending responses. Expired or abandoned queued tools cannot mutate another encounter. First-use microphone permission survives the operating-system permission-dialog pause. Later suspension disconnects an active conversation. A completed assessment leaves the attending conversation connected long enough to speak feedback. Live provider behavior remains a separate acceptance check.
+
+The glass panels expose patient selection, paged history/examination/test choices, paged findings/responses, an editable assessment, a controller-ray keyboard and score feedback. They use rounded tinted glass surfaces, subtle borders and unmodified Inter 4.1 static fonts ([upstream release](https://github.com/rsms/inter/releases/tag/v4.1), SIL Open Font License 1.1). The adjacent `Fonts/LICENSE.txt` and `Fonts/README.md` record license and hashes. Actual text-mesh bounds are fitted to each region; world-space text uses depth testing. Glass is a lightweight transparent treatment rather than a full-scene blur pass.
+
+## Prepare, Preview and Build
+
+Open `apps/quest` in Unity **6000.0.66f2**. Select **Scalpal → Encounter Office → Prepare Diagnosis Office**, then open `Assets/Scalpal/EncounterOffice/Scenes/DiagnosisOffice.unity`. Preparation maps exported materials and textures, creates dedicated prefabs, verifies imported face direction and preserves the default surgery build scene. Native floor-space head/controller tracking and before-render pose updates reuse the project’s XR conventions; deliberate trigger activation is rearmed across invalid tracking/focus.
+
+Repeatable checks from the repository root:
+
+```sh
+python3 scripts/quest/verify_session.py --suite encounter
+python3 scripts/quest/verify_session.py --suite voice
+python3 scripts/quest/verify_session.py --suite services
+```
+
+The service gate requires the pinned SpacetimeDB **2.10.2** CLI on `PATH` and its local server. It uses a uniquely named disposable test database. It must never reset the running demo database.
+
+For a mono Editor preview, optionally set `SCALPAL_ENCOUNTER_PREVIEW_LAYOUT=assessment` to inspect assessment and keyboard placement without fabricated case data. Set `SCALPAL_ENCOUNTER_PREVIEW` to an absolute PNG path and execute `Scalpal.EncounterOffice.Editor.EncounterOfficeBuild.CapturePreview` with Unity batch mode and graphics enabled. A rendered preview checks composition/text; it does not establish stereo headset appearance.
+
+For an Android development APK, set `SCALPAL_ENCOUNTER_APK` to an absolute APK path and execute `Scalpal.EncounterOffice.Editor.EncounterOfficeBuild.Build`. The build verifies the scene, temporarily selects `com.scalpal.encounteroffice`, and restores the project’s product/package/version/HTTP settings and XR preload assets afterward. It builds only the diagnosis scene. To configure its private development endpoint after installing:
+
+```sh
+python3 scripts/quest/configure_encounter.py --service-url http://127.0.0.1:8787
+```
+
+The helper targets only the office package, creates USB reverse forwarding for localhost, writes private `files/session-config.json`, and starts neither voice nor capture. Restart the office to apply it. A reachable LAN root URL is also supported. The runtime accepts `encounterBaseUrl` or the existing `coachBaseUrl` private configuration key. Provider credentials remain on the service.
+
+## Verification and Acceptance
+
+Completed backend gates: 161 preop tests, two provider-live tests skipped; type/catalog checks; companion type/build; 23 gateway integration tests; 19 coach HTTP checks; 156 production relay checks; 10 actual SDK subscription checks; 30 loopback HTTP → production coach bridge → SpacetimeDB encounter checks for both fictional adults. Native voice verification passed 50 actual tool/HTTP checks plus PCM/protocol/encounter identity checks; no WebSocket, microphone or provider was exercised.
+
+The existing surgery Unity gate passed bridge 33, instrument 160, input 24, body-registration 76, tissue 5,739, appendectomy 75, attempt 72 and coach-binding 68 assertions. Tissue counts include per-vertex preservation checks. The registration service passed 33 tests. These checks preserve existing boundaries; none establishes a physical wearer playthrough.
+
+The final native office gate passed 227 assertions with actual native coroutines and isolated HTTP: both donor skinning/texture bindings, world-space text bounds, controller keyboard and paging, grounded findings, assessment/score, role recovery, identity mismatches, FIFO voice-tool ordering, 400-character draft paging, foreground keyboard clearance and stale-connection abandonment. Provider and headset behavior were not exercised. Mono Editor interview and assessment/keyboard renders passed visual review after correcting glass/text ordering, panel size, typography and actual patient/desk occlusion. No case results were fabricated for the assessment layout preview.
+
+The Android development build succeeded and repeated all 227 office assertions. `aapt` verified package `com.scalpal.encounteroffice`, version `0.1.0-office` / code 1 and `arm64-v8a`; `apksigner` verified its APK Signature Scheme v2 signature. The delivered APK is 68,083,130 bytes (64.93 MiB), SHA-256 `833d3fbaf1648c37632f80131ed40bd1bef396acaca4f9e838a9187735b6bae2`. This is the file size, distinct from Unity’s larger build-report total. The incremental build preserved the XR preload assets and restored product/package/version settings; remaining SDK serialization whitespace was discarded. No global project settings are part of the office change.
+
+Physical stereo appearance, panel readability/comfort, controller aiming, frame time, microphone/speaker behavior and live spoken patient/attending conversation remain wearer/provider acceptance checkpoints. The APK has not been installed or launched on a headset. No participant capture is started by this experience.

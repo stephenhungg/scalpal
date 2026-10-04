@@ -139,6 +139,12 @@ namespace Scalpal.Voice
                 if (!Application.HasUserAuthorization(UserAuthorization.Microphone)) { Fail("Microphone permission was denied."); yield break; }
             }
 #endif
+            yield return BeginConversation(epoch);
+        }
+
+        // Kept separate so deterministic HTTP tests can exercise identity/roles without a mic or socket.
+        IEnumerator BeginConversation(int epoch)
+        {
             Reply state = null;
             yield return Http("GET", SessionPath, null, r => state = r);
             if (epoch != generation) yield break;
@@ -163,21 +169,25 @@ namespace Scalpal.Voice
                 url = "wss://api.elevenlabs.io/v1/convai/conversation?agent_id=" + Uri.EscapeDataString(connection.agentId);
             if (!Uri.TryCreate(url, UriKind.Absolute, out var ws) || ws.Scheme != "wss" || ws.Host != "api.elevenlabs.io")
             { Fail("Voice service did not return a supported ElevenLabs WebSocket connection."); yield break; }
-            var initiation = new Initiation
-            {
-                conversation_config_override = new Overrides { agent = new AgentOverride { prompt = new Prompt { prompt = prompt }, first_message = firstMessage },
-                    tts = encounterMode && !string.IsNullOrEmpty(encounterVoiceId) ? new TtsOverride { voice_id = encounterVoiceId } : null },
-                dynamic_variables = new DynamicVariables { coach_session_id = encounterMode ? "" : CoachSessionId,
-                    encounter_id = encounterMode ? CoachSessionId : "", session_id = CoachSessionId, patient_id = patientId,
-                    mode = encounterMode ? encounterRole : state.snapshot.mode ?? "", context = initialContext }
-            };
-            // Leave existing agent defaults intact if no per-case override was supplied.
-            string initJson = string.IsNullOrEmpty(prompt)
-                ? JsonUtility.ToJson(new BasicInitiation { dynamic_variables = initiation.dynamic_variables })
-                : JsonUtility.ToJson(initiation);
+            string initJson = BuildInitiation(encounterMode ? encounterRole : state.snapshot.mode ?? "");
             active = new Connection(epoch);
             connectionStarted = Time.realtimeSinceStartup;
             _ = RunSocket(active, ws, initJson);
+        }
+
+        string BuildInitiation(string mode)
+        {
+            var variables = new DynamicVariables { coach_session_id = encounterMode ? "" : CoachSessionId,
+                encounter_id = encounterMode ? CoachSessionId : "", session_id = CoachSessionId,
+                patient_id = patientId, mode = mode, context = initialContext };
+            // Separate schemas keep the original coach/default voice free of an empty TTS override.
+            if (string.IsNullOrEmpty(prompt)) return JsonUtility.ToJson(new BasicInitiation { dynamic_variables = variables });
+            var agent = new AgentOverride { prompt = new Prompt { prompt = prompt }, first_message = firstMessage };
+            if (encounterMode && !string.IsNullOrEmpty(encounterVoiceId))
+                return JsonUtility.ToJson(new VoicedInitiation { dynamic_variables = variables,
+                    conversation_config_override = new VoicedOverrides { agent = agent, tts = new TtsOverride { voice_id = encounterVoiceId } } });
+            return JsonUtility.ToJson(new Initiation { dynamic_variables = variables,
+                conversation_config_override = new Overrides { agent = agent } });
         }
 
         static async Task RunSocket(Connection connection, Uri uri, string initialization)
@@ -378,6 +388,8 @@ namespace Scalpal.Voice
             if (Connected && !string.IsNullOrEmpty(text)) Queue(JsonUtility.ToJson(new TextMessage { type = "user_message", text = text }));
         }
 
+        public bool OwnsClientTool(ToolRequest request) => request != null && request.ConnectionGeneration == generation && pendingTools.Contains(request.ToolCallId);
+
         public void ResolveClientTool(ToolRequest request, string result, bool isError = false)
         {
             if (request == null || request.ConnectionGeneration != generation || !pendingTools.Remove(request.ToolCallId)) return;
@@ -577,7 +589,9 @@ namespace Scalpal.Voice
         [Serializable, UnityEngine.Scripting.Preserve] sealed class DynamicVariables { public string coach_session_id, encounter_id, session_id, patient_id, mode, context; }
         [Serializable, UnityEngine.Scripting.Preserve] sealed class BasicInitiation { public string type = "conversation_initiation_client_data"; public DynamicVariables dynamic_variables; }
         [Serializable, UnityEngine.Scripting.Preserve] sealed class Initiation { public string type = "conversation_initiation_client_data"; public Overrides conversation_config_override; public DynamicVariables dynamic_variables; }
-        [Serializable, UnityEngine.Scripting.Preserve] sealed class Overrides { public AgentOverride agent; public TtsOverride tts; }
+        [Serializable, UnityEngine.Scripting.Preserve] sealed class VoicedInitiation { public string type = "conversation_initiation_client_data"; public VoicedOverrides conversation_config_override; public DynamicVariables dynamic_variables; }
+        [Serializable, UnityEngine.Scripting.Preserve] sealed class VoicedOverrides { public AgentOverride agent; public TtsOverride tts; }
+        [Serializable, UnityEngine.Scripting.Preserve] sealed class Overrides { public AgentOverride agent; }
         [Serializable, UnityEngine.Scripting.Preserve] sealed class TtsOverride { public string voice_id; }
         [Serializable, UnityEngine.Scripting.Preserve] sealed class AgentOverride { public Prompt prompt; public string first_message; }
         [Serializable, UnityEngine.Scripting.Preserve] sealed class Prompt { public string prompt; }

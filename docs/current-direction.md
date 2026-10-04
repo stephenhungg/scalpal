@@ -1,5 +1,9 @@
 # Current Direction
 
+## Separate Diagnosis Experience
+
+The user requested a separate Quest 3S doctor-office encounter simulator: interview/examine fictional male and female patients from authored FinchNode demo cases, form a diagnosis and differential, and receive Jarvis attending feedback grounded in actions actually performed. The office uses Matthew's existing encounter engine and distinct patient/attending voices, with a usable visual fallback. Its Blender room follows the user's flowery MHacks theme request, with CC0 MakeHuman characters and rounded glass panels using Inter. It does not replace or change the ongoing surgical/tissue practice path. See [diagnosis office](diagnosis-office.md) for exact sources and verified limits.
+
 ## Abdominal Tissue Direction
 
 The user selected appendectomy/abdomen for the first material/physics expansion. The focused tissue milestone adds 39 shared-frame exterior, abdominal wall, skeletal and vascular references to the existing preview (81 structures total), layer inspection controls, procedural appearance and gated local grasp deformation on three existing practice targets. These are demo-tuned mechanics, not measured tissue viscosity or a complete layered body simulator. Skin thickness, fat/peritoneum volumes, topology cutting, circulation and physical performance remain missing/unverified. See [tissue simulation](tissue-simulation.md) for actual routing, evidence and next steps.

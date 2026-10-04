@@ -28,6 +28,8 @@ Main contains documentation, the complete source atlas and team services, a nati
 
 The new [native appendectomy session](docs/native-session.md) assembles the working Quest rig, selected anatomy, authored case, coach and real session adapter. Start with `Assets/Scalpal/Quest/Scenes/NativeSession.unity`; use the component workbench for isolated tool checks. Verification and unconnected media/MR/robot interfaces are listed in that document.
 
+The separate [floral diagnosis office](docs/diagnosis-office.md) uses original Blender office art and CC0 MakeHuman characters representing fictional adult patients with Matthew's authoritative interview/attending encounter engine. Its dedicated native scene includes visual questions, examinations, test results and editable diagnosis/differential/plan fallback. It preserves the surgical scene and tool path; headset comfort/performance and live spoken provider conversation remain separate verification checkpoints.
+
 ## Status
 
 As of October 3, 2026, native camera acquisition, Unity sample deployment, desktop mirroring, and an immersive bottle-detection overlay have been demonstrated on the headset. The native workbench combines the shared tools, tracked head/controllers and operating-room/patient art. USB installation, XR tracking and held-tool telemetry were exercised on Quest; the user reported tool-motion lag, then confirmed the corrected build keeps up with hand movement. See [native workbench evidence](docs/native-workbench.md). Teammate branches contain anatomy, case/coach, realtime/companion and motion implementations. Native torso registration, capture and their complete integration have not been demonstrated; see the audited map.
