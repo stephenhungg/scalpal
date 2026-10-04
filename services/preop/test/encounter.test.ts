@@ -499,6 +499,21 @@ describe("office to operating room", () => {
     expect(surgery.json.systemPrompt).toMatch(/missed: .*allergies/);
   });
 
+  it("splits chart risks into found and missed and opens the OR with the time-out", async () => {
+    const id = (await req("POST", "/encounters", { patientId: "patient-demo-multi-source" })).json.encounterId;
+    await req("POST", `/encounters/${id}/tools/answer`, { topic: "allergies" });
+    await req("POST", `/encounters/${id}/attending`);
+    await req("POST", `/encounters/${id}/tools/record_assessment`, { diagnosis: "appendicitis", differential: [], procedure: "laparoscopic appendectomy", urgency: "urgent" });
+    const card = (await req("GET", `/encounters/${id}/score`)).json.scorecard;
+    expect(card.risksFound).toEqual([expect.objectContaining({ type: "latex", source: "history:allergies" })]);
+    expect(card.risksMissed).toEqual([expect.objectContaining({ type: "anemia", source: "history:past_medical" })]);
+    const surgery = await req("POST", "/coach/sessions", { patientId: "patient-demo-multi-source", encounterId: id });
+    expect(surgery.json.firstMessage).toBe("Scrubbed in with you. Time-out: confirm patient, procedure and site.");
+    expect(surgery.json.systemPrompt).toMatch(/did not elicit: Anemia/);
+    const plain = await req("POST", "/coach/sessions", { patientId: "patient-demo-multi-source" });
+    expect(plain.json.firstMessage).toMatch(/^Jarvis here/);
+  });
+
   it("ignores an encounter that belongs to a different patient or is not scored", async () => {
     const id = (await req("POST", "/encounters", { patientId: "patient-demo-multi-source" })).json.encounterId;
     expect((await req("POST", "/coach/sessions", { patientId: "patient-demo-multi-source", encounterId: id })).json.systemPrompt).not.toMatch(/PRE-OP OFFICE/);

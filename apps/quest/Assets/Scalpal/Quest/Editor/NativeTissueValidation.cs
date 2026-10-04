@@ -95,6 +95,7 @@ namespace Scalpal.Quest.Editor
             var rigObject = new GameObject("SyntheticInactiveTissueWorkbench");
             rigObject.SetActive(false); // Prevent XR initialization; readiness is injected explicitly.
             Mesh source = null;
+            NativeTissueSimulation simulation=null;
             try
             {
                 var rig = rigObject.AddComponent<NativeWorkbench>();
@@ -114,7 +115,7 @@ namespace Scalpal.Quest.Editor
                 var tip = tipObject.AddComponent<InstrumentTipContact>(); instrument.actionPoint = tipObject.transform;
                 instrumentObject.transform.position = new Vector3(0, 0, -.02f);
                 rig.tools = new[] { instrument };
-                var simulation = root.AddComponent<NativeTissueSimulation>();
+                simulation = root.AddComponent<NativeTissueSimulation>();
                 bool ready = true;
                 simulation.Initialize(anatomy, rig, () => ready);
                 var tissue = obj.GetComponent<DeformableTissue>();
@@ -184,6 +185,7 @@ namespace Scalpal.Quest.Editor
             }
             finally
             {
+                simulation?.Dispose(); // Manually initialized Editor components need explicit native-buffer cleanup.
                 UnityEngine.Object.DestroyImmediate(root); UnityEngine.Object.DestroyImmediate(rigObject);
                 if (source) UnityEngine.Object.DestroyImmediate(source);
             }

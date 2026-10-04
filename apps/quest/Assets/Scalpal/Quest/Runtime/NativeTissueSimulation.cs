@@ -9,7 +9,7 @@ namespace Scalpal.Quest
 {
     // Local mechanical feedback only. NativeProcedureInput remains the sole scored path.
     [DefaultExecutionOrder(110)]
-    public sealed class NativeTissueSimulation : MonoBehaviour
+    public sealed class NativeTissueSimulation : MonoBehaviour, IDisposable
     {
         readonly List<DeformableTissue> tissues = new List<DeformableTissue>();
         readonly Dictionary<InstrumentBehaviour,InstrumentTipContact[]> tipCache = new Dictionary<InstrumentBehaviour,InstrumentTipContact[]>();
@@ -129,6 +129,8 @@ namespace Scalpal.Quest
             accumulator=surfaceClock=0; wasReady=false;
         }
         void OnDisable() => ResetTissues();
-        void OnDestroy() => contactSolver.Dispose();
+        // Editor callers can initialize outside Unity Awake/OnDestroy scheduling.
+        public void Dispose() { contactSolver.Dispose(); ready=null; }
+        void OnDestroy() => Dispose();
     }
 }

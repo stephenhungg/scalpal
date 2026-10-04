@@ -130,6 +130,8 @@ def main():
         # Require the terminal marker: an editor exit alone is not proof the method ran.
         if passed and "SCALPAL_NATIVE_SESSION_VERIFY_OK" not in output:
             failures.append("Unity verification marker absent")
+        if "Leak Detected : Persistent allocates" in output:
+            failures.append("Unity persistent native allocation leak")
         for line in output.splitlines():
             if line.startswith("SCALPAL_") or "error CS" in line:
                 print(line)
