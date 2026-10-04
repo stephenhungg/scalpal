@@ -21,6 +21,7 @@ function useLiveTables() {
   const [coachStatus] = useTable(tables.sessionCoachStatus);
   const [commands] = useTable(tables.sessionCommands);
   const [simLogs] = useTable(tables.sessionSimLogs);
+  const [robotResults] = useTable(tables.sessionRobotResults);
   const [artifacts] = useTable(tables.sessionArtifacts);
   const [jobs] = useTable(tables.sessionMotionJobs);
   const [replay] = useTable(tables.sessionReplayState);
@@ -41,6 +42,7 @@ function useLiveTables() {
     coachStatus,
     commands,
     simLogs,
+    robotResults,
     artifacts,
     jobs,
     replay,
@@ -120,6 +122,7 @@ export function useSession(sessionId: string) {
       coachStatus: live.coachStatus.find(x => x.sessionId === sessionId) ?? null,
       // Operating-room log, newest first.
       simLogs: pick(live.simLogs).sort((a, b) => (a.id < b.id ? 1 : a.id > b.id ? -1 : 0)),
+      robotResults: pick(live.robotResults).sort(byTime(r => toMs(r.at))),
       commands: pick(live.commands).sort(byTime(c => toMs(c.requestedAt))),
       artifacts: pick(live.artifacts).sort(byTime(a => toMs(a.createdAt))),
       jobs: pick(live.jobs).sort(byTime(j => toMs(j.createdAt))),

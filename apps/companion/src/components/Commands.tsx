@@ -16,6 +16,8 @@ export const ACTIONS: Record<string, 'none' | 'target' | 'bool' | 'number'> = {
   requestHint: 'none',
   pausePractice: 'none',
   resumePractice: 'none',
+  handInstrument: 'target',
+  highlightInstrument: 'target',
 };
 
 function describe(c: { action: string; targetId?: string; argBool?: boolean; argNumber?: number }) {

@@ -59,6 +59,7 @@ export default function SessionPage({ sessionId }: { sessionId: string }) {
           </div>
         </div>
         <div className="spacer" />
+        <Link to={`/s/${sessionId}/or`} className="btn sm primary">Live OR</Link>
         <Link to={`/s/${sessionId}/recap`} className="btn sm">Run recap</Link>
         <StatusPill status={s.status} label={s.status === 'active' ? 'Session active' : 'Session ended'} />
         {roles.map(r => (
