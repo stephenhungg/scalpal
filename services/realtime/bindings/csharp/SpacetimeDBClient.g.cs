@@ -47,6 +47,7 @@ namespace SpacetimeDB.Types
             AddTable(SessionMembers = new(conn));
             AddTable(SessionMotionJobs = new(conn));
             AddTable(SessionReplayState = new(conn));
+            AddTable(SessionSimLogs = new(conn));
         }
     }
 
@@ -563,6 +564,7 @@ namespace SpacetimeDB.Types
             new QueryBuilder().From.SessionMembers().ToSql(),
             new QueryBuilder().From.SessionMotionJobs().ToSql(),
             new QueryBuilder().From.SessionReplayState().ToSql(),
+            new QueryBuilder().From.SessionSimLogs().ToSql(),
         }
         ;
     }
@@ -589,6 +591,7 @@ namespace SpacetimeDB.Types
         public global::SpacetimeDB.Table<SessionMember, SessionMembersCols, SessionMembersIxCols> SessionMembers() => new("session_members", new SessionMembersCols("session_members"), new SessionMembersIxCols("session_members"));
         public global::SpacetimeDB.Table<MotionJob, SessionMotionJobsCols, SessionMotionJobsIxCols> SessionMotionJobs() => new("session_motion_jobs", new SessionMotionJobsCols("session_motion_jobs"), new SessionMotionJobsIxCols("session_motion_jobs"));
         public global::SpacetimeDB.Table<ReplayState, SessionReplayStateCols, SessionReplayStateIxCols> SessionReplayState() => new("session_replay_state", new SessionReplayStateCols("session_replay_state"), new SessionReplayStateIxCols("session_replay_state"));
+        public global::SpacetimeDB.Table<SimLog, SessionSimLogsCols, SessionSimLogsIxCols> SessionSimLogs() => new("session_sim_logs", new SessionSimLogsCols("session_sim_logs"), new SessionSimLogsIxCols("session_sim_logs"));
     }
 
     public sealed class TypedSubscriptionBuilder
@@ -674,6 +677,7 @@ namespace SpacetimeDB.Types
                 Reducer.AddServiceIdentity args => Reducers.InvokeAddServiceIdentity(eventContext, args),
                 Reducer.AppendEncounterEvent args => Reducers.InvokeAppendEncounterEvent(eventContext, args),
                 Reducer.AppendExerciseEvent args => Reducers.InvokeAppendExerciseEvent(eventContext, args),
+                Reducer.AppendSimLog args => Reducers.InvokeAppendSimLog(eventContext, args),
                 Reducer.CancelMotionJob args => Reducers.InvokeCancelMotionJob(eventContext, args),
                 Reducer.ClaimMotionJob args => Reducers.InvokeClaimMotionJob(eventContext, args),
                 Reducer.CompleteMotionJob args => Reducers.InvokeCompleteMotionJob(eventContext, args),
