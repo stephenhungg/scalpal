@@ -4,10 +4,10 @@
 // rendered as white silhouettes so the row matches the page; the band is centered and fades
 // out at both ends instead of running edge to edge. Pauses on hover.
 const TRACKS = [
-  { name: "MHacks · Actually Intelligent", logo: "/tracks/mhacks.png" },
+  { name: "MHacks", logo: "/tracks/mhacks.png" },
   { name: "ElevenLabs", logo: "/tracks/elevenlabs.svg" },
   { name: "SpacetimeDB", logo: "/tracks/spacetimedb.svg" },
-  { name: "FinchNode · HealthTech", logo: "/tracks/finchnode.svg" },
+  { name: "FinchNode", logo: "/tracks/finchnode.svg" },
 ];
 
 function Row({ hidden }: { hidden?: boolean }) {
