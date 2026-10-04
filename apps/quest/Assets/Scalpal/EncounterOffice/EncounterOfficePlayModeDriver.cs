@@ -124,12 +124,17 @@ namespace Scalpal.EncounterOffice.Editor
                 "real office Start loads explore patients and pairs the isolated headset identity");
             var jonah = office.Patients.Single(item => item.patientId == "patient-demo-sparse");
             Check(EncounterOfficeRoute.CanEnter(jonah), "explore producer supplies selectable canonical Jonah subject");
-            Check(!office.voice.Connected, "no patient provider connection starts automatically");
+            Check(!office.voice.Connected, "no patient provider connection starts before a patient is chosen");
+            // The office auto-connects the patient voice when an encounter starts. Like the surgery Time-Out, this
+            // synthetic fixture disables the transport so that attempt fails before mic permission or provider HTTP.
+            office.voice.enabled = false;
             yield return ReadFixture();
             Check(fixture.attemptCount == fixture.initialAttemptCount && fixture.encounterCreates == 0, "office list does not silently create an attempt or encounter");
             office.StartPatient(jonah.patientId);
             yield return Wait(() => office.State?.phase == "interview" && !office.Busy,
                 "real selected-patient path confirms new shared attempt then creates authoritative HTTP encounter");
+            Check((office.voice.Status == "error" || office.voice.Status == "offline") && office.voice.LastError.Length > 0 && office.patient.Patient && office.patient.Patient.activeSelf,
+                "encounter start seats the patient and attempts the patient voice automatically (disabled fixture transport fails safely)");
             encounterId = office.State.encounterId; sharedSessionId = office.realtime.SessionId; attemptId = office.realtime.AttemptId;
             procedureId = office.AuthoredProcedureId;
             Check(office.State.patientId == jonah.patientId && !string.IsNullOrEmpty(encounterId) && !string.IsNullOrEmpty(attemptId), "selected canonical patient and encounter identity match");

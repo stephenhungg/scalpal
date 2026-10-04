@@ -82,6 +82,11 @@ namespace Scalpal.EncounterOffice.Editor
                 Check(buttons.Any(button=>button.command==command&&button.GetComponent<Collider>()&&button.panel==panel),"ray-accessible control exists: "+command);
             Check(buttons.Any(button=>button.command=="page"&&button.argument=="patients")&&!buttons.Any(button=>button.command=="patient"&&(button.argument==EncounterContract.FemalePatientId||button.argument==EncounterContract.MalePatientId)),"patient picker uses the service list instead of fixed demo identity buttons");
             Check(panel.surgery&&panel.surgery.command=="surgery"&&!panel.surgery.gameObject.activeSelf&&File.Exists(EncounterOfficeBuild.SurgeryScenePath),"OR action is bound, starts hidden before scoring, and the existing native surgery scene is present");
+            var voiceButton=buttons.Single(button=>button.command=="voice");panel.Refresh();
+            Check(session.VoiceEnabled&&voiceButton.label.text=="Voice on","voice auto-connect is enabled by default; with no live connection the button offers Voice on");
+            Property(session.voice,"Status","connected");panel.Refresh();Check(voiceButton.label.text=="Voice off","a live voice offers an explicit Voice off");
+            panel.Act("voice","");Check(!session.VoiceEnabled&&voiceButton.label.text=="Voice on"&&!session.voice.Connected,"Voice off disconnects, disables auto-connect and offers Voice on");
+            panel.Act("voice","");Check(session.VoiceEnabled,"Voice on re-enables auto-connect");
             panel.Act("field","diagnosis");panel.Act("key","clear");panel.Act("key","a");panel.Act("key","space");panel.Act("key","b");panel.Act("key","back");
             Check(session.Draft.diagnosis=="a ","ray keyboard supports letter, space, clear and backspace editing");
             panel.Act("page","assessment");panel.Act("field","differential");panel.Act("option","Ectopic pregnancy");panel.Act("option","Ureteric stone");panel.Act("option","Ectopic pregnancy");
@@ -130,7 +135,10 @@ namespace Scalpal.EncounterOffice.Editor
             Check(presentation.female.activeSelf&&!presentation.male.activeSelf&&presentation.stateLabel.text.Contains("Generic adult female"),"arbitrary subject identity with explicit female adult demographics selects a labeled generic female avatar");
             adult.patientId="arbitrary-subject-male";adult.patientSex="male";adult.patientAge=70;
             presentation.Select(adult);
-            Check(presentation.male.activeSelf&&!presentation.female.activeSelf,"arbitrary subject identity with explicit male adult demographics selects the male template");
+            Check(presentation.male.activeSelf&&!presentation.female.activeSelf&&presentation.Patient==presentation.male,"arbitrary subject identity with explicit male adult demographics selects the male template");
+            float olderScale=presentation.male.transform.localScale.x;adult.patientAge=40;presentation.Select(adult);
+            Check(olderScale<presentation.male.transform.localScale.x&&EncounterPatientPresentation.AgeScale(40)==1&&EncounterPatientPresentation.AgeScale(9)<.85f,"an older adult is seated slightly smaller than a working-age adult and a child much smaller");
+            float adultScale=presentation.male.transform.localScale.x;
             adult.patientId=EncounterContract.FemalePatientId;
             presentation.Select(adult);
             Check(presentation.male.activeSelf&&!presentation.female.activeSelf,"catalog ID never overrides explicit patient sex");
@@ -141,35 +149,38 @@ namespace Scalpal.EncounterOffice.Editor
                 Set(presentation.voice,"encounterVoiceId","male-voice-fixture");
                 var parent=new EncounterState { patientId="child-subject-fixture", patientName="Child fixture", patientSex="male", patientAge=9, speaker="parent", speakerName="Parent fixture", speakerSex="female", speakerAge=35 };
                 presentation.Select(parent);
-                Check(presentation.female.activeSelf&&!presentation.male.activeSelf&&Get<string>(presentation.voice,"encounterVoiceId")=="male-voice-fixture","adult parent avatar uses speaker sex independently of child sex and configured voice identity");
-                Check(presentation.stateLabel.text.Contains("Parent fixture · parent speaking for Child fixture"),"parent label identifies named speaker and named patient without presenting the adult as the child");
+                // Product rule: a pediatric encounter seats the child in the patient chair and the parent beside them.
+                Check(presentation.Patient==presentation.male&&presentation.male.activeSelf&&presentation.Companion==presentation.female&&presentation.female.activeSelf&&presentation.Speaker==presentation.female&&Get<string>(presentation.voice,"encounterVoiceId")=="male-voice-fixture","pediatric encounter seats a scaled child and the speaking parent beside them, independent of configured voice identity");
+                Check(presentation.male.transform.localScale.x<.85f*adultScale&&presentation.male.transform.localPosition.y>.05f&&Vector3.Distance(presentation.female.transform.position,presentation.male.transform.position)>.8f,"child figure is scaled down, lifted onto the seat, and the parent sits in the companion chair");
+                Check(presentation.stateLabel.text.Contains("Parent fixture · parent speaking for Child fixture")&&presentation.stateLabel.text.Contains("child"),"parent label identifies named speaker and named child patient");
                 parent.speakerSex="male";parent.patientSex="female";
                 presentation.Select(parent);
-                Check(presentation.male.activeSelf&&!presentation.female.activeSelf,"male parent for female child selects the explicit adult speaker demographics");
+                Check(presentation.Patient==presentation.female&&presentation.Companion==presentation.male&&presentation.Speaker==presentation.male,"male parent for female child seats both, parent speaking");
                 var jaw=presentation.male.GetComponentsInChildren<Transform>(true).Single(node=>node.name=="JawPivot");var jawRest=jaw.localRotation;
                 presentation.SetState("speaking");Call(presentation,"ApplyAnimation",.2f,0f,1f,true);
-                parent.speaker="patient";parent.patientAge=9;
+                parent.speakerSex="male";parent.patientSex="male";
                 presentation.Select(parent);
-                Check(Hidden()&&presentation.stateLabel.text.Contains("no child model")&&Quaternion.Angle(jaw.localRotation,jawRest)<.001f&&Get<Transform>(presentation,"jaw")==null,"child selection hides adults, restores the previous speaking pose and clears animation bone bindings");
-                parent.speaker="parent";parent.speakerAge=0;
+                Check(Quaternion.Angle(jaw.localRotation,jawRest)<.001f,"reselection restores the previous speaker's speaking pose");
+                Check(presentation.Patient==presentation.male&&presentation.Companion&&presentation.Companion!=presentation.male&&presentation.Companion.activeSelf&&presentation.Speaker==presentation.Companion,"same-sex parent and child get two seated figures, the parent a separate instance");
+                parent.speakerAge=0;parent.speakerSex=null;
                 presentation.Select(parent);
-                Check(Hidden()&&presentation.stateLabel.text.Contains("speaker age unknown"),"parent role does not invent adult age when speaker age is missing");
-                parent.speakerAge=17;presentation.Select(parent);
-                Check(Hidden()&&presentation.stateLabel.text.Contains("no child model"),"explicit underage parent cannot use an adult template");
-                parent.speakerAge=35;parent.speakerSex=null;presentation.Select(parent);
-                Check(Hidden()&&presentation.stateLabel.text.Contains("speaker sex unsupported or unknown"),"missing parent sex cannot be inferred from the child or voice");
+                Check(presentation.Patient&&presentation.Patient.activeSelf&&presentation.Companion&&presentation.Companion.activeSelf,"missing parent demographics still seat a generic adult parent rather than an empty chair");
+                parent.speaker="patient";
+                presentation.Select(parent);
+                Check(presentation.Patient&&presentation.Patient.activeSelf&&!presentation.Companion&&presentation.Speaker==presentation.Patient&&presentation.Patient.transform.localScale.x<.85f*adultScale,"a child speaking for themself is seated as a scaled child with no parent");
             }
             finally { Set(presentation.voice,"encounterVoiceId",previousVoice);presentation.Select(null); }
             foreach(var sex in new string[] { null,"unknown","nonbinary" })
             {
                 adult.patientSex=sex;presentation.Select(adult);
-                Check(Hidden()&&presentation.stateLabel.text.Contains("speaker sex unsupported or unknown"),"unknown or unsupported patient sex hides gendered adult templates: "+sex);
+                Check(presentation.Patient&&presentation.Patient.activeSelf&&presentation.stateLabel.text.Contains("Generic adult"),"unknown or unsupported patient sex still seats a generic adult: "+sex);
             }
             adult.patientSex="female";adult.patientAge=0;presentation.Select(adult);
-            Check(Hidden()&&presentation.stateLabel.text.Contains("speaker age unknown"),"missing patient age cannot select an adult avatar");
+            Check(presentation.female.activeSelf&&presentation.female.transform.localScale.x>.99f*adultScale,"missing patient age seats an adult-size avatar");
             adult.patientAge=40;adult.speaker="unknown";presentation.Select(adult);
-            Check(Hidden()&&presentation.stateLabel.text.Contains("speaker role unavailable"),"unknown speaker role does not assume the patient is speaking");
+            Check(presentation.female.activeSelf&&presentation.Speaker==presentation.female,"unknown speaker role seats the patient");
             presentation.Select(null);
+            Check(!presentation.female.activeSelf&&!presentation.male.activeSelf&&!presentation.Patient,"no encounter leaves the chair empty");
         }
         static void ValidatePatientAnimation(NativeEncounterSession session)
         {
@@ -328,10 +339,14 @@ namespace Scalpal.EncounterOffice.Editor
             Check(EncounterContract.StateMatches(state,"enc-test000",state.patientId,3)&&!EncounterContract.StateMatches(state,"enc-other00",state.patientId,3)&&!EncounterContract.StateMatches(state,"enc-test000",EncounterContract.MalePatientId,3)&&!EncounterContract.StateMatches(state,"enc-test000",state.patientId,4),"state adoption checks id, patient and monotonic version");
             var chart=EncounterContract.Chart(state);Check(chart.Contains("Authored finding")&&chart.Contains("Returned result")&&!chart.Contains("appendicitis"),"chart displays only returned gathered findings, with no local diagnosis facts");
             Check(EncounterContract.Chart(null).Contains("Start a synthetic encounter"),"offline service failure does not invent findings");
+            var theo=new EncounterState{patientName="Theo Abernathy",speaker="parent",speakerName="Laura Abernathy"};
+            string[] labels={EncounterContract.SpeakerLabel(state,"patient"),EncounterContract.SpeakerLabel(theo,"patient"),EncounterContract.SpeakerLabel(state,"attending"),EncounterContract.LearnerLabel};
+            Check(labels.SequenceEqual(new[]{"Priya Ramaswamy · Patient","Laura Abernathy · Parent of Theo","Jarvis · Attending","You"}),"patient, parent, attending and learner lines carry distinct speaker labels");
+            Check(labels.All(label=>!EncounterOfficePanel.ResponseHeader(label,0).Contains("Patient / Jarvis"))&&EncounterOfficePanel.ResponseHeader(labels[2],0).StartsWith("Jarvis · Attending",StringComparison.Ordinal),"response header names the actual speaker, never a blended Patient / Jarvis role");
         }
         static void ValidateExchange()
         {
-            Process server=null;GameObject fixture=null;QuestJarvisVoice voice=null;object connection=null;var connections=new List<object>();
+            Process server=null;GameObject fixture=null,liveVoiceObject=null;QuestJarvisVoice voice=null;object connection=null;var connections=new List<object>();
             try
             {
                 string repo=Path.GetFullPath(Path.Combine(Application.dataPath,"../../.."));string service=Path.Combine(repo,"services/preop");
@@ -346,6 +361,9 @@ namespace Scalpal.EncounterOffice.Editor
                 Check(list.exchanges.Count==1&&list.exchanges[0].path=="/patients"&&session.Patients.Length==12,"actual patient list returns all twelve synthetic scenarios through the production coroutine");
                 var available=session.Patients.Where(entry=>(entry.status=="ready"||entry.status=="needs_review")&&!string.IsNullOrEmpty(entry.patientId)&&!string.IsNullOrEmpty(entry.procedureId)).ToArray();
                 Check(available.Length==8,"patient list exposes all eight available canonical synthetic subjects");
+                // An active transport so the production auto-connect can begin (its HTTP is never pumped: no provider).
+                liveVoiceObject=new GameObject("EncounterAutoVoiceFixture");var liveVoice=liveVoiceObject.AddComponent<QuestJarvisVoice>();session.voice=liveVoice;
+                var patientLabels=new HashSet<string>();
                 foreach(var entry in available)
                 {
                     session.StartPatient(entry.patientId);var started=Drain(session);started.Run();
@@ -354,11 +372,28 @@ namespace Scalpal.EncounterOffice.Editor
                     bool parent=session.State.speaker=="parent";
                     if(entry.patientId=="patient-demo-pediatric-asthma")
                         Check(parent&&session.State.patientName=="Theo Abernathy"&&session.State.speakerName=="Laura Abernathy","pediatric encounter retains Laura as the parent speaker for Theo");
-                    int age=parent?session.State.speakerAge:session.State.patientAge;
-                    string sex=parent?session.State.speakerSex:session.State.patientSex;
-                    if(age<=0||age<18||sex!="female"&&sex!="male")
-                        Check(!session.patient.female.activeSelf&&!session.patient.male.activeSelf,"raw service demographic gaps or unsupported child speakers remain hidden without fabricated avatar metadata: "+entry.patientId);
+                    // Requirement: every playable patient is seated as soon as the encounter starts, from service demographics.
+                    var seated=session.patient;
+                    Check(session.State.patientAge>0&&(session.State.patientSex=="female"||session.State.patientSex=="male")&&session.State.speakerAge>=18&&(session.State.speakerSex=="female"||session.State.speakerSex=="male"),"service state carries seated patient and speaker demographics: "+entry.patientId);
+                    Check(seated.Patient&&seated.Patient.activeSelf&&seated.Speaker&&seated.Speaker.activeSelf&&seated.Patient==(session.State.patientSex=="female"?seated.female:seated.male)||parent&&seated.Patient&&seated.Patient.activeSelf,"a seated patient avatar appears when the encounter starts: "+entry.patientId);
+                    if(parent)
+                        Check(seated.Companion&&seated.Companion.activeSelf&&seated.Speaker==seated.Companion&&seated.Patient.transform.localScale.x<seated.Companion.transform.localScale.x*.85f,"pediatric encounter seats a scaled child with the speaking parent beside them: "+entry.patientId);
+                    else Check(!seated.Companion&&seated.Speaker==seated.Patient,"adult patient speaks for themself from the patient chair: "+entry.patientId);
+                    // Voice auto-connects for the patient role, with output bound to the speaker's mouth as a 3D source.
+                    Check(liveVoice.Status=="connecting"&&liveVoice.CoachSessionId==session.State.encounterId&&Get<string>(liveVoice,"encounterRole")=="patient"&&Get<string>(liveVoice,"prompt")==Get<string>(session,"prompt")&&!string.IsNullOrEmpty(Get<string>(session,"prompt")),"encounter start auto-connects the patient voice with the server persona prompt: "+entry.patientId);
+                    var mouth=liveVoice.Speaker;
+                    Check(mouth&&mouth==seated.MouthSource&&mouth.transform.IsChildOf(seated.Speaker.transform)&&mouth.transform.parent.name=="JawPivot"&&mouth.spatialBlend==1&&!mouth.mute&&mouth.volume>0&&mouth.enabled&&mouth.gameObject.activeInHierarchy,"patient voice AudioSource is a spatial, audible source at the speaking avatar's mouth: "+entry.patientId);
+                    string label=EncounterContract.SpeakerLabel(session.State,"patient");
+                    Check(session.LastSpeaker==label&&label!=EncounterContract.AttendingLabel&&!label.Contains("Jarvis")&&!label.Contains("/")&&label.StartsWith(parent?session.State.speakerName:session.State.patientName,StringComparison.Ordinal),"greeting is labelled with the actual patient or parent speaker: "+entry.patientId);
+                    patientLabels.Add(label);
+                    if(entry.patientId=="patient-demo-pediatric-asthma")Check(label=="Laura Abernathy · Parent of Theo","Theo's history is labelled as coming from his mother Laura");
                 }
+                Check(patientLabels.Count==available.Length,"each encounter speaker has a distinct label");
+                session.ToggleVoice();Check(!session.VoiceEnabled&&liveVoice.Status=="disconnected","explicit Voice off disconnects the patient voice");
+                session.StartPatient(available[0].patientId);Drain(session).Run();
+                Check(session.State!=null&&liveVoice.Status!="connecting"&&!session.VoiceEnabled,"with Voice off a new encounter does not connect");
+                session.ToggleVoice();Check(session.VoiceEnabled&&liveVoice.Status=="connecting","Voice on reconnects the current encounter's patient voice");
+                liveVoice.Disconnect();session.voice=null;
                 var unavailable=session.Patients.Where(entry=>entry.status!="connect"&&entry.status!="ready"&&entry.status!="needs_review").ToArray();
                 Check(unavailable.Length==2,"patient list keeps both unavailable synthetic record cases visible as unavailable");
                 foreach(var entry in unavailable)
@@ -425,11 +460,14 @@ namespace Scalpal.EncounterOffice.Editor
                 Check(init.dynamic_variables.encounter_id==session.State.encounterId&&init.dynamic_variables.session_id==session.State.encounterId&&init.dynamic_variables.coach_session_id==""&&init.dynamic_variables.patient_id==EncounterContract.FemalePatientId&&init.dynamic_variables.mode=="patient","serialized patient voice initiation uses exact encounter identity and distinct role");
                 Check(init.conversation_config_override.tts.voice_id=="female-voice"&&init.conversation_config_override.agent.prompt.prompt=="authored prompt","patient voice selects returned voice and authored prompt");
                 var begin=new Pump((IEnumerator)Call(voice,"BeginConversation",Get<int>(voice,"generation")));begin.Run();
-                Check(begin.exchanges.Count==2&&begin.exchanges[0].path=="/encounters/"+session.State.encounterId&&begin.exchanges[1].path=="/jarvis/connection"&&begin.exchanges[1].query=="?agent=patient"&&voice.Status=="error","production voice HTTP validates encounter then requests patient agent; missing credentials fail visibly before WSS");
-                session.SeeAttending();Drain(session).Run();VoiceConfiguration(voice,session.State.encounterId,session.State.patientId,"attending","");
+                Check(begin.exchanges.Count==2&&begin.exchanges[0].path=="/encounters/"+session.State.encounterId&&begin.exchanges[1].path=="/jarvis/connection"&&begin.exchanges[1].query=="?encounterId="+session.State.encounterId&&voice.Status=="error"&&voice.LastError.Contains("jarvis_unconfigured"),"production voice HTTP validates encounter then requests the encounter-bound agent; missing credentials fail visibly with the service reason before WSS");
+                string patientLabel=session.LastSpeaker;
+                session.SeeAttending();Drain(session).Run();
+                Check(session.Role=="attending"&&session.LastSpeaker==EncounterContract.AttendingLabel&&session.LastSpeaker!=patientLabel&&patientLabel.EndsWith("· Patient",StringComparison.Ordinal),"Present to Jarvis switches the speaker label from the patient to Jarvis · Attending");
+                VoiceConfiguration(voice,session.State.encounterId,session.State.patientId,"attending","");
                 var attendingJson=(string)Call(voice,"BuildInitiation","attending");Check(!attendingJson.Contains("\"tts\"")&&attendingJson.Contains("\"mode\":\"attending\""),"attending keeps Jarvis default voice and separate role");
                 var attendBegin=new Pump((IEnumerator)Call(voice,"BeginConversation",Get<int>(voice,"generation")));attendBegin.Run();
-                Check(attendBegin.exchanges.Count==2&&attendBegin.exchanges[1].query=="","attending signed connection uses default Jarvis agent");
+                Check(attendBegin.exchanges.Count==2&&attendBegin.exchanges[1].query=="?encounterId="+session.State.encounterId,"attending connection is bound to the encounter so the service selects Jarvis for the attending phase");
                 VoiceConfiguration(voice,session.State.encounterId,EncounterContract.MalePatientId,"attending","");
                 var mismatch=new Pump((IEnumerator)Call(voice,"BeginConversation",Get<int>(voice,"generation")));mismatch.Run();
                 Check(mismatch.exchanges.Count==1&&voice.Status=="error","voice patient identity mismatch never reaches provider connection route");
@@ -443,7 +481,7 @@ namespace Scalpal.EncounterOffice.Editor
             }
             finally
             {
-                if(voice)voice.Disconnect();if(fixture)UnityEngine.Object.DestroyImmediate(fixture);
+                if(voice)voice.Disconnect();if(fixture)UnityEngine.Object.DestroyImmediate(fixture);if(liveVoiceObject)UnityEngine.Object.DestroyImmediate(liveVoiceObject);
                 foreach(var created in connections)foreach(var name in new[]{"Socket","Cancel","SendSignal"})if(created.GetType().GetField(name).GetValue(created) is IDisposable disposable)disposable.Dispose();
                 if(server!=null){if(!server.HasExited)server.Kill();server.WaitForExit(5000);server.Dispose();}
             }

@@ -69,6 +69,17 @@ namespace Scalpal.EncounterOffice
         public static bool ToolAllowed(string role, string phase, string tool) =>
             role == "patient" && phase == "interview" && (tool == "answer" || tool == "examine" || tool == "order_test") ||
             role == "attending" && (tool == "get_encounter_summary" || phase == "attending" && tool == "record_assessment");
+        public const string AttendingLabel = "Jarvis · Attending", LearnerLabel = "You";
+        // The patient agent and Jarvis are separate voices; every line names who actually said it.
+        public static string SpeakerLabel(EncounterState state, string role)
+        {
+            if (role == "attending") return AttendingLabel;
+            if (state == null) return "Patient";
+            string patientName = string.IsNullOrWhiteSpace(state.patientName) ? "the patient" : state.patientName.Trim();
+            if (state.speaker == "parent")
+                return (string.IsNullOrWhiteSpace(state.speakerName) ? "Parent" : state.speakerName.Trim()) + " · Parent of " + patientName.Split(' ')[0];
+            return (string.IsNullOrWhiteSpace(state.patientName) ? "Patient" : patientName) + " · Patient";
+        }
         public static bool HasError(EncounterReply reply) => reply?.error != null && (!string.IsNullOrEmpty(reply.error.code) || !string.IsNullOrEmpty(reply.error.message));
         public static bool StateMatches(EncounterState state, string id, string patient, int version) =>
             state != null && state.encounterId == id && state.patientId == patient && state.version >= version;
