@@ -1,0 +1,9 @@
+# Model weights, datasets, caches and run outputs stay local.
+data/
+models/
+runs/
+out/
+.cache/
+*.pt
+*.safetensors
+*.bin
