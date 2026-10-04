@@ -80,6 +80,18 @@ export function createApp(config: Config, rt: Realtime, storage: Storage) {
       if (c.req.query('m') !== 'PUT' || !storage.verify('PUT', key, c.req.query('exp'), c.req.query('sig'), contentType)) {
         return c.json({ error: 'invalid or expired signature' }, 403);
       }
+      // A signed URL outlives the upload it was issued for. Once the artifact
+      // leaves pending_upload (verifying, available, deleted, failed), its
+      // bytes are final, so a replayed PUT must not replace them.
+      let art;
+      try {
+        art = [...rt.require().db.sessionArtifacts.iter()].find(a => a.storageKey === key);
+      } catch (err) {
+        return reducerError(c, err);
+      }
+      if (art?.status !== 'pending_upload') {
+        return c.json({ error: `artifact is ${art?.status ?? 'unknown'}; upload refused` }, 409);
+      }
       const body = c.req.raw.body;
       if (!body) return c.json({ error: 'empty body' }, 400);
       try {

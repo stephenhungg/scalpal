@@ -480,6 +480,13 @@ describe('motion jobs', () => {
     assert.deepEqual(job.outputArtifactIds, [out.json.artifactId]);
     assert.equal(job.quality?.framesValid, 8);
     assert.equal(artifactOf(r.viewer, out.json.artifactId)?.status, 'available');
+    // The still-valid upload URL cannot replace the finished output.
+    const overwrite = await fetch(out.json.upload.url, {
+      method: 'PUT',
+      headers: out.json.upload.headers,
+      body: '{"swapped":true}',
+    });
+    assert.equal(overwrite.status, 409);
 
     // Completing again is stale.
     const again = await worker(WORKER_TOKEN, claim.json.endpoints.complete, {
