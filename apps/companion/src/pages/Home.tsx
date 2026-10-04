@@ -54,51 +54,53 @@ export default function Home() {
       .join(', ');
 
   return (
-    <main className="page page-narrow">
-      <section className="hero">
-        <h1>Watch a Scalpal session live</h1>
-        <p>
-          Follow a guided mixed-reality practice session as it happens: the wearer's view with virtual anatomy, the
-          exercise step, what Jarvis says, and the robot-hand replay derived from the recorded movement. Replay is
-          retargeted motion, not a learned robot policy.
-        </p>
+    <main className="page home">
+      <section className="home-hero">
+        <h1>Watch a session live.</h1>
+        <p>Join with an invite code, or start a new session.</p>
+        <p className="home-note">Robot replay is retargeted motion, not a learned robot policy.</p>
       </section>
 
-      <div className="two">
-        <Panel title="Join a session">
-          <div className="stack">
-            <label className="field">
-              Invite code
-              <input
-                className="code-box"
-                value={code}
-                onChange={e => setCode(e.target.value.toUpperCase())}
-                placeholder="ABC123"
-                maxLength={6}
-                autoCapitalize="characters"
-                spellCheck={false}
-              />
-            </label>
-            <label className="field">
-              Your name
-              <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Judge" maxLength={60} />
-            </label>
-            <div className="row">
-              <button className="btn primary" disabled={!live.conn || code.trim().length < 6 || join.busy} onClick={onJoin}>
-                {join.busy ? 'Joining…' : 'Join'}
-              </button>
-              <span className="muted small">The code decides your role: viewer, coach, headset or operator.</span>
-            </div>
-            {join.error && <div className="error-text">{join.error}</div>}
-          </div>
-        </Panel>
+      <Panel title="Join a session" className="home-card">
+        <div className="stack">
+          <label className="field">
+            Invite code
+            <input
+              className="code-box"
+              value={code}
+              onChange={e => setCode(e.target.value.toUpperCase())}
+              placeholder="ABC123"
+              maxLength={6}
+              autoCapitalize="characters"
+              spellCheck={false}
+            />
+          </label>
+          <label className="field">
+            Your name
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Judge" maxLength={60} />
+          </label>
+          <button className="btn primary block" disabled={!live.conn || code.trim().length < 6 || join.busy} onClick={onJoin}>
+            {join.busy ? 'Joining…' : 'Join'}
+          </button>
+          <span className="muted small center">The code decides your role: viewer, coach, headset or operator.</span>
+          {join.error && <div className="error-text">{join.error}</div>}
+        </div>
+      </Panel>
 
-        <Panel title="Start a session">
-          <div className="stack">
-            <label className="field">
-              Session label
-              <input value={label} onChange={e => setLabel(e.target.value)} placeholder="MHacks demo table 12" maxLength={120} />
-            </label>
+      <div className="home-or">or</div>
+
+      <Panel title="Start a session" className="home-card">
+        <div className="stack">
+          <label className="field">
+            Session label
+            <input value={label} onChange={e => setLabel(e.target.value)} placeholder="MHacks demo table 12" maxLength={120} />
+          </label>
+          <label className="field">
+            Your name
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="Operator" maxLength={60} />
+          </label>
+          <details className="home-details">
+            <summary>Exercise details</summary>
             <div className="two">
               <label className="field">
                 Exercise id
@@ -109,22 +111,15 @@ export default function Home() {
                 <input value={exerciseVersion} onChange={e => setExerciseVersion(e.target.value)} maxLength={60} />
               </label>
             </div>
-            <label className="field">
-              Your name
-              <input value={name} onChange={e => setName(e.target.value)} placeholder="Operator" maxLength={60} />
-            </label>
-            <div className="row">
-              <button className="btn primary" disabled={!live.conn || !exerciseId.trim() || create.busy} onClick={onCreate}>
-                {create.busy ? 'Creating…' : 'Create as operator'}
-              </button>
-            </div>
-            {create.error && <div className="error-text">{create.error}</div>}
-          </div>
-        </Panel>
-      </div>
+          </details>
+          <button className="btn block" disabled={!live.conn || !exerciseId.trim() || create.busy} onClick={onCreate}>
+            {create.busy ? 'Creating…' : 'Create as operator'}
+          </button>
+          {create.error && <div className="error-text">{create.error}</div>}
+        </div>
+      </Panel>
 
-      <div style={{ height: 16 }} />
-
+      <div className="home-sessions">
       <Panel title="Your sessions" flush>
         {mine.length === 0 ? (
           <Empty>{live.ready ? 'No sessions yet. Create one or join with a code.' : 'Loading…'}</Empty>
@@ -162,6 +157,7 @@ export default function Home() {
           </div>
         )}
       </Panel>
+      </div>
     </main>
   );
 }
