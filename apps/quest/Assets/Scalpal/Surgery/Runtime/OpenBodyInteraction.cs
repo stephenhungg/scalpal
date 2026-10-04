@@ -37,6 +37,8 @@ namespace Scalpal.Surgery
             // Wall fracture counts when this blade engaged the wall: a stroke scores only the layer it opened.
             public bool wallEngaged;
             public readonly long[] wallCutBaseline = new long[OpenWallLayers.Count];
+            // Tissue a held tool is resting on without the trigger (no effect), for the first-use affordance.
+            public string idleTouched = "";
         }
         // Authored teaching thresholds for coupling paired retraction to the volume, not measured mechanics.
         const float SplitOnsetMm = .5f, SplitHalfLengthMeters = .03f, SplitDepthMarginMeters = .0005f, BladeContactMeters = .003f;
@@ -69,6 +71,9 @@ namespace Scalpal.Surgery
         // State tracker (never scored): a tool tip first touching a tissue, and region injury/control outside the field.
         public event Action<InstrumentBehaviour, string> Contacted;
         public event Action<string, InstrumentBehaviour, bool> RegionInjured;
+        // A held, tracked tool touching tissue with the trigger released: nothing is applied, so tell the learner
+        // which input acts (tool, verb, tissue). Edge-triggered per touch; never scored or sent to the coach.
+        public event Action<InstrumentBehaviour, string, string> TouchedWithoutTrigger;
         public string LastRejection { get; private set; } = "";
         public double ActiveSeconds => activeSeconds;
         public double TimeMs => activeSeconds * 1000;
@@ -248,8 +253,9 @@ namespace Scalpal.Surgery
             if (!ValidTool(state))
             {
                 if (state.active && state.tool && state.tool.TrackingValid) FlushStroke(state);
-                Release(state); return;
+                Release(state); IdleContact(state); return;
             }
+            state.idleTouched = "";
             Vector3 point = state.tool.actionPoint.position;
             if (!OpenSurgeryStroke.Finite(point)) { Release(state); return; }
             state.speed = state.previousValid ? Vector3.Distance(point, state.previous) / seconds : 0;
@@ -325,6 +331,20 @@ namespace Scalpal.Surgery
                     Latch(state); state.clampedTissueId = state.tissueId;
                 }
             }
+        }
+
+        // Same geometric contact as an activated tool, but only reported: tool effects stay trigger-driven.
+        void IdleContact(ToolState state)
+        {
+            var tool = state.tool;
+            string touched = "";
+            if (tool && tool.isActiveAndEnabled && tool.Held && tool.TrackingValid && tool.actionPoint && OpenSurgeryStroke.Finite(tool.actionPoint.position))
+            {
+                string verb = BodyState.ToolVerbs[tool.instrumentId][0];
+                if (FindContact(state, verb, tool.actionPoint.position, out var definition, out _, out _)) touched = definition.id;
+                if (touched != "" && touched != state.idleTouched) TouchedWithoutTrigger?.Invoke(tool, verb, touched);
+            }
+            state.idleTouched = touched;
         }
 
         void FlushStroke(ToolState state)

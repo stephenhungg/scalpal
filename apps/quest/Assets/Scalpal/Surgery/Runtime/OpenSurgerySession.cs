@@ -28,6 +28,7 @@ namespace Scalpal.Surgery
         OpenSurgeryCoach delivery;
         SurgeryFeedback feedback;
         OpenBodyBleeding bleeding;
+        SurgeryTriggerHint triggerHint;
         OpenSurgeryPanel panel;
         BodyState body;
         GameObject kit, riskAnatomy;
@@ -113,6 +114,7 @@ namespace Scalpal.Surgery
             if (plan.decisions != null && plan.decisions.Length > 0) wound.SetDecisionChoices(plan.decisions[0].choices);
             interaction = GetComponent<OpenBodyInteraction>() ?? gameObject.AddComponent<OpenBodyInteraction>();
             interaction.Submitted -= Applied; interaction.MarkerChanged -= Marked; interaction.Contacted -= Touched; interaction.RegionInjured -= Injured;
+            interaction.TouchedWithoutTrigger -= NeedsTrigger;
             interaction.Initialize(session.exercise,session.workbench.tools,session.patientFrame,woundFrame,()=>Ready);
             bool mobile = interaction.ConfigureMobility(mobileOrganGroups,out string mobility);
             bool anatomyBound = OpenSurgeryAnatomy.Bind(session.anatomy,interaction);
@@ -122,6 +124,8 @@ namespace Scalpal.Surgery
             interaction.BindWall(volume);
             session.workbench.ToolsReset-=ClearPlacements; session.workbench.ToolsReset+=ClearPlacements;
             interaction.Submitted += Applied; interaction.MarkerChanged += Marked; interaction.Contacted += Touched; interaction.RegionInjured += Injured;
+            interaction.TouchedWithoutTrigger += NeedsTrigger;
+            triggerHint = GetComponent<SurgeryTriggerHint>() ?? gameObject.AddComponent<SurgeryTriggerHint>();
             if(rightAsis && umbilicus) interaction.SetLandmarks(rightAsis.position,umbilicus.position,woundFrame.right);
             // The old vessel demonstration cannot emit a second unrelated blood pool in this case.
             var legacyVessel = GetComponent<NativeVesselSimulation>(); if(legacyVessel) legacyVessel.enabled=false;
@@ -167,8 +171,18 @@ namespace Scalpal.Surgery
                     inHand[input.controller] = tool;
                 }
         }
+        // Touching tissue without the trigger does nothing; say so at the tool tip, once per touch.
+        void NeedsTrigger(InstrumentBehaviour tool, string verb, string tissueId)
+        {
+            if (!triggerHint) return;
+            XRNode? hand = null;
+            foreach (var input in session.workbench.inputs)
+                if (input && input.GetComponent<InstrumentInteractor>()?.HeldInstrument == tool) { hand = input.controller; break; }
+            triggerHint.Show(tool, verb, hand, session.workbench.headCamera ? session.workbench.headCamera.transform : null);
+        }
         void Applied(BodyRecord record, InstrumentBehaviour tool)
         {
+            if (triggerHint && tool) triggerHint.Hide();
             XRNode? hand = null;
             if(tool) foreach(var input in session.workbench.inputs)
                 if(input && input.GetComponent<InstrumentInteractor>()?.HeldInstrument == tool) { hand=input.controller; break; }
@@ -213,7 +227,7 @@ namespace Scalpal.Surgery
         void OnDestroy()
         {
             if(session && session.workbench)session.workbench.ToolsReset-=ClearPlacements;
-            if (interaction) { interaction.Submitted -= Applied; interaction.MarkerChanged -= Marked; interaction.Contacted -= Touched; interaction.RegionInjured -= Injured; }
+            if (interaction) { interaction.Submitted -= Applied; interaction.MarkerChanged -= Marked; interaction.Contacted -= Touched; interaction.RegionInjured -= Injured; interaction.TouchedWithoutTrigger -= NeedsTrigger; }
             if (woundFrame) { if(Application.isPlaying)Destroy(woundFrame.gameObject);else DestroyImmediate(woundFrame.gameObject); }
             // Kit tools are owned by the scene/workbench; do not leave dangling registered entries.
         }
