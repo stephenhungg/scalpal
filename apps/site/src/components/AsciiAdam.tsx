@@ -1,6 +1,6 @@
 "use client";
 
-// From MatthewKim323/adam (src/components/AsciiAdam.tsx), unchanged apart from this header, both arms set to white, the onTouch / introSpeed props, and pointer reach turned off (glyph scramble kept).
+// From MatthewKim323/adam (src/components/AsciiAdam.tsx), unchanged apart from this header, both arms set to white, the onTouch / introSpeed / onUnavailable props, and pointer reach turned off (glyph scramble kept).
 import { useEffect, useRef } from 'react'
 
 /*
@@ -248,19 +248,23 @@ function aim(arm: Arm, base: Xf, pointer: Vec | null, dt: number): Xf {
 
 // Scalpal site additions: onTouch fires once when the fingertips first meet (spark fully lit),
 // and introSpeed speeds up only that first approach so it can work as a loader.
+// onUnavailable fires instead when the art cannot render (no WebGL2, failed images or shaders),
+// so a page waiting on onTouch is never left blank.
 const TOUCH = 6.6
 
-type Props = { playing?: boolean; time?: number; onTouch?: () => void; introSpeed?: number }
+type Props = { playing?: boolean; time?: number; onTouch?: () => void; introSpeed?: number; onUnavailable?: () => void }
 
-export function AsciiAdam({ playing = true, time, onTouch, introSpeed = 1 }: Props) {
+export function AsciiAdam({ playing = true, time, onTouch, introSpeed = 1, onUnavailable }: Props) {
   const ref = useRef<HTMLCanvasElement>(null)
   const playingRef = useRef(playing)
   const onTouchRef = useRef(onTouch)
   const introSpeedRef = useRef(introSpeed)
+  const onUnavailableRef = useRef(onUnavailable)
   useEffect(() => {
     onTouchRef.current = onTouch
     introSpeedRef.current = introSpeed
-  }, [onTouch, introSpeed])
+    onUnavailableRef.current = onUnavailable
+  }, [onTouch, introSpeed, onUnavailable])
   useEffect(() => {
     playingRef.current = playing
   }, [playing])
@@ -269,7 +273,11 @@ export function AsciiAdam({ playing = true, time, onTouch, introSpeed = 1 }: Pro
     const canvas = ref.current
     if (!canvas) return
     const gl = canvas.getContext('webgl2', { antialias: false, premultipliedAlpha: false })
-    if (!gl) return
+    if (!gl) {
+      console.warn('AsciiAdam: WebGL2 unavailable, skipping hero art')
+      onUnavailableRef.current?.()
+      return
+    }
 
     let raf = 0
     let disposed = false
@@ -436,6 +444,10 @@ export function AsciiAdam({ playing = true, time, onTouch, introSpeed = 1 }: Pro
         document.documentElement.removeEventListener('pointerleave', onLeave)
         window.removeEventListener('blur', onLeave)
       }
+    }).catch((err: unknown) => {
+      if (disposed) return
+      console.warn('AsciiAdam: hero art failed to load', err)
+      onUnavailableRef.current?.()
     })
 
     let cleanup = () => {}

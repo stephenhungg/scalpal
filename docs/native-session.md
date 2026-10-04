@@ -1,5 +1,7 @@
 # Native Appendectomy Integration
 
+> **Scope notice:** the current product flow is the [latest experience flow](current-direction.md#latest-experience-flow): launch → explore patients → diagnosis office → full-VR surgery → required robot replay. Mixed reality with a real participant, conversational selection and the rotating preview are off the main path. Where this document disagrees, current direction wins. This native session is the operating-room stage of that flow. Its current default to mixed-reality passthrough (below) is a known gap: the operating room should default to full VR.
+
 The original milestone assembled one full-VR rehearsal in `Assets/Scalpal/Quest/Scenes/NativeSession.unity`. It preserves the native tracked-head/controller rig and the user-confirmed held-tool motion fix. It connects Matthew's authored appendectomy case, selected anatomy, coach HTTP service, a native client for his existing Jarvis agent, and Nathan's actual SpacetimeDB session adapter.
 
 The exercise is illustrative. Tool contact advances authored procedural checks; the organs do not have validated deformable-tissue physics. The static virtual patient fit is explicitly authored. The current AR/body-fit milestone is described below; video streaming and robot replay remain absent.
@@ -21,7 +23,7 @@ The permission-lifecycle Unity gate passed 76 synthetic surface/body-projection/
 5. Publish confirmed coarse phase/step/selection/registration state and actual events to SpacetimeDB. XR poses stay local. Coach scoring events retain IDs across bounded retries and use the step that validated the action. Applied scene-command acknowledgements wait for a committed snapshot.
 6. After all ten authored steps, show a local recap and send the actual learning result. A successful send is distinct from the backend's committed acknowledgement. **A** abandons the previous local coach binding, restores tools and preview, and requests a new shared attempt.
 
-**Y** explicitly enables/disables microphone voice. If pressed before practice, it opts into the next confirmed session. Native conversational procedure selection is not yet wired: this first slice exposes one appendectomy through controller confirmation. Do not describe it as the completed conversational catalog experience.
+**Y** explicitly enables/disables microphone voice. If pressed before practice, it opts into the next confirmed session. Conversational procedure selection is superseded: under the current flow the procedure comes from the diagnosis office. This first slice exposes one appendectomy through controller confirmation and does not yet load the case chosen on the explore page.
 
 ## Service Boundaries
 
@@ -63,8 +65,8 @@ Confirmed regressions: stale/unknown coach step metadata no longer scores the cu
 
 - Existing ElevenLabs agent credentials are currently absent locally; `/jarvis/connection` reports unconfigured. Spoken headset input/output remains unverified.
 - Main includes Matthew's shared tool/alert/context-key service. The native six-tool path now posts complete JSON parameters to the explicit coach-session tool endpoint. Context updates use the meaningful `contextKey`. Fifty actual Unity coroutine/HTTP checks passed against isolated synthetic Hono fixtures, including pending/applied highlights and stale connections; WSS, microphone and provider calls did not run. Polled alerts/reflex pacing remains an adapter gap.
-- Conversational selection and native visual preview actions need to be connected to the same single agent; controller selection is the bounded first integration.
-- The new automatic generic-surface MR/camera route is implemented but its reclining-person/stereo-alignment test remains unverified; see [body registration](body-registration.md).
+- Conversational selection and the visual preview are superseded; the session needs to load the patient/procedure decided in the diagnosis office instead of the fixed appendectomy.
+- The automatic generic-surface MR/camera route is implemented but off the main path; its reclining-person/stereo-alignment test remains unverified; see [body registration](body-registration.md).
 - Native video production/WebRTC publishing and upload are absent; the companion must not claim a live headset video feed.
 - Silas's video-to-motion processor is merged on main. Its latest frozen-dependency suite passed 30 tests (one external sample-video test skipped), including output-path traversal and malformed job regressions. A 60-frame synthetic kinematic replay encoded successfully and preserved ten explicit gap frames. Nathan's lease/artifact worker adapter and compatible trajectory conversion are now implemented. Actual permitted Quest-video validation remains absent; synthetic checks do not prove first-person reconstruction quality.
 
