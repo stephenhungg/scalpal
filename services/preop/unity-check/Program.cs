@@ -8,6 +8,7 @@ using System.Text.Json;
 using Scalpal.Exercises.Data;
 using Scalpal.Exercises.Engine;
 using Scalpal.Exercises.Generated;
+using Scalpal.Hands;
 
 static class Program
 {
@@ -76,7 +77,64 @@ static class Program
         }
 
         Console.WriteLine($"{bundle.cases.Length} cases, {playable} playable, every step completed in C#.");
+        CheckHandMath(args.Length > 1 ? args[1] : "../hands/tests/golden.json");
         return Report();
+    }
+
+    // BlazeHandMath must reproduce services/hands/reference.py, which is checked against Google's MediaPipe.
+    static void CheckHandMath(string goldenPath)
+    {
+        if (!File.Exists(goldenPath))
+        {
+            Failures.Add($"hand golden file missing: {goldenPath}");
+            return;
+        }
+        using var doc = JsonDocument.Parse(File.ReadAllText(goldenPath));
+        var g = doc.RootElement;
+        float F(JsonElement e) => (float)e.GetDouble();
+        float[] Arr(JsonElement e) => e.EnumerateArray().Select(F).ToArray();
+        bool Near(float a, float b) => Math.Abs(a - b) <= 1e-3f * Math.Max(1f, Math.Abs(b));
+        void Affine(string what, Affine2 m, float[] expected)
+        {
+            var got = new[] { m.a, m.b, m.c, m.d, m.e, m.f };
+            for (var i = 0; i < 6; i++) Check(Near(got[i], expected[i]), $"hand math {what}[{i}]: {got[i]} vs {expected[i]}");
+        }
+        void Roi(string what, HandRoi r, JsonElement e)
+        {
+            Check(Near(r.centerX, F(e.GetProperty("centerX"))) && Near(r.centerY, F(e.GetProperty("centerY"))), $"hand math {what} centre");
+            Check(Near(r.size, F(e.GetProperty("size"))), $"hand math {what} size: {r.size} vs {F(e.GetProperty("size"))}");
+            Check(Near(r.rotation, F(e.GetProperty("rotation"))), $"hand math {what} rotation: {r.rotation} vs {F(e.GetProperty("rotation"))}");
+        }
+
+        var width = g.GetProperty("image").GetProperty("width").GetInt32();
+        var height = g.GetProperty("image").GetProperty("height").GetInt32();
+        var toImage = BlazeHandMath.DetectorToImage(width, height);
+        Affine("DetectorToImage", toImage, Arr(g.GetProperty("detectorToImage")));
+
+        var det = g.GetProperty("detection");
+        var index = det.GetProperty("index").GetInt32();
+        var boxes = new float[BlazeHandMath.NumAnchors * 18];
+        Array.Copy(Arr(det.GetProperty("box")), 0, boxes, index * 18, 18);
+        var anchors = new float[BlazeHandMath.NumAnchors, 4];
+        var anchor = Arr(det.GetProperty("anchor"));
+        for (var k = 0; k < 4; k++) anchors[index, k] = anchor[k];
+        var roi = BlazeHandMath.DetectionToRoi(boxes, index, anchors);
+        Roi("DetectionToRoi", roi, det.GetProperty("roi"));
+        Affine("LandmarkerToImage(detection)", BlazeHandMath.LandmarkerToImage(toImage, roi), Arr(g.GetProperty("landmarkerToImage")));
+
+        var tracking = g.GetProperty("tracking");
+        var tracked = BlazeHandMath.RoiFromLandmarks(Arr(tracking.GetProperty("xTopLeft")), Arr(tracking.GetProperty("yTopLeft")));
+        Roi("RoiFromLandmarks", tracked, tracking.GetProperty("roi"));
+        Affine("LandmarkerToImage(tracking)", BlazeHandMath.LandmarkerToImage(BlazeHandMath.TopLeftToImage(height), tracked), Arr(tracking.GetProperty("landmarkerToImage")));
+
+        var scores = new float[BlazeHandMath.NumAnchors];
+        for (var i = 0; i < scores.Length; i++) scores[i] = -10f;
+        scores[index] = 5f;
+        var rois = new HandRoi[2];
+        var roiScores = new float[2];
+        var count = BlazeHandMath.SelectDetections(boxes, scores, anchors, 0.5f, 2, rois, roiScores);
+        Check(count == 1 && Near(rois[0].centerX, roi.centerX), $"hand math SelectDetections found {count} hands");
+        Console.WriteLine("hand math matches the MediaPipe-checked Python reference.");
     }
 
     static IEnumerable<ScalpalAction> AllActions(ScalpalBundle b) =>

@@ -29,6 +29,9 @@ namespace UnityEngine
         public Transform transform => null;
         public bool activeInHierarchy => true;
         public void SetActive(bool value) { }
+        public bool activeSelf => true;
+        public T GetComponent<T>() => default;
+        public static GameObject CreatePrimitive(PrimitiveType type) => new GameObject();
         public T AddComponent<T>() where T : Component => default;
     }
 
@@ -36,7 +39,8 @@ namespace UnityEngine
 
     public class Transform : Component
     {
-        public Vector3 position => default;
+        public Vector3 position { get; set; }
+        public Vector3 localScale { get; set; }
         public Vector3 InverseTransformPoint(Vector3 position) => position;
         public void Rotate(Vector3 axis, float angle, Space relativeTo) { }
         public Vector3 localPosition { get; set; }
@@ -62,11 +66,13 @@ namespace UnityEngine
     {
         public float r, g, b, a;
         public Color(float r, float g, float b, float a) { this.r = r; this.g = g; this.b = b; this.a = a; }
+        public static Color Lerp(Color a, Color b, float t) => new Color(a.r + (b.r - a.r) * t, a.g + (b.g - a.g) * t, a.b + (b.b - a.b) * t, a.a + (b.a - a.a) * t);
     }
 
     public struct Vector2
     {
         public float x, y;
+        public Vector2(float x, float y) { this.x = x; this.y = y; }
     }
 
     public class Shader : Object
@@ -89,6 +95,7 @@ namespace UnityEngine
     public static class Time
     {
         public static float deltaTime => 0f;
+        public static double realtimeSinceStartupAsDouble => 0.0;
     }
 
     public struct Bounds
@@ -104,6 +111,8 @@ namespace UnityEngine
         public void GetPropertyBlock(MaterialPropertyBlock properties) { }
         public void GetPropertyBlock(MaterialPropertyBlock properties, int materialIndex) { }
         public void SetPropertyBlock(MaterialPropertyBlock properties, int materialIndex) { }
+        public void SetPropertyBlock(MaterialPropertyBlock properties) { }
+        public Material sharedMaterial { get; set; }
     }
 
     public class Mesh : Object
@@ -153,6 +162,7 @@ namespace UnityEngine
     {
         public static T FromJson<T>(string json) => default;
         public static string ToJson(object obj) => "";
+        public static string ToJson(object obj, bool prettyPrint) => "";
     }
 
     public static class Debug
@@ -161,6 +171,7 @@ namespace UnityEngine
         public static void LogWarning(object message) { }
         public static void LogWarning(object message, Object context) { }
         public static void LogError(object message) { }
+        public static void LogException(Exception exception, Object context) { }
     }
 
     public static class Mathf
@@ -168,6 +179,12 @@ namespace UnityEngine
         public static float Max(float a, float b) => Math.Max(a, b);
         public static float Sign(float f) => f >= 0f ? 1f : -1f;
         public static float Min(float a, float b) => Math.Min(a, b);
+        public const float Deg2Rad = (float)(Math.PI / 180.0);
+        public static float Clamp(float v, float min, float max) => Math.Max(min, Math.Min(max, v));
+        public static float Tan(float f) => (float)Math.Tan(f);
+        public static float Sqrt(float f) => (float)Math.Sqrt(f);
+        public static float Abs(float f) => Math.Abs(f);
+        public static float InverseLerp(float a, float b, float v) => a == b ? 0f : Clamp((v - a) / (b - a), 0f, 1f);
     }
 
     public struct Vector3
@@ -175,6 +192,10 @@ namespace UnityEngine
         public float x, y, z;
         public Vector3(float x, float y, float z) { this.x = x; this.y = y; this.z = z; }
         public static Vector3 up => new Vector3(0f, 1f, 0f);
+        public static Vector3 one => new Vector3(1f, 1f, 1f);
+        public static Vector3 operator +(Vector3 a, Vector3 b) => new Vector3(a.x + b.x, a.y + b.y, a.z + b.z);
+        public static Vector3 operator *(float d, Vector3 a) => a * d;
+        public static float Angle(Vector3 from, Vector3 to) => 0f;
         public static Vector3 operator *(Vector3 a, float d) => new Vector3(a.x * d, a.y * d, a.z * d);
     }
 
