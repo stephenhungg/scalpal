@@ -104,6 +104,60 @@ function Stat({ label, value, unit, tone }: { label: string; value: string; unit
   );
 }
 
+const parseList = (json: string): Rec[] => {
+  const d = parseData(json);
+  return Array.isArray(d) ? d.filter(isRec) : [];
+};
+
+/** The simulated patient as SpacetimeDB itself computes it (patient_condition, advanced by the module at 1 Hz). */
+function ConditionVitals({ c, now }: { c: NonNullable<SessionData['patientCondition']>; now: number }) {
+  const died = c.outcomeResult === 'died';
+  const bleeds = parseList(c.activeBleedsJson);
+  const regions = parseList(c.regionInjuriesJson).filter(r => r.bleeding === true);
+  const sources = [
+    ...bleeds.map(b => `${String(b.name ?? 'bleed')} ${Math.round(num(b.rateMlPerMin) ?? 0)} ml/min`),
+    ...regions.map(r => `${String(r.label ?? r.region)} ${Math.round(num(r.rawBleedMlPerMin) ?? 0)} ml/min`),
+  ];
+  return (
+    <>
+      <div className="or-vitals">
+        <Stat label="HR" value={died ? '0' : String(c.hr)} unit="bpm" tone={died || c.hr > 110 ? 'bad' : undefined} />
+        <Stat label="BP" value={`${c.sys}/${c.dia}`} tone={died || c.sys < 90 ? 'bad' : undefined} />
+        <Stat label="SpO2" value={c.spo2 >= 0 ? String(c.spo2) : '--'} unit="%" />
+        <Stat label="RR" value={String(c.rr)} unit="/min" />
+      </div>
+      <div className="row small">
+        <span>
+          Blood loss <b>{Math.round(c.bloodLossPct)}%</b>
+          <span className="muted">
+            {' '}
+            · {Math.round(c.bloodLostMl)} of {Math.round(c.ebvMl)} ml · class {c.hemorrhageClass}
+          </span>
+        </span>
+        <span className="spacer" />
+        {sources.length > 0 && !died ? (
+          <Pill tone="bad" live>
+            {sources.length} active bleed{sources.length > 1 ? 's' : ''}
+          </Pill>
+        ) : (
+          <Pill tone="muted">No active bleeding</Pill>
+        )}
+      </div>
+      {sources.length > 0 && !died && <div className="notice bad small">Bleeding: {sources.join(' · ')} (raw)</div>}
+      {c.outcomeResult !== 'in_progress' && (
+        <div className={`notice ${died ? 'bad' : 'info'} small`}>
+          {died ? 'Patient died' : humanize(c.outcomeResult)}
+          {c.outcomeCause ? `: ${c.outcomeCause}` : ''}
+        </div>
+      )}
+      <div className="muted small">
+        <Pill tone="info">SpacetimeDB</Pill> Simulated physiology computed in the database · {c.label || `baseline ${c.baselineSource}`} · ×{c.scale} demo
+        acceleration · {ago(c.updatedAt, now)}
+      </div>
+    </>
+  );
+}
+
 function PatientPanel({ data }: { data: SessionData }) {
   const p = usePatient(data);
   const now = useNow(5000);
@@ -118,12 +172,23 @@ function PatientPanel({ data }: { data: SessionData }) {
   const result = typeof p.outcome?.result === 'string' ? p.outcome.result : null;
   const state = data.state;
   const step = p.checklist.find(c => c.current);
+  const cond = data.patientCondition;
 
   return (
     <Panel
       title="Patient"
       actions={
-        result === 'died' ? (
+        cond ? (
+          cond.outcomeResult === 'died' ? (
+            <Pill tone="bad">Died</Pill>
+          ) : cond.outcomeResult === 'completed' ? (
+            <Pill tone="ok">Case goals reached</Pill>
+          ) : cond.outcomeResult === 'in_progress' ? (
+            <Pill tone="ok" live>
+              Live
+            </Pill>
+          ) : null
+        ) : result === 'died' ? (
           <Pill tone="bad">Died</Pill>
         ) : result === 'completed' ? (
           <Pill tone="ok">Case goals reached</Pill>
@@ -148,7 +213,9 @@ function PatientPanel({ data }: { data: SessionData }) {
             )}
           </div>
         </div>
-        {p.vitalsRow ? (
+        {cond ? (
+          <ConditionVitals c={cond} now={now} />
+        ) : p.vitalsRow ? (
           <>
             <div className="or-vitals">
               <Stat label="HR" value={hr != null ? String(Math.round(hr)) : '--'} unit="bpm" tone={hr != null && hr > 110 ? 'bad' : undefined} />
@@ -178,7 +245,7 @@ function PatientPanel({ data }: { data: SessionData }) {
         ) : (
           <div className="muted small">Vitals appear when the coach starts tracking the case in this session.</div>
         )}
-        {p.outcomeRow && result !== 'in_progress' && <div className={`notice ${result === 'died' ? 'bad' : 'info'} small`}>{p.outcomeRow.text}</div>}
+        {!cond && p.outcomeRow && result !== 'in_progress' && <div className={`notice ${result === 'died' ? 'bad' : 'info'} small`}>{p.outcomeRow.text}</div>}
         {p.checklist.length > 0 && (
           <ol className="or-checklist">
             {p.checklist.map(c => (
