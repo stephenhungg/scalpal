@@ -153,7 +153,7 @@ namespace Scalpal.EncounterOffice.Editor
             Check(flow && HandoffRun.Current != null && HandoffRun.Current.sourceOffice != null, "ContinueToSurgery opens canonical scored office handoff");
             card = Read<HandoffCard>(flow, "card");
             var ticket = HandoffRun.Current;
-            Check(ticket.escalated && ticket.procedureId == "lap_appendectomy" && ticket.procedureId == procedureId,
+            Check(ticket.escalated && HandoffRun.Supported(ticket.procedureId) && ticket.procedureId == procedureId,
                 "wrong plan routes to supported authored appendectomy");
             Check(ticket.sourceOffice.sharedSessionId == sharedSessionId && ticket.sourceOffice.attemptId == attemptId,
                 "immutable source captures actual office reducer binding");
