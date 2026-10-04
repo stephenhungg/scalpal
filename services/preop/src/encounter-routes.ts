@@ -1,5 +1,5 @@
 import type { Context, Hono } from "hono";
-import { ENCOUNTERS_BY_PLAN, type Encounter } from "./catalog/encounters.js";
+import { ENCOUNTERS_BY_PLAN, EXAM_MANEUVERS, HISTORY_TOPICS, TESTS, type Encounter } from "./catalog/encounters.js";
 import { DEFAULT_PATIENT_VOICES, EncounterSession } from "./encounter.js";
 import { attendingFirstMessage, attendingPrompt, patientFirstMessage, patientPrompt } from "./encounter-prompt.js";
 import { NO_REALTIME, type RealtimeSink } from "./realtime-bridge.js";
@@ -36,7 +36,12 @@ export function registerEncounterRoutes(app: Hono, options: EncounterRouteOption
   };
   const missing = (c: Context) =>
     bad(c, 404, "encounter_not_found", "No live encounter with that id. Start one from a patient.", [{ id: "choose_patient", label: "Choose a patient", method: "GET", route: "/patients" }]);
-  const body = async (c: Context) => (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+  const body = async (c: Context): Promise<Record<string, unknown>> => {
+    const value: unknown = await c.req.json().catch(() => ({}));
+    return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  };
+  const wrongPhase = (c: Context, s: EncounterSession, required: string) =>
+    bad(c, 409, "invalid_phase", `This action requires ${required}; encounter is ${s.phase}.`, encounterActions(s.id));
 
   app.post("/encounters", async (c) => {
     const { patientId } = await body(c);
@@ -46,6 +51,13 @@ export function registerEncounterRoutes(app: Hono, options: EncounterRouteOption
     const encounter = ENCOUNTERS_BY_PLAN.get(await options.planSubjectFor(kase));
     if (!encounter) {
       return bad(c, 404, "no_encounter", "This patient has no authored interview yet. Go straight to surgery.", [{ id: "choose_patient", label: "Choose another patient", method: "GET", route: "/patients" }]);
+    }
+    // Authored demo symptoms must never be attached to real records or a different patient.
+    if (!kase.brief.synthetic) return bad(c, 409, "synthetic_only", "Authored interviews are available only for synthetic demo patients.", kase.actions);
+    const persona = encounter.persona;
+    const expectedSex = persona.voiceKey === "adult_female" ? "female" : "male";
+    if (kase.patient.name !== persona.patientName || kase.patient.age !== persona.age || kase.patient.sex.toLowerCase() !== expectedSex) {
+      return bad(c, 409, "demographics_mismatch", "The chart demographics do not match this authored demo interview.", kase.actions);
     }
     if (sessions.size >= MAX) sessions.delete(sessions.keys().next().value!);
     const id = `enc-${crypto.randomUUID().replaceAll("-", "").slice(0, 16)}`;
@@ -78,6 +90,7 @@ export function registerEncounterRoutes(app: Hono, options: EncounterRouteOption
   app.post("/encounters/:id/attending", (c) => {
     const s = get(c);
     if (!s) return missing(c);
+    if (s.phase === "scored") return wrongPhase(c, s, "interview or attending");
     if (s.phase === "interview") {
       s.phase = "attending";
       realtime.encounterPhase(s);
@@ -99,6 +112,7 @@ export function registerEncounterRoutes(app: Hono, options: EncounterRouteOption
   app.get("/encounters/:id/score", (c) => {
     const s = get(c);
     if (!s) return missing(c);
+    if (s.phase !== "scored") return wrongPhase(c, s, "scored");
     return c.json({ scorecard: s.score(), state: s.state(), actions: encounterActions(s.id) });
   });
 
@@ -107,19 +121,45 @@ export function registerEncounterRoutes(app: Hono, options: EncounterRouteOption
     if (!s) return missing(c);
     const p = await body(c);
     const str = (k: string) => (typeof p[k] === "string" ? (p[k] as string) : "");
+    const name = c.req.param("name");
+    const interviewTools: Record<string, { key: string; ids: readonly string[] }> = {
+      answer: { key: "topic", ids: HISTORY_TOPICS },
+      examine: { key: "maneuver", ids: EXAM_MANEUVERS },
+      order_test: { key: "test", ids: TESTS },
+    };
+    const interviewTool = interviewTools[name ?? ""];
+    if (interviewTool) {
+      if (s.phase !== "interview") return wrongPhase(c, s, "interview");
+      if (!interviewTool.ids.includes(str(interviewTool.key))) {
+        return bad(c, 400, "invalid_tool_argument", `Send a supported ${interviewTool.key}.`, encounterActions(s.id));
+      }
+    }
+    if (name === "record_assessment") {
+      if (s.phase !== "attending") return wrongPhase(c, s, "attending");
+      if (!["diagnosis", "procedure", "urgency"].every((key) => typeof p[key] === "string") ||
+          !Array.isArray(p.differential) || !p.differential.every((item) => typeof item === "string")) {
+        return bad(c, 400, "invalid_assessment", "Send diagnosis, procedure, urgency as strings and differential as an array of strings.", encounterActions(s.id));
+      }
+    }
     let result: string;
-    switch (c.req.param("name")) {
+    let display: string;
+    switch (name) {
       case "answer":
         result = s.answer(str("topic"));
+        display = s.log.at(-1)?.text ?? "Unknown.";
+        if (display === "unknown") display = "I don't know or don't remember.";
         break;
       case "examine":
         result = s.examine(str("maneuver"));
+        display = s.encounter.exam[str("maneuver") as keyof typeof s.encounter.exam]?.reaction || "Patient response not available for this case.";
         break;
       case "order_test":
         result = s.orderTest(str("test"));
+        display = "Test ordered. See the clinician chart.";
         break;
       case "get_encounter_summary":
         result = s.summary();
+        display = result;
         break;
       case "record_assessment": {
         s.recordAssessment({ diagnosis: str("diagnosis"), differential: p.differential as string[], procedure: str("procedure"), urgency: str("urgency") });
@@ -127,11 +167,12 @@ export function registerEncounterRoutes(app: Hono, options: EncounterRouteOption
         const card = s.score();
         realtime.encounterResult(s, card);
         result = `Recorded. Score ${card.total} of 100 (${card.grade}). Key feedback, most important first: ${card.feedback.slice(0, 4).join(" ")} Tell them the score and the most important one or two points in your own words, briefly.`;
+        display = card.spoken;
         break;
       }
       default:
         return bad(c, 404, "unknown_tool", `No encounter tool named "${c.req.param("name")}".`, encounterActions(s.id));
     }
-    return c.json({ result, state: s.state(), actions: encounterActions(s.id) });
+    return c.json({ result, display, state: s.state(), actions: encounterActions(s.id) });
   });
 }

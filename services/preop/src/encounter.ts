@@ -155,13 +155,13 @@ export class EncounterSession {
       const section = t === "medications" ? "Medications" : t === "allergies" ? "Allergies" : "Problems";
       const lines = this.chartLines(section);
       if (lines.length) {
-        fact = `From ${p.speaker === "parent" ? `${p.patientName}'s` : "your"} records: ${lines.join("; ")}. Say this in your own everyday words, the way a patient would, not as a list of drug names unless asked.`;
+        fact = `From ${p.speaker === "parent" ? `${p.patientName}'s` : "your"} records: ${lines.join("; ")}.`;
       }
     }
     if (!fact && t === "menstrual_pregnancy" && (p.age < 12 || this.kase.patient.sex.toLowerCase().startsWith("m"))) {
-      fact = "This question does not apply. Say so naturally.";
+      fact = "This question does not apply.";
     }
-    this.record("history", t, fact ? "answered" : "unknown");
+    this.record("history", t, fact ?? "unknown");
     if (!fact) return "You honestly don't know or don't remember this. Say so naturally, without making anything up.";
     return `FACT for you to say in character, in your own words, only what was asked: ${fact}`;
   }
@@ -173,8 +173,8 @@ export class EncounterSession {
     const m = maneuver as ExamManeuver;
     this.exams.set(m, (this.exams.get(m) ?? 0) + 1);
     const found = this.encounter.exam[m];
-    this.record("exam", m, found?.finding ?? "Unremarkable.");
-    const reaction = found?.reaction || "No particular reaction. Let them examine you; say something brief and natural if anything.";
+    this.record("exam", m, found?.finding ?? "Finding not available for this case.");
+    const reaction = found?.reaction || "No patient reaction is authored for this exam. Do not invent a reaction.";
     return `Your reaction (say only this, in character): ${reaction} Never read out clinical findings; they appear on the clinician's screen.`;
   }
 
@@ -191,12 +191,17 @@ export class EncounterSession {
   // What the learner has gathered so far, for the attending to probe without giving answers away.
   summary(): string {
     const hx = [...this.history.keys()].map(labelOf);
+    const historyFacts = [...this.history.keys()].map((topic) => {
+      const entry = this.log.findLast((item) => item.kind === "history" && item.id === topic);
+      return `${labelOf(topic)}: ${entry?.text ?? "unknown"}`;
+    });
     const ex = [...this.exams.keys()].map(labelOf);
     const results = this.tests.map((t) => `${labelOf(t)}: ${this.encounter.tests[t]?.result ?? "not available"}`);
-    const findings = [...this.exams.keys()].map((m) => `${labelOf(m)}: ${this.encounter.exam[m]?.finding ?? "unremarkable"}`);
+    const findings = [...this.exams.keys()].map((m) => `${labelOf(m)}: ${this.encounter.exam[m]?.finding ?? "finding not available"}`);
     return [
       `Patient: ${this.kase.patient.displayLabel}${this.encounter.persona.speaker === "parent" ? `, history given by ${this.encounter.persona.name}` : ""}.`,
       `History the learner asked about: ${hx.join(", ") || "nothing yet"}.`,
+      `History returned: ${historyFacts.join(" ") || "none"}`,
       `Exam performed: ${ex.join(", ") || "none"}.`,
       `Findings: ${findings.join(" ") || "none"}`,
       `Tests ordered and results: ${results.join(" ") || "none"}`,
@@ -334,7 +339,7 @@ export class EncounterSession {
       speaker: this.encounter.persona.speaker,
       elapsedSeconds: Math.round((this.clock().getTime() - this.startedAt) / 1000),
       historyAsked: [...this.history.keys()].map((id) => ({ id, label: labelOf(id) })),
-      exams: [...this.exams.keys()].map((id) => ({ id, label: labelOf(id), finding: this.encounter.exam[id]?.finding ?? "Unremarkable." })),
+      exams: [...this.exams.keys()].map((id) => ({ id, label: labelOf(id), finding: this.encounter.exam[id]?.finding ?? "Finding not available for this case." })),
       tests: this.tests.map((id) => ({ id, label: labelOf(id), result: this.encounter.tests[id]?.result ?? "Not available.", abnormal: this.encounter.tests[id]?.abnormal ?? false })),
       assessment: this.assessment ?? { diagnosis: "", differential: [], procedure: "", urgency: "" },
     };

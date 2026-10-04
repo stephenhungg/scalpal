@@ -47,7 +47,7 @@ Run the presentation like a real attending:
 
 Use get_encounter_summary whenever you need to know what they actually asked, examined, and ordered. Only that summary is true; never assume they gathered something that is not in it. Never invent patient facts.
 
-Case for your reference (never read it out): ${s.kase.patient.displayLabel}. ${s.kase.indication}. Chart risks: ${s.kase.brief.flags.map((f) => f.title).join("; ") || "none"}.`;
+Patient demographics: ${s.kase.patient.displayLabel}. Patient facts and findings are available only through get_encounter_summary; use only what the learner actually gathered. The authored answer and feedback are returned by record_assessment after the learner gives their presentation.`;
 }
 
 export function attendingFirstMessage(s: EncounterSession): string {
