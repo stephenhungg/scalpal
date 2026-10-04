@@ -451,6 +451,22 @@ bpy.ops.wm.save_as_mainfile(filepath=str(source / "doctor-office.blend"))
 bpy.ops.render.render(write_still=True)
 
 
+def add_lightmap_uvs(obj):
+    # Unity bakes the office into lightmaps and reads the FBX's second UV set as uv2.
+    # Unity's import-time unwrapper collapsed large bevelled faces (window frame) into slivers,
+    # so author non-overlapping lightmap charts here; UVMap stays the render set.
+    render_uv = obj.data.uv_layers[0]
+    lightmap = obj.data.uv_layers.new(name="Lightmap")
+    obj.data.uv_layers.active = lightmap
+    bpy.ops.object.mode_set(mode="EDIT")
+    bpy.ops.mesh.select_all(action="SELECT")
+    bpy.ops.uv.smart_project(angle_limit=math.radians(66), island_margin=0.03, area_weight=0.0,
+                             correct_aspect=True, scale_to_bounds=False)
+    bpy.ops.object.mode_set(mode="OBJECT")
+    render_uv.active_render = True
+    obj.data.uv_layers.active = render_uv
+
+
 def export(name, objects):
     # Merge export duplicates by material AND animation parent, preserving source parts.
     duplicates = []
@@ -493,6 +509,8 @@ def export(name, objects):
         bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
         obj.name = ("Head_" if ancestor and ancestor.name.startswith("HeadPivot") else
                     "Jaw_" if ancestor and ancestor.name.startswith("JawPivot") else "Body_") + mat
+        if name == "DoctorOffice":
+            add_lightmap_uvs(obj)
         exported.append(obj)
     for old, new in mapping.items():
         if old.type == "EMPTY":
