@@ -98,8 +98,8 @@ h3 {
   text-decoration: none;
 }
 .brand-mark {
-  width: 26px;
-  height: 26px;
+  width: 34px;
+  height: 34px;
 }
 .brand small {
   color: var(--text-3);
@@ -830,4 +830,18 @@ input,
 select,
 textarea {
   border-radius: 0;
+}
+
+/* The mark ends like a sentence, same as the "Scalpal." headline on the landing page. */
+.brand {
+  align-items: flex-end;
+  gap: 1px;
+}
+.brand-dot {
+  font-family: var(--serif);
+  font-size: 36px;
+  line-height: 0.62;
+  color: var(--text);
+  margin-left: -3px;
+  transform: translateY(-5px);
 }
