@@ -1,6 +1,6 @@
 "use client";
 
-// From MatthewKim323/adam (src/components/AsciiAdam.tsx), unchanged apart from this header, both arms set to white, the onTouch / introSpeed / holdAfterTouch / shiftY props, and pointer reach turned off (glyph scramble kept).
+// From MatthewKim323/adam (src/components/AsciiAdam.tsx), unchanged apart from this header, both arms set to white, the onTouch / introSpeed / holdAfterTouch (with breathing) / shiftY props, and pointer reach turned off (glyph scramble kept).
 import { useEffect, useRef } from 'react'
 
 /*
@@ -252,6 +252,8 @@ function aim(arm: Arm, base: Xf, pointer: Vec | null, dt: number): Xf {
 // keeps the hands together once they meet instead of looping.
 const TOUCH = 6.6
 const CLOSED = 6.8 // arms fully at their touching pose
+// once held, the arms breathe: a slow bob (out of phase) and a slight ease apart and back
+const BREATH = { period: 3.4, bob: 0.006, part: 0.007, easeIn: 1.2 }
 
 type Props = { playing?: boolean; time?: number; onTouch?: () => void; introSpeed?: number; holdAfterTouch?: boolean; shiftY?: number }
 
@@ -384,6 +386,7 @@ export function AsciiAdam({ playing = true, time, onTouch, introSpeed = 1, holdA
 
       let clock = 0
       let touched = false
+      let held = 0 // seconds since the hands settled together
       let last = performance.now()
       let drawn = false
       const frame = (now: number) => {
@@ -421,6 +424,16 @@ export function AsciiAdam({ playing = true, time, onTouch, introSpeed = 1, holdA
 
         const lx = aim(leftArm, baseL, null, dt)
         const rx = aim(rightArm, baseR, null, dt)
+        if (touched && holdRef.current && clock >= CLOSED) {
+          if (live) held += dt
+          const w = Math.min(1, held / BREATH.easeIn) // fade the breathing in
+          const ph = (held / BREATH.period) * Math.PI * 2
+          const apart = BREATH.part * (0.5 - 0.5 * Math.cos(ph)) * w
+          lx[0] -= apart
+          rx[0] += apart
+          lx[1] += BREATH.bob * Math.sin(ph) * w
+          rx[1] += BREATH.bob * Math.sin(ph + 0.9) * w
+        }
         const a = pointOf(lx, leftArm.size, SCENE.leftTip)
         const b = pointOf(rx, rightArm.size, SCENE.rightTip)
 

@@ -3,10 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import { BAYER, MARK } from "@/lib/mark";
 
-// The headline's entrance: the Scalpal mark dithers in where the title sits, holds, then dithers
+// The headline's entrance: the Scalpal mark fades in where the title sits, holds, then dithers
 // into the "Scalpal." text. The real <h1> text stays in the layout (invisible) so the canvas can
 // draw the letters exactly where they will end up, and the swap at the end is seamless.
-const APPEAR = 450; // ms, mark dithers in
+const APPEAR = 500; // ms, mark fades in
 const HOLD = 1000; // ms, mark on its own
 const MORPH = 800; // ms, mark dithers into the text
 const CELL = 3; // dither cell, CSS px
@@ -96,9 +96,11 @@ export function TitleMorph({ text, onDone }: { text: string; onDone: () => void 
           }
         }
       };
-      const drawMarkSolid = () => {
+      const drawMarkSolid = (alpha = 1) => {
         ctx.clearRect(0, 0, W, H);
+        ctx.globalAlpha = alpha;
         ctx.drawImage(markMask, 0, 0);
+        ctx.globalAlpha = 1;
       };
 
       const t0 = performance.now();
@@ -106,7 +108,8 @@ export function TitleMorph({ text, onDone }: { text: string; onDone: () => void 
         if (cancelled) return;
         const t = now - t0;
         if (t < APPEAR) {
-          draw(t / APPEAR, 0);
+          const p = t / APPEAR;
+          drawMarkSolid(p * p * (3 - 2 * p));
         } else if (t < APPEAR + HOLD) {
           drawMarkSolid();
         } else if (t < APPEAR + HOLD + MORPH) {
@@ -114,6 +117,18 @@ export function TitleMorph({ text, onDone }: { text: string; onDone: () => void 
           const p = (t - APPEAR - HOLD) / MORPH;
           const e = p * p * (3 - 2 * p);
           draw(1 - e, e);
+          // over the last stretch, fade the blocky cells into crisp letters so the swap to the
+          // real text has nothing left to change
+          const crisp = Math.max(0, (p - 0.55) / 0.45);
+          if (crisp > 0) {
+            ctx.globalAlpha = 1 - crisp;
+            ctx.globalCompositeOperation = "destination-in";
+            ctx.fillRect(0, 0, W, H);
+            ctx.globalCompositeOperation = "source-over";
+            ctx.globalAlpha = crisp * crisp * (3 - 2 * crisp);
+            ctx.drawImage(textMask, 0, 0);
+            ctx.globalAlpha = 1;
+          }
         } else {
           ctx.clearRect(0, 0, W, H);
           finish();
