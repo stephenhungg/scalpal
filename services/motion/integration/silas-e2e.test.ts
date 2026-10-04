@@ -1,36 +1,40 @@
-// Local-only end-to-end check: Nathan's real gateway + SpacetimeDB module, Silas's real
-// motion worker (scalpal-motion gateway-worker) on a real hand clip. Not committed.
+// Local-only end-to-end check: the real gateway + SpacetimeDB module and the real
+// motion worker (scalpal-motion gateway-worker) on a real hand clip. Manual: it needs
+// `spacetime start`, a clip and uv, so it is skipped unless E2E_CLIP and MOTION_DIR are
+// set. It reuses the API integration harness. Run from services/api (for its
+// node_modules):
+//   E2E_CLIP=<clip.mp4> MOTION_DIR=../motion node --import tsx --test ../motion/integration/silas-e2e.test.ts
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { after, before, test } from 'node:test';
+import { before, test } from 'node:test';
 import {
   GATEWAY,
   WORKER_TOKEN,
   eventually,
+  exitAfterTeardown,
   publishFresh,
   sessionWithRoles,
   startGateway,
   uid,
   type Gateway,
-} from './harness';
+} from '../../api/test/harness';
 
-const CLIP = process.env.E2E_CLIP!;
-const MOTION_DIR = process.env.MOTION_DIR!;
-let gw: Gateway;
+const CLIP = process.env.E2E_CLIP ?? '';
+const MOTION_DIR = process.env.MOTION_DIR ?? '';
+const skip = CLIP && MOTION_DIR ? false : 'manual e2e: set E2E_CLIP and MOTION_DIR and run `spacetime start`';
+let gw: Gateway | undefined;
 
 before(async () => {
+  if (skip) return;
   publishFresh();
   gw = await startGateway();
 });
-after(async () => {
-  await gw?.stop();
-  setTimeout(() => process.exit(0), 200).unref();
-});
+exitAfterTeardown(() => gw?.stop());
 
-test('real worker turns a real clip into a ready replay the viewer can download', { timeout: 300_000 }, async () => {
+test('real worker turns a real clip into a ready replay the viewer can download', { timeout: 300_000, skip }, async () => {
   const r = await sessionWithRoles();
   const bytes = readFileSync(CLIP);
   const artifactId = uid('art');
