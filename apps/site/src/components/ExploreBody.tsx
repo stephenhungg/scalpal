@@ -18,7 +18,7 @@ import { wordCount } from "@/lib/text";
 const TITLE = "The future of surgery.";
 const LEDE = "One workflow, from the first cut to the robot replay.";
 
-export function ExploreBody({ apkUrl, videoUrl }: { apkUrl: string; videoUrl: string }) {
+export function ExploreBody({ apkUrl, videoUrl, embedUrl = "" }: { apkUrl: string; videoUrl: string; embedUrl?: string }) {
   const { leaving, go } = useLeave("/");
   // Reaching this page counts as having seen the site: Back returns to the finished landing.
   // Set in an effect so it only ever happens in the browser; module state on the server is
@@ -43,7 +43,16 @@ export function ExploreBody({ apkUrl, videoUrl }: { apkUrl: string; videoUrl: st
           </p>
 
           <FadeIn delay={0.55} className="mt-6 w-full max-w-[min(800px,calc((100dvh-430px)*16/9))]">
-            {videoUrl ? (
+            {embedUrl ? (
+                <iframe
+                  className="block aspect-video w-full bg-black"
+                  src={embedUrl}
+                  title="Scalpal demo"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  referrerPolicy="strict-origin-when-cross-origin"
+                  allowFullScreen
+                />
+              ) : videoUrl ? (
                 <video className="block aspect-video w-full bg-black" src={videoUrl} controls playsInline preload="metadata" />
               ) : (
                 <div className="flex aspect-video w-full items-center justify-center bg-[rgb(18,18,18)] text-[14px] text-white/50">

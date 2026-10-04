@@ -9,5 +9,12 @@ function resolve(envUrl: string | undefined, publicFile: string) {
 }
 
 export const APK_URL = resolve(process.env.NEXT_PUBLIC_APK_URL, "scalpal.apk");
-export const DEMO_VIDEO_URL = resolve(process.env.NEXT_PUBLIC_DEMO_VIDEO_URL, "demo.mp4");
+export const DEMO_VIDEO_URL =
+  resolve(process.env.NEXT_PUBLIC_DEMO_VIDEO_URL, "demo.mp4") || "https://www.youtube.com/shorts/9m1Pt74R2lY";
+
+// A YouTube watch, share or Shorts link -> its privacy-friendly embed URL; anything else -> "".
+export function youtubeEmbed(url: string): string {
+  const id = url.match(/(?:youtube\.com\/(?:shorts\/|watch\?v=|embed\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/)?.[1];
+  return id ? `https://www.youtube-nocookie.com/embed/${id}?rel=0&modestbranding=1&playsinline=1` : "";
+}
 
