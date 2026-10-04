@@ -9,6 +9,7 @@ namespace Scalpal.EncounterOffice
         public NativeEncounterSession session;
         public TextMesh heading, status, response, chart, draft;
         public EncounterOfficeButton[] options;
+        public EncounterOfficeButton microphoneMode;
         public Transform keyboard, assessment;
         public string Page { get; private set; } = "history";
         public int Offset { get; private set; }
@@ -38,6 +39,7 @@ namespace Scalpal.EncounterOffice
                 case "chart_previous": chartOffset = Mathf.Max(0, chartOffset - 10); break;
                 case "voice": session.StartVoice(); break;
                 case "stop": session.StopVoice(); break;
+                case "mic_mode": session.ToggleOpenMicrophone(); break;
                 case "refresh": session.RefreshState(); break;
                 case "attending": session.SeeAttending(); Page = "assessment"; Offset = 0; break;
                 case "submit": session.SubmitAssessment(); break;
@@ -89,6 +91,7 @@ namespace Scalpal.EncounterOffice
             if (!session) return;
             if (heading) heading.text = "Scalpal\n" + (session.State?.patientName ?? "Practice a patient encounter");
             if (status) status.text = Wrap((session.Busy ? "Working… " : "") + session.Status, 42);
+            if (microphoneMode && microphoneMode.label) microphoneMode.label.text = session.OpenMicrophone ? "Hold grip" : "Open mic";
             if (lastResponse != session.LastResponse) { lastResponse = session.LastResponse; responseOffset = 0; }
             if (lastScore != session.Score) { lastScore = session.Score; chartOffset = 0; feedbackVisible = true; }
             var responseLines = Wrap(session.LastResponse, 42).Split('\n');

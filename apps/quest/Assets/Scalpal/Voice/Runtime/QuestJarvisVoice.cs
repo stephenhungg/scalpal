@@ -26,12 +26,36 @@ namespace Scalpal.Voice
         [SerializeField] string baseUrl = "http://localhost:8787";
         [SerializeField] int timeoutSeconds = 10;
         [SerializeField] AudioSource speaker;
-        public bool MicrophoneMuted { get; set; }
+        bool microphoneMuted;
+        public bool MicrophoneMuted
+        {
+            get => microphoneMuted;
+            set
+            {
+                if (microphoneMuted == value) return;
+                microphoneMuted = value;
+                // Starting a talk hold must discard samples captured before the press.
+                if (!value && microphoneClip && microphoneReady)
+                { microphoneCursor = Microphone.GetPosition(microphoneDevice); lastCapture = Time.realtimeSinceStartup; }
+            }
+        }
         public string Status { get; private set; } = "disconnected";
         public string Mode { get; private set; } = "listening";
         public string LastError { get; private set; } = "";
         public string CoachSessionId { get; private set; } = "";
         public bool Connected => Status == "connected";
+        public bool PlaybackActive => Connected || localSpeech;
+        // The level of PCM consumed by the audio callback, not text arrival or provider mode.
+        public float PlaybackLevel
+        {
+            get
+            {
+                long stamp = Interlocked.Read(ref playbackTimestamp);
+                if (!PlaybackActive || stamp == 0 ||
+                    (System.Diagnostics.Stopwatch.GetTimestamp() - stamp) / (double)System.Diagnostics.Stopwatch.Frequency > .15) return 0;
+                return playbackLevel;
+            }
+        }
         public event Action<string> StatusChanged;
         public event Action<string> ModeChanged;
         public event Action<string, string> Transcript; // source: user or agent
@@ -50,6 +74,9 @@ namespace Scalpal.Voice
         readonly object audioLock = new object();
         readonly Queue<float> outputSamples = new Queue<float>();
         int outputRate;
+        bool localSpeech;
+        volatile float playbackLevel;
+        long playbackTimestamp;
         readonly HashSet<string> pendingTools = new HashSet<string>(StringComparer.Ordinal);
         readonly HashSet<string> seenTools = new HashSet<string>(StringComparer.Ordinal);
 
@@ -257,6 +284,12 @@ namespace Scalpal.Voice
 
         void Update()
         {
+            if (localSpeech)
+            {
+                int remaining;
+                lock (audioLock) remaining = outputSamples.Count;
+                if (remaining == 0 && PlaybackLevel == 0) StopLocalSpeech();
+            }
             var connection = active;
             if (connection == null) return;
             if (!string.IsNullOrEmpty(connection.Error)) { Fail(connection.Error); return; }
@@ -271,7 +304,7 @@ namespace Scalpal.Voice
             if (Connected) CaptureMicrophone();
             int buffered;
             lock (audioLock) buffered = outputSamples.Count;
-            if (Mode == "speaking" && buffered == 0) SetMode("listening");
+            if (Mode == "speaking" && buffered == 0 && PlaybackLevel == 0) SetMode("listening");
         }
 
         void Handle(string json)
@@ -334,13 +367,56 @@ namespace Scalpal.Voice
             microphoneCursor = 0;
             microphoneReady = false;
             microphoneStarted = lastCapture = Time.realtimeSinceStartup;
+            StartPlayback();
+        }
+
+        void StartPlayback()
+        {
             if (speaker == null) speaker = gameObject.AddComponent<AudioSource>();
             speaker.playOnAwake = false;
-            speaker.spatialBlend = 0;
             speaker.loop = true;
             playbackClip = AudioClip.Create("Jarvis streamed PCM", outputRate, 1, outputRate, true, ReadAudio);
             speaker.clip = playbackClip;
             speaker.Play();
+        }
+
+        // Explicit, authored offline speech uses the same PCM output and mouth envelope.
+        // It does not start a microphone, socket or a second conversation engine.
+        public bool PlayLocalSpeech(AudioClip clip)
+        {
+            if (!clip || clip.length > 30 || clip.channels < 1) return false;
+            var samples = new float[clip.samples * clip.channels];
+            if (!clip.GetData(samples, 0)) return false;
+            Disconnect();
+            outputRate = clip.frequency;
+            lock (audioLock)
+            {
+                for (int i = 0; i < samples.Length; i += clip.channels)
+                {
+                    float sum = 0;
+                    for (int channel = 0; channel < clip.channels; channel++) sum += samples[i + channel];
+                    outputSamples.Enqueue(sum / clip.channels);
+                }
+            }
+            localSpeech = true;
+            StartPlayback();
+            SetStatus("offline"); SetMode("speaking");
+            return true;
+        }
+
+        void StopLocalSpeech()
+        {
+            localSpeech = false;
+            if (speaker) { speaker.Stop(); speaker.clip = null; }
+            if (playbackClip) { Destroy(playbackClip); playbackClip = null; }
+            ResetPlaybackLevel();
+            SetMode("listening");
+        }
+
+        public void InterruptPlayback()
+        {
+            if (localSpeech) StopLocalSpeech();
+            ClearAudio(); SetMode("listening");
         }
 
         void CaptureMicrophone()
@@ -364,7 +440,8 @@ namespace Scalpal.Voice
                 if (!microphoneClip.GetData(samples, microphoneCursor)) { Fail("Microphone PCM read failed."); return; }
                 microphoneCursor = (microphoneCursor + microphoneChunk) % microphoneClip.samples;
                 available -= microphoneChunk;
-                if (!MicrophoneMuted) Queue(JsonUtility.ToJson(new AudioInput { user_audio_chunk = Convert.ToBase64String(EncodePcm(samples, microphoneClip.channels)) }));
+                // Keep the audio clock/VAD running during hold-to-talk silence; never send captured muted speech.
+                Queue(JsonUtility.ToJson(new AudioInput { user_audio_chunk = Convert.ToBase64String(EncodeMicrophonePcm(samples, microphoneClip.channels, MicrophoneMuted)) }));
                 if (!Connected) return;
             }
         }
@@ -373,7 +450,27 @@ namespace Scalpal.Voice
         void ReadAudio(float[] samples)
         {
             lock (audioLock)
+            {
                 for (int i = 0; i < samples.Length; i++) samples[i] = outputSamples.Count > 0 ? outputSamples.Dequeue() : 0;
+                playbackLevel = MeasurePlaybackLevel(samples);
+                Interlocked.Exchange(ref playbackTimestamp, System.Diagnostics.Stopwatch.GetTimestamp());
+            }
+        }
+
+        public static float MeasurePlaybackLevel(float[] samples)
+        {
+            if (samples == null || samples.Length == 0) return 0;
+            double energy = 0;
+            foreach (float sample in samples)
+                if (!float.IsNaN(sample) && !float.IsInfinity(sample)) energy += (double)sample * sample;
+            // A quiet noise floor keeps silent gaps shut; speech RMS maps to a bounded jaw opening.
+            return (float)Math.Min(1, Math.Max(0, (Math.Sqrt(energy / samples.Length) - .008) * 6));
+        }
+
+        void ResetPlaybackLevel()
+        {
+            playbackLevel = 0;
+            Interlocked.Exchange(ref playbackTimestamp, 0);
         }
 
         public void SendContext(string context)
@@ -475,6 +572,7 @@ namespace Scalpal.Voice
 
         public void Disconnect()
         {
+            localSpeech = false;
             generation++;
             StopAllCoroutines();
             var connection = active;
@@ -492,7 +590,7 @@ namespace Scalpal.Voice
             }
             if (speaker != null) { speaker.Stop(); speaker.clip = null; }
             if (playbackClip != null) { Destroy(playbackClip); playbackClip = null; }
-            lock (audioLock) outputSamples.Clear();
+            lock (audioLock) { outputSamples.Clear(); ResetPlaybackLevel(); }
             pendingTools.Clear(); seenTools.Clear(); lastContext = "";
             patientId = ""; CoachSessionId = "";
             SetMode("listening");
@@ -501,7 +599,7 @@ namespace Scalpal.Voice
 
         void ClearAudio()
         {
-            lock (audioLock) outputSamples.Clear();
+            lock (audioLock) { outputSamples.Clear(); ResetPlaybackLevel(); }
             if (speaker != null && playbackClip != null) { speaker.Stop(); speaker.Play(); }
         }
         void Fail(string message) { Disconnect(); LastError = message; SetStatus("error"); }
@@ -509,8 +607,8 @@ namespace Scalpal.Voice
         void SetMode(string value) { if (Mode != value) { Mode = value; ModeChanged?.Invoke(value); } }
         void OnDisable() => Disconnect();
         // Android's permission dialog may pause the app during Begin. Do not cancel that prompt.
-        void OnApplicationPause(bool paused) { if (paused && active != null) Disconnect(); }
-        void OnApplicationFocus(bool focused) { if (!focused && Connected) Disconnect(); }
+        void OnApplicationPause(bool paused) { if (paused && (active != null || localSpeech)) Disconnect(); }
+        void OnApplicationFocus(bool focused) { if (!focused && PlaybackActive) Disconnect(); }
 
         public static bool TryPcmRate(string format, out int rate)
         {
@@ -531,6 +629,11 @@ namespace Scalpal.Voice
                 bytes[frame * 2] = (byte)(value & 255); bytes[frame * 2 + 1] = (byte)((value >> 8) & 255);
             }
             return bytes;
+        }
+
+        public static byte[] EncodeMicrophonePcm(float[] samples, int channels, bool muted)
+        {
+            return EncodePcm(muted ? new float[samples.Length] : samples, channels);
         }
         public static float[] DecodePcm(byte[] bytes)
         {

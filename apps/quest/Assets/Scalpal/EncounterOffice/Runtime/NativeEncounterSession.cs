@@ -21,6 +21,8 @@ namespace Scalpal.EncounterOffice
         public string LastResponse { get; private set; } = "";
         public string Role { get; private set; } = "patient";
         public bool Busy => working || pending.Count > 0;
+        public bool TalkHeld { get; private set; }
+        public bool OpenMicrophone { get; private set; }
         public event Action Changed;
         public EncounterAssessment Draft = new EncounterAssessment();
         string encounterId = "", patientId = "", prompt = "", greeting = "", voiceId = "";
@@ -61,6 +63,7 @@ namespace Scalpal.EncounterOffice
         }
         void OnEnable()
         {
+            if (voice) voice.MicrophoneMuted = true;
             if (voice) { voice.ClientToolRequested += VoiceTool; voice.Transcript += Transcript; voice.StatusChanged += VoiceStatus; voice.ModeChanged += VoiceMode; }
         }
         void OnDisable()
@@ -70,6 +73,8 @@ namespace Scalpal.EncounterOffice
         }
         void Invalidate()
         {
+            TalkHeld = false;
+            if (voice) voice.MicrophoneMuted = true;
             generation++; if (voice) voice.Disconnect();
             activeRequest?.Abort(); StopAllCoroutines(); activeRequest = null; pending.Clear(); working = false;
         }
@@ -83,8 +88,9 @@ namespace Scalpal.EncounterOffice
             {
                 if (reply.state == null || reply.state.patientId != id || reply.encounterId != reply.state.encounterId || reply.speaker != "patient") { SetStatus("Encounter identity mismatch. Choose a patient again."); return; }
                 encounterId = reply.encounterId; State = reply.state; prompt = reply.patientPrompt; greeting = reply.patientFirstMessage; voiceId = reply.voiceId;
-                LastResponse = "Patient: " + greeting; SetStatus("Interview ready. Voice is optional; select questions, exams and tests.");
+                LastResponse = "Patient: " + greeting; SetStatus("Interview ready. Hold grip to talk, or select questions.");
                 if (patient) patient.SetState("listening");
+                PlayAuthoredSpeech("greeting", "", greeting);
             });
         }
         public void Ask(string topic) => Tool("answer", JsonUtility.ToJson(new TopicRequest { topic = topic }));
@@ -110,6 +116,7 @@ namespace Scalpal.EncounterOffice
         public void SeeAttending()
         {
             if (State == null || Busy || State.phase != "interview") return;
+            SetTalkHeld(false);
             if (voice) voice.Disconnect();
             Enqueue("POST", "/encounters/" + Uri.EscapeDataString(encounterId) + "/attending", "{}", true, AdoptAttending);
         }
@@ -139,16 +146,49 @@ namespace Scalpal.EncounterOffice
             { SetStatus("Refresh the encounter to load the correct conversation role before starting voice."); return; }
             try
             {
+                voice.MicrophoneMuted = !OpenMicrophone && !TalkHeld;
                 voice.ConfigureEndpoint(baseUrl);
                 voice.ConfigureEncounterConversation(prompt, greeting, voiceId, Role);
                 voice.ConnectEncounter(encounterId, patientId);
             }
             catch (ArgumentException) { SetStatus("Set a valid HTTP(S) encounter service URL."); }
         }
-        public void StopVoice() { if (voice) voice.Disconnect(); if (patient) patient.SetState(Role == "patient" ? "listening" : "resting"); SetStatus("Voice stopped. Visual controls remain available."); }
+        public void SetTalkHeld(bool held)
+        {
+            if (held && (State == null || State.phase == "scored" || !voice)) return;
+            if (held == TalkHeld) return;
+            TalkHeld = held;
+            if (voice)
+            {
+                voice.MicrophoneMuted = !OpenMicrophone && !held;
+                if (held)
+                {
+                    voice.InterruptPlayback();
+                    if (!voice.Connected && voice.Status != "connecting") StartVoice();
+                }
+            }
+            if (held) SetStatus("Listening while you hold grip. Release to hear the reply.");
+            else if (voice && voice.Connected) SetStatus(OpenMicrophone ? "Open mic enabled." : "Hold grip to talk.");
+            Notify();
+        }
+        public void ToggleOpenMicrophone()
+        {
+            OpenMicrophone = !OpenMicrophone;
+            if (voice) voice.MicrophoneMuted = !OpenMicrophone && !TalkHeld;
+            SetStatus(OpenMicrophone ? "Open mic enabled. Use Stop to disconnect." : "Hold grip to talk.");
+        }
+        public void StopVoice() { TalkHeld = false; if (voice) { voice.MicrophoneMuted = true; voice.Disconnect(); } if (patient) patient.SetState(Role == "patient" ? "listening" : "resting"); SetStatus("Voice stopped. Visual controls remain available."); }
         void VoiceStatus(string value)
         {
-            if (value == "error") SetStatus("Voice is unavailable. You can use the visual controls.");
+            if (value == "error")
+            {
+                TalkHeld = false;
+                if (voice) voice.MicrophoneMuted = true;
+                SetStatus("Live voice unavailable. Authored offline speech and visual questions work.");
+                if (Role == "patient") PlayAuthoredSpeech("greeting", "", greeting);
+            }
+            else if (value == "offline") SetStatus("Offline patient voice. Select questions to hear authored answers.");
+            else if (value == "connected") SetStatus(OpenMicrophone ? "Open mic enabled." : "Voice ready. Hold grip to talk; release for the reply.");
             else { SetStatus((Role == "patient" ? "Patient voice: " : "Jarvis voice: ") + value); }
         }
         void VoiceMode(string mode) { if (patient && Role == "patient") patient.SetState(mode == "speaking" ? "speaking" : "listening"); Notify(); }
@@ -161,6 +201,13 @@ namespace Scalpal.EncounterOffice
             Notify();
         }
         void VoiceTool(QuestJarvisVoice.ToolRequest request) => Tool(request.ToolName, request.ParametersJson, request);
+        void PlayAuthoredSpeech(string tool, string argument, string display)
+        {
+            if (!voice || Role != "patient" || voice.Connected || voice.Status == "connecting") return;
+            voice.InterruptPlayback(); // A changed/visual-only answer must not retain the previous spoken response.
+            var clip = EncounterPatientSpeech.Find(patientId, tool, argument, display);
+            if (clip) voice.PlayLocalSpeech(clip);
+        }
         void Tool(string name, string body, QuestJarvisVoice.ToolRequest request = null)
         {
             if (State == null || !EncounterContract.ToolAllowed(Role, State.phase, name))
@@ -173,6 +220,11 @@ namespace Scalpal.EncounterOffice
             {
                 LastResponse = (Role == "patient" ? "Authored patient response / reaction:\n" : "Jarvis:\n") + (reply.display ?? reply.result);
                 SetStatus("Recorded by the encounter service.");
+                if (request == null && name == "answer")
+                {
+                    var topic = JsonUtility.FromJson<TopicRequest>(body);
+                    PlayAuthoredSpeech("answer", topic?.topic, reply.display);
+                }
                 if (reply.state.phase == "scored")
                 {
                     Enqueue("GET", "/encounters/" + Uri.EscapeDataString(encounterId) + "/score", null, true, scored => AdoptScore(scored, "Attending assessment complete."));
@@ -236,8 +288,8 @@ namespace Scalpal.EncounterOffice
             }
             working = false; Notify();
         }
-        void OnApplicationFocus(bool focus) { if (!focus && voice && voice.Connected) voice.Disconnect(); }
-        void OnApplicationPause(bool pause) { if (pause && voice && voice.Connected) voice.Disconnect(); }
+        void OnApplicationFocus(bool focus) { if (!focus) { SetTalkHeld(false); if (voice && voice.PlaybackActive) voice.Disconnect(); } }
+        void OnApplicationPause(bool pause) { if (pause) { SetTalkHeld(false); if (voice && voice.PlaybackActive) voice.Disconnect(); } }
         void SetStatus(string text) { Status = text; Notify(); }
         void Notify() => Changed?.Invoke();
     }

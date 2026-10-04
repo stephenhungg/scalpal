@@ -37,11 +37,11 @@ namespace Scalpal.EncounterOffice.Editor
             speaker.playOnAwake = false; speaker.spatialBlend = 0;
             var voiceProps = new SerializedObject(voice); voiceProps.FindProperty("speaker").objectReferenceValue = speaker; voiceProps.ApplyModifiedPropertiesWithoutUndo();
             session.voice = voice;
-            var patients = systems.AddComponent<EncounterPatientPresentation>(); patients.female = female; patients.male = male; session.patient = patients;
+            var patients = systems.AddComponent<EncounterPatientPresentation>(); patients.female = female; patients.male = male; patients.voice = voice; session.patient = patients;
             patients.stateLabel = Text(systems.transform, "PatientState", "Patient · waiting", new Vector3(0,1.65f,.2f), .022f, TextAnchor.MiddleCenter);
             patients.stateLabel.transform.localRotation = Quaternion.Euler(0,180,0);
             var origin = new GameObject("EncounterTrackingOrigin").transform;
-            var rig = origin.gameObject.AddComponent<EncounterOfficeRig>(); rig.origin = origin;
+            var rig = origin.gameObject.AddComponent<EncounterOfficeRig>(); rig.origin = origin; rig.session = session;
             var head = new GameObject("TrackedHeadCamera").AddComponent<Camera>(); head.transform.SetParent(origin,false); head.tag = "MainCamera";
             head.transform.SetLocalPositionAndRotation(new Vector3(0,1.2f,1.75f), Quaternion.Euler(0,180,0));
             head.nearClipPlane = .025f; head.farClipPlane = 25; head.clearFlags = CameraClearFlags.SolidColor; head.backgroundColor = new Color(.88f,.9f,.85f); head.stereoTargetEye = StereoTargetEyeMask.Both;
@@ -49,6 +49,9 @@ namespace Scalpal.EncounterOffice.Editor
             rig.left = new GameObject("LeftTrackedController").transform; rig.left.SetParent(origin,false);
             rig.right = new GameObject("RightTrackedController").transform; rig.right.SetParent(origin,false);
             rig.leftRay = Ray(rig.left); rig.rightRay = Ray(rig.right);
+            rig.talkHint = Text(rig.left,"TalkHint","Hold grip to talk",new Vector3(0,.075f,.06f),.024f,TextAnchor.MiddleCenter);
+            var talkFit = rig.talkHint.GetComponent<EncounterOfficeText>(); talkFit.maximumWidth = .28f; talkFit.maximumHeight = .05f;
+            rig.talkHint.gameObject.SetActive(false);
             var ui = new GameObject("EncounterVisualFallback").AddComponent<EncounterOfficePanel>(); ui.session = session;
             var left = Panel("InterviewConsole", new Vector3(.94f,1.48f,-.20f), new Vector3(0,1.2f,1.75f), new Vector2(.88f,1.1f)); left.SetParent(ui.transform,true);
             var right = Panel("FindingsConsole", new Vector3(-.94f,1.48f,-.20f), new Vector3(0,1.2f,1.75f), new Vector2(.88f,1.1f)); right.SetParent(ui.transform,true);
@@ -67,7 +70,8 @@ namespace Scalpal.EncounterOffice.Editor
             Button(right,ui,"Back","chart_previous","",-.28f,-.09f,.25f); Button(right,ui,"More","chart_next","",0,-.09f,.25f); Button(right,ui,"Findings / score","chart_toggle","",.28f,-.09f,.25f);
             ui.response = Text(right,"Response","Patient response appears here.",new Vector3(-.38f,-.17f,-.026f),.024f);
             Button(right,ui,"Back","response_previous","",-.21f,-.42f,.39f); Button(right,ui,"More","response_next","",.21f,-.42f,.39f);
-            Text(right,"EvidenceNotice","Synthetic teaching cases · no recording",new Vector3(-.38f,-.50f,-.026f),.017f);
+            Text(right,"EvidenceNotice","Synthetic teaching cases",new Vector3(-.38f,-.50f,-.026f),.017f).GetComponent<EncounterOfficeText>().maximumWidth=.48f;
+            ui.microphoneMode=Button(right,ui,"Open mic","mic_mode","",.28f,-.51f,.25f);
             var assessment = Panel("AssessmentConsole",new Vector3(0,.70f,.22f),new Vector3(0,1.2f,1.75f),new Vector2(1.15f,.40f)); assessment.SetParent(ui.transform,true);ui.assessment=assessment;
             ui.draft = Text(assessment,"Draft","Your assessment",new Vector3(-.52f,.16f,-.026f),.025f);
             Button(assessment,ui,"‹","draft_previous","",.405f,.13f,.09f);Button(assessment,ui,"›","draft_next","",.51f,.13f,.09f);

@@ -26,6 +26,8 @@ namespace Scalpal.EncounterOffice.Editor
         [Serializable] sealed class Agent { public Prompt prompt; public string first_message; }
         [Serializable] sealed class Prompt { public string prompt; }
         [Serializable] sealed class Tts { public string voice_id; }
+        [Serializable] sealed class SpeechManifest { public string speakerRole; public SpeechEntry[] entries; }
+        [Serializable] sealed class SpeechEntry { public string patientId,tool,argument,exactDisplayText,resourcePath; }
         public static void Run()
         {
             checks=0;
@@ -41,6 +43,7 @@ namespace Scalpal.EncounterOffice.Editor
             var panel=UnityEngine.Object.FindFirstObjectByType<EncounterOfficePanel>();
             Check(session&&session.voice&&session.patient&&rig&&rig.origin&&rig.head&&rig.left&&rig.right,"dedicated scene binds encounter, voice, patients and tracked rig");
             Check(rig.head.transform.parent==rig.origin&&rig.left.parent==rig.origin&&rig.right.parent==rig.origin,"head and controllers share one floor tracking origin");
+            Check(rig.session==session&&rig.talkHint&&panel&&panel.microphoneMode&&panel.microphoneMode.command=="mic_mode","tracked hold-to-talk rig, first-use hint and explicit microphone mode bind the encounter");
             Check(panel&&panel.session==session&&panel.options.Length==4&&panel.keyboard&&panel.assessment&&panel.chart&&panel.response&&panel.draft,"visual fallback has paged questions, findings and editable assessment");
             Check(session.patient.female&&session.patient.male&&!session.patient.male.activeSelf,"both adult synthetic character presentations bind; only one starts active");
             foreach(var patient in new[]{session.patient.female,session.patient.male})
@@ -69,6 +72,8 @@ namespace Scalpal.EncounterOffice.Editor
                 Check(!root.GetComponentsInChildren<Component>(true).Any(component=>component==null),"scene has no missing scripts");
                 Check(!root.GetComponentsInChildren<Renderer>(true).Any(renderer=>renderer.sharedMaterials.Any(material=>!material||!material.shader)),"scene renderers have supported materials");
             }
+            ValidatePatientAnimation(session);
+            ValidateSpeechAndTalk(session.patient);
             Check(!UnityEngine.Object.FindFirstObjectByType<Scalpal.Quest.NativeCaseSession>()&&!UnityEngine.Object.FindFirstObjectByType<Scalpal.Instruments.TrainingTarget>(),"encounter scene does not instantiate surgery progression or scored tissue targets");
             var buttons=UnityEngine.Object.FindObjectsByType<EncounterOfficeButton>(FindObjectsInactive.Include,FindObjectsSortMode.None);
             foreach(var command in new[]{"patient","page","option","voice","stop","attending","submit","field","key","refresh","summary"})
@@ -106,6 +111,145 @@ namespace Scalpal.EncounterOffice.Editor
             }
             return false;
         }
+        static void ValidatePatientAnimation(NativeEncounterSession session)
+        {
+            var presentation=session.patient;
+            Check(presentation.voice==session.voice,"patient animation samples the same authoritative native playback transport");
+            var animation=typeof(EncounterPatientPresentation).GetMethod("ApplyAnimation",Private);
+            void Step(float level,bool playbackActive,float time=0) => animation.Invoke(presentation,new object[]{.2f,time,level,playbackActive});
+            foreach(var id in new[]{EncounterContract.FemalePatientId,EncounterContract.MalePatientId})
+            {
+                presentation.Select(id);
+                var model=id==EncounterContract.FemalePatientId?presentation.female:presentation.male;
+                var nodes=model.GetComponentsInChildren<Transform>(true);
+                var head=nodes.Single(node=>node.name=="HeadPivot");var jaw=nodes.Single(node=>node.name=="JawPivot");var chest=nodes.Single(node=>node.name=="spine02");
+                var headRest=head.localRotation;var jawRest=jaw.localRotation;var chestRest=chest.localRotation;
+                var skins=model.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+                Check(WeightedBone(skins,chest),"subtle breathing uses the real weighted donor torso bone: "+id);
+                var skin=skins.First(renderer=>renderer.sharedMaterials.Any(material=>material.name.Contains("Skin")));
+                presentation.SetState("speaking");Step(0,true);var baseline=BakedVertices(skin);
+                Step(1,true);var voiced=BakedVertices(skin);
+                float jawMotion=MaximumMotion(baseline,voiced);
+                UnityEngine.Debug.Log("SCALPAL_PATIENT_JAW_DEFORMATION patient="+id+" jawDegrees="+Quaternion.Angle(jaw.localRotation,jawRest)+" maxVertexMetres="+jawMotion+" rendererScale="+skin.transform.lossyScale);
+                Check(Quaternion.Angle(jaw.localRotation,jawRest)>8&&jawMotion>.002f&&jawMotion<.04f,"controlled nonzero playback envelope rotates and deforms the imported human jaw by 2–40mm: "+id+" maxVertexMetres="+jawMotion);
+                Step(0,true);Check(Quaternion.Angle(jaw.localRotation,jawRest)<.001f,"actual playback silence closes the jaw even while agent mode says speaking: "+id);
+                Step(.2f,true);float soft=Quaternion.Angle(jaw.localRotation,jawRest);Step(0,true);Step(1,true);
+                Check(soft>0&&Quaternion.Angle(jaw.localRotation,jawRest)>soft,"jaw opening follows audio amplitude rather than a clock-driven talking cycle: "+id);
+                presentation.SetState("listening");Step(1,true);Check(Quaternion.Angle(jaw.localRotation,jawRest)>8,"last audible syllable animates even if provider mode already returned to listening: "+id);
+                presentation.SetState("speaking");
+                Step(1,false);Check(Quaternion.Angle(jaw.localRotation,jawRest)<.001f,"disconnected transport closes patient mouth despite stale speaking mode: "+id);
+                presentation.SetState("resting");Step(1,true);Check(Quaternion.Angle(jaw.localRotation,jawRest)<.001f,"attending/resting patient does not mouth the attending's playback: "+id);
+                // Sample near a breath peak; t=2.1 gave only .031 degrees, below Quaternion.Angle's near-equal resolution.
+                presentation.SetState("listening");Step(0,false,1f);
+                float headDegrees=Quaternion.Angle(head.localRotation,headRest),chestDegrees=Quaternion.Angle(chest.localRotation,chestRest),idleMotion=MaximumMotion(baseline,BakedVertices(skin));
+                UnityEngine.Debug.Log("SCALPAL_PATIENT_IDLE_DEFORMATION patient="+id+" headDegrees="+headDegrees+" torsoDegrees="+chestDegrees+" maxVertexMetres="+idleMotion);
+                Check(headDegrees>.05f&&chestDegrees>.01f&&idleMotion>.0001f&&idleMotion<.03f,"idle/listening head and breathing animate real weighted skin within 0.1–30mm without voice: "+id+" headDegrees="+headDegrees+" torsoDegrees="+chestDegrees+" maxVertexMetres="+idleMotion);
+                presentation.SetState("speaking");Step(1,true);
+                Call(presentation,"OnApplicationFocus",false);Step(1,true,2.1f);
+                Check(AtRest(head,headRest,jaw,jawRest,chest,chestRest),"focus loss restores all bones and prevents stale playback from moving the suspended patient: "+id);
+                Call(presentation,"OnApplicationFocus",true);Step(1,true);
+                Call(presentation,"OnApplicationPause",true);Check(AtRest(head,headRest,jaw,jawRest,chest,chestRest),"application pause restores donor pose: "+id);
+                Call(presentation,"OnApplicationPause",false);Step(1,true);
+                Call(presentation,"OnDisable");Check(AtRest(head,headRest,jaw,jawRest,chest,chestRest),"disable restores the authored head, jaw and torso pose: "+id);
+                Step(1,true);presentation.Select(id==EncounterContract.FemalePatientId?EncounterContract.MalePatientId:EncounterContract.FemalePatientId);
+                Check(AtRest(head,headRest,jaw,jawRest,chest,chestRest)&&!model.activeSelf,"case switch restores old human before hiding it and clears the audio envelope: "+id);
+            }
+            presentation.Select(EncounterContract.FemalePatientId);
+        }
+        static bool AtRest(Transform head,Quaternion headRest,Transform jaw,Quaternion jawRest,Transform chest,Quaternion chestRest) =>
+            Quaternion.Angle(head.localRotation,headRest)<.001f&&Quaternion.Angle(jaw.localRotation,jawRest)<.001f&&Quaternion.Angle(chest.localRotation,chestRest)<.001f;
+        static Vector3[] BakedVertices(SkinnedMeshRenderer skin)
+        {
+            // Compensate renderer scale in the bake before TransformPoint applies that scale once in world meters.
+            var mesh=new Mesh();try { skin.BakeMesh(mesh,true);return mesh.vertices.Select(vertex=>skin.transform.TransformPoint(vertex)).ToArray(); }
+            finally { UnityEngine.Object.DestroyImmediate(mesh); }
+        }
+        static float MaximumMotion(Vector3[] before,Vector3[] after)
+        {
+            float maximum=0;for(int i=0;i<before.Length;i++)maximum=Mathf.Max(maximum,Vector3.Distance(before[i],after[i]));return maximum;
+        }
+        static void ValidateSpeechAndTalk(EncounterPatientPresentation presentation)
+        {
+            var manifestAsset=Resources.Load<TextAsset>("EncounterSpeech/manifest");
+            Check(manifestAsset,"authored offline speech manifest is bundled");
+            var manifest=JsonUtility.FromJson<SpeechManifest>(manifestAsset.text);
+            Check(manifest.speakerRole=="patient"&&manifest.entries!=null&&manifest.entries.Length>2,"offline manifest contains patient recordings and authored facts");
+            foreach(var entry in manifest.entries)
+            {
+                var clip=EncounterPatientSpeech.Find(entry.patientId,entry.tool,entry.argument,entry.exactDisplayText);
+                Check(clip&&clip==Resources.Load<AudioClip>(entry.resourcePath),"exact authored fact resolves its committed speech clip: "+entry.resourcePath);
+                Check(!EncounterPatientSpeech.Find(entry.patientId,entry.tool,entry.argument,entry.exactDisplayText+" changed")&&!EncounterPatientSpeech.Find("wrong-patient",entry.tool,entry.argument,entry.exactDisplayText),"changed patient/text cannot select another authored recording: "+entry.resourcePath);
+            }
+            GameObject fixture=null;QuestJarvisVoice voice=null;var previousVoice=presentation.voice;
+            try
+            {
+                fixture=new GameObject("EncounterHoldAndAudioFixture");fixture.SetActive(false);
+                voice=fixture.AddComponent<QuestJarvisVoice>();var session=fixture.AddComponent<NativeEncounterSession>();session.voice=voice;
+                Property(session,"State",new EncounterState{phase="interview",patientId=EncounterContract.FemalePatientId});
+                Call(session,"OnEnable");Property(voice,"Status","connected");
+                Check(!session.OpenMicrophone&&!session.TalkHeld&&voice.MicrophoneMuted,"hold-to-talk begins released with microphone muted");
+                session.SetTalkHeld(true);Check(session.TalkHeld&&!voice.MicrophoneMuted,"held input unmutes the existing conversation without microphone or socket access");
+                session.SetTalkHeld(false);Check(!session.TalkHeld&&voice.MicrophoneMuted,"release mutes microphone for the patient's reply");
+                session.ToggleOpenMicrophone();session.SetTalkHeld(true);session.SetTalkHeld(false);
+                Check(session.OpenMicrophone&&!voice.MicrophoneMuted,"explicit open-microphone choice survives grip release");
+                session.ToggleOpenMicrophone();Check(!session.OpenMicrophone&&voice.MicrophoneMuted,"explicit toggle restores hold-to-talk default");
+                session.SetTalkHeld(true);Call(session,"OnApplicationFocus",false);
+                Check(!session.TalkHeld&&voice.MicrophoneMuted&&!voice.PlaybackActive,"focus loss clears held input and disconnects active speech");
+                Property(voice,"Status","connected");session.SetTalkHeld(true);Call(session,"OnApplicationPause",true);
+                Check(!session.TalkHeld&&voice.MicrophoneMuted,"pause clears held input before voice disconnect");
+                Property(voice,"Status","connected");session.SetTalkHeld(true);Call(session,"Invalidate");
+                Check(!session.TalkHeld&&voice.MicrophoneMuted&&!voice.PlaybackActive,"case/reset invalidation clears held input, mutes microphone and clears playback");
+                Call(session,"OnDisable");
+                presentation.voice=voice;presentation.Select(EncounterContract.FemalePatientId);presentation.SetState("speaking");
+                var jaw=presentation.female.GetComponentsInChildren<Transform>(true).Single(node=>node.name=="JawPivot");var rest=jaw.localRotation;
+                Property(voice,"Status","connected");var samples=Get<Queue<float>>(voice,"outputSamples");
+                for(int i=0;i<512;i++)samples.Enqueue(.25f);var buffer=new float[512];Call(voice,"ReadAudio",buffer);
+                Call(presentation,"ApplyAnimation",.2f,0f,voice.PlaybackLevel,voice.PlaybackActive);
+                Check(buffer.All(sample=>sample==.25f)&&voice.PlaybackLevel>.9f&&Quaternion.Angle(jaw.localRotation,rest)>8,"actual queued PCM callback drives the bound patient's jaw through measured playback level");
+                Call(voice,"ReadAudio",buffer);Call(presentation,"LateUpdate");
+                Check(buffer.All(sample=>sample==0)&&voice.PlaybackLevel==0&&Quaternion.Angle(jaw.localRotation,rest)<.001f,"empty actual PCM queue produces silence and closes jaw on production update");
+                for(int i=0;i<512;i++)samples.Enqueue(.25f);Call(voice,"ReadAudio",buffer);Call(voice,"ResetPlaybackLevel");
+                Check(voice.PlaybackLevel==0,"playback reset clears the measured audio envelope");
+                for(int i=0;i<512;i++)samples.Enqueue(.25f);Call(voice,"ReadAudio",buffer);
+                Set(voice,"playbackTimestamp",Stopwatch.GetTimestamp()-Stopwatch.Frequency);Check(voice.PlaybackLevel==0,"stale consumed PCM cannot hold the mouth open");
+                voice.Disconnect();Call(presentation,"LateUpdate");
+                Check(!voice.PlaybackActive&&voice.PlaybackLevel==0&&Quaternion.Angle(jaw.localRotation,rest)<.001f,"disconnect resets actual playback activity/envelope and mouth");
+                Set(voice,"localSpeech",true);Set(session,"patientId",EncounterContract.FemalePatientId);
+                for(int i=0;i<512;i++)samples.Enqueue(.25f);Call(voice,"ReadAudio",buffer);
+                Call(session,"PlayAuthoredSpeech","answer","allergies","From your records: a changed chart-derived answer.");
+                Check(!voice.PlaybackActive&&voice.PlaybackLevel==0&&samples.Count==0,"a visual-only/mismatched answer interrupts the previous offline utterance rather than speaking stale facts");
+                foreach(var id in new[]{EncounterContract.FemalePatientId,EncounterContract.MalePatientId})
+                {
+                    var entry=manifest.entries.Single(item=>item.patientId==id&&item.tool=="greeting");
+                    var clip=EncounterPatientSpeech.Find(id,entry.tool,entry.argument,entry.exactDisplayText);
+                    var source=new float[clip.samples*clip.channels];Check(clip.GetData(source,0)&&source.Any(sample=>Mathf.Abs(sample)>.02f),"bundled greeting exposes real readable speech PCM: "+id);
+                    Check(voice.PlayLocalSpeech(clip)&&voice.PlaybackActive&&!voice.Connected&&Get<AudioClip>(voice,"microphoneClip")==null&&Get<object>(voice,"active")==null,"bundled speech queues through native playback without microphone/provider connection: "+id);
+                    presentation.Select(id);presentation.SetState("speaking");var active=id==EncounterContract.FemalePatientId?presentation.female:presentation.male;
+                    jaw=active.GetComponentsInChildren<Transform>(true).Single(node=>node.name=="JawPivot");rest=jaw.localRotation;
+                    bool moved=false;buffer=new float[1024];int remaining=Get<Queue<float>>(voice,"outputSamples").Count;
+                    for(int offset=0;offset<remaining;offset+=buffer.Length)
+                    {
+                        Call(voice,"ReadAudio",buffer);float level=voice.PlaybackLevel;
+                        Call(presentation,"ApplyAnimation",.1f,0f,level,voice.PlaybackActive);
+                        if(level>.1f&&Quaternion.Angle(jaw.localRotation,rest)>1) { moved=true;break; }
+                    }
+                    Check(moved,"actual bundled greeting PCM amplitude deforms patient jaw: "+id);
+                    DisposeStreamingClip(voice);voice.Disconnect();Call(presentation,"LateUpdate");
+                    Check(voice.PlaybackLevel==0&&!voice.PlaybackActive&&Quaternion.Angle(jaw.localRotation,rest)<.001f,"offline speech cancellation closes mouth and clears queued playback: "+id);
+                }
+            }
+            finally
+            {
+                if(voice) { DisposeStreamingClip(voice);voice.Disconnect(); }
+                presentation.voice=previousVoice;presentation.Select(EncounterContract.FemalePatientId);
+                if(fixture)UnityEngine.Object.DestroyImmediate(fixture);
+            }
+        }
+        static void DisposeStreamingClip(QuestJarvisVoice voice)
+        {
+            var speaker=Get<AudioSource>(voice,"speaker");if(speaker) { speaker.Stop();speaker.clip=null; }
+            var clip=Get<AudioClip>(voice,"playbackClip");Set(voice,"playbackClip",null);if(clip)UnityEngine.Object.DestroyImmediate(clip);
+        }
         static void ValidateContracts()
         {
             Check(!EncounterContract.HasError(JsonUtility.FromJson<EncounterReply>("{\"result\":\"Recorded.\"}")) && EncounterContract.HasError(JsonUtility.FromJson<EncounterReply>("{\"error\":{\"code\":\"invalid_topic\",\"message\":\"Unknown topic\"}}")),"JsonUtility absent/empty error object is not a service error; nonempty error content is");
@@ -132,6 +276,7 @@ namespace Scalpal.EncounterOffice.Editor
                 var session=fixture.AddComponent<NativeEncounterSession>();session.baseUrl=endpoint;
                 session.StartPatient(EncounterContract.FemalePatientId);Drain(session).Run();
                 Check(session.State!=null&&session.State.patientId==EncounterContract.FemalePatientId&&session.State.patientName=="Priya Ramaswamy"&&session.State.phase=="interview","actual create response binds female40 catalog persona; status="+session.Status+" name="+session.State?.patientName+" id="+session.State?.patientId+" phase="+session.State?.phase);
+                Check(EncounterPatientSpeech.Find(session.State.patientId,"greeting","",Get<string>(session,"greeting")),"actual authoritative patient opener resolves exact bundled greeting");
                 string femaleId=session.State.encounterId;
                 session.Ask("allergies");var allergy=Drain(session);allergy.Run();
                 Check(allergy.exchanges.Single().path=="/encounters/"+femaleId+"/tools/answer"&&allergy.exchanges.Single().body=="{\"topic\":\"allergies\"}","fallback question uses exact authoritative encounter route and body");
@@ -166,6 +311,7 @@ namespace Scalpal.EncounterOffice.Editor
                 Property(session,"Score",null);session.RefreshState();var recoveredScore=Drain(session);recoveredScore.Run();
                 Check(session.Score!=null&&recoveredScore.exchanges.Count==2&&session.State.phase=="scored","refresh recovers scored card without repeating assessment mutation");
                 session.StartPatient(EncounterContract.MalePatientId);Drain(session).Run();Check(session.State.patientName=="Jonah Okoye"&&session.State.patientId==EncounterContract.MalePatientId,"male30 persona binds its own synthetic case");
+                Check(EncounterPatientSpeech.Find(session.State.patientId,"greeting","",Get<string>(session,"greeting")),"actual male authoritative patient opener resolves its own bundled greeting");
                 string maleId=session.State.encounterId;
                 session.Ask("onset");var stale=Drain(session);Check(stale.Step(),"old-case actual HTTP request begins");
                 session.StartPatient(EncounterContract.FemalePatientId);stale.Run();Drain(session).Run();

@@ -12,14 +12,18 @@ namespace Scalpal.EncounterOffice
         public Camera head;
         public Transform left, right;
         public LineRenderer leftRay, rightRay;
+        public NativeEncounterSession session;
+        public TextMesh talkHint;
         public Vector3 initialHeadFloorPosition = new Vector3(0, 0, 1.75f);
         public bool Ready { get; private set; }
         readonly List<XRDisplaySubsystem> displays = new List<XRDisplaySubsystem>();
         readonly List<XRInputSubsystem> inputs = new List<XRInputSubsystem>();
         bool aligned, tracked, focused = true, paused;
         bool leftDown, rightDown, leftArmed, rightArmed;
+        bool leftGripArmed, rightGripArmed, previousGripHold, talkHintDismissed;
+        XRNode talkHand;
         void OnEnable() => Application.onBeforeRender += RefreshPose;
-        void OnDisable() { Application.onBeforeRender -= RefreshPose; Ready = false; ClearRays(); }
+        void OnDisable() { Application.onBeforeRender -= RefreshPose; Ready = false; ClearRays(); ClearTalk(); }
         void Update()
         {
             SubsystemManager.GetSubsystems(displays); SubsystemManager.GetSubsystems(inputs);
@@ -42,12 +46,29 @@ namespace Scalpal.EncounterOffice
             Ready = aligned && tracked && floor && displays.Exists(display => display.running) && focused && !paused;
             Point(XRNode.LeftHand, left, leftRay, ref leftDown, ref leftArmed);
             Point(XRNode.RightHand, right, rightRay, ref rightDown, ref rightArmed);
+            bool leftGrip = Grip(XRNode.LeftHand, ref leftGripArmed);
+            bool rightGrip = Grip(XRNode.RightHand, ref rightGripArmed);
+            ApplyTalkInput(leftGrip || rightGrip, leftGrip ? XRNode.LeftHand : XRNode.RightHand);
+            if (talkHint)
+            {
+                var leftDevice = InputDevices.GetDeviceAtXRNode(XRNode.LeftHand);
+                bool leftTracked = leftDevice.TryGetFeatureValue(CommonUsages.isTracked, out bool valid) && valid;
+                talkHint.gameObject.SetActive(Ready && leftTracked && !talkHintDismissed && session && session.State != null);
+                if (talkHint.gameObject.activeSelf && head)
+                    talkHint.transform.rotation = Quaternion.LookRotation(talkHint.transform.position - head.transform.position);
+            }
 #if UNITY_EDITOR
             // Desktop component preview fallback, independent of physical XR evidence.
             if (UnityEngine.InputSystem.Mouse.current != null && UnityEngine.InputSystem.Mouse.current.leftButton.wasPressedThisFrame && Camera.main)
             {
                 var ray = Camera.main.ScreenPointToRay(UnityEngine.InputSystem.Mouse.current.position.ReadValue());
                 if (Physics.Raycast(ray, out var hit, 8)) hit.collider.GetComponent<EncounterOfficeButton>()?.Press();
+            }
+            var keyboard = UnityEngine.InputSystem.Keyboard.current;
+            if (keyboard != null && session)
+            {
+                if (keyboard.spaceKey.wasPressedThisFrame) session.SetTalkHeld(true);
+                if (keyboard.spaceKey.wasReleasedThisFrame) session.SetTalkHeld(false);
             }
 #endif
         }
@@ -84,7 +105,27 @@ namespace Scalpal.EncounterOffice
             previous = pressed;
         }
         void ClearRays() { if (leftRay) leftRay.enabled = false; if (rightRay) rightRay.enabled = false; leftArmed = rightArmed = false; }
-        void OnApplicationFocus(bool value) { focused = value; if (!value) { Ready = false; ClearRays(); } }
-        void OnApplicationPause(bool value) { paused = value; if (value) { Ready = false; ClearRays(); } }
+        bool Grip(XRNode node, ref bool armed)
+        {
+            var device = InputDevices.GetDeviceAtXRNode(node);
+            bool valid = device.isValid && device.TryGetFeatureValue(CommonUsages.isTracked, out bool trackedHand) && trackedHand;
+            device.TryGetFeatureValue(CommonUsages.gripButton, out bool pressed);
+            if (!Ready || !valid) { armed = false; return false; }
+            if (!pressed) armed = true;
+            return armed && pressed;
+        }
+        void ApplyTalkInput(bool held, XRNode hand)
+        {
+            if (held == previousGripHold) return;
+            previousGripHold = held;
+            if (held) { talkHand = hand; talkHintDismissed = true; }
+            if (session) session.SetTalkHeld(held);
+            var device = InputDevices.GetDeviceAtXRNode(talkHand);
+            if (Ready && device.isValid && device.TryGetHapticCapabilities(out var capabilities) && capabilities.supportsImpulse)
+                device.SendHapticImpulse(0, .18f, .04f);
+        }
+        void ClearTalk() { leftGripArmed = rightGripArmed = previousGripHold = false; if (session) session.SetTalkHeld(false); if (talkHint) talkHint.gameObject.SetActive(false); }
+        void OnApplicationFocus(bool value) { focused = value; if (!value) { Ready = false; ClearRays(); ClearTalk(); } }
+        void OnApplicationPause(bool value) { paused = value; if (value) { Ready = false; ClearRays(); ClearTalk(); } }
     }
 }
