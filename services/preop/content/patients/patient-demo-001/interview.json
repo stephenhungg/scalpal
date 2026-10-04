@@ -1,0 +1,387 @@
+{
+  "version": 1,
+  "patientId": "patient-demo-001",
+  "procedureId": "lap_cholecystectomy",
+  "openingLine": "Hi! My doctor sent me over about my gallbladder. I feel fine right now, but these attacks are wrecking my evenings.",
+  "rounds": [
+    {
+      "id": "history_onset",
+      "stage": "history",
+      "prompt": "Morgan has told you why she is here. What do you do next?",
+      "weight": 8,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Tell her it is probably heartburn and suggest antacids",
+          "grade": "wrong",
+          "feedback": "Labeling the pain before taking a history misses the meal-triggered pattern that points to the gallbladder.",
+          "patientCue": "Honestly, I take Tums sometimes. But these attacks feel like something else, and I want them sorted out."
+        },
+        {
+          "key": "B",
+          "text": "Ask whether she smokes",
+          "grade": "wrong",
+          "feedback": "Social history can wait until the pattern of the main complaint is clear.",
+          "patientCue": "No, I don't smoke. Maybe a glass of wine a week. But, um, should I tell you about the attacks?"
+        },
+        {
+          "key": "C",
+          "text": "Ask her to rate her pain right now from zero to ten",
+          "grade": "partial",
+          "feedback": "Severity is worth knowing, but she is pain-free today, so the timing and triggers of the attacks tell you far more.",
+          "patientCue": "Right now, zero. During an attack, it's an eight.",
+          "covers": [
+            "history:severity"
+          ]
+        },
+        {
+          "key": "D",
+          "text": "Ask when the attacks started, how many she has had, and what brings them on",
+          "grade": "correct",
+          "feedback": "Four attacks in three months, each after a fatty dinner and settling in two to three hours, is the classic biliary pattern and justifies elective surgery.",
+          "patientCue": "Okay, so the first one was about three months ago, and I've had four. The last was eight days ago. It's always after a big or greasy dinner, and it eases off on its own after two or three hours.",
+          "covers": [
+            "history:onset",
+            "history:aggravating_relieving"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "history_red_flags",
+      "stage": "history",
+      "prompt": "Each attack follows a fatty dinner and settles within two to three hours. What do you do next?",
+      "weight": 8,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Reassure her the attacks will stop on their own and move on",
+          "grade": "wrong",
+          "feedback": "Dismissing recurrent attacks skips the questions that rule out complications like cholecystitis or a duct stone.",
+          "patientCue": "Here's the thing, I've had four of them now. I'd really like to get this sorted out."
+        },
+        {
+          "key": "B",
+          "text": "Ask what the pain feels like and where it spreads",
+          "grade": "partial",
+          "feedback": "Steady pain under the right ribs going to the shoulder blade fits the gallbladder, but it does not screen for complications.",
+          "patientCue": "Up under my right ribs, sometimes in the middle under my breastbone, and sometimes through to my back near my right shoulder blade. It builds over about twenty minutes, then it's a hard, steady squeezing.",
+          "covers": [
+            "history:character",
+            "history:location",
+            "history:migration"
+          ]
+        },
+        {
+          "key": "C",
+          "text": "Ask about fever or chills, dark urine, and pale or greasy stools",
+          "grade": "correct",
+          "feedback": "No fever, dark urine or pale stools argues against cholecystitis, cholangitis and a stone blocking the bile duct.",
+          "patientCue": "No fevers or chills, not even during the attacks. My urine has never looked dark, and my bowels are normal. No pale or greasy stools, no blood.",
+          "covers": [
+            "history:fever",
+            "history:urinary",
+            "history:bowel"
+          ]
+        },
+        {
+          "key": "D",
+          "text": "Ask whether anyone in her family has had heart disease",
+          "grade": "wrong",
+          "feedback": "Family cardiac history does not tell you whether she has a complicated gallstone problem right now.",
+          "patientCue": "Not that I know of. My mom had her gallbladder out in her forties, that's the main thing."
+        }
+      ]
+    },
+    {
+      "id": "history_meds_allergies",
+      "stage": "history",
+      "prompt": "The attack story is clear. Before you plan anything, what do you do next?",
+      "weight": 12,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Ask about her medical conditions, every medicine she takes, and exactly what happened with penicillin",
+          "grade": "correct",
+          "feedback": "Diabetes on metformin needs a perioperative glucose plan, and a childhood rash with later safe cephalexin means cefazolin is fine.",
+          "patientCue": "Type 2 diabetes, about five years, and high blood pressure. Metformin 500 twice a day with meals, lisinopril 10 in the morning, sometimes Tums. Penicillin gave me an itchy rash as a kid, no swelling or trouble breathing, and I've had cephalexin since with no problem.",
+          "covers": [
+            "history:past_medical",
+            "history:medications",
+            "history:allergies"
+          ]
+        },
+        {
+          "key": "B",
+          "text": "Confirm the penicillin allergy on the chart and ask if she has any others",
+          "grade": "partial",
+          "feedback": "Confirming the label is a start, but without the reaction details and her medicine list you cannot choose the antibiotic or plan for her diabetes.",
+          "patientCue": "Yes, penicillin. That's the only one.",
+          "covers": [
+            "history:allergies"
+          ]
+        },
+        {
+          "key": "C",
+          "text": "Ask what she ate for lunch today",
+          "grade": "wrong",
+          "feedback": "Last meal matters on the day of surgery, not in clinic while her medicines and allergy are still unknown.",
+          "patientCue": "A salad at noon, before I came in. Is that a problem?"
+        },
+        {
+          "key": "D",
+          "text": "Mark all cephalosporins as off limits because of the penicillin label",
+          "grade": "wrong",
+          "feedback": "An unexamined penicillin label pushes teams to broader, less effective antibiotics when cefazolin is safe for her.",
+          "patientCue": "Wait, I've had cephalexin since then with no problem. Is that the same kind of thing? Sorry, I just want to understand."
+        }
+      ]
+    },
+    {
+      "id": "history_pregnancy",
+      "stage": "history",
+      "prompt": "She is 38 and may need an operation and anesthesia. What do you do next?",
+      "weight": 8,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Ask about past operations and how anesthesia went",
+          "grade": "partial",
+          "feedback": "Her C-section scar and uneventful anesthesia are useful, but pregnancy status matters more before elective surgery.",
+          "patientCue": "Just a C-section with my son, eight years ago. The anesthesia went fine.",
+          "covers": [
+            "history:past_surgical"
+          ]
+        },
+        {
+          "key": "B",
+          "text": "Ask whether her mother had gallbladder problems",
+          "grade": "wrong",
+          "feedback": "Family history is interesting but does not change whether elective anesthesia is safe for her today.",
+          "patientCue": "Yes, my mom had her gallbladder out in her forties. Honestly, I figured this might be like hers."
+        },
+        {
+          "key": "C",
+          "text": "Ask how much alcohol she drinks",
+          "grade": "wrong",
+          "feedback": "Her drinking is minimal and does not address the reproductive-age safety question.",
+          "patientCue": "Maybe a glass of wine a week. Not much at all."
+        },
+        {
+          "key": "D",
+          "text": "Ask about her last period and what contraception she uses",
+          "grade": "correct",
+          "feedback": "Condom-only contraception in a 38-year-old means pregnancy must be excluded before elective surgery.",
+          "patientCue": "My last period started about three weeks ago, it was normal. We're not trying, but I'm not on birth control. We use condoms.",
+          "covers": [
+            "history:menstrual_pregnancy"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "exam_abdomen",
+      "stage": "exam",
+      "prompt": "Time to examine her. What do you do next?",
+      "weight": 12,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Press deep at McBurney point in the right lower quadrant",
+          "grade": "wrong",
+          "feedback": "McBurney point tests for appendicitis, not the gallbladder.",
+          "patientCue": "Nope, nothing there.",
+          "finding": {
+            "label": "Right lower quadrant",
+            "text": "Nontender in the right lower quadrant.",
+            "abnormal": false
+          }
+        },
+        {
+          "key": "B",
+          "text": "Palpate the abdomen, then press under the right ribs as she breathes in (Murphy sign)",
+          "grade": "correct",
+          "feedback": "A soft abdomen and negative Murphy sign between attacks support uncomplicated gallstones rather than cholecystitis.",
+          "patientCue": "That's fine. Maybe a little sore up on the right, but nothing like an attack. And a little tender when I breathe in, but I can breathe in fine.",
+          "covers": [
+            "exam:abdomen_palpation",
+            "exam:murphy"
+          ],
+          "finding": {
+            "label": "Abdomen and Murphy sign",
+            "text": "Soft. Minimal right upper quadrant tenderness to deep palpation, no guarding, no mass. Negative Murphy sign between attacks.",
+            "abnormal": false
+          }
+        },
+        {
+          "key": "C",
+          "text": "Check vital signs and general appearance",
+          "grade": "partial",
+          "feedback": "Normal vitals and no jaundice fit colic, but the abdominal exam is what separates colic from cholecystitis.",
+          "patientCue": "Sure, go ahead.",
+          "covers": [
+            "exam:vitals",
+            "exam:general_appearance"
+          ],
+          "finding": {
+            "label": "Vitals and appearance",
+            "text": "Temperature 36.8 C, heart rate 74, blood pressure 126/80, respiratory rate 14, oxygen saturation 98% on room air. Weight 74 kg, BMI 27. Well appearing and comfortable. No jaundice or scleral icterus.",
+            "abnormal": false
+          }
+        },
+        {
+          "key": "D",
+          "text": "Tap over her back for costovertebral angle tenderness",
+          "grade": "wrong",
+          "feedback": "CVA tenderness screens for kidney problems, which her history does not suggest.",
+          "patientCue": "No.",
+          "finding": {
+            "label": "CVA tenderness",
+            "text": "No costovertebral angle tenderness.",
+            "abnormal": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "tests_workup",
+      "stage": "tests",
+      "prompt": "Her exam is benign today. Which workup do you order?",
+      "weight": 17,
+      "choices": [
+        {
+          "key": "A",
+          "text": "CT of the abdomen and pelvis with contrast",
+          "grade": "wrong",
+          "feedback": "CT adds radiation and misses many gallstones; ultrasound is the test.",
+          "patientCue": "Okay, sure.",
+          "finding": {
+            "label": "CT abdomen and pelvis",
+            "text": "No acute abnormality. Gallstones not well seen on CT.",
+            "abnormal": false
+          }
+        },
+        {
+          "key": "B",
+          "text": "Right upper quadrant ultrasound and liver tests",
+          "grade": "partial",
+          "feedback": "This confirms stones and a normal duct but skips the pregnancy test and kidney and glucose check she needs before elective surgery.",
+          "patientCue": "Okay, sure. Do I need to be fasting? I had a salad at noon.",
+          "covers": [
+            "test:ultrasound",
+            "test:lfts"
+          ],
+          "finding": {
+            "label": "Ultrasound and LFTs",
+            "text": "Ultrasound: Multiple mobile gallstones up to 12 mm. Gallbladder wall 2 mm, no pericholecystic fluid, sonographic Murphy sign negative. Common bile duct 4 mm. Normal liver. LFTs: Total bilirubin 0.6, alkaline phosphatase 82, AST 22, ALT 25. Normal.",
+            "abnormal": true
+          }
+        },
+        {
+          "key": "C",
+          "text": "Right upper quadrant ultrasound, liver tests, CBC, basic metabolic panel and a urine pregnancy test",
+          "grade": "correct",
+          "feedback": "This confirms stones, rules out a duct stone and inflammation, checks kidney function and glucose for metformin, and excludes pregnancy.",
+          "patientCue": "Okay, sure. A pregnancy test makes sense, go ahead.",
+          "covers": [
+            "test:ultrasound",
+            "test:lfts",
+            "test:cbc",
+            "test:bmp",
+            "test:pregnancy_test"
+          ],
+          "finding": {
+            "label": "Workup",
+            "text": "Ultrasound: Multiple mobile gallstones up to 12 mm. Gallbladder wall 2 mm, no pericholecystic fluid, sonographic Murphy sign negative. Common bile duct 4 mm. Normal liver. LFTs: Total bilirubin 0.6, alkaline phosphatase 82, AST 22, ALT 25. Normal. CBC: White count 7.2, hemoglobin 13.5, platelets 260. Normal. BMP: Sodium 139, potassium 4.2, creatinine 0.86, glucose 118. Normal kidney function. Pregnancy test: Urine hCG negative.",
+            "abnormal": true
+          }
+        },
+        {
+          "key": "D",
+          "text": "Send a lipase and stop there",
+          "grade": "wrong",
+          "feedback": "Lipase screens for pancreatitis, which she does not have, and it never shows the stones.",
+          "patientCue": "Okay, sure.",
+          "finding": {
+            "label": "Lipase",
+            "text": "Lipase 28 (normal).",
+            "abnormal": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "diagnosis",
+      "stage": "diagnosis",
+      "prompt": "Pulling it all together, what is your diagnosis?",
+      "weight": 20,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Acute cholecystitis",
+          "grade": "wrong",
+          "feedback": "Attacks lasting two to three hours, no fever, a negative Murphy sign, normal white count and a 2 mm wall exclude cholecystitis.",
+          "patientCue": "Sorry, what does that mean? Is that the gallbladder thing?"
+        },
+        {
+          "key": "B",
+          "text": "Choledocholithiasis",
+          "grade": "wrong",
+          "feedback": "Normal liver tests, a 4 mm duct and no dark urine or pale stools make a bile duct stone unlikely.",
+          "patientCue": "Okay, in English? I don't know that word."
+        },
+        {
+          "key": "C",
+          "text": "Gallstones",
+          "grade": "partial",
+          "feedback": "Stones are present, but naming the symptomatic pattern, biliary colic, is what justifies removing the gallbladder.",
+          "patientCue": "Okay. So something's off with my gallbladder, like my mom?"
+        },
+        {
+          "key": "D",
+          "text": "Symptomatic cholelithiasis (biliary colic)",
+          "grade": "correct",
+          "feedback": "Recurrent steady pain after fatty meals that settles within hours, with stones on ultrasound and no inflammation, is biliary colic.",
+          "patientCue": "Sorry, what does that mean? So it's my gallbladder causing these attacks?"
+        }
+      ]
+    },
+    {
+      "id": "plan",
+      "stage": "plan",
+      "prompt": "What do you recommend?",
+      "weight": 15,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Recommend elective laparoscopic cholecystectomy, holding metformin and lisinopril the morning of surgery",
+          "grade": "correct",
+          "feedback": "Four attacks in three months with uncomplicated stones warrant elective keyhole gallbladder removal with a clear medication plan.",
+          "patientCue": "Honestly, good. I just want my evenings back. So when could we do it, and how long would I be off work?"
+        },
+        {
+          "key": "B",
+          "text": "Admit her today for urgent laparoscopic cholecystectomy tomorrow",
+          "grade": "partial",
+          "feedback": "Right operation, but she is pain-free with normal labs, so urgent admission is unnecessary.",
+          "patientCue": "Tomorrow? Okay, but I feel fine right now. I have a sub for today, but I didn't plan on staying."
+        },
+        {
+          "key": "C",
+          "text": "Refer her for ERCP to clear the bile duct first",
+          "grade": "wrong",
+          "feedback": "Normal liver tests and a 4 mm duct put her at low risk for a duct stone, so ERCP adds risk without benefit.",
+          "patientCue": "Sorry, what does that mean? Is that the same as taking care of the gallbladder?"
+        },
+        {
+          "key": "D",
+          "text": "Advise a low-fat diet and follow up in six months, no surgery",
+          "grade": "wrong",
+          "feedback": "Symptomatic stones keep causing attacks and can lead to cholecystitis or pancreatitis, so diet alone is not enough.",
+          "patientCue": "Here's the thing, I've already been avoiding fatty food. I really just want these attacks sorted out."
+        }
+      ]
+    }
+  ],
+  "closingLine": "Honestly, good. I just want my evenings back. Okay, so when can we do it, how long will I be off work, and what can I eat afterward?"
+}

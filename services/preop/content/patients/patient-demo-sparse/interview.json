@@ -1,0 +1,451 @@
+{
+  "version": 1,
+  "patientId": "patient-demo-sparse",
+  "procedureId": "open_appendectomy",
+  "openingLine": "Doc, I'm in bad shape. My whole stomach is on fire.",
+  "rounds": [
+    {
+      "id": "history_onset",
+      "stage": "history",
+      "prompt": "Jonah says his whole stomach is on fire. What do you do next?",
+      "weight": 8,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Ask about his family history",
+          "grade": "wrong",
+          "feedback": "Family history can wait. The story of the pain comes first.",
+          "patientCue": "My dad has high blood pressure. That's all I know. Man... my stomach, Doc."
+        },
+        {
+          "key": "B",
+          "text": "Ask if he smokes and tell him he needs to quit",
+          "grade": "wrong",
+          "feedback": "A smoking lecture for a man in severe pain wastes time and costs rapport.",
+          "patientCue": "Yeah, I know. I know."
+        },
+        {
+          "key": "C",
+          "text": "Ask him to rate the pain from 0 to 10",
+          "grade": "partial",
+          "feedback": "Severity matters, but timing and migration tell you far more about the cause.",
+          "patientCue": "Nine. I don't go to doctors, so you know it's bad.",
+          "covers": [
+            "history:severity"
+          ]
+        },
+        {
+          "key": "D",
+          "text": "Ask when the pain started and where it began",
+          "grade": "correct",
+          "feedback": "Two days of pain that moved from the umbilicus to the right lower quadrant, eased briefly, then spread everywhere points to perforated appendicitis.",
+          "patientCue": "Two days ago. Wednesday morning. Around my belly button first. Then down low on the right. Yesterday afternoon it got better. Like an hour. Then it came back worse. Everywhere now.",
+          "covers": [
+            "history:onset",
+            "history:migration",
+            "history:location"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "history_systemic",
+      "stage": "history",
+      "prompt": "The pain moved to the right, eased briefly, then spread everywhere. What do you ask next?",
+      "weight": 8,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Ask what he does for work",
+          "grade": "wrong",
+          "feedback": "His job does not help you judge how sick he is right now.",
+          "patientCue": "Construction. Framing carpenter. Man... does that matter?"
+        },
+        {
+          "key": "B",
+          "text": "Ask about his bowels and his urine",
+          "grade": "partial",
+          "feedback": "No diarrhea and reduced urine output are useful, but fever and vomiting matter more for sepsis.",
+          "patientCue": "Haven't gone since Wednesday. No diarrhea. Peeing less than normal. No burning.",
+          "covers": [
+            "history:bowel",
+            "history:urinary"
+          ]
+        },
+        {
+          "key": "C",
+          "text": "Ask about fever, chills, and vomiting",
+          "grade": "correct",
+          "feedback": "Rigors and repeated vomiting after the pain began point to perforation and sepsis.",
+          "patientCue": "Chills and sweats all night. I'm shaking. Threw up maybe four or five times since yesterday.",
+          "covers": [
+            "history:fever",
+            "history:nausea_vomiting"
+          ]
+        },
+        {
+          "key": "D",
+          "text": "Ask what sports he plays",
+          "grade": "wrong",
+          "feedback": "Hobbies do not change the diagnosis or the urgency.",
+          "patientCue": "Basketball. Sundays. Not this week, man."
+        }
+      ]
+    },
+    {
+      "id": "history_meds_allergies",
+      "stage": "history",
+      "prompt": "His chart is empty: no medications, allergies, or conditions on file. What do you do next?",
+      "weight": 12,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Ask him directly about any health problems, what medicines he takes, and whether he is allergic to anything",
+          "grade": "correct",
+          "feedback": "An empty chart is a data gap, and only asking him reveals the penicillin allergy that steers antibiotics away from piperacillin-tazobactam.",
+          "patientCue": "Nothing. I'm never sick. I don't take anything. Some ibuprofen yesterday, didn't help. Allergies... penicillin. Broke out in hives when I was a kid.",
+          "covers": [
+            "history:past_medical",
+            "history:medications",
+            "history:allergies"
+          ]
+        },
+        {
+          "key": "B",
+          "text": "Document no known drug allergies, since the chart lists none",
+          "grade": "wrong",
+          "feedback": "An empty allergy list means unknown, not none, so this misses his penicillin allergy.",
+          "patientCue": "Okay. Whatever. Just fix it."
+        },
+        {
+          "key": "C",
+          "text": "Ask what medicines he takes",
+          "grade": "partial",
+          "feedback": "Medications must come from him, but skipping allergies and conditions leaves the most dangerous gaps open.",
+          "patientCue": "I don't take anything. Some ibuprofen yesterday, didn't help.",
+          "covers": [
+            "history:medications"
+          ]
+        },
+        {
+          "key": "D",
+          "text": "Give him ibuprofen for the pain and move on",
+          "grade": "wrong",
+          "feedback": "Treating before taking a drug and allergy history is unsafe, and NSAIDs are a poor choice in a dehydrated septic patient.",
+          "patientCue": "I took some yesterday. Didn't help, man."
+        }
+      ]
+    },
+    {
+      "id": "history_last_meal",
+      "stage": "history",
+      "prompt": "He may need the operating room today. What do you ask next?",
+      "weight": 8,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Ask how much he drinks on weekends",
+          "grade": "wrong",
+          "feedback": "Weekend drinking is worth noting later, but it does not set anesthesia timing.",
+          "patientCue": "I drink on weekends. That's it."
+        },
+        {
+          "key": "B",
+          "text": "Ask whether he has ever had surgery",
+          "grade": "partial",
+          "feedback": "No prior surgery keeps appendicitis possible, but last intake matters more for induction.",
+          "patientCue": "Never had surgery.",
+          "covers": [
+            "history:past_surgical"
+          ]
+        },
+        {
+          "key": "C",
+          "text": "Ask what his girlfriend thinks is going on",
+          "grade": "wrong",
+          "feedback": "A relative's guess adds nothing to the surgical history at this point.",
+          "patientCue": "Dani made me come. She drove me. I figured food poisoning."
+        },
+        {
+          "key": "D",
+          "text": "Ask when he last ate or drank anything",
+          "grade": "correct",
+          "feedback": "Last intake plus ongoing vomiting sets aspiration risk and calls for rapid sequence induction.",
+          "patientCue": "Breakfast sandwich yesterday morning. Around seven. Little water about two hours ago. Haven't eaten since.",
+          "covers": [
+            "history:last_meal",
+            "history:appetite"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "exam_vitals",
+      "stage": "exam",
+      "prompt": "Time to examine him. What do you do first?",
+      "weight": 10,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Inspect the abdomen",
+          "grade": "partial",
+          "feedback": "Inspection is useful, but vital signs come first in a man who looks septic.",
+          "patientCue": "Man... I'm good, I'm good. Just don't make me move.",
+          "covers": [
+            "exam:abdomen_inspection"
+          ],
+          "finding": {
+            "label": "Abdomen inspection",
+            "text": "Mildly distended, not moving with respiration.",
+            "abnormal": true
+          }
+        },
+        {
+          "key": "B",
+          "text": "Check full vital signs and look at how he appears",
+          "grade": "correct",
+          "feedback": "Fever, tachycardia, tachypnea and a soft pressure mean sepsis, which needs fluids and antibiotics before the operating room.",
+          "patientCue": "I'm shivering. Can't stop. Sweaty all over.",
+          "covers": [
+            "exam:vitals",
+            "exam:general_appearance"
+          ],
+          "finding": {
+            "label": "Vital signs and appearance",
+            "text": "Temperature 38.9 C, heart rate 118, blood pressure 102/64, respiratory rate 22, oxygen saturation 97% on room air. Ill appearing, diaphoretic, lying completely still, shivering.",
+            "abnormal": true
+          }
+        },
+        {
+          "key": "C",
+          "text": "Check for Murphy sign under the right ribs",
+          "grade": "wrong",
+          "feedback": "Gallbladder testing is off target when the pain began at the umbilicus and settled low on the right.",
+          "patientCue": "It's all bad.",
+          "finding": {
+            "label": "Murphy sign",
+            "text": "Diffuse tenderness, not localized to the right upper quadrant.",
+            "abnormal": true
+          }
+        },
+        {
+          "key": "D",
+          "text": "Tap over his back for kidney tenderness",
+          "grade": "wrong",
+          "feedback": "Costovertebral tapping before vitals misses the sepsis that sets the urgency.",
+          "patientCue": "My back's okay.",
+          "finding": {
+            "label": "Costovertebral angle",
+            "text": "No costovertebral angle tenderness.",
+            "abnormal": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "exam_abdomen",
+      "stage": "exam",
+      "prompt": "He is febrile and tachycardic. How do you examine his abdomen?",
+      "weight": 10,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Have him lift his right leg against your hand",
+          "grade": "wrong",
+          "feedback": "A psoas sign adds little and hurts him when you have not yet palpated for peritonitis.",
+          "patientCue": "No, I can't lift my leg.",
+          "finding": {
+            "label": "Psoas sign",
+            "text": "Positive right psoas sign.",
+            "abnormal": true
+          }
+        },
+        {
+          "key": "B",
+          "text": "Press deeply and let go quickly to test for rebound",
+          "grade": "partial",
+          "feedback": "Diffuse rebound confirms peritoneal irritation, but gentle palpation and a guarding check give the same answer with less pain.",
+          "patientCue": "Don't do that again!",
+          "covers": [
+            "exam:rebound"
+          ],
+          "finding": {
+            "label": "Rebound",
+            "text": "Diffuse rebound tenderness.",
+            "abnormal": true
+          }
+        },
+        {
+          "key": "C",
+          "text": "Palpate gently, ending in the right lower quadrant, and see if he can relax his belly",
+          "grade": "correct",
+          "feedback": "Diffuse tenderness worst in the right lower quadrant with board-like rigidity means generalized peritonitis.",
+          "patientCue": "Agh! Everywhere hurts! That's the worst spot! I can't relax it, man.",
+          "covers": [
+            "exam:abdomen_palpation",
+            "exam:mcburney_point",
+            "exam:guarding_rigidity"
+          ],
+          "finding": {
+            "label": "Abdominal palpation",
+            "text": "Diffuse tenderness, worst in the right lower quadrant. Maximal tenderness in the right lower quadrant. Involuntary guarding and board-like rigidity. Generalized peritonitis.",
+            "abnormal": true
+          }
+        },
+        {
+          "key": "D",
+          "text": "Do a testicular exam before touching the belly",
+          "grade": "wrong",
+          "feedback": "A testicular check is reasonable later, but the abdomen holds the key finding here.",
+          "patientCue": "No, that's fine.",
+          "finding": {
+            "label": "Genitourinary",
+            "text": "Normal testicular exam.",
+            "abnormal": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "tests_workup",
+      "stage": "tests",
+      "prompt": "He looks septic with a rigid abdomen. What do you order?",
+      "weight": 12,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Send CBC, CRP, BMP, lactate, type and screen and blood cultures, and get a CT of the abdomen and pelvis",
+          "grade": "correct",
+          "feedback": "This fills the missing labs, grades sepsis, checks the kidneys after vomiting, prepares for the operating room and defines the perforation on CT.",
+          "patientCue": "Fine. Take whatever. Just fix it.",
+          "covers": [
+            "test:cbc",
+            "test:crp",
+            "test:bmp",
+            "test:lactate",
+            "test:type_and_screen",
+            "test:ct_abdomen_pelvis"
+          ],
+          "finding": {
+            "label": "Labs and CT",
+            "text": "White count 18.6 with 12% bands. Hemoglobin 15.1. Platelets 410. CRP 180 mg/L (markedly elevated). Sodium 134, potassium 3.6, creatinine 1.3 (mildly elevated, likely dehydration), glucose 128. Lactate 2.8 (elevated). Type B positive, antibody screen negative. CT: Perforated appendicitis with periappendiceal phlegmon and free fluid. No drainable abscess. No free air under the diaphragm.",
+            "abnormal": true
+          }
+        },
+        {
+          "key": "B",
+          "text": "Send a CBC and a urinalysis only",
+          "grade": "partial",
+          "feedback": "Leukocytosis and a clean urine help, but you still lack lactate, kidney function and imaging.",
+          "patientCue": "Okay. I barely pee, but okay.",
+          "covers": [
+            "test:cbc",
+            "test:urinalysis"
+          ],
+          "finding": {
+            "label": "CBC and urinalysis",
+            "text": "White count 18.6 with 12% bands. Hemoglobin 15.1. Platelets 410. Urinalysis: Concentrated, specific gravity 1.030. No blood, no infection.",
+            "abnormal": true
+          }
+        },
+        {
+          "key": "C",
+          "text": "Send a lipase only",
+          "grade": "wrong",
+          "feedback": "Pancreatitis does not fit this migrating right-sided pain, and a lone lipase misses the sepsis workup.",
+          "patientCue": "Whatever you need, Doc.",
+          "finding": {
+            "label": "Lipase",
+            "text": "Lipase normal.",
+            "abnormal": false
+          }
+        },
+        {
+          "key": "D",
+          "text": "Get an abdominal ultrasound and wait for it before anything else",
+          "grade": "wrong",
+          "feedback": "Ultrasound is limited by gas and guarding here, and waiting delays the sepsis workup.",
+          "patientCue": "Man... how long? I can't do this much longer.",
+          "finding": {
+            "label": "Abdominal ultrasound",
+            "text": "Limited by bowel gas and guarding. Free fluid in the right lower quadrant.",
+            "abnormal": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "diagnosis",
+      "stage": "diagnosis",
+      "prompt": "What is the most likely diagnosis?",
+      "weight": 18,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Perforated peptic ulcer",
+          "grade": "wrong",
+          "feedback": "The pain began at the umbilicus and migrated to the right lower quadrant, and CT shows no free air.",
+          "patientCue": "An ulcer? I don't know, man. Just fix it."
+        },
+        {
+          "key": "B",
+          "text": "Appendicitis (perforation not named)",
+          "grade": "partial",
+          "feedback": "Right organ, but the lull then diffuse pain, peritonitis and CT all show it has perforated.",
+          "patientCue": "My appendix? I thought that was a kid thing."
+        },
+        {
+          "key": "C",
+          "text": "Ureteric stone with infection",
+          "grade": "wrong",
+          "feedback": "No costovertebral tenderness and a urinalysis without blood or infection argue against a stone.",
+          "patientCue": "A stone? My back's okay, Doc."
+        },
+        {
+          "key": "D",
+          "text": "Perforated appendicitis with peritonitis and sepsis",
+          "grade": "correct",
+          "feedback": "Migration, a brief lull, generalized peritonitis, sepsis physiology and CT confirmation make this the diagnosis.",
+          "patientCue": "My appendix? It burst? Man... just fix it."
+        }
+      ]
+    },
+    {
+      "id": "plan",
+      "stage": "plan",
+      "prompt": "What is your plan?",
+      "weight": 14,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Admit for IV antibiotics and plan an interval appendectomy in several weeks",
+          "grade": "wrong",
+          "feedback": "Non-operative care suits a contained phlegmon in a stable patient, not generalized peritonitis with sepsis.",
+          "patientCue": "Weeks? Doc, I can't do this for weeks."
+        },
+        {
+          "key": "B",
+          "text": "Emergency open appendectomy with peritoneal washout today, after IV fluids, blood cultures and ceftriaxone with metronidazole now",
+          "grade": "correct",
+          "feedback": "Generalized peritonitis with sepsis needs emergency source control after resuscitation, with a cephalosporin regimen that avoids penicillin.",
+          "patientCue": "Do it, whatever you gotta do."
+        },
+        {
+          "key": "C",
+          "text": "Start antibiotics overnight and do an open appendectomy tomorrow morning",
+          "grade": "partial",
+          "feedback": "Right operation, but sepsis from a perforated appendix needs source control today, not tomorrow.",
+          "patientCue": "Tomorrow? Man... okay. If that's what you say."
+        },
+        {
+          "key": "D",
+          "text": "Start piperacillin-tazobactam and arrange a CT-guided drain",
+          "grade": "wrong",
+          "feedback": "There is no drainable abscess, peritonitis needs surgery, and piperacillin-tazobactam is a penicillin he is allergic to.",
+          "patientCue": "I don't know what that is. Just fix it."
+        }
+      ]
+    }
+  ],
+  "closingLine": "Do it, whatever you gotta do. Can someone text Dani? And my boss?"
+}

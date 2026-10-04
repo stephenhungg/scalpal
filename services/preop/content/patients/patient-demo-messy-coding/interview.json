@@ -1,0 +1,377 @@
+{
+  "version": 1,
+  "patientId": "patient-demo-messy-coding",
+  "procedureId": "lap_sigmoid_colectomy",
+  "openingLine": "Hi there. My stomach doctor says it's time to take out the bad part of my colon. After three rounds of this, honestly, I'm ready.",
+  "rounds": [
+    {
+      "id": "history_course",
+      "stage": "history",
+      "prompt": "Dee says she is ready for surgery. What do you do next?",
+      "weight": 10,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Ask whether her pain started around the belly button and moved",
+          "grade": "wrong",
+          "feedback": "Migration is an appendicitis question and tells you little about her recurrent left sided attacks.",
+          "patientCue": "No, honey, it always stays low on the left. It never moves anywhere else."
+        },
+        {
+          "key": "B",
+          "text": "Ask how bad her pain is today",
+          "grade": "partial",
+          "feedback": "Current severity matters, but the pattern and complications of past attacks drive the decision to operate.",
+          "patientCue": "Today maybe a one, just a twinge on the left now and then. The attacks were a seven or eight.",
+          "covers": [
+            "history:severity"
+          ]
+        },
+        {
+          "key": "C",
+          "text": "Ask how many attacks she has had, when, how each was diagnosed and treated, and whether she had fevers",
+          "grade": "correct",
+          "feedback": "The number, timing and severity of episodes, including the June pocket of pus, are what justify an elective resection.",
+          "patientCue": "Three times in a year and a half: the first a year and a half ago, then last fall, then a bad one in June with a fever up to 39. Every time they did a CT scan, and in June there was a small pocket of pus they treated with antibiotics, no drain. I've been okay since July.",
+          "covers": [
+            "history:chief_complaint",
+            "history:onset",
+            "history:past_medical",
+            "history:fever",
+            "history:recent_illness"
+          ]
+        },
+        {
+          "key": "D",
+          "text": "Tell her you will book the operation and skip the history",
+          "grade": "wrong",
+          "feedback": "Booking a colectomy without taking a history misses the indication and every chart risk.",
+          "patientCue": "Well, sweetheart, don't you want to hear about it first? I've been through a lot with this."
+        }
+      ]
+    },
+    {
+      "id": "history_medications",
+      "stage": "history",
+      "prompt": "Her chart lists a \"blood pressure pill, 1 daily\" with no drug name and simvastatin with unknown status. What do you do next?",
+      "weight": 10,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Copy the chart medication list into your note as it stands",
+          "grade": "wrong",
+          "feedback": "Copying an uncoded pill and a statin of unknown status forward leaves both risks hidden.",
+          "patientCue": "Okay, honey. I did bring my bottles in my purse, if anybody wants to look."
+        },
+        {
+          "key": "B",
+          "text": "Ask her to list her medicines from memory",
+          "grade": "partial",
+          "feedback": "Asking is right, but her memory is vague and only the bottles reveal the water pill and the stopped statin.",
+          "patientCue": "Oh, the one for sugar twice a day and a couple for my pressure. Hold on, I'd have to check the bottles to tell you exactly.",
+          "covers": [
+            "history:medications"
+          ]
+        },
+        {
+          "key": "C",
+          "text": "Ask whether her pain ever spreads to her back",
+          "grade": "wrong",
+          "feedback": "Pain radiation does nothing to reconcile the uncoded pill or the statin on her chart.",
+          "patientCue": "No, it always stays low on the left. Why, should it?"
+        },
+        {
+          "key": "D",
+          "text": "Go through each pill bottle with her, asking specifically about the blood pressure pill and the simvastatin",
+          "grade": "correct",
+          "feedback": "Bottle reconciliation shows the mystery pill is hydrochlorothiazide and that she stopped simvastatin, both of which matter before bowel prep and anesthesia.",
+          "patientCue": "Hold on, I have them right here. Metformin 500 twice a day, amlodipine 5 and metoprolol 25, and the blood pressure pill is the water pill, hydrochlorothiazide 25, once a day. And the simvastatin, I stopped it in the spring because my legs ached, and I never told anyone. I feel a little guilty.",
+          "covers": [
+            "history:medications"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "history_allergies",
+      "stage": "history",
+      "prompt": "The chart says only \"Amoxicillin allergy\" with no reaction listed. What do you do next?",
+      "weight": 10,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Ask what happened when she took amoxicillin and whether she has any other allergies",
+          "grade": "correct",
+          "feedback": "Generalized hives is an immediate type reaction, which rules out aminopenicillins but still allows cefazolin with metronidazole.",
+          "patientCue": "Amoxicillin. I broke out in hives all over when I was about forty. And seasonal allergies, pollen in the spring.",
+          "covers": [
+            "history:allergies"
+          ]
+        },
+        {
+          "key": "B",
+          "text": "Assume it was a stomach upset and keep penicillin type antibiotics available",
+          "grade": "wrong",
+          "feedback": "Assuming an intolerance without asking risks giving a drug that caused hives.",
+          "patientCue": "Wait, honey, it wasn't my stomach. I broke out in hives all over."
+        },
+        {
+          "key": "C",
+          "text": "Confirm the amoxicillin allergy is still listed without asking about the reaction",
+          "grade": "partial",
+          "feedback": "Confirming the allergy helps, but without the reaction type you cannot choose prophylaxis safely.",
+          "patientCue": "Yes, amoxicillin, that's right.",
+          "covers": [
+            "history:allergies"
+          ]
+        },
+        {
+          "key": "D",
+          "text": "Ask about her diet and how many vegetables she eats",
+          "grade": "wrong",
+          "feedback": "Diet is a reasonable later conversation but does not clarify the allergy before choosing antibiotics.",
+          "patientCue": "Oh, let me tell you, years of tasting frosting and not enough vegetables. I think that's what did this."
+        }
+      ]
+    },
+    {
+      "id": "history_cancer_check",
+      "stage": "history",
+      "prompt": "Before you plan to remove part of her colon, what do you do next?",
+      "weight": 10,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Ask about her periods",
+          "grade": "wrong",
+          "feedback": "Her menstrual history is not the priority when cancer must be excluded before resection.",
+          "patientCue": "I went through menopause at fifty-one, sweetheart. No bleeding since."
+        },
+        {
+          "key": "B",
+          "text": "Ask about blood in her stool, black or thinner stools, and air or anything strange in her urine",
+          "grade": "partial",
+          "feedback": "Red flag bowel and fistula symptoms are useful, but only a colonoscopy actually excludes cancer.",
+          "patientCue": "No blood, no black stools, and my stools haven't gotten thinner. And no, never any air bubbles or anything strange in my urine, no bladder infections.",
+          "covers": [
+            "history:bowel",
+            "history:urinary"
+          ]
+        },
+        {
+          "key": "C",
+          "text": "Ask whether she has had a colonoscopy since the last attack and whether anyone in her family had colon cancer",
+          "grade": "correct",
+          "feedback": "A post recovery colonoscopy must exclude a sigmoid cancer that can mimic diverticulitis, especially with her father's history.",
+          "patientCue": "A colonoscopy in August after I got better. They said no cancer, just lots of pouches on the left side. And my tubes tied after my last baby. My father had colon cancer in his seventies, but the colonoscopy was clear.",
+          "covers": [
+            "history:past_surgical",
+            "history:family"
+          ]
+        },
+        {
+          "key": "D",
+          "text": "Ask what she ate this morning",
+          "grade": "wrong",
+          "feedback": "Last meal timing matters on the day of surgery, not for an elective clinic plan.",
+          "patientCue": "Oatmeal at seven this morning. Why, am I having surgery today?"
+        }
+      ]
+    },
+    {
+      "id": "exam_abdomen",
+      "stage": "exam",
+      "prompt": "She looks comfortable and relaxed. What do you examine next?",
+      "weight": 10,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Check for Murphy sign under the right ribs",
+          "grade": "wrong",
+          "feedback": "Murphy sign tests the gallbladder, which has nothing to do with her left sided disease.",
+          "patientCue": "No.",
+          "finding": {
+            "label": "Murphy sign",
+            "text": "Negative Murphy sign.",
+            "abnormal": false
+          }
+        },
+        {
+          "key": "B",
+          "text": "Check her vital signs, then palpate the abdomen with attention to the left lower quadrant",
+          "grade": "correct",
+          "feedback": "Normal vitals and mild left lower quadrant tenderness without a mass confirm she is between episodes and fit for elective surgery.",
+          "patientCue": "Mm, a little sore down there on the left, but nothing like before.",
+          "covers": [
+            "exam:vitals",
+            "exam:abdomen_palpation"
+          ],
+          "finding": {
+            "label": "Vitals and abdominal palpation",
+            "text": "Temperature 36.9 C, heart rate 70, blood pressure 144/82, respiratory rate 14, oxygen saturation 98% on room air. Weight 76 kg. Mild deep tenderness in the left lower quadrant. No mass, no guarding, no peritonitis.",
+            "abnormal": true
+          }
+        },
+        {
+          "key": "C",
+          "text": "Check for rebound tenderness and guarding",
+          "grade": "partial",
+          "feedback": "Excluding peritonitis is useful, but vitals and focused palpation tell you more about whether she is quiet.",
+          "patientCue": "No, that's okay. I'm relaxed, go ahead.",
+          "covers": [
+            "exam:rebound",
+            "exam:guarding_rigidity"
+          ],
+          "finding": {
+            "label": "Rebound and guarding",
+            "text": "No rebound tenderness. No guarding or rigidity.",
+            "abnormal": false
+          }
+        },
+        {
+          "key": "D",
+          "text": "Press at McBurney point in the right lower quadrant",
+          "grade": "wrong",
+          "feedback": "McBurney point targets the appendix, while her disease has always been on the left.",
+          "patientCue": "No, the right side's fine.",
+          "finding": {
+            "label": "Right lower quadrant",
+            "text": "Nontender in the right lower quadrant.",
+            "abnormal": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "tests_preop",
+      "stage": "tests",
+      "prompt": "Her charted creatinine was ordered but has no result. Which tests do you order?",
+      "weight": 15,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Order a lipase and a gallbladder ultrasound",
+          "grade": "wrong",
+          "feedback": "Pancreatic and biliary tests do not address her kidney function, potassium or the state of her sigmoid.",
+          "patientCue": "Alright, if you need it, honey. Whatever gets me to the operation."
+        },
+        {
+          "key": "B",
+          "text": "Order a CBC and CRP to confirm she is quiet",
+          "grade": "partial",
+          "feedback": "These confirm no active infection but leave her kidney function and potassium unknown on metformin and a diuretic.",
+          "patientCue": "Fine, take what you need.",
+          "covers": [
+            "test:cbc",
+            "test:crp"
+          ],
+          "finding": {
+            "label": "CBC and CRP",
+            "text": "White count 7.8, hemoglobin 13.0, platelets 268. Normal. CRP 6 mg/L (normal).",
+            "abnormal": false
+          }
+        },
+        {
+          "key": "C",
+          "text": "Skip labs because she feels well and the chart hemoglobin is normal",
+          "grade": "wrong",
+          "feedback": "A cancelled creatinine means kidney function is unknown, not normal, so skipping labs hides a real risk.",
+          "patientCue": "Well, I do feel fine today. You're the doctor, sweetheart."
+        },
+        {
+          "key": "D",
+          "text": "Order a BMP for creatinine and potassium, plus CBC, CRP, urinalysis, CT abdomen and pelvis, and type and screen",
+          "grade": "correct",
+          "feedback": "The BMP replaces the missing creatinine and catches thiazide hypokalemia, while the rest confirms resolution, excludes fistula and prepares for bleeding.",
+          "patientCue": "Another scan? Alright, if you need it. Take what you need.",
+          "covers": [
+            "test:bmp",
+            "test:cbc",
+            "test:crp",
+            "test:urinalysis",
+            "test:ct_abdomen_pelvis",
+            "test:type_and_screen"
+          ],
+          "finding": {
+            "label": "Preoperative workup",
+            "text": "BMP: Sodium 137, potassium 3.4 (low, likely from the thiazide), creatinine 0.9, eGFR above 60, glucose 128. This replaces the cancelled creatinine on her chart. CBC: White count 7.8, hemoglobin 13.0, platelets 268. Normal. CRP: CRP 6 mg/L (normal). Urinalysis: No blood, leukocytes, nitrites, or debris. No sign of a colovesical fistula. CT abdomen and pelvis: Sigmoid diverticulosis with mild wall thickening. The June pericolic abscess has resolved. No fistula, no free air, no mass. Type and screen: Type O positive, antibody screen negative.",
+            "abnormal": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "diagnosis",
+      "stage": "diagnosis",
+      "prompt": "What is the diagnosis?",
+      "weight": 20,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Diverticulitis",
+          "grade": "partial",
+          "feedback": "Correct disease, but naming recurrent sigmoid disease with a resolved abscess is what supports resection.",
+          "patientCue": "That's what they told me about the pouches. So what do we do about it?"
+        },
+        {
+          "key": "B",
+          "text": "Colon cancer",
+          "grade": "wrong",
+          "feedback": "Her August colonoscopy showed no cancer and she has no bleeding or change in stool caliber.",
+          "patientCue": "Oh. My father had that. But they told me the colonoscopy was clear, no cancer."
+        },
+        {
+          "key": "C",
+          "text": "Recurrent sigmoid diverticulitis, complicated by a resolved abscess",
+          "grade": "correct",
+          "feedback": "Three CT confirmed left sided episodes, one with an abscess now resolved, define complicated recurrent sigmoid disease.",
+          "patientCue": "So it's the pouches, like my stomach doctor said. Okay. What do we do?"
+        },
+        {
+          "key": "D",
+          "text": "Colovesical fistula",
+          "grade": "wrong",
+          "feedback": "She has no air or stool in her urine, a clean urinalysis and no fistula on CT.",
+          "patientCue": "Sweetheart, say that plainly for me? I've never had anything strange in my urine."
+        }
+      ]
+    },
+    {
+      "id": "plan",
+      "stage": "plan",
+      "prompt": "What do you recommend?",
+      "weight": 15,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Recommend an elective laparoscopic sigmoid colectomy, with potassium repleted and antibiotics chosen around her amoxicillin allergy",
+          "grade": "correct",
+          "feedback": "Complicated recurrent disease, now quiet with cancer excluded, is the classic indication for elective laparoscopic sigmoid colectomy.",
+          "patientCue": "Thank God. Okay. Now, am I going to wake up with a bag? Be honest with me."
+        },
+        {
+          "key": "B",
+          "text": "Recommend a laparoscopic sigmoid colectomy as an urgent operation this week",
+          "grade": "partial",
+          "feedback": "Right operation, but she is quiet and well, so it should be planned electively after optimization.",
+          "patientCue": "This week? I'm ready, honey, but I didn't think it was an emergency. I feel fine today."
+        },
+        {
+          "key": "C",
+          "text": "Prescribe another long course of antibiotics and watch",
+          "grade": "wrong",
+          "feedback": "Antibiotics do not treat quiescent disease and she already had a complicated episode.",
+          "patientCue": "More antibiotics? Honey, I've done three rounds of this. I'm fed up and ready to be done."
+        },
+        {
+          "key": "D",
+          "text": "Recommend an open colectomy with a permanent colostomy",
+          "grade": "wrong",
+          "feedback": "An elective resection in a quiet patient is usually laparoscopic with a primary joining, not a planned permanent stoma.",
+          "patientCue": "A bag? Like my neighbor Sal? Oh no, that's what I was afraid of."
+        }
+      ]
+    }
+  ],
+  "closingLine": "Okay. I can live with unlikely. Now, can we do it before the baby comes in January?"
+}

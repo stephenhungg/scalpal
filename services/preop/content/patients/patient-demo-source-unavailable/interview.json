@@ -1,0 +1,382 @@
+{
+  "version": 1,
+  "patientId": "patient-demo-source-unavailable",
+  "procedureId": "lap_cholecystectomy",
+  "openingLine": "Hello, I'm Ingrid. The hospital told me to come see you about taking my gallbladder out, after that business with my pancreas.",
+  "rounds": [
+    {
+      "id": "history_admission",
+      "stage": "history",
+      "prompt": "Her chart shows only high blood pressure and high cholesterol, and one record source failed to sync. What do you do next?",
+      "weight": 10,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Ask her to walk you through the hospital stay: where, when, how serious, and what they tested",
+          "grade": "correct",
+          "feedback": "The admission lives in the unsynced Quillhaven source, so only she can tell you it was mild, that the bile duct MRI was clear, and when it happened.",
+          "patientCue": "Let me be exact. About four weeks ago at Quillhaven, for three days. They said it was mild, I never went to the ICU, and before I went home they did an MRI of my bile ducts and said no stones were stuck.",
+          "covers": [
+            "history:past_medical",
+            "history:onset",
+            "history:recent_illness"
+          ]
+        },
+        {
+          "key": "B",
+          "text": "Tell her the chart shows no recent admission, so there must be a mix up",
+          "grade": "wrong",
+          "feedback": "A failed source sync means missing data, not normal data, so the chart cannot overrule her account.",
+          "patientCue": "Well, I was there for three days about four weeks ago, at Quillhaven. I'm not mixed up about that."
+        },
+        {
+          "key": "C",
+          "text": "Ask where the pain was back then and what it felt like",
+          "grade": "partial",
+          "feedback": "The classic pain story is useful, but it does not fill the chart gap about how severe the episode was and whether the bile duct was cleared.",
+          "patientCue": "Well, it was in the upper middle of my belly, boring straight through to my back. A terrible, steady pain, a ten. Nothing now.",
+          "covers": [
+            "history:location",
+            "history:character",
+            "history:severity",
+            "history:migration"
+          ]
+        },
+        {
+          "key": "D",
+          "text": "Wait for the Quillhaven records to sync before taking a history",
+          "grade": "wrong",
+          "feedback": "The source may never sync, and the patient in front of you is the best available record.",
+          "patientCue": "Well, I'm right here. I left my notebook on the kitchen table, which annoys me, but I can tell you what happened."
+        }
+      ]
+    },
+    {
+      "id": "history_since_discharge",
+      "stage": "history",
+      "prompt": "She says she feels fine today. What do you do next?",
+      "weight": 10,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Ask about her last menstrual period",
+          "grade": "wrong",
+          "feedback": "At 68 she is postmenopausal, and this does not screen for complications since discharge.",
+          "patientCue": "Well, I'm long past menopause."
+        },
+        {
+          "key": "B",
+          "text": "Ask whether she has had any pain, nausea or vomiting since she got home",
+          "grade": "partial",
+          "feedback": "Confirming she is pain free helps, but fever, dark urine and pale stools are what flag cholangitis or a retained duct stone.",
+          "patientCue": "Today it's zero. I threw up a lot in the hospital, but none since I got home.",
+          "covers": [
+            "history:severity",
+            "history:nausea_vomiting"
+          ]
+        },
+        {
+          "key": "C",
+          "text": "Ask about fever, dark urine or pale stools since discharge",
+          "grade": "correct",
+          "feedback": "No fever, dark urine or pale stools makes cholangitis or a retained bile duct stone unlikely.",
+          "patientCue": "No fevers since I got home. My urine hasn't been dark, and my bowels are normal. No pale stools.",
+          "covers": [
+            "history:fever",
+            "history:urinary",
+            "history:bowel"
+          ]
+        },
+        {
+          "key": "D",
+          "text": "Tell her she sounds well and move straight to scheduling",
+          "grade": "wrong",
+          "feedback": "Skipping the post discharge review risks missing a complication that would change the plan.",
+          "patientCue": "Well, I do want it on the calendar. But don't you want to know how I've been?"
+        }
+      ]
+    },
+    {
+      "id": "history_meds_allergies",
+      "stage": "history",
+      "prompt": "The chart lists lisinopril, atorvastatin and a penicillin allergy. What do you do next?",
+      "weight": 10,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Ask everything she takes, including over the counter pills, and exactly what happened with penicillin",
+          "grade": "correct",
+          "feedback": "This uncovers the self started aspirin that is in no chart and shows the penicillin reaction was a remote mild rash, so cefazolin is fine.",
+          "patientCue": "Lisinopril in the morning and atorvastatin at night. I also take a baby aspirin most days on my own, nobody prescribed it. Penicillin gave me an itchy red rash on my arms and chest when I was about thirty, no swelling, no trouble breathing.",
+          "covers": [
+            "history:medications",
+            "history:allergies"
+          ]
+        },
+        {
+          "key": "B",
+          "text": "Confirm the two listed prescriptions and the penicillin allergy as charted",
+          "grade": "partial",
+          "feedback": "Reading back the chart confirms what is listed but misses the unlisted aspirin and the nature of the penicillin reaction.",
+          "patientCue": "Well, yes. Lisinopril in the morning and atorvastatin at night. And yes, penicillin."
+        },
+        {
+          "key": "C",
+          "text": "Ask whether she has ever had surgery",
+          "grade": "wrong",
+          "feedback": "Surgical history matters, but it does not address the medication and allergy risks flagged in the chart.",
+          "patientCue": "I've never had surgery. I had a colonoscopy at sixty and it was fine."
+        },
+        {
+          "key": "D",
+          "text": "Write that she must avoid all beta lactam antibiotics, without asking more",
+          "grade": "wrong",
+          "feedback": "An uncharacterized label leads to needlessly worse prophylaxis when a remote mild rash still allows cefazolin.",
+          "patientCue": "Say that again in plain English, please. I did numbers, not medicine."
+        }
+      ]
+    },
+    {
+      "id": "history_cause",
+      "stage": "history",
+      "prompt": "You want to confirm what caused the pancreatitis. What do you do next?",
+      "weight": 10,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Tell her it was probably from drinking",
+          "grade": "wrong",
+          "feedback": "Assuming alcohol without asking is inaccurate and alienating, and her history points to stones.",
+          "patientCue": "Well, I hardly drink. Maybe a glass of wine at a wedding. They asked me about that a lot in the hospital too."
+        },
+        {
+          "key": "B",
+          "text": "Ask whether anyone in the family has had gallstones",
+          "grade": "partial",
+          "feedback": "Family history supports a stone cause, but alcohol, the other common cause, still has to be asked about.",
+          "patientCue": "My sister had gallstones.",
+          "covers": [
+            "history:family"
+          ]
+        },
+        {
+          "key": "C",
+          "text": "Ask what she ate this morning",
+          "grade": "wrong",
+          "feedback": "Her last meal matters for anesthesia on the day of surgery, not for the cause of last month's pancreatitis.",
+          "patientCue": "Toast and coffee at eight this morning."
+        },
+        {
+          "key": "D",
+          "text": "Ask calmly about alcohol and smoking, and about gallstones in the family",
+          "grade": "correct",
+          "feedback": "Minimal alcohol and a sister with gallstones make stones the clear cause and rule out the other common culprit.",
+          "patientCue": "I never smoked. Maybe a glass of wine at a wedding, that's it. And my sister had gallstones.",
+          "covers": [
+            "history:social",
+            "history:family"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "exam_focused",
+      "stage": "exam",
+      "prompt": "She is pain free and cooperative. What do you do next?",
+      "weight": 10,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Palpate the abdomen",
+          "grade": "partial",
+          "feedback": "A soft abdomen without a mass helps exclude a collection, but you also need vitals, a jaundice check and a Murphy sign.",
+          "patientCue": "No, that's all fine now.",
+          "covers": [
+            "exam:abdomen_palpation"
+          ],
+          "finding": {
+            "label": "Abdominal palpation",
+            "text": "Soft and nontender. No mass.",
+            "abnormal": false
+          }
+        },
+        {
+          "key": "B",
+          "text": "Check vitals, look for jaundice, then palpate the abdomen including a Murphy sign",
+          "grade": "correct",
+          "feedback": "Normal vitals, no jaundice, a soft abdomen and a negative Murphy sign confirm recovery and no ongoing gallbladder inflammation.",
+          "patientCue": "Go ahead. No, that's all fine now. No, that doesn't hurt.",
+          "covers": [
+            "exam:vitals",
+            "exam:general_appearance",
+            "exam:abdomen_palpation",
+            "exam:murphy"
+          ],
+          "finding": {
+            "label": "Vitals and abdominal exam",
+            "text": "Vitals: Temperature 36.7 C, heart rate 72, blood pressure 132/80, respiratory rate 14, oxygen saturation 98% on room air. Weight 81 kg. General: Well appearing. No jaundice, no scleral icterus. Palpation: Soft and nontender. No mass. Murphy: Negative Murphy sign.",
+            "abnormal": false
+          }
+        },
+        {
+          "key": "C",
+          "text": "Press on McBurney's point in the right lower quadrant",
+          "grade": "wrong",
+          "feedback": "McBurney's point screens for appendicitis, which is not the question here.",
+          "patientCue": "No.",
+          "finding": {
+            "label": "McBurney point",
+            "text": "Nontender in the right lower quadrant.",
+            "abnormal": false
+          }
+        },
+        {
+          "key": "D",
+          "text": "Perform a pelvic exam",
+          "grade": "wrong",
+          "feedback": "A pelvic exam adds nothing for a postmenopausal woman recovering from gallstone pancreatitis.",
+          "patientCue": "Well, I'm long past menopause. Is that really needed for this?"
+        }
+      ]
+    },
+    {
+      "id": "tests_workup",
+      "stage": "tests",
+      "prompt": "Her exam is benign. What do you order?",
+      "weight": 15,
+      "choices": [
+        {
+          "key": "A",
+          "text": "CT abdomen and pelvis with contrast",
+          "grade": "wrong",
+          "feedback": "After mild pancreatitis that has resolved, CT adds radiation without changing the plan, and it shows the stones poorly.",
+          "patientCue": "I'd rather not have a scan with radiation, unless I need it.",
+          "finding": {
+            "label": "CT abdomen and pelvis",
+            "text": "No peripancreatic collection or necrosis. Gallstones not well seen.",
+            "abnormal": false
+          }
+        },
+        {
+          "key": "B",
+          "text": "Lipase only, to confirm the pancreatitis has resolved",
+          "grade": "partial",
+          "feedback": "A normal lipase confirms resolution, but you still need liver tests to exclude a retained duct stone and an ultrasound to show the stones.",
+          "patientCue": "Fine.",
+          "covers": [
+            "test:lipase"
+          ],
+          "finding": {
+            "label": "Lipase",
+            "text": "Lipase 42 (normal).",
+            "abnormal": false
+          }
+        },
+        {
+          "key": "C",
+          "text": "CBC, BMP, liver tests, lipase and a right upper quadrant ultrasound",
+          "grade": "correct",
+          "feedback": "Normal liver tests with a 5 mm duct exclude a retained stone, lipase confirms resolution, BMP checks kidneys, calcium and glucose, and ultrasound shows the stones.",
+          "patientCue": "Fine. Another scan? Alright, as long as it's not the radiation kind.",
+          "covers": [
+            "test:cbc",
+            "test:bmp",
+            "test:lfts",
+            "test:lipase",
+            "test:ultrasound"
+          ],
+          "finding": {
+            "label": "Labs and ultrasound",
+            "text": "CBC: White count 6.9, hemoglobin 13.4, platelets 245. Normal. BMP: Sodium 140, potassium 4.4, creatinine 0.9, glucose 102, calcium 9.4. Normal. LFTs: Total bilirubin 0.7, alkaline phosphatase 88, AST 24, ALT 21. Normal: no sign of a retained bile duct stone. Lipase: Lipase 42 (normal). Ultrasound: Multiple small gallstones and sludge. Gallbladder wall 3 mm, no pericholecystic fluid. Common bile duct 5 mm. Pancreas partly obscured by bowel gas, no peripancreatic fluid seen.",
+            "abnormal": true
+          }
+        },
+        {
+          "key": "D",
+          "text": "Urinalysis and CRP",
+          "grade": "wrong",
+          "feedback": "Neither test addresses a retained duct stone, resolution of the pancreatitis, or the stones themselves.",
+          "patientCue": "Fine.",
+          "finding": {
+            "label": "Urinalysis and CRP",
+            "text": "Urinalysis: Normal. CRP: CRP 4 mg/L (normal).",
+            "abnormal": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "diagnosis",
+      "stage": "diagnosis",
+      "prompt": "What is your working diagnosis?",
+      "weight": 20,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Resolved mild gallstone pancreatitis, due for interval cholecystectomy",
+          "grade": "correct",
+          "feedback": "Stones on ultrasound, minimal alcohol, normal calcium, a clear duct and a normal lipase define resolved mild gallstone pancreatitis needing the gallbladder out.",
+          "patientCue": "Well, that matches what the hospital said. I never want to go through that again."
+        },
+        {
+          "key": "B",
+          "text": "Retained common bile duct stone",
+          "grade": "wrong",
+          "feedback": "A clear bile duct MRI, normal liver tests, a 5 mm duct and no jaundice argue against a retained stone.",
+          "patientCue": "They told me no stones were stuck. That's what the MRI of my bile ducts was for."
+        },
+        {
+          "key": "C",
+          "text": "Gallstone disease",
+          "grade": "partial",
+          "feedback": "Gallstones are present, but naming the prior pancreatitis explains why surgery should not be put off.",
+          "patientCue": "Well, the stones, yes. But it was my pancreas that put me in the hospital."
+        },
+        {
+          "key": "D",
+          "text": "Alcohol related pancreatitis",
+          "grade": "wrong",
+          "feedback": "She drinks a glass of wine at a wedding at most, and gallstones are clearly present.",
+          "patientCue": "I hardly drink. Maybe a glass of wine at a wedding. Please write that down correctly."
+        }
+      ]
+    },
+    {
+      "id": "plan",
+      "stage": "plan",
+      "prompt": "What do you recommend?",
+      "weight": 15,
+      "choices": [
+        {
+          "key": "A",
+          "text": "ERCP to clear the bile duct first, then reassess",
+          "grade": "wrong",
+          "feedback": "With a clear MRI, normal liver tests and a 5 mm duct there is no duct stone to clear, so ERCP adds risk without benefit.",
+          "patientCue": "Say that again in plain English, please. The hospital said no stones were stuck."
+        },
+        {
+          "key": "B",
+          "text": "Laparoscopic cholecystectomy in about six months, once everything has fully settled",
+          "grade": "partial",
+          "feedback": "Right operation, but waiting months leaves her at high risk of another attack; it should be done within weeks.",
+          "patientCue": "Six months? I don't want to go through that again. How soon can it actually be done?"
+        },
+        {
+          "key": "C",
+          "text": "Low fat diet and observation, operating only if it happens again",
+          "grade": "wrong",
+          "feedback": "Without removing the gallbladder, recurrent pancreatitis and other stone events are common.",
+          "patientCue": "Well, I already stay away from fried food. I'd rather not wait for it to happen again."
+        },
+        {
+          "key": "D",
+          "text": "Elective laparoscopic cholecystectomy within the next few weeks, cefazolin prophylaxis, a decision on her aspirin, and request the Quillhaven records",
+          "grade": "correct",
+          "feedback": "Prompt elective laparoscopic cholecystectomy prevents recurrence, cefazolin suits her mild remote rash, and the aspirin and missing records are handled before the OR.",
+          "patientCue": "Good. Put me on the calendar. How soon can it be done?"
+        }
+      ]
+    }
+  ],
+  "closingLine": "Good. Put me on the calendar. I never want to go through that pain again, so the sooner the better."
+}

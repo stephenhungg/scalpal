@@ -1,0 +1,452 @@
+{
+  "version": 1,
+  "patientId": "patient-demo-pediatric-asthma",
+  "procedureId": "open_appendectomy",
+  "openingLine": "Hi, I'm Laura, Theo's mom. He's been miserable since last night and he won't let anyone touch his belly.",
+  "rounds": [
+    {
+      "id": "history_onset",
+      "stage": "history",
+      "prompt": "Laura is waiting for you to start. What do you do next?",
+      "weight": 8,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Ask whether anyone at home smokes",
+          "grade": "wrong",
+          "feedback": "Social history can wait; the story of the pain comes first.",
+          "patientCue": "Okay, so... no, nobody smokes at home. But it's his tummy I'm worried about."
+        },
+        {
+          "key": "B",
+          "text": "Ask when the pain started, where it began, and where it is now",
+          "grade": "correct",
+          "feedback": "Timing and migration from the umbilicus to the right lower quadrant are the core of the appendicitis history.",
+          "patientCue": "It started last night around six, before dinner, maybe eighteen hours ago. At first he said it was around his belly button. This morning he said it moved down to the right, and now he points to the lower right side. Right, buddy?",
+          "covers": [
+            "history:chief_complaint",
+            "history:onset",
+            "history:migration",
+            "history:location"
+          ]
+        },
+        {
+          "key": "C",
+          "text": "Ask Theo to rate his pain from zero to ten",
+          "grade": "partial",
+          "feedback": "Severity matters, but onset and migration tell you far more about the diagnosis.",
+          "patientCue": "He says eight. He's usually tough about this stuff.",
+          "covers": [
+            "history:severity"
+          ]
+        },
+        {
+          "key": "D",
+          "text": "Ask Theo which Pokemon cards he likes best",
+          "grade": "wrong",
+          "feedback": "Building rapport is kind, but it delays the history of a child in real pain.",
+          "patientCue": "Theo just shrugs and holds Chompy tighter. He's really hurting right now."
+        }
+      ]
+    },
+    {
+      "id": "history_associated",
+      "stage": "history",
+      "prompt": "The pain moved to his lower right side. What do you do next?",
+      "weight": 8,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Ask only whether he has thrown up",
+          "grade": "partial",
+          "feedback": "Vomiting is relevant, but you also need appetite, fever, bowel and urinary symptoms to sort the differential.",
+          "patientCue": "He threw up once this morning. He's been nauseous since last night.",
+          "covers": [
+            "history:nausea_vomiting"
+          ]
+        },
+        {
+          "key": "B",
+          "text": "Reassure her it is probably a stomach bug and send them home with fluids",
+          "grade": "wrong",
+          "feedback": "Migrating pain with fever is not a stomach bug until proven otherwise, and he has not been examined.",
+          "patientCue": "That's what I thought last night, and now it's moved and he has a fever. I really want someone to look at him."
+        },
+        {
+          "key": "C",
+          "text": "Ask whether anyone in the family has had problems with anesthesia",
+          "grade": "wrong",
+          "feedback": "Anesthesia history matters later, but right now you need the symptoms that go with the pain.",
+          "patientCue": "Not that I know of. Why, does he need anesthesia?"
+        },
+        {
+          "key": "D",
+          "text": "Ask about nausea, vomiting, appetite, fever, bowel movements and peeing",
+          "grade": "correct",
+          "feedback": "Anorexia, vomiting after the pain, and fever with normal stools and urine support appendicitis over gastroenteritis or a urinary cause.",
+          "patientCue": "Okay, so: he's been nauseous since last night and threw up once this morning. He didn't want his pizza, and he never refuses pizza. He felt warm and it was 38.0 this morning. His last poop was yesterday, normal, no diarrhea. No complaints about peeing.",
+          "covers": [
+            "history:nausea_vomiting",
+            "history:appetite",
+            "history:fever",
+            "history:bowel",
+            "history:urinary"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "history_background",
+      "stage": "history",
+      "prompt": "The story fits a surgical belly. What do you do next?",
+      "weight": 8,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Ask about his medical problems, how well his asthma is controlled, his medicines, and all his allergies",
+          "grade": "correct",
+          "feedback": "This uncovers his asthma, recent albuterol use and peanut anaphylaxis, all of which anesthesia and the time-out need.",
+          "patientCue": "He has asthma, it's well controlled. He's never been hospitalized for it or needed a breathing tube. He has eczema too. He uses his fluticasone inhaler twice a day, albuterol when he needs it, last time two days ago, a montelukast chewable every evening, and cetirizine when his allergies act up. He's very allergic to peanuts. He had anaphylaxis once when he was five, so he carries an EpiPen. Dust mites too. No medication allergies that we know of.",
+          "covers": [
+            "history:past_medical",
+            "history:medications",
+            "history:allergies"
+          ]
+        },
+        {
+          "key": "B",
+          "text": "Ask only whether he is allergic to any medicines",
+          "grade": "partial",
+          "feedback": "Drug allergies matter, but a narrow question can miss his peanut anaphylaxis and his asthma.",
+          "patientCue": "No medication allergies that we know of. But he's very allergic to peanuts, he carries an EpiPen.",
+          "covers": [
+            "history:allergies"
+          ]
+        },
+        {
+          "key": "C",
+          "text": "Skip it, since the chart already lists his allergies and medicines",
+          "grade": "wrong",
+          "feedback": "The chart is incomplete, so allergies and medicines must be confirmed directly with the parent.",
+          "patientCue": "I'd feel better if you heard it from me. There are things about his asthma and his allergies you should know."
+        },
+        {
+          "key": "D",
+          "text": "Ask what grade Theo is in",
+          "grade": "wrong",
+          "feedback": "School details do not change management; his asthma and allergies do.",
+          "patientCue": "He's in third grade. Right, buddy?"
+        }
+      ]
+    },
+    {
+      "id": "history_last_meal",
+      "stage": "history",
+      "prompt": "He may need anesthesia today. What do you do next?",
+      "weight": 8,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Ask whether he has ever had surgery",
+          "grade": "partial",
+          "feedback": "Prior surgery is worth knowing, but last oral intake is what sets anesthesia timing.",
+          "patientCue": "He's never had surgery.",
+          "covers": [
+            "history:past_surgical"
+          ]
+        },
+        {
+          "key": "B",
+          "text": "Give him some apple juice while you finish the paperwork",
+          "grade": "wrong",
+          "feedback": "A child who may need surgery today should have nothing by mouth until anesthesia decides.",
+          "patientCue": "Okay, so... should he be drinking? He's been having just sips of water."
+        },
+        {
+          "key": "C",
+          "text": "Ask when he last ate or drank, whether he has had surgery before, and about any family anesthesia problems",
+          "grade": "correct",
+          "feedback": "Last intake sets aspiration risk and induction timing, and surgical and family anesthesia history round out the pre-op screen.",
+          "patientCue": "A few crackers around seven last night. Just sips of water this morning, the last about an hour ago. He's never had surgery. No one in the family has had problems with anesthesia that I know of.",
+          "covers": [
+            "history:last_meal",
+            "history:past_surgical",
+            "history:family"
+          ]
+        },
+        {
+          "key": "D",
+          "text": "Ask Theo what he builds in Minecraft",
+          "grade": "wrong",
+          "feedback": "Friendly, but it misses the fasting history anesthesia will ask for first.",
+          "patientCue": "Theo whispers \"houses\" and curls up again. He's really tired."
+        }
+      ]
+    },
+    {
+      "id": "exam_abdomen",
+      "stage": "exam",
+      "prompt": "Theo is curled up on the bed. What do you do next?",
+      "weight": 10,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Press firmly on his right lower belly right away",
+          "grade": "wrong",
+          "feedback": "Starting hard over the painful spot without warning hurts a scared child and loses his trust for the rest of the exam.",
+          "patientCue": "Can you please tell him first? He's pulling away, he says that's where it hurts.",
+          "finding": {
+            "label": "Abdominal palpation",
+            "text": "Right lower quadrant tenderness with guarding. Rest of the abdomen soft.",
+            "abnormal": true
+          }
+        },
+        {
+          "key": "B",
+          "text": "Check his vitals and leave the belly for later",
+          "grade": "partial",
+          "feedback": "Fever and tachycardia matter, but the abdominal exam is the key finding.",
+          "patientCue": "Okay. He's okay with that part. Right, buddy?",
+          "covers": [
+            "exam:vitals"
+          ],
+          "finding": {
+            "label": "Vital signs",
+            "text": "Temperature 38.0 C, heart rate 112, blood pressure 104/66, respiratory rate 20, oxygen saturation 98% on room air. Weight 30 kg.",
+            "abnormal": true
+          }
+        },
+        {
+          "key": "C",
+          "text": "Check for a Murphy sign under the right ribs",
+          "grade": "wrong",
+          "feedback": "Gallbladder disease is unlikely in a 9-year-old with right lower quadrant pain.",
+          "patientCue": "He says that's fine up there.",
+          "finding": {
+            "label": "Murphy sign",
+            "text": "No right upper quadrant tenderness.",
+            "abnormal": false
+          }
+        },
+        {
+          "key": "D",
+          "text": "Tell Theo what you'll do, check vitals, then palpate gently from the left side toward McBurney's point and test for rebound",
+          "grade": "correct",
+          "feedback": "Warning the child, starting away from the pain and localizing to McBurney's point with rebound gives the key peritoneal findings.",
+          "patientCue": "Thank you for telling him. He's pulling away, he says that's where it hurts. He yelped, that's the spot. Now he's crying, he says letting go hurt more. I know, bud, I know.",
+          "covers": [
+            "exam:vitals",
+            "exam:abdomen_palpation",
+            "exam:mcburney_point",
+            "exam:rebound"
+          ],
+          "finding": {
+            "label": "Vitals and abdomen",
+            "text": "Temperature 38.0 C, heart rate 112, blood pressure 104/66, respiratory rate 20, oxygen saturation 98% on room air. Weight 30 kg. Right lower quadrant tenderness with guarding. Rest of the abdomen soft. Maximal tenderness at McBurney's point. Rebound tenderness in the right lower quadrant.",
+            "abnormal": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "exam_testes_chest",
+      "stage": "exam",
+      "prompt": "The belly points to the right lower quadrant. What do you do next?",
+      "weight": 10,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Explain to Theo, then examine his testicles and listen to his chest",
+          "grade": "correct",
+          "feedback": "Every boy with lower abdominal pain needs a testicular exam for torsion, and a clear chest rules out pneumonia and wheeze before anesthesia.",
+          "patientCue": "He's going to be embarrassed. He says it doesn't hurt there. And his breathing seems okay to me.",
+          "covers": [
+            "exam:genitourinary",
+            "exam:chest_lungs"
+          ],
+          "finding": {
+            "label": "Testicular and chest exam",
+            "text": "Normal testicular exam, no swelling or tenderness, normal cremasteric reflex. Clear breath sounds bilaterally, no wheeze. Normal work of breathing.",
+            "abnormal": false
+          }
+        },
+        {
+          "key": "B",
+          "text": "Listen to his chest only",
+          "grade": "partial",
+          "feedback": "Checking for wheeze matters with his asthma, but skipping the testicular exam risks missing torsion.",
+          "patientCue": "Okay. He's breathing okay, I think.",
+          "covers": [
+            "exam:chest_lungs"
+          ],
+          "finding": {
+            "label": "Chest",
+            "text": "Clear breath sounds bilaterally, no wheeze. Normal work of breathing.",
+            "abnormal": false
+          }
+        },
+        {
+          "key": "C",
+          "text": "Rotate his right hip inward to test the obturator sign",
+          "grade": "wrong",
+          "feedback": "Another appendix sign adds little now, while the can't-miss torsion exam is still undone.",
+          "patientCue": "He says that's okay.",
+          "finding": {
+            "label": "Obturator sign",
+            "text": "Negative obturator sign.",
+            "abnormal": false
+          }
+        },
+        {
+          "key": "D",
+          "text": "Skip the genital exam because he seems embarrassed",
+          "grade": "wrong",
+          "feedback": "Embarrassment is never a reason to skip the testicular exam in a boy with lower abdominal pain.",
+          "patientCue": "He is shy about that, but if you need to check, I'd rather you did. Tell him first, please."
+        }
+      ]
+    },
+    {
+      "id": "tests_workup",
+      "stage": "tests",
+      "prompt": "You suspect a surgical cause. What do you order next?",
+      "weight": 13,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Order a CT of the abdomen and pelvis first",
+          "grade": "wrong",
+          "feedback": "In children, ultrasound comes first to avoid radiation; CT is for an equivocal ultrasound.",
+          "patientCue": "Okay, so a scan. Is that a lot for a kid his size?",
+          "finding": {
+            "label": "CT abdomen and pelvis",
+            "text": "Dilated 9 mm appendix with fat stranding, no abscess.",
+            "abnormal": true
+          }
+        },
+        {
+          "key": "B",
+          "text": "Order a CBC, CRP and right lower quadrant ultrasound",
+          "grade": "partial",
+          "feedback": "Good diagnostic tests, but you skipped the kidney function the chart is missing, the urinalysis, and a type and screen.",
+          "patientCue": "Okay. Bud, they need to check a few things. Right, buddy?",
+          "covers": [
+            "test:cbc",
+            "test:crp",
+            "test:ultrasound"
+          ],
+          "finding": {
+            "label": "CBC, CRP, ultrasound",
+            "text": "White count 14.2 with 85% neutrophils. Hemoglobin 13.1. Platelets 310. CRP 32 mg/L (elevated). Noncompressible 9 mm appendix with periappendiceal fluid and hyperemia. No abscess.",
+            "abnormal": true
+          }
+        },
+        {
+          "key": "C",
+          "text": "Order a CBC, CRP, BMP, urinalysis, type and screen, and a right lower quadrant ultrasound",
+          "grade": "correct",
+          "feedback": "This confirms the diagnosis without radiation, rules out a urinary cause, fills the chart's kidney function gap and prepares for surgery.",
+          "patientCue": "Okay, so blood, pee, and a scan with the jelly. We can do that. Right, buddy?",
+          "covers": [
+            "test:cbc",
+            "test:crp",
+            "test:bmp",
+            "test:urinalysis",
+            "test:type_and_screen",
+            "test:ultrasound"
+          ],
+          "finding": {
+            "label": "Labs and ultrasound",
+            "text": "White count 14.2 with 85% neutrophils. Hemoglobin 13.1. Platelets 310. CRP 32 mg/L (elevated). Sodium 137, potassium 4.0, creatinine 0.5, glucose 102. Urinalysis normal. No blood, no leukocytes, no nitrites. Type A positive, antibody screen negative. Ultrasound: noncompressible 9 mm appendix with periappendiceal fluid and hyperemia. No abscess.",
+            "abnormal": true
+          }
+        },
+        {
+          "key": "D",
+          "text": "Order a lipase only",
+          "grade": "wrong",
+          "feedback": "Pancreatitis is unlikely here, and a lipase alone does nothing to confirm or exclude the leading diagnosis.",
+          "patientCue": "Just one test? Okay. Will that tell you what's going on?",
+          "finding": {
+            "label": "Lipase",
+            "text": "Lipase normal.",
+            "abnormal": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "diagnosis",
+      "stage": "diagnosis",
+      "prompt": "Laura asks what is wrong with Theo. What is your diagnosis?",
+      "weight": 20,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Mesenteric adenitis",
+          "grade": "wrong",
+          "feedback": "There was no recent viral illness, and the ultrasound shows an abnormal appendix.",
+          "patientCue": "What does that mean in normal words?"
+        },
+        {
+          "key": "B",
+          "text": "Acute uncomplicated appendicitis",
+          "grade": "correct",
+          "feedback": "Migrating pain, anorexia, fever, peritoneal signs, leukocytosis and a noncompressible 9 mm appendix make this acute uncomplicated appendicitis.",
+          "patientCue": "Okay. Okay. So it's not a stomach bug. Did I wait too long?"
+        },
+        {
+          "key": "C",
+          "text": "Perforated appendicitis",
+          "grade": "partial",
+          "feedback": "Right organ, but there is no abscess on ultrasound and he is not toxic, so this is uncomplicated.",
+          "patientCue": "That sounds bad. Is that because I waited overnight?"
+        },
+        {
+          "key": "D",
+          "text": "Testicular torsion",
+          "grade": "wrong",
+          "feedback": "His testicular exam was normal with an intact cremasteric reflex.",
+          "patientCue": "But he said it didn't hurt down there. I'm confused."
+        }
+      ]
+    },
+    {
+      "id": "plan",
+      "stage": "plan",
+      "prompt": "What is your plan for Theo?",
+      "weight": 15,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Admit for observation and repeat the ultrasound tomorrow",
+          "grade": "wrong",
+          "feedback": "The diagnosis is already confirmed, and waiting risks perforation.",
+          "patientCue": "Wait until tomorrow? He's really hurting now."
+        },
+        {
+          "key": "B",
+          "text": "Discharge home on oral antibiotics with follow-up in two days",
+          "grade": "wrong",
+          "feedback": "A febrile child with peritoneal signs and a confirmed inflamed appendix should not be sent home.",
+          "patientCue": "Home? He can barely walk. I don't feel okay about that."
+        },
+        {
+          "key": "C",
+          "text": "Book an open appendectomy for next week once he is feeling better",
+          "grade": "partial",
+          "feedback": "Right operation, wrong timing: acute appendicitis needs urgent surgery, not a delayed booking.",
+          "patientCue": "Next week? Can he really wait that long like this?"
+        },
+        {
+          "key": "D",
+          "text": "Urgent open appendectomy today, with IV fluids, pain medicine and antibiotics now, and anesthesia told about his asthma and peanut anaphylaxis",
+          "grade": "correct",
+          "feedback": "Urgent appendectomy is the treatment, with early analgesia and antibiotics and his asthma and peanut allergy flagged for the team.",
+          "patientCue": "Okay. Okay. Today. Everyone knows about his peanut allergy and his asthma, right? He has his EpiPen in my purse."
+        }
+      ]
+    }
+  ],
+  "closingLine": "Okay. Okay. Please make sure everyone knows about the peanuts and his asthma. Can I call his dad? Mark's on his way. Right, buddy, Dad's coming."
+}

@@ -1,0 +1,444 @@
+{
+  "version": 1,
+  "patientId": "patient-demo-polypharmacy",
+  "procedureId": "lap_cholecystectomy",
+  "openingLine": "Hello, dear. I'm sorry to be a bother. This pain under my ribs just won't let up.",
+  "rounds": [
+    {
+      "id": "history_pain",
+      "stage": "history",
+      "prompt": "Mrs. Lindqvist has just told you about pain under her ribs. What do you do next?",
+      "weight": 8,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Tell her it is probably her reflux and offer an antacid",
+          "grade": "wrong",
+          "feedback": "Anchoring on reflux before taking a history risks missing a surgical cause of right upper quadrant pain.",
+          "patientCue": "Well, now, that's what I thought too at first, dear, but it never settled. Shouldn't you ask me a bit more about it?"
+        },
+        {
+          "key": "B",
+          "text": "Ask how bad the pain is on a scale of zero to ten",
+          "grade": "partial",
+          "feedback": "Severity matters, but onset, duration and character are what define this presentation.",
+          "patientCue": "Seven, dear, maybe eight when I take a deep breath. It's not so bad, really, when I keep still.",
+          "covers": [
+            "history:severity"
+          ]
+        },
+        {
+          "key": "C",
+          "text": "Ask when the pain started, exactly where it is, whether it spreads, and what it feels like",
+          "grade": "correct",
+          "feedback": "Two days of constant right subcostal pain radiating to the right shoulder blade, after past short spells, separates cholecystitis from biliary colic.",
+          "patientCue": "It started two days ago, after supper, right here under the ribs on the right side, and it goes through to my back under my right shoulder blade. It's a constant, heavy ache. Last year I had a few short spells like this that went away in an hour or two, but this one hasn't.",
+          "covers": [
+            "history:onset",
+            "history:location",
+            "history:migration",
+            "history:character"
+          ]
+        },
+        {
+          "key": "D",
+          "text": "Ask whether anyone in her family has had bowel cancer",
+          "grade": "wrong",
+          "feedback": "Family cancer history is not the next step when the story of the acute pain is still unknown.",
+          "patientCue": "Not that I know of, dear. My mother had gallstones. But it's this pain I came about."
+        }
+      ]
+    },
+    {
+      "id": "history_associated",
+      "stage": "history",
+      "prompt": "She describes two days of constant right-sided pain. What do you do next?",
+      "weight": 8,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Ask whether she has had any burning when she passes water",
+          "grade": "partial",
+          "feedback": "Urinary symptoms help exclude pyelonephritis, but fever and vomiting matter more for grading her illness.",
+          "patientCue": "It doesn't burn. I'm passing less water than usual, though, because I haven't been drinking much.",
+          "covers": [
+            "history:urinary"
+          ]
+        },
+        {
+          "key": "B",
+          "text": "Ask whether she has noticed any change in her vision",
+          "grade": "wrong",
+          "feedback": "Vision changes are unrelated to her abdominal pain and waste a turn.",
+          "patientCue": "My eyes are fine, dear, I had both cataracts done. I still do the crossword in pen."
+        },
+        {
+          "key": "C",
+          "text": "Ask whether she has been short of breath on the stairs",
+          "grade": "wrong",
+          "feedback": "Breathlessness questions belong to her heart history; right now fever and vomiting grade the acute illness.",
+          "patientCue": "Well, now, a deep breath catches the pain under my ribs, dear. Is that what you meant?"
+        },
+        {
+          "key": "D",
+          "text": "Ask about fever or chills, nausea or vomiting, appetite, and her bowels",
+          "grade": "correct",
+          "feedback": "Rigors, vomiting and poor intake point to inflammation and explain her dehydration, while normal stools without blood argue against a bleeding ulcer.",
+          "patientCue": "I've had chills, dear. Last night I was shaking under two blankets. I've been sick to my stomach the whole time and threw up twice yesterday, and I haven't eaten much of anything. My bowels are about normal, no black or bloody stools.",
+          "covers": [
+            "history:fever",
+            "history:nausea_vomiting",
+            "history:appetite",
+            "history:bowel"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "history_medications",
+      "stage": "history",
+      "prompt": "She mentions a long list of pills folded in her purse. What do you do next?",
+      "weight": 8,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Go through her list with her, ask when she last took her blood thinner, and ask about any drug allergies",
+          "grade": "correct",
+          "feedback": "Apixaban taken at seven this morning plus aspirin, metformin with weak kidneys, a sulfa allergy and a scan dye reaction all change the timing and safety of surgery.",
+          "patientCue": "Thank you for taking it seriously, dear. The important one is my blood thinner, apixaban 5, twice a day. I took last night's at seven and this morning's at seven. Also a baby aspirin, metoprolol, furosemide, lisinopril, metformin, my thyroid pill, omeprazole, atorvastatin, sertraline, trazodone, a potassium pill, vitamin D and Tylenol. Sulfa drugs give me hives all over, that was a bad one, and the dye they use for scans made me throw up once.",
+          "covers": [
+            "history:medications",
+            "history:allergies"
+          ]
+        },
+        {
+          "key": "B",
+          "text": "Ask only whether she has any allergies",
+          "grade": "partial",
+          "feedback": "Allergies are essential, but missing this morning's apixaban dose is a serious bleeding risk.",
+          "patientCue": "Sulfa drugs give me hives all over, that was a bad one. And the dye they use for scans made me throw up once.",
+          "covers": [
+            "history:allergies"
+          ]
+        },
+        {
+          "key": "C",
+          "text": "Tell her the pharmacy will sort out the list later",
+          "grade": "wrong",
+          "feedback": "Deferring the medication reconciliation hides an anticoagulant taken this morning.",
+          "patientCue": "Oh. Well, if you think so, dear. I'm sorry it's such a long list."
+        },
+        {
+          "key": "D",
+          "text": "Ask whether she smokes",
+          "grade": "wrong",
+          "feedback": "Smoking history is lower priority than her anticoagulant and allergies in a likely surgical patient.",
+          "patientCue": "Never, dear. Just a small sherry at Christmas."
+        }
+      ]
+    },
+    {
+      "id": "history_background",
+      "stage": "history",
+      "prompt": "You now know her medicines and allergies. What do you do next?",
+      "weight": 8,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Ask when her last menstrual period was",
+          "grade": "wrong",
+          "feedback": "At 78 she is decades past menopause, so this adds nothing.",
+          "patientCue": "Oh, dear. I went through the change nearly thirty years ago."
+        },
+        {
+          "key": "B",
+          "text": "Ask about her past operations",
+          "grade": "partial",
+          "feedback": "Prior surgery is useful, but her heart, kidney and diabetes history and last intake matter more for planning.",
+          "patientCue": "My appendix came out when I was a girl, and I had both cataracts done. They keep talking about replacing my knees.",
+          "covers": [
+            "history:past_surgical"
+          ]
+        },
+        {
+          "key": "C",
+          "text": "Ask about her medical conditions, when she last ate or drank, and who she lives with",
+          "grade": "correct",
+          "feedback": "Atrial fibrillation, heart failure, stage 3 kidney disease and diabetes raise her risk, last intake sets anesthesia timing, and living alone with a cane starts discharge planning.",
+          "patientCue": "My heart has the atrial fibrillation, and I have heart failure, so they watch my water pill closely. My kidneys are weak, stage three they told me. Diabetes, blood pressure, thyroid, cholesterol, reflux and bad knees. A few spoonfuls of broth last night around six, and sips of water with my pills at seven this morning. I'm a widow and live alone; my daughter Karin is nearby. I walk with a cane.",
+          "covers": [
+            "history:past_medical",
+            "history:last_meal",
+            "history:social"
+          ]
+        },
+        {
+          "key": "D",
+          "text": "Ask whether she has had a cold or flu recently",
+          "grade": "wrong",
+          "feedback": "Recent illness is low yield compared with her serious comorbidities and last oral intake.",
+          "patientCue": "No, dear, I was fine before this started."
+        }
+      ]
+    },
+    {
+      "id": "exam_vitals",
+      "stage": "exam",
+      "prompt": "You move on to examine her. What do you do first?",
+      "weight": 9,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Percuss her back over the kidneys",
+          "grade": "wrong",
+          "feedback": "Checking for kidney tenderness before vital signs skips the step that grades how sick she is.",
+          "patientCue": "My back's just stiff, dear, that doesn't hurt.",
+          "finding": {
+            "label": "Costovertebral angle",
+            "text": "No costovertebral angle tenderness.",
+            "abnormal": false
+          }
+        },
+        {
+          "key": "B",
+          "text": "Check her vital signs and listen to her heart and lungs",
+          "grade": "correct",
+          "feedback": "Fever with an irregular tachycardia grades severity, and crackles with ankle edema warn you to give fluids carefully in her heart failure.",
+          "patientCue": "Of course, dear. My heart is irregular, they always say so. No pain when you listen.",
+          "covers": [
+            "exam:vitals",
+            "exam:chest_lungs"
+          ],
+          "finding": {
+            "label": "Vitals, heart and lungs",
+            "text": "Temperature 38.3 C, heart rate 104 and irregularly irregular, blood pressure 128/70, respiratory rate 20, oxygen saturation 95% on room air. Weight 70 kg. Irregularly irregular rhythm, no new murmur. Faint crackles at both lung bases, trace ankle edema. No focal consolidation.",
+            "abnormal": true
+          }
+        },
+        {
+          "key": "C",
+          "text": "Take her vital signs only",
+          "grade": "partial",
+          "feedback": "Vitals show fever and tachycardia, but skipping the chest misses her heart failure volume status and a pneumonia check.",
+          "patientCue": "Go ahead, dear. I'm a bit shivery.",
+          "covers": [
+            "exam:vitals"
+          ],
+          "finding": {
+            "label": "Vitals",
+            "text": "Temperature 38.3 C, heart rate 104 and irregularly irregular, blood pressure 128/70, respiratory rate 20, oxygen saturation 95% on room air. Weight 70 kg.",
+            "abnormal": true
+          }
+        },
+        {
+          "key": "D",
+          "text": "Perform a pelvic examination",
+          "grade": "wrong",
+          "feedback": "A pelvic exam is not indicated for upper abdominal pain in a postmenopausal woman.",
+          "patientCue": "Oh, dear. Is that really necessary? It's up under my ribs, not down there."
+        }
+      ]
+    },
+    {
+      "id": "exam_abdomen",
+      "stage": "exam",
+      "prompt": "She is febrile and in fast atrial fibrillation. What do you do next?",
+      "weight": 9,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Press on McBurney point in the right lower quadrant",
+          "grade": "wrong",
+          "feedback": "Her appendix is already out and her pain is in the right upper quadrant.",
+          "patientCue": "No, that's alright down there, dear.",
+          "finding": {
+            "label": "McBurney point",
+            "text": "Nontender in the right lower quadrant.",
+            "abnormal": false
+          }
+        },
+        {
+          "key": "B",
+          "text": "Palpate gently through all four quadrants",
+          "grade": "partial",
+          "feedback": "This finds the right upper quadrant tenderness but stops short of the Murphy sign that points to the gallbladder.",
+          "patientCue": "Oh! Yes, that's it, right there under the ribs.",
+          "covers": [
+            "exam:abdomen_palpation"
+          ],
+          "finding": {
+            "label": "Abdominal palpation",
+            "text": "Right upper quadrant tenderness with voluntary guarding and a tender fullness below the right costal margin. Rest of the abdomen soft.",
+            "abnormal": true
+          }
+        },
+        {
+          "key": "C",
+          "text": "Test for a psoas sign by extending her right hip",
+          "grade": "wrong",
+          "feedback": "The psoas sign looks for retrocecal appendicitis, which is not the question here.",
+          "patientCue": "Oh, dear, my knees and hips don't like that. Must I? It's my ribs that hurt."
+        },
+        {
+          "key": "D",
+          "text": "Palpate the abdomen, then press deep under the right ribs while she breathes in",
+          "grade": "correct",
+          "feedback": "A tender palpable fullness with a positive Murphy sign is the classic bedside finding of acute cholecystitis and a Tokyo grade II feature.",
+          "patientCue": "Oh! Yes, that's it, right there under the ribs. Ah! I can't breathe in when you press there.",
+          "covers": [
+            "exam:abdomen_palpation",
+            "exam:murphy"
+          ],
+          "finding": {
+            "label": "Abdomen and Murphy sign",
+            "text": "Right upper quadrant tenderness with voluntary guarding and a tender fullness below the right costal margin. Rest of the abdomen soft. Positive Murphy sign: inspiration stops on deep right subcostal palpation.",
+            "abnormal": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "tests_workup",
+      "stage": "tests",
+      "prompt": "Her exam points to the right upper quadrant. What do you order?",
+      "weight": 15,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Order a contrast CT of the abdomen and pelvis",
+          "grade": "wrong",
+          "feedback": "Ultrasound is the first test, CT misses many gallstones, and her contrast reaction and weak kidneys argue against dye.",
+          "patientCue": "Will there be dye? The dye they use for scans made me throw up once. I'd rather not, dear, if you can help it.",
+          "finding": {
+            "label": "CT abdomen and pelvis",
+            "text": "Noncontrast CT: distended gallbladder with wall thickening and pericholecystic stranding. Gallstones not well seen. No free air, no abscess.",
+            "abnormal": true
+          }
+        },
+        {
+          "key": "B",
+          "text": "Order a CBC, CRP and a right upper quadrant ultrasound",
+          "grade": "partial",
+          "feedback": "This confirms the diagnosis but misses her kidney injury, liver tests, lipase and a type and screen.",
+          "patientCue": "My veins are difficult, dear, the nurses usually use the back of my hand. The scan is the jelly one, no dye? Good.",
+          "covers": [
+            "test:cbc",
+            "test:crp",
+            "test:ultrasound"
+          ],
+          "finding": {
+            "label": "CBC, CRP, ultrasound",
+            "text": "White count 14.8 with 84% neutrophils. Hemoglobin 11.0 (her baseline is about 11.4). Platelets 205. CRP 96 mg/L (elevated). Multiple gallstones with one impacted in the gallbladder neck. Gallbladder wall 6 mm with pericholecystic fluid and a positive sonographic Murphy sign. Common bile duct 5 mm, no duct stones seen.",
+            "abnormal": true
+          }
+        },
+        {
+          "key": "C",
+          "text": "Order a CBC, CRP, basic metabolic panel, liver tests, lipase, type and screen, and a right upper quadrant ultrasound",
+          "grade": "correct",
+          "feedback": "This confirms cholecystitis, shows acute kidney injury that changes her drugs and apixaban timing, rules out duct stones and pancreatitis, and readies blood for an anemic, anticoagulated patient.",
+          "patientCue": "That's a lot of blood, dear. My veins are difficult, the nurses usually use the back of my hand. And the scan, there's no dye in that one, is there?",
+          "covers": [
+            "test:cbc",
+            "test:crp",
+            "test:bmp",
+            "test:lfts",
+            "test:lipase",
+            "test:type_and_screen",
+            "test:ultrasound"
+          ],
+          "finding": {
+            "label": "Labs and ultrasound",
+            "text": "CBC: White count 14.8 with 84% neutrophils. Hemoglobin 11.0 (her baseline is about 11.4). Platelets 205. CRP 96 mg/L (elevated). BMP: Sodium 134, potassium 5.1, bicarbonate 21, BUN 38, creatinine 1.9 (baseline 1.7), eGFR 27, glucose 186. Acute kidney injury on chronic kidney disease. LFTs: Total bilirubin 1.0, alkaline phosphatase 110, AST 34, ALT 31. Normal: no pattern of a common bile duct stone or cholangitis. Lipase 38 (normal). Type and screen: Type A negative, antibody screen negative. Ultrasound: Multiple gallstones with one impacted in the gallbladder neck. Gallbladder wall 6 mm with pericholecystic fluid and a positive sonographic Murphy sign. Common bile duct 5 mm, no duct stones seen.",
+            "abnormal": true
+          }
+        },
+        {
+          "key": "D",
+          "text": "Order a lactate and a urinalysis only",
+          "grade": "wrong",
+          "feedback": "Lactate and urinalysis chase mesenteric ischemia and pyelonephritis but leave the likely diagnosis and her kidney function unexamined.",
+          "patientCue": "I'll do my best with the sample, dear. I haven't been drinking much.",
+          "finding": {
+            "label": "Lactate and urinalysis",
+            "text": "Lactate 1.6 (normal). Urinalysis: Concentrated, specific gravity 1.025. No leukocytes, no nitrites, no bilirubin.",
+            "abnormal": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "diagnosis",
+      "stage": "diagnosis",
+      "prompt": "Fever, a positive Murphy sign, leukocytosis, and gallstones with a thick wall and pericholecystic fluid. What is the diagnosis?",
+      "weight": 20,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Acute calculous cholecystitis, moderate (Tokyo grade II)",
+          "grade": "correct",
+          "feedback": "Local signs, systemic inflammation and typical ultrasound make a definite diagnosis, and the tender palpable gallbladder makes it grade II.",
+          "patientCue": "Could you say that in plain English, dear? My mother had gallstones, you know. Don't sugarcoat it for me, I like facts."
+        },
+        {
+          "key": "B",
+          "text": "Choledocholithiasis with acute cholangitis",
+          "grade": "wrong",
+          "feedback": "Normal bilirubin and liver enzymes, a 5 mm duct and no jaundice make cholangitis unlikely.",
+          "patientCue": "I'm sorry, dear, I don't know that word. Is it my heart?"
+        },
+        {
+          "key": "C",
+          "text": "Symptomatic gallstones (biliary colic)",
+          "grade": "partial",
+          "feedback": "Gallstones are the cause, but two days of constant pain with fever and leukocytosis is cholecystitis, not colic.",
+          "patientCue": "Well, now, but the spells last year went away in an hour or two. This one hasn't let up at all."
+        },
+        {
+          "key": "D",
+          "text": "Acute gallstone pancreatitis",
+          "grade": "wrong",
+          "feedback": "A normal lipase and right upper quadrant rather than epigastric pain argue against pancreatitis.",
+          "patientCue": "Could you say that in plain English, dear? I only know it hurts under my right ribs."
+        }
+      ]
+    },
+    {
+      "id": "plan",
+      "stage": "plan",
+      "prompt": "She took apixaban at seven this morning and has acute kidney injury. What is your plan?",
+      "weight": 15,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Take her for laparoscopic cholecystectomy this afternoon",
+          "grade": "partial",
+          "feedback": "Right operation, but apixaban taken this morning with her kidney function needs about 72 hours or a low anti-Xa level before surgery.",
+          "patientCue": "This afternoon? Oh, dear. But I took my blood thinner this morning. Will my heart be all right?"
+        },
+        {
+          "key": "B",
+          "text": "Admit her for IV antibiotics that avoid sulfa, careful fluids, hold apixaban, aspirin, metformin, lisinopril and potassium, then urgent laparoscopic cholecystectomy once the apixaban has safely worn off, with no heparin bridge",
+          "grade": "correct",
+          "feedback": "Urgent laparoscopic cholecystectomy after a renal-adjusted apixaban hold, with sulfa-free antibiotics and a medication hold plan, treats the disease while respecting her bleeding, kidney and heart risks.",
+          "patientCue": "So I'm to wait for my blood thinner to wear off. Well. I suppose that's that. I'm a little frightened at my age, dear, but I like facts."
+        },
+        {
+          "key": "C",
+          "text": "Send her home on oral trimethoprim-sulfamethoxazole with an elective cholecystectomy in six weeks",
+          "grade": "wrong",
+          "feedback": "She is septic with a kidney injury and is allergic to sulfa, so outpatient management with a sulfonamide is unsafe.",
+          "patientCue": "Oh, no, dear. Sulfa drugs give me hives all over, that was a bad one. And I live alone."
+        },
+        {
+          "key": "D",
+          "text": "Arrange urgent ERCP to clear the bile duct",
+          "grade": "wrong",
+          "feedback": "ERCP treats bile duct stones, and her normal liver tests and 5 mm duct show none.",
+          "patientCue": "I'm sorry, could you say that in plain English? Will there be dye? I had a bad time with the dye."
+        }
+      ]
+    }
+  ],
+  "closingLine": "Well, now. I'm glad someone looked at my whole list, dear. Could you bring Karin in to hear all this? She remembers things better than I do. And someone will have to feed Dewey tonight."
+}

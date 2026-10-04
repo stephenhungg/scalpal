@@ -1,0 +1,442 @@
+{
+  "version": 1,
+  "patientId": "patient-demo-consent-partial",
+  "procedureId": "lap_cholecystectomy",
+  "openingLine": "Afternoon, doc. I'm Sam. They told me to come see you about my gallbladder.",
+  "rounds": [
+    {
+      "id": "history_attacks",
+      "stage": "history",
+      "prompt": "Sam is pain-free and relaxed. What do you do next?",
+      "weight": 8,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Ask him to describe the attacks: when they started, how often, and what sets them off",
+          "grade": "correct",
+          "feedback": "Recurrent attacks over months, triggered by fatty meals and settling within hours, are the core of biliary colic and justify elective surgery.",
+          "patientCue": "Attacks of pain up under my right ribs, mostly after dinner. About six months now, five or six of them, the last one two weeks ago. Fried food or a big dinner sets it off, and it goes away on its own in an hour or two.",
+          "covers": [
+            "history:chief_complaint",
+            "history:onset",
+            "history:aggravating_relieving"
+          ]
+        },
+        {
+          "key": "B",
+          "text": "Tell him the gallbladder needs to come out and start the consent form",
+          "grade": "wrong",
+          "feedback": "Recommending surgery before hearing his story skips the history that justifies it.",
+          "patientCue": "Hold on, doc. You haven't even asked me what's been going on yet."
+        },
+        {
+          "key": "C",
+          "text": "Ask where the pain is and whether it spreads anywhere",
+          "grade": "partial",
+          "feedback": "Location and shoulder spread are useful, but timing, frequency and triggers tell you more about colic versus cholecystitis.",
+          "patientCue": "Right side, under the ribs. Sometimes it goes up to my right shoulder.",
+          "covers": [
+            "history:location",
+            "history:migration"
+          ]
+        },
+        {
+          "key": "D",
+          "text": "Ask about his family history of cancer",
+          "grade": "wrong",
+          "feedback": "Family history is low yield before you understand the presenting complaint.",
+          "patientCue": "Nothing I know of. But that's not why I came in, doc."
+        }
+      ]
+    },
+    {
+      "id": "history_red_flags",
+      "stage": "history",
+      "prompt": "The attacks sound like a recurring pattern. What do you do next?",
+      "weight": 8,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Ask whether he could be pregnant",
+          "grade": "wrong",
+          "feedback": "Pregnancy does not apply to this patient, and the question wastes a chance to screen for complications.",
+          "patientCue": "He laughs. Doc, I'm a guy."
+        },
+        {
+          "key": "B",
+          "text": "Ask how his appetite has been",
+          "grade": "partial",
+          "feedback": "Appetite is reasonable to ask, but it does not screen for cholecystitis or a duct stone the way fever and urine color do.",
+          "patientCue": "Fine between attacks.",
+          "covers": [
+            "history:appetite"
+          ]
+        },
+        {
+          "key": "C",
+          "text": "Ask about fevers, vomiting, dark urine and pale or bloody stools",
+          "grade": "correct",
+          "feedback": "No fever, vomiting, dark urine or pale stools points away from cholecystitis, cholangitis and a common duct stone.",
+          "patientCue": "No fevers, no chills. I feel queasy during the attacks but I've never thrown up. Urine's normal, never dark, and my bowels are normal, no pale stools, no blood.",
+          "covers": [
+            "history:fever",
+            "history:nausea_vomiting",
+            "history:urinary",
+            "history:bowel"
+          ]
+        },
+        {
+          "key": "D",
+          "text": "Ask whether he has had any recent colds or infections",
+          "grade": "wrong",
+          "feedback": "Recent illness does not help separate simple colic from its complications.",
+          "patientCue": "No, I've been fine.",
+          "covers": [
+            "history:recent_illness"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "history_identity_background",
+      "stage": "history",
+      "prompt": "His chart shows no name, no birth date and no problem list. What do you do next?",
+      "weight": 8,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Confirm his name and date of birth in person, then ask about his medical problems, past surgery and anesthesia, and smoking",
+          "grade": "correct",
+          "feedback": "Partial consent means unknown, not none, so identity and the problem list must come from him directly before any procedure.",
+          "patientCue": "Sam Ortiz. March twelfth, 1965. Good, that's how it should be. High blood pressure and high cholesterol, no heart attacks, no lung problems, no diabetes that I know of, and an open hernia repair on the right about fifteen years ago with no anesthesia problems. I quit smoking ten years ago after about thirty years of a pack a day.",
+          "covers": [
+            "history:past_medical",
+            "history:past_surgical",
+            "history:social"
+          ]
+        },
+        {
+          "key": "B",
+          "text": "Request his full record from the health system so you can see everything",
+          "grade": "wrong",
+          "feedback": "He chose to share only medications and allergies, so working around his consent is wrong when you can simply ask him.",
+          "patientCue": "Tell you the truth, doc, I didn't share it on purpose. Ask me, I'll tell you."
+        },
+        {
+          "key": "C",
+          "text": "Ask what medical problems he has",
+          "grade": "partial",
+          "feedback": "The problem list is essential, but skipping identity confirmation leaves the chart unable to say who this patient is.",
+          "patientCue": "High blood pressure and high cholesterol. No heart attacks, no lung problems, no diabetes that I know of. I only let them see my medicines and allergies.",
+          "covers": [
+            "history:past_medical"
+          ]
+        },
+        {
+          "key": "D",
+          "text": "Document no past medical history since none is listed",
+          "grade": "wrong",
+          "feedback": "An empty problem list under partial consent is missing data, not a healthy patient.",
+          "patientCue": "Right, because I didn't share it. Ask me."
+        }
+      ]
+    },
+    {
+      "id": "history_meds_allergies",
+      "stage": "history",
+      "prompt": "The chart lists lisinopril, atorvastatin and a penicillin allergy. What do you do next?",
+      "weight": 8,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Note the penicillin allergy and plan to give no antibiotic at surgery",
+          "grade": "wrong",
+          "feedback": "A penicillin label should be characterized, not used to skip prophylaxis.",
+          "patientCue": "Okay, doc. Whatever you think is safe."
+        },
+        {
+          "key": "B",
+          "text": "Ask what happened when he took penicillin",
+          "grade": "partial",
+          "feedback": "Characterizing the allergy is key, but you also need to confirm the medication list is complete.",
+          "patientCue": "Penicillin gave me a rash when I was in the army. No swelling, no breathing trouble. Nothing since.",
+          "covers": [
+            "history:allergies"
+          ]
+        },
+        {
+          "key": "C",
+          "text": "Tell him to stop his cholesterol pill now",
+          "grade": "wrong",
+          "feedback": "Atorvastatin is continued around surgery and there is no reason to stop it.",
+          "patientCue": "Stop it? My regular doctor wants me on it. Why would I stop?"
+        },
+        {
+          "key": "D",
+          "text": "Confirm the medication list is complete, including over-the-counter drugs, and ask exactly what the penicillin reaction was",
+          "grade": "correct",
+          "feedback": "This confirms a complete list and shows a remote mild rash, which still allows cefazolin prophylaxis.",
+          "patientCue": "Lisinopril 10 in the morning and atorvastatin 20 at night. Maybe an ibuprofen once a month for a sore back. Penicillin gave me a rash in the army, no swelling, no breathing trouble, nothing since.",
+          "covers": [
+            "history:medications",
+            "history:allergies"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "exam_vitals",
+      "stage": "exam",
+      "prompt": "There are no vitals on his chart. What do you do next?",
+      "weight": 8,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Take a full set of vital signs and note his general appearance",
+          "grade": "correct",
+          "feedback": "With no vitals on the chart, a baseline is needed before an elective operation.",
+          "patientCue": "Sure, doc.",
+          "covers": [
+            "exam:vitals",
+            "exam:general_appearance"
+          ],
+          "finding": {
+            "label": "Vital signs",
+            "text": "Temperature 36.8 C, heart rate 76, blood pressure 138/84, respiratory rate 14, oxygen saturation 97% on room air.",
+            "abnormal": false
+          }
+        },
+        {
+          "key": "B",
+          "text": "Look at his eyes and skin for yellowing",
+          "grade": "partial",
+          "feedback": "Checking for jaundice is useful, but it does not replace the baseline vitals the chart lacks.",
+          "patientCue": "Sure, doc.",
+          "covers": [
+            "exam:general_appearance"
+          ],
+          "finding": {
+            "label": "General appearance",
+            "text": "Well appearing and comfortable. No jaundice or scleral icterus.",
+            "abnormal": false
+          }
+        },
+        {
+          "key": "C",
+          "text": "Tap over his back for kidney tenderness",
+          "grade": "wrong",
+          "feedback": "Costovertebral angle tenderness is a kidney sign and does not address the missing baseline.",
+          "patientCue": "No.",
+          "finding": {
+            "label": "Costovertebral angle",
+            "text": "No costovertebral angle tenderness.",
+            "abnormal": false
+          }
+        },
+        {
+          "key": "D",
+          "text": "Skip vitals because he is pain-free and looks well",
+          "grade": "wrong",
+          "feedback": "Looking well is not a set of vital signs, and none are on file.",
+          "patientCue": "Okay, if you say so, doc."
+        }
+      ]
+    },
+    {
+      "id": "exam_abdomen",
+      "stage": "exam",
+      "prompt": "His vitals are normal. What do you do next?",
+      "weight": 8,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Press on the lower right side of his belly",
+          "grade": "wrong",
+          "feedback": "Right lower quadrant tenderness is an appendicitis sign and does not fit his story.",
+          "patientCue": "Nothing there.",
+          "finding": {
+            "label": "Right lower quadrant",
+            "text": "Nontender in the right lower quadrant.",
+            "abnormal": false
+          }
+        },
+        {
+          "key": "B",
+          "text": "Gently palpate his whole abdomen",
+          "grade": "partial",
+          "feedback": "Palpation is right, but without a Murphy sign you have not excluded acute cholecystitis.",
+          "patientCue": "That's alright. A little tender up on the right, but not like an attack.",
+          "covers": [
+            "exam:abdomen_palpation"
+          ],
+          "finding": {
+            "label": "Abdominal palpation",
+            "text": "Soft. Minimal right upper quadrant tenderness to deep palpation, no guarding, no mass.",
+            "abnormal": false
+          }
+        },
+        {
+          "key": "C",
+          "text": "Palpate the abdomen, then press under the right ribs while he breathes in to check a Murphy sign",
+          "grade": "correct",
+          "feedback": "A soft abdomen with a negative Murphy sign between attacks supports uncomplicated gallstones over cholecystitis.",
+          "patientCue": "That's alright. A little tender up on the right, but not like an attack. No, I can breathe in fine.",
+          "covers": [
+            "exam:abdomen_palpation",
+            "exam:murphy"
+          ],
+          "finding": {
+            "label": "Abdomen and Murphy sign",
+            "text": "Soft. Minimal right upper quadrant tenderness to deep palpation, no guarding, no mass. Negative Murphy sign between attacks.",
+            "abnormal": false
+          }
+        },
+        {
+          "key": "D",
+          "text": "Perform a digital rectal exam",
+          "grade": "wrong",
+          "feedback": "A rectal exam adds nothing to upper abdominal pain with normal bowels.",
+          "patientCue": "For my gallbladder, doc? Say it simple, why do you need that?"
+        }
+      ]
+    },
+    {
+      "id": "tests_labs_imaging",
+      "stage": "tests",
+      "prompt": "No labs were shared and his scan report is not on the chart. What do you do next?",
+      "weight": 17,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Order a CT of the abdomen and pelvis",
+          "grade": "wrong",
+          "feedback": "Ultrasound is the test for gallstones; CT adds radiation and misses many stones.",
+          "patientCue": "Sure. That's why I'm here.",
+          "finding": {
+            "label": "CT abdomen and pelvis",
+            "text": "No acute abnormality. Gallstones not well seen on CT.",
+            "abnormal": false
+          }
+        },
+        {
+          "key": "B",
+          "text": "Order a CBC, basic metabolic panel, liver tests and a right upper quadrant ultrasound",
+          "grade": "correct",
+          "feedback": "Baseline labs check kidney function on lisinopril, liver tests screen for a duct stone, and ultrasound confirms the stones.",
+          "patientCue": "Sure. That's why I'm here.",
+          "covers": [
+            "test:cbc",
+            "test:bmp",
+            "test:lfts",
+            "test:ultrasound"
+          ],
+          "finding": {
+            "label": "Labs and ultrasound",
+            "text": "CBC: White count 6.8, hemoglobin 14.6, platelets 232. Normal. BMP: Sodium 140, potassium 4.5, creatinine 1.0, glucose 104. Normal kidney function. LFTs: Total bilirubin 0.8, alkaline phosphatase 90, AST 26, ALT 30. Normal. Ultrasound: Multiple gallstones up to 15 mm. Gallbladder wall 3 mm, no pericholecystic fluid, sonographic Murphy sign negative. Common bile duct 4 mm.",
+            "abnormal": true
+          }
+        },
+        {
+          "key": "C",
+          "text": "Order a right upper quadrant ultrasound only",
+          "grade": "partial",
+          "feedback": "Ultrasound confirms the stones, but with no labs on file you still need kidney function and liver tests before surgery.",
+          "patientCue": "They did a scan. The doctor said a surgeon would explain it. Sure, again if you need it.",
+          "covers": [
+            "test:ultrasound"
+          ],
+          "finding": {
+            "label": "Right upper quadrant ultrasound",
+            "text": "Multiple gallstones up to 15 mm. Gallbladder wall 3 mm, no pericholecystic fluid, sonographic Murphy sign negative. Common bile duct 4 mm.",
+            "abnormal": true
+          }
+        },
+        {
+          "key": "D",
+          "text": "Order a lipase and a urinalysis",
+          "grade": "wrong",
+          "feedback": "Lipase and urinalysis chase unlikely diagnoses and miss the kidney and liver labs he needs.",
+          "patientCue": "Sure. That's why I'm here.",
+          "finding": {
+            "label": "Lipase and urinalysis",
+            "text": "Lipase 30 (normal). Urinalysis: Normal.",
+            "abnormal": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "diagnosis",
+      "stage": "diagnosis",
+      "prompt": "Recurrent meal-triggered attacks, a benign exam, normal labs and stones on ultrasound. What is the diagnosis?",
+      "weight": 20,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Acute cholecystitis",
+          "grade": "wrong",
+          "feedback": "Short attacks, no fever, a negative Murphy sign and a thin wall without fluid exclude cholecystitis.",
+          "patientCue": "I'm a bus driver, doc, say it simple. Is that my gallbladder?"
+        },
+        {
+          "key": "B",
+          "text": "Choledocholithiasis",
+          "grade": "wrong",
+          "feedback": "Normal liver tests, a 4 mm duct and no dark urine or jaundice make a duct stone unlikely.",
+          "patientCue": "That's a mouthful. My doctor just said my gallbladder."
+        },
+        {
+          "key": "C",
+          "text": "Gallstones",
+          "grade": "partial",
+          "feedback": "Stones are present, but the diagnosis should name them as symptomatic, causing biliary colic, since that is what justifies surgery.",
+          "patientCue": "So it's like a clogged filter, like I figured?"
+        },
+        {
+          "key": "D",
+          "text": "Symptomatic cholelithiasis (biliary colic)",
+          "grade": "correct",
+          "feedback": "Stereotyped postprandial right upper quadrant attacks with stones and no inflammation or duct obstruction is biliary colic.",
+          "patientCue": "Okay. So it's my gallbladder causing the attacks. Like a flat tire, you can drive on it a while, but you know it's coming."
+        }
+      ]
+    },
+    {
+      "id": "plan",
+      "stage": "plan",
+      "prompt": "What do you recommend?",
+      "weight": 15,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Recommend elective laparoscopic cholecystectomy, with cefazolin prophylaxis and identity confirmed at the time out",
+          "grade": "correct",
+          "feedback": "Recurrent uncomplicated biliary colic is treated with elective laparoscopic cholecystectomy, and a remote rash allows cefazolin.",
+          "patientCue": "Okay. Let's get it done. How long before I can carry the cooler?"
+        },
+        {
+          "key": "B",
+          "text": "Admit him today for an urgent laparoscopic cholecystectomy",
+          "grade": "partial",
+          "feedback": "The operation is right, but he is pain-free with no inflammation, so it should be scheduled electively.",
+          "patientCue": "Today? Tell you the truth, doc, I feel fine right now. Does it have to be today?"
+        },
+        {
+          "key": "C",
+          "text": "Refer for ERCP to clear the bile duct first",
+          "grade": "wrong",
+          "feedback": "ERCP is for a suspected duct stone, and his liver tests and duct size put him at low risk.",
+          "patientCue": "I don't know what that is, doc. Say it simple."
+        },
+        {
+          "key": "D",
+          "text": "Advise a low-fat diet and see him again if the attacks get worse",
+          "grade": "wrong",
+          "feedback": "After five or six attacks, watchful waiting risks cholecystitis, a duct stone or pancreatitis.",
+          "patientCue": "I've already been eating less fried stuff, doc. The attacks keep coming."
+        }
+      ]
+    }
+  ],
+  "closingLine": "Okay. Let's get it done. Do I keep taking my blood pressure pill before? And I'd like it done before my grandson Mateo's birthday in December."
+}

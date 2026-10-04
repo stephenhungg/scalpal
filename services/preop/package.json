@@ -18,7 +18,8 @@
     "realtime:e2e": "tsx scripts/realtime-e2e.ts",
     "demo:session": "tsx scripts/demo-session.ts",
     "jarvis:eval": "tsx scripts/jarvis-eval.ts",
-    "jarvis:live-eval": "tsx scripts/jarvis-live-eval.ts"
+    "jarvis:live-eval": "tsx scripts/jarvis-live-eval.ts",
+    "patients:build": "tsx scripts/build-patient-files.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.131.0",
