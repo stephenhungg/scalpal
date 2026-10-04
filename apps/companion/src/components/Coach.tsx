@@ -28,7 +28,7 @@ export default function Coach({ data }: { data: SessionData }) {
             <div key={String(m.messageId)} className={`bubble ${m.speaker}`}>
               {m.speaker !== 'system' && (
                 <span className="who">
-                  {m.speaker === 'coach' ? 'Jarvis' : 'Learner'} · {clock(m.at)}
+                  {m.speaker === 'coach' ? 'Jarvis' : m.speaker === 'patient' ? 'Patient' : m.speaker === 'system' ? 'System' : 'Learner'} · {clock(m.at)}
                 </span>
               )}
               {m.text}

@@ -171,6 +171,8 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
     sessions.set(sid, session);
     if (typeof runId === "string") runSessions.set(runId, sid);
     if (preop) officeCarryover.set(sid, preop);
+    // Bleeding, vitals and stall hints advance even when no client holds the SSE stream.
+    ensureTicker();
     const snapshot = session.snapshot();
     return c.json(
       {
@@ -485,7 +487,8 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
       for (const a of alerts) log("alert", a.say, { kind: a.kind, tier: a.tier });
       const v = snapshot.condition.vitals;
       const now = options.now().getTime();
-      if (now - lastVitalsAt >= 2000 || v.hemorrhageClass !== lastClass) {
+      // Always sample on an outcome change, so the dashboard's pinned vitals show asystole after a death.
+      if (now - lastVitalsAt >= 2000 || v.hemorrhageClass !== lastClass || snapshot.condition.outcome.result !== outcome) {
         lastVitalsAt = now;
         lastClass = v.hemorrhageClass;
         log("vitals", `HR ${v.hr} · BP ${v.sys}/${v.dia} · RR ${v.rr}${v.spo2 >= 0 ? ` · SpO2 ${v.spo2}` : ""} · loss ${v.bloodLossPct}% (class ${v.hemorrhageClass}, simulated from ${snapshot.condition.baselineSource})`, { ...v, rawBloodLossMl: snapshot.condition.rawBloodLossMl });

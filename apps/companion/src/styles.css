@@ -564,6 +564,11 @@ table.data tr:last-child td {
   border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
   align-self: flex-start;
 }
+.bubble.patient {
+  background: var(--panel-2);
+  border: 1px dashed var(--line);
+  align-self: flex-start;
+}
 .bubble.learner {
   background: var(--panel-2);
   border: 1px solid var(--line);

@@ -43,7 +43,7 @@ export function compactVitals(data: unknown): string | null {
   const rr = first(v, ['rr', 'respRate', 'breathing']);
   if (rr != null) parts.push(`RR ${Math.round(rr)}`);
   const spo2 = first(v, ['spo2', 'spO2', 'SpO2']);
-  if (spo2 != null) parts.push(`SpO2 ${Math.round(spo2)}%`);
+  if (spo2 != null && spo2 >= 0) parts.push(`SpO2 ${Math.round(spo2)}%`); // -1: not charted
   const loss = first(v, ['bloodLossPct', 'lossPct', 'loss']);
   if (loss != null) parts.push(`loss ${Math.round(loss)}%`);
   return parts.length ? parts.join(' · ') : null;
@@ -52,6 +52,9 @@ export function compactVitals(data: unknown): string | null {
 /** Tone for a row: alerts are red, or amber when the payload marks them as a warning. */
 export function toneOfLog(kind: string, data: unknown): 'bad' | 'warn' | 'ok' | 'info' | 'accent' | 'muted' {
   if (kind === 'alert') {
+    // The coach sends {kind, tier}: warning = red, caution = amber, advisory (e.g. bleeding controlled) = muted.
+    const tier = isRec(data) && typeof data.tier === 'string' ? data.tier : '';
+    if (tier) return tier === 'warning' ? 'bad' : tier === 'caution' ? 'warn' : 'muted';
     const sev = isRec(data) ? String(data.severity ?? data.level ?? '') : '';
     return /warn|amber|low|moderate|caution/i.test(sev) ? 'warn' : 'bad';
   }

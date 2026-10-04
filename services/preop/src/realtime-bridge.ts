@@ -107,6 +107,11 @@ export class RealtimeBridge implements RealtimeSink {
           .onApplied(() => {
             this.ready = true;
             this.log("connected as coach identity", this.identityHex.slice(0, 12));
+            // After a restart, rebind to the session this coach was last bound to (no invite code needed).
+            if (!this.sessionId) {
+              const saved = this.savedSession();
+              if (saved && this.bind(saved)) this.log("rebound to session", saved);
+            }
             if (this.cfg.inviteCode && !this.sessionId) void this.join(this.cfg.inviteCode).catch((e) => (this.lastError = String(e)));
           })
           .subscribe([tables.mySessions, tables.myMemberships, tables.sessionExerciseState, tables.sessionCommands, tables.sessionEncounters]);
@@ -141,6 +146,7 @@ export class RealtimeBridge implements RealtimeSink {
       const m = [...conn.db.myMemberships.iter()].find((x) => x.role === "coach" && !before.has(x.sessionId));
       if (m) {
         this.sessionId = m.sessionId;
+        this.saveSession();
         this.log("bound to session", this.sessionId);
         this.coachStatus("listening");
         return this.sessionId;
@@ -155,8 +161,31 @@ export class RealtimeBridge implements RealtimeSink {
     const conn = this.conn;
     if (!conn) return false;
     const ok = [...conn.db.myMemberships.iter()].some((m) => m.sessionId === sessionId && m.role === "coach");
-    if (ok) this.sessionId = sessionId;
+    if (ok) {
+      this.sessionId = sessionId;
+      this.saveSession();
+    }
     return ok;
+  }
+
+  private get sessionFile() {
+    return `${this.cfg.tokenFile}.session`;
+  }
+
+  private savedSession(): string {
+    try {
+      return existsSync(this.sessionFile) ? readFileSync(this.sessionFile, "utf8").trim() : "";
+    } catch {
+      return "";
+    }
+  }
+
+  private saveSession() {
+    try {
+      writeFileSync(this.sessionFile, this.sessionId, { mode: 0o600 });
+    } catch {
+      /* rebinding after a restart is a convenience */
+    }
   }
 
   private call(name: string, fn: (c: DbConnection) => Promise<unknown>) {
