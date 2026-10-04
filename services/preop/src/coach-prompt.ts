@@ -127,7 +127,8 @@ const SITE: Record<string, string> = {
 
 // The whole time-out spoken in one line, so practice can start without waiting for a spoken confirmation.
 export function timeOutOpening(kase: SurgicalCase): string {
-  const risks = kase.brief.flags.filter((f) => f.severity === "high").map((f) => f.title.toLowerCase()).slice(0, 2);
+  // Clinical risks only: age bands and chart gaps are not something to watch for at the table.
+  const risks = kase.brief.flags.filter((f) => f.severity === "high" && !["incomplete_chart", "pediatric", "elderly"].includes(f.type)).map((f) => f.title.toLowerCase()).slice(0, 2);
   const site = SITE[kase.procedureId];
   const first = kase.procedure.steps[0];
   return `Scrubbed in with you. Time-out: ${kase.patient.name || "our patient"}, ${kase.procedure.title.toLowerCase()}${site ? `, ${site}` : ""}.${risks.length ? ` Watch for ${risks.join(" and ")}.` : ""}${first ? ` Let's begin: ${first.title.toLowerCase()}.` : " Let's begin."}`;
