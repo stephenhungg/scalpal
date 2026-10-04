@@ -16,7 +16,7 @@ namespace Scalpal.Briefing
     /// </summary>
     public sealed class BriefingDirector : MonoBehaviour
     {
-        public const float Distance = .8f, Drop = .18f, ModelScale = .75f, MinimumLift = .06f, MaximumLift = .3f, LiftClearance = .02f, FocusScale = 2.5f, FocusMaximumSize = .32f, PeelDistance = .12f;
+        public const float Distance = .8f, Drop = .18f, ModelScale = .75f, MinimumLift = .06f, MaximumLift = .5f, LiftClearance = .02f, FocusScale = 2.5f, FocusMaximumSize = .32f, PeelDistance = .12f;
         public const float MinimumStepSeconds = 3.5f, ClipTailSeconds = 1.1f;
         public BriefingAtlas Atlas { get; private set; }
         public BriefingPicker Picker { get; private set; }
@@ -111,12 +111,16 @@ namespace Scalpal.Briefing
             float front = float.MinValue;
             for (int i = 0; i < Atlas.Parts.Length; i++)
                 if (!peeled.Contains(i) && !focused.Contains(i) && Atlas.Parts[i].triangles.Length > 0) front = Mathf.Max(front, Vector3.Dot(Atlas.Parts[i].max, anterior));
-            float lift = MinimumLift;
+            // The group spins about its pivot, so clear the whole scaled sweep (a sphere around the pivot), not just the
+            // part centres: otherwise the far side of a spinning organ swings back through the torso.
+            float sweep = 0;
             foreach (int part in focused)
-            {
-                float partFront = Vector3.Dot(pivot, anterior) + (Vector3.Dot(Atlas.Parts[part].center, anterior) - Vector3.Dot(pivot, anterior)) * scale;
-                if (front > float.MinValue) lift = Mathf.Max(lift, front + LiftClearance - partFront);
-            }
+                foreach (var corner in Corners(Atlas.Parts[part].min, Atlas.Parts[part].max)) sweep = Mathf.Max(sweep, (corner - pivot).magnitude * scale);
+            float lift = MinimumLift;
+            if (focused.Count > 0 && front > float.MinValue) lift = Mathf.Max(lift, front + LiftClearance + sweep - Vector3.Dot(pivot, anterior));
+            // A wall layer as big as the torso (skin, aponeurosis) cannot spin clear at a comfortable distance: it lifts
+            // forward and glows without turning.
+            bool spin = lift <= MaximumLift;
             lift = Mathf.Min(lift, MaximumLift);
             for (int i = 0; i < Atlas.Parts.Length; i++)
             {
@@ -129,9 +133,14 @@ namespace Scalpal.Briefing
                     state.alpha = 0;
                     state.peel = (anterior + (outward.sqrMagnitude > 1e-8f ? outward.normalized * .6f : Vector3.zero)).normalized * PeelDistance;
                 }
-                else if (focused.Contains(i)) { state.scale = scale; state.glow = 1; state.lift = anterior * lift; state.pivot = pivot; }
+                else if (focused.Contains(i)) { state.scale = scale; state.glow = 1; state.lift = anterior * lift; state.pivot = pivot; state.spin = spin; }
                 Atlas.SetTarget(i, state);
             }
+        }
+
+        static IEnumerable<Vector3> Corners(Vector3 min, Vector3 max)
+        {
+            for (int i = 0; i < 8; i++) yield return new Vector3((i & 1) == 0 ? min.x : max.x, (i & 2) == 0 ? min.y : max.y, (i & 4) == 0 ? min.z : max.z);
         }
 
         void Speak(BriefingStep step)

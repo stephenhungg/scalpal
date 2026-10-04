@@ -51,6 +51,7 @@ namespace Scalpal.Briefing
         {
             public float alpha, scale, glow, angle, highlight;
             public Vector3 lift, peel, pivot;
+            public bool spin; // only when the lifted, scaled group can turn without swinging into the torso
         }
 
         public Part[] Parts { get; private set; } = Array.Empty<Part>();
@@ -280,7 +281,7 @@ namespace Scalpal.Briefing
                 c.highlight = Mathf.Lerp(c.highlight, t.highlight, Mathf.Min(1, k * 2.5f));
                 c.lift = Vector3.Lerp(c.lift, t.lift, k); c.peel = Vector3.Lerp(c.peel, t.peel, k);
                 c.pivot = t.pivot;
-                if (t.glow > .5f) c.angle = Mathf.Repeat(c.angle + spinRadiansPerSecond * dt, TwoPi);
+                if (t.glow > .5f && t.spin) c.angle = Mathf.Repeat(c.angle + spinRadiansPerSecond * dt, TwoPi);
                 else
                 {
                     float rest = c.angle > Mathf.PI ? TwoPi : 0;

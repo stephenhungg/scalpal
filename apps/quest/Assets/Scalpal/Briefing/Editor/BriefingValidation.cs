@@ -173,6 +173,23 @@ namespace Scalpal.Briefing.Editor
                     }
                     Check(visibleSet, label + ": " + step.id + " shows exactly the unpeeled parts (" + peeled.Count + " peeled)");
                     Check(focusSet && director.Step.id == step.id, label + ": " + step.id + " lifts, scales (" + scale.ToString("0.00") + "x) and lights only its " + focus.Count + " focus parts");
+                    if (focus.Count > 0)
+                    {
+                        // A spinning focus must never swing back into the torso: at every spin angle its scaled bounds
+                        // stay in front of everything left in place.
+                        var pivot = (lo + hi) * .5f; float reach = 0, front = float.MinValue;
+                        foreach (int i in focus) for (int c = 0; c < 8; c++)
+                        {
+                            var corner = new Vector3((c & 1) == 0 ? atlas.Parts[i].min.x : atlas.Parts[i].max.x, (c & 2) == 0 ? atlas.Parts[i].min.y : atlas.Parts[i].max.y, (c & 4) == 0 ? atlas.Parts[i].min.z : atlas.Parts[i].max.z);
+                            reach = Mathf.Max(reach, (corner - pivot).magnitude * scale);
+                        }
+                        for (int i = 0; i < atlas.Parts.Length; i++)
+                            if (!peeled.Contains(i) && !focus.Contains(i) && atlas.Parts[i].triangles.Length > 0) front = Mathf.Max(front, Vector3.Dot(atlas.Parts[i].max, atlas.Anterior));
+                        float lifted = Vector3.Dot(pivot, atlas.Anterior) + Vector3.Dot(atlas.Current[focus.First()].lift, atlas.Anterior);
+                        bool spins = atlas.Target[focus.First()].spin;
+                        Check(!spins || front == float.MinValue || lifted - reach >= front - 1e-4f, label + ": " + step.id + " spins clear of the torso (gap " + ((lifted - reach - front) * 1000).ToString("0") + " mm)");
+                        if (step.id == "deliver_appendix" || step.id == "divide_mesoappendix") Check(spins, label + ": the organ focus spins at " + step.id);
+                    }
                     if (step.id == "deliver_appendix" || step.id == "divide_mesoappendix") Check(scale >= 1.5f, label + ": small focus structures are enlarged at " + step.id + " (" + scale.ToString("0.00") + "x)");
                     Rows(atlas, label + " " + step.id);
                     Picking(director, focus, peeled, viewer, label + " " + step.id);
