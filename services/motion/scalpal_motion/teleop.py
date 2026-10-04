@@ -22,7 +22,7 @@ from pathlib import Path
 import numpy as np
 
 from .learning.demos import APPROACH, CARRY, CLOSE, PRESHAPE, RELEASE, RETREAT, Demo
-from .learning.env import DT, HANDLE_RADIUS, HOME_GRIP, MAX_STEPS, Scene, TransferEnv, sample_scene, wrap
+from .learning.env import DT, FINGER_ACTUATORS, HANDLE_RADIUS, HOME_GRIP, MAX_STEPS, Scene, TransferEnv, sample_scene, wrap
 from .paths import MOTION_ROOT
 
 CONTROLLER_SCHEMA = "scalpal.controller_motion.v1"
@@ -47,9 +47,34 @@ def controller_yaw(q) -> float:
     return float(np.arctan2(f[1], f[0]))
 
 
+# Finger mapping, matched to the gloved hands in the Quest build (Quest/Runtime/ControllerHandPose.cs):
+#   trigger          -> index finger (FF) curl
+#   grip             -> middle, ring and little finger (MF, RF, LF) curl
+#   held instrument  -> full grasp: every finger, thumb included, at the closed shape
+#   thumb            -> follows the harder of grip and trigger (the glove's thumb does the same)
+# 0 is the open pre-shape, 1 the grasp validated in physics. The glove's 0.2 rest curl is cosmetic and
+# is not copied: an idle controller leaves the robot hand open.
+FINGER_OF_ACTUATOR = np.array([a[:2] for a in FINGER_ACTUATORS])
+
+
+def finger_curls(sample: dict) -> dict[str, float]:
+    """Per-finger curl (0 open .. 1 closed) from one controller sample, as the glove poses it."""
+    grip = float(np.clip(sample.get("grip", 0.0) or 0.0, 0.0, 1.0))
+    trigger = float(np.clip(sample.get("trigger", 0.0) or 0.0, 0.0, 1.0))
+    if sample.get("heldInstrument"):
+        return {"TH": 1.0, "FF": 1.0, "MF": 1.0, "RF": 1.0, "LF": 1.0}
+    return {"TH": max(grip, trigger), "FF": trigger, "MF": grip, "RF": grip, "LF": grip}
+
+
+def curl_vector(curls: dict[str, float]) -> np.ndarray:
+    """Per-actuator blend weight (18,) in FINGER_ACTUATORS order."""
+    return np.array([curls[f] for f in FINGER_OF_ACTUATOR], dtype=float)
+
+
 def closure(sample: dict) -> float:
-    """How closed the hand is: the harder of grip and trigger, 0 open to 1 closed."""
-    return float(np.clip(max(sample.get("grip", 0.0), sample.get("trigger", 0.0)), 0.0, 1.0))
+    """How closed the hand is overall (phase detection): 1 when holding an instrument, else the harder
+    of grip and trigger."""
+    return float(max(finger_curls(sample).values()))
 
 
 def grasp_shapes() -> tuple[np.ndarray, np.ndarray]:
@@ -136,10 +161,11 @@ class TeleopSession:
             # Lost tracking: hold the last command rather than inventing motion.
             grip = self.env.grip_cmd.copy()
             c = self.ep.closure[-1] if self.ep.closure else 0.0
+            finger = self.ep.finger[-1].copy() if self.ep.finger else self.open.copy()
         else:
             grip = self.mapper(sample)
             c = closure(sample)
-        finger = self.open + c * (self.closed - self.open)
+            finger = self.open + curl_vector(finger_curls(sample)) * (self.closed - self.open)
         self.env.set_command(grip, finger)
         self.ep.grip.append(grip)
         self.ep.finger.append(finger)
@@ -285,7 +311,7 @@ def scripted_controller_frames(env: TransferEnv, demo: Demo, hand: str = "right"
         c = float(np.clip(np.median((f - open_) / span), 0, 1))
         frames.append({"schema": CONTROLLER_SCHEMA, "frameIndex": t, "unityTime": t * DT,
                        "controllers": [{"hand": hand, "tracked": True, "position": p_unity, "rotation": q,
-                                        "grip": c, "trigger": 0.0, "heldInstrument": ""}]})
+                                        "grip": c, "trigger": c, "heldInstrument": ""}]})
     return frames
 
 

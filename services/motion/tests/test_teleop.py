@@ -8,9 +8,10 @@ from scalpal_motion.learning.demos import make_demos
 from scalpal_motion.learning.env import TransferEnv
 from scalpal_motion.learning.evaluate import load_profiles
 from scalpal_motion.teleop import (
-    ControllerMapper, TeleopSession, closure, controller_yaw, episode_to_demo, load_teleop_demos, pick_controller,
-    scripted_controller_frames, unity_to_mujoco,
+    ControllerMapper, TeleopSession, closure, controller_yaw, curl_vector, episode_to_demo, finger_curls,
+    load_teleop_demos, pick_controller, scripted_controller_frames, unity_to_mujoco,
 )
+from scalpal_motion.learning.env import FINGER_ACTUATORS
 
 
 def test_unity_axes_map_to_mujoco_z_up():
@@ -29,8 +30,35 @@ def test_mapper_anchors_first_pose_to_home_and_follows_motion():
     assert np.allclose(moved[:3], home + [0.10, 0.0, 0.05])
 
 
+def test_finger_mapping_matches_the_quest_gloves():
+    # Trigger curls only the index; grip curls middle, ring and little; the thumb follows the harder one.
+    trig = finger_curls({"grip": 0.0, "trigger": 1.0, "heldInstrument": ""})
+    assert trig == {"TH": 1.0, "FF": 1.0, "MF": 0.0, "RF": 0.0, "LF": 0.0}
+    grip = finger_curls({"grip": 0.6, "trigger": 0.0})
+    assert grip == {"TH": 0.6, "FF": 0.0, "MF": 0.6, "RF": 0.6, "LF": 0.6}
+    # A held instrument closes the full grasp whatever the analog inputs say.
+    held = finger_curls({"grip": 0.0, "trigger": 0.0, "heldInstrument": "inst_scalpel"})
+    assert set(held.values()) == {1.0}
+    assert finger_curls({}) == {"TH": 0.0, "FF": 0.0, "MF": 0.0, "RF": 0.0, "LF": 0.0}
+    w = curl_vector(trig)
+    for name, weight in zip(FINGER_ACTUATORS, w):
+        assert weight == (1.0 if name[:2] in ("FF", "TH") else 0.0), name
+
+
+def test_trigger_moves_only_index_actuators_in_the_sim():
+    session = TeleopSession("right", seed=2)
+    frame = {"controllers": [{"hand": "right", "tracked": True, "position": [0, 0, 0], "rotation": [0, 0, 0, 1],
+                              "grip": 0.0, "trigger": 1.0, "heldInstrument": ""}]}
+    session.step(frame)
+    cmd = session.ep.finger[-1]
+    for name, value, lo, hi in zip(FINGER_ACTUATORS, cmd, session.open, session.closed):
+        expected = hi if name[:2] in ("FF", "TH") else lo
+        assert np.isclose(value, expected), name
+
+
 def test_closure_and_controller_pick():
     assert closure({"grip": 0.3, "trigger": 0.8}) == 0.8
+    assert closure({"grip": 0.0, "trigger": 0.0, "heldInstrument": "inst_needle_driver"}) == 1.0
     frame = {"controllers": [{"hand": "left", "tracked": True}, {"hand": "right", "tracked": False}]}
     assert pick_controller(frame, "right") is None
     assert pick_controller(frame, "left")["hand"] == "left"

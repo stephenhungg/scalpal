@@ -41,13 +41,26 @@ Surgery in the headset is done with Quest controllers, so controller motion is t
 The mapping onto the floating Shadow hand of the instrument-transfer task (`learning/env.py`, physics on):
 - **Position:** controller position moves the grip point. The first tracked pose anchors to the hand's home.
 - **Yaw:** the controller's heading turns the hand.
-- **Fingers:** see "Finger mapping" below.
+- **Fingers:** per finger, exactly like the VR gloves (table below).
 
 ```sh
 uv run scalpal-motion teleop --consented          # window: robot hand follows the controller; each attempt saved to out/teleop
 uv run scalpal-motion send-controller             # stand-in headset: a scripted reach-and-place over UDP
 uv run scalpal-motion learn sweep --teleop out/teleop --n 1,5,10   # train and evaluate on the teleop demos
 ```
+
+### Finger mapping (matches the gloved hands in the Quest build)
+
+Stephen's gloves (`apps/quest/Assets/Scalpal/Quest/Runtime/ControllerHandPose.cs`) and the robot hand read the same controller inputs the same way, so what the gloved hand does in VR is what the Shadow hand does in sim:
+
+| Controller input | Glove in VR | Shadow hand actuators |
+| --- | --- | --- |
+| Trigger | index curls | `FFJ4`, `FFJ3`, `FFJ0` blend open to grasp by trigger |
+| Grip | middle, ring, pinky curl | `MF*`, `RF*`, `LF*` blend open to grasp by grip |
+| Either | thumb follows the harder of the two | `TH*` blend by max(grip, trigger) |
+| Instrument held (`heldInstrument` non-empty) | fist closes on the handle | every finger at the full grasp, regardless of grip/trigger |
+
+"Open" is the pre-shape and "grasp" is the closed shape validated in physics (`learning-results/human_profiles.json`). The glove's 0.2 rest curl is cosmetic and is not copied, so an idle controller leaves the robot hand open. Code: `finger_curls` and `curl_vector` in `scalpal_motion/teleop.py`; test: `tests/test_teleop.py::test_finger_mapping_matches_the_quest_gloves`.
 
 Successful attempts become training demos with a real wrist path and grip timing. Lost tracking holds the last command instead of inventing motion. Recording requires `--consented`. The Shadow hand model is not committed: fetch it once (see `scalpal_motion/learning/README.md`).
 
