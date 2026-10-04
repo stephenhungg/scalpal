@@ -12,8 +12,8 @@ Read `README.md`, `docs/current-direction.md` and `docs/system-integration.md` f
 
 User direction takes precedence over older proposals. In particular:
 
-- Build the latest experience flow in `docs/current-direction.md#latest-experience-flow`: launch → Enter → explore the FinchNode patients → full-VR diagnosis office (voice patient plus Jarvis attending) → the diagnosis decides the surgery → full-VR operating room with a virtual patient → required robot replay → recap. See `docs/demo-flow.md` and `docs/experience-ux.md`.
-- The whole run is full VR. Mixed reality with a real reclining participant, body registration, conversational case selection and the rotating anatomy preview are superseded and off the main path; keep that code but do not build on it or require it. Share one coach/tool/exercise core.
+- Build the latest experience flow in `docs/current-direction.md#latest-experience-flow`: launch → Enter → explore the FinchNode patients → full-VR diagnosis office (voice patient plus Jarvis attending) → the diagnosis decides the surgery → mixed-reality operating room on a real reclining person → required robot replay → recap.
+- The explore hub and diagnosis office are full VR. The operating room is mixed reality: passthrough, MediaPipe detection of a real reclining participant, generic teaching anatomy registered to their body, and virtual tools that expose and perform the steps on the overlay. A full-VR virtual-patient operating room, conversational case selection and the rotating anatomy preview are off the main path; keep that code but do not extend it unless asked.
 - The robotics input proposal is recorded passthrough video, not Meta SDK hand-joint telemetry.
 - First demonstrate video-derived hand motion retargeting and replay in simulation. Do not describe replay as a learned autonomous policy.
 - Preserve both education and robotics goals. Do not silently replace the project with a pure analytics dashboard or robotics-only collector.

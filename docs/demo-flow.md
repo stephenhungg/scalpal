@@ -10,7 +10,7 @@ Launch ─Enter─▶ Explore patients ─choose─▶ Diagnosis office ─asses
 
 ## Before the Learner Arrives
 
-The operator confirms the pre-op/encounter service, voice provider and shared-state connectivity, pairs the headset and companion to the same session, and confirms the video capture route for the replay step. The app uses full VR throughout; no real participant reclines on a table.
+The operator confirms the pre-op/encounter service, voice provider and shared-state connectivity, pairs the headset and companion to the same session, and confirms the video capture route for the replay step. The explore hub and office are full VR. For the operating room a real participant reclines on the accepted table, and the operator checks lighting and the space so the headset can see their torso. The virtual activity affects only simulated anatomy and tools.
 
 ## 1. Launch
 
@@ -38,11 +38,11 @@ Recommended handoff: see [experience UX](experience-ux.md#4-diagnosis--surgery-h
 
 ## 5. Operating Room
 
-The scene transitions to the full-VR operating room with a virtual patient on the table, scaled to that patient (`bodyScale`), with the case's anatomy, instruments, ports and steps from `GET /patients/:id/case`. Chart risks found in the office (anticoagulation, allergies, incomplete chart) carry into the pre-op check and pinned step considerations.
+The headset fades from the office into passthrough. The participant is lying on the table; MediaPipe detects their body and the generic teaching anatomy for this case is registered onto it (landmarks plus measured surface depth). The operator confirms the fit before practice. The overlay is scaled to that patient (`bodyScale`), with the case's anatomy, instruments, ports and steps from `GET /patients/:id/case`. Chart risks found in the office (anticoagulation, allergies, incomplete chart) carry into the pre-op check and pinned step considerations.
 
 Jarvis guides the current authored step. Tracked virtual tools and supported UI actions pass through one local dispatcher; one deliberate action produces one accepted transition. Wrong-tool/contact feedback follows the authored rubric. Controller tracking loss releases tools. Voice/network failure preserves local pause and the attempt; recovery resynchronizes confirmed state.
 
-Recording of raw passthrough video starts explicitly for a defined surgery segment, with capture, calibration and clock metadata plus a separate virtual scene timeline. The headset renders full VR while the camera records the learner's real hands; raw images contain no virtual tools or organs. Rendered VR footage is never substituted as motion input.
+Recording of raw passthrough video starts explicitly for a defined surgery segment, with capture, calibration and clock metadata plus a separate virtual scene timeline. Raw camera images contain the learner's real hands and the participant but no virtual tools or organs. Rendered or composited footage is never substituted as motion input. Lost registration hides the anatomy and pauses scoring and effects until it reacquires.
 
 ## 6. Robot Replay (Required)
 
