@@ -423,7 +423,11 @@ namespace Scalpal.Quest
                 created.snapshot.patientId != SelectedPatientId || created.snapshot.procedureId != SelectedProcedureId || created.snapshot.mode != PresentationMode)
             { busy = false; Message = "Coach case differs from the reviewed case; restart selection"; yield break; }
             coachSessionId = created.sessionId;
-            voicePrompt = created.systemPrompt; voiceGreeting = HasHandoff ? "Scrubbed in with you. Time-out: confirm patient, procedure and site." : created.firstMessage; voiceContext = created.context;
+            // There is no Time-Out panel to confirm against: the coach's own opening states the time-out and starts the
+            // first step ("Let's begin: ..."), so Jarvis never waits for a confirmation that cannot come.
+            voicePrompt = created.systemPrompt; voiceContext = created.context;
+            voiceGreeting = !string.IsNullOrWhiteSpace(created.firstMessage) ? created.firstMessage
+                : HasHandoff ? "Scrubbed in with you. Time-out done. Let's begin with the first step." : "";
             if (HasHandoff)
             {
                 busy = false; Message = "Jarvis ready. Confirm the Time-Out rows.";
