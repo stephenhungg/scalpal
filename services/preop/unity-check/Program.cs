@@ -129,7 +129,7 @@ static class Program
         tied.position.x = 900;
         Check(body.Body.Log.Last().action.position.x == 0, "action history snapshots submitted measurements");
         var dummy = new Procedure { id = "dummy", steps = procedure.steps, firstStep = procedure.firstStep,
-            openBody = new OpenBodyCase { tissues = procedure.openBody.tissues, milestones = procedure.openBody.milestones,
+            openBody = new OpenBodyCase { version = 1, tissues = procedure.openBody.tissues, milestones = procedure.openBody.milestones,
                 guardrails = Array.Empty<BodyGuardrail>(), decisions = Array.Empty<BodyDecision>() } };
         var second = new CaseRunner(dummy);
         Expose(second);

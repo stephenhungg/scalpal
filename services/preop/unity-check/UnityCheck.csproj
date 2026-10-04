@@ -19,6 +19,9 @@
     <!-- Anatomy runtime compiles here against the real CoachRelay; its editor tooling has its own check in scripts/anatomy/runtime-check. -->
     <Compile Include="../../../apps/quest/Assets/Scalpal/Anatomy/Runtime/*.cs" />
     <Compile Include="../../../apps/quest/Assets/Scalpal/Experience/**/*.cs" />
+    <!-- Controller motion capture (robot-hand input); main's instrument input is stubbed in RoboticsStubs.cs. -->
+    <Compile Include="../../../apps/quest/Assets/Scalpal/Robotics/**/*.cs" />
+    <Compile Include="RoboticsStubs.cs" />
     <Compile Include="UnityEngineStubs.cs" />
     <Compile Include="Program.cs" />
   </ItemGroup>

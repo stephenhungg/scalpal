@@ -34,6 +34,31 @@ uv run scalpal-motion run clip.mp4 --hand Right --smooth 0.3
 
 `run` writes `hand_track.json`, `motion.json`, and `replay.mp4` (H.264, plays in browsers when ffmpeg is installed) (source clip with landmarks next to the robot). Inputs are assumed unmirrored, like Quest passthrough. Pass `--mirrored` for selfie footage, since MediaPipe's handedness label assumes a mirrored image. Smoothing is off by default. With `--smooth`, the low-pass filter resets after every tracking gap. `out/` and `models/` are gitignored. Keep participant clips outside the repo.
 
+## Quest Controllers Drive the Robot Hand (current demo path)
+
+Surgery in the headset is done with Quest controllers, so controller motion is the robot input. There is no hand camera and no passthrough video in this path. The Quest's `ControllerMotionCapture` (`apps/quest/Assets/Scalpal/Robotics`) streams `scalpal.controller_motion.v1` frames over UDP: each controller's tracked pose (relative to the registered `PatientRoot` when set), grip, trigger, and held instrument.
+
+The mapping onto the floating Shadow hand of the instrument-transfer task (`learning/env.py`, physics on):
+- **Position:** controller position moves the grip point. The first tracked pose anchors to the hand's home.
+- **Yaw:** the controller's heading turns the hand.
+- **Fingers:** see "Finger mapping" below.
+
+```sh
+uv run scalpal-motion teleop --consented          # window: robot hand follows the controller; each attempt saved to out/teleop
+uv run scalpal-motion send-controller             # stand-in headset: a scripted reach-and-place over UDP
+uv run scalpal-motion learn sweep --teleop out/teleop --n 1,5,10   # train and evaluate on the teleop demos
+```
+
+Successful attempts become training demos with a real wrist path and grip timing. Lost tracking holds the last command instead of inventing motion. Recording requires `--consented`. The Shadow hand model is not committed: fetch it once (see `scalpal_motion/learning/README.md`).
+
+Verified on an M2 MacBook (branch `matthew/preop-finchnode`, carried to main):
+- **Network path:** a scripted controller reach-and-place sent over UDP placed the handle and saved the attempt.
+- **Without the network:** 5 of 5 scripted seeds placed the handle.
+- **Training data:** two such episodes, converted to demos, generated training data at 55% physics yield.
+- **Not yet run:** a real headset session. The capture compiles in the .NET check but has not run on a Quest.
+
+**What is human data here and what is not.** The committed learning result (`learning-results/`, 96.7% policy vs 20% replay) used finger shapes extracted from one public MediaPipe sample clip; `learning-results/human_profiles.json` is that frozen extraction and is the only camera-derived file on main. Teleop uses its open and closed shapes as the two ends of the finger blend. The MediaPipe hand-camera stream (`services/hands`, `live`, `import-episode`) stayed on the branch and is not part of the demo.
+
 ## Nathan's Gateway (integration path)
 
 Nathan's gateway (`nathan/companion-realtime`, `packages/contracts/worker-api.md`) is pull-based. This worker implements it:
