@@ -1,0 +1,63 @@
+# Native Appendectomy Integration
+
+This milestone assembles one full-VR rehearsal in `Assets/Scalpal/Quest/Scenes/NativeSession.unity`. It preserves the native tracked-head/controller rig and the user-confirmed held-tool motion fix. It connects Matthew's authored appendectomy case, selected anatomy, coach HTTP service, a native client for his existing Jarvis agent, and Nathan's actual SpacetimeDB session adapter.
+
+The exercise is illustrative. Tool contact advances authored procedural checks; the organs do not have validated deformable-tissue physics. The static virtual patient fit is explicitly authored. This scene does not perform real-person registration, passthrough capture, video streaming, or robot replay.
+
+## One Session
+
+1. Load the synthetic `patient-demo-multi-source` case from Matthew's running service; reject unknown patients, procedures, nonsynthetic briefs and unavailable cases.
+2. Join a genuine headset invitation and create a fresh `lap_appendectomy@0.1.0` attempt. Freeze its shared session/attempt IDs so external attempt changes cannot receive the old local runner's progress.
+3. Show a rotating preview containing the nine required/context anatomy meshes. **B** opens the synthetic case review. **B** again acknowledges the brief and requests a fresh coach session for that exact case in `virtual` mode.
+4. Bind one `AnatomyExerciseBinding`/`CaseRunner`. Practice remains gated until the coach acknowledges tracking and the headset has valid floor/head/focus tracking. Grip picks up tools; trigger activates them. Port placement requires actual tip overlap, the current step's instrument, and the port allowlist. **X** identifies anatomy under the actual held tip or head ray. **B** satisfies only an authored confirmation step.
+5. Publish confirmed coarse phase/step/selection/registration state and actual events to SpacetimeDB. XR poses stay local. Coach scoring events retain IDs across bounded retries and use the step that validated the action. Applied scene-command acknowledgements wait for a committed snapshot.
+6. After all ten authored steps, show a local recap and send the actual learning result. A successful send is distinct from the backend's committed acknowledgement. **A** abandons the previous local coach binding, restores tools and preview, and requests a new shared attempt.
+
+**Y** explicitly enables/disables microphone voice. If pressed before practice, it opts into the next confirmed session. Native conversational procedure selection is not yet wired: this first slice exposes one appendectomy through controller confirmation. Do not describe it as the completed conversational catalog experience.
+
+## Service Boundaries
+
+| Component | Local development route | Native consumer |
+| --- | --- | --- |
+| Matthew's preop/coach | HTTP `localhost:8787` | Reviewed case, fresh explicit coach session, ordered events, highlights, context |
+| Matthew's existing ElevenLabs agent | Signed WSS URL supplied by `/jarvis/connection` | `QuestJarvisVoice`: negotiated PCM microphone/speaker transport and existing bounded tools |
+| Nathan's SpacetimeDB | WS `127.0.0.1:3000`, database `scalpal` | `QuestSessionBridge`: real invitation, subscriptions, reducer acknowledgements |
+| Nathan's gateway | HTTP `localhost:8788` | Artifact/worker service available separately; native capture adapter still absent |
+| Nathan's companion | HTTP `localhost:5173` | Joined observer reads actual native snapshots and command acknowledgements |
+
+These are local development processes, not production deployment URLs. USB reverse routes make localhost services reachable by the headset. Development HTTP is enabled only for development players. Provider credentials remain on the preop service; no key, invitation or auth token belongs in a committed scene.
+
+Use `scripts/quest/configure_session.py --config /absolute/private/session-config.json` after installing a development APK. Its five fields are `uri`, `database`, `joinCode`, `preferredSessionId`, and `coachBaseUrl`. The helper sends private JSON over stdin into the app's private internal files directory and establishes needed localhost USB routes. Restart the app to read it. The native player reads this configuration only in development builds. Tokens persist per database endpoint in the app directory and are never logged.
+
+## Geometry and Input
+
+The scene contains two instances of a nine-mesh appendectomy subset, 93,399 triangles per instance. Selection preview colliders are disabled. The practice instance preserves authored renderer/collider defaults and hides geometry until its validity gate opens. All twelve runtime FBXs, original exports and the editable Blender atlas are now on main with attribution and preparation scripts. The native scene still loads only its nine-part subset.
+
+The exported anatomy is upright with a source foot origin. The illustrative fit uses X=90 degrees and uniform `1.75/1.743` scale: source +Y becomes the reclining patient's +Z. Source anterior -Z is assumed to become +Y. The source foot maps to the virtual patient's actual foot extent. Port coordinates use meters, +X patient-left, +Y anterior, +Z cranial, with an authored approximate skin umbilicus origin. These assumptions require visual headset validation and must never be reused as measured participant registration.
+
+`NativeProcedureInput` is the sole scored contact adapter. It reuses `InstrumentTipContact`, verifies selected anatomy ownership and actual tip penetration, and deduplicates per structure/port per activation cycle. Do not install an additional case director or contact scorer. `NativeCaseSession` owns the only coach command handler; no extra `AnatomyCoachBinding` is installed in this scene.
+
+Device event time is Unity monotonic elapsed milliseconds. Spacetime server timestamps use the server clock. These clocks are not calibrated and do not support cross-device motion alignment.
+
+## Build and Verification
+
+Use Unity 6000.0.66f2 with Android modules, ARM64 IL2CPP and Vulkan. `Scalpal.Quest.Editor.NativeSessionBuild.Prepare` regenerates the scene; `Validate` checks unique bindings, actual part/triangle counts, metric fit, port identities, materials and model dependencies. `Build` consumes an absolute `SCALPAL_QUEST_APK` output path and makes a development APK.
+
+`python3 scripts/quest/verify_session.py --suite all` is the repeatable gate; see [helper requirements](../scripts/README.md). `Build` now runs `Verify` before producing an APK. This includes the real scene/geometry/binding checks but does not depend on a live coach/provider. The gate's separate service stage starts an isolated recorded-fixture coach and a unique throwaway Spacetime database. It preserves the demo database and keeps physical playthrough explicitly unverified.
+
+Verification distinguishes real backend exchanges, synthetic editor checks and physical headset evidence. The backend suite passed 23 real local-server tests; preop passed 140 tests (two live-provider tests skipped); native PCM/protocol checks passed against actual Unity Android assemblies. The existing instrument runtime passed 160 editor checks. The native input fixture passed 24 checks, actual scene playthrough passed 75 checks across ten steps/thirteen actions, and attempt/retry boundary fixture passed 72 checks. These editor poses/identities are synthetic and cannot establish physical usability. The consolidated ARM64 development APK `0.2.1-main` (Android version code 4) built successfully and installed over USB; private pairing and service routes were restored. Its launch remains blocked by the controllers-required prompt. The previous `0.2.0-session` was installed and privately paired over USB, but launch was blocked at the Quest controllers-required dialog. Headset wake/controllers and an actual session playthrough remain the physical checkpoint. The full-session headset result, native voice authentication/audio and actual observer state remain unverified.
+
+The expanded gate passed after failure-path fixes: 19 real isolated coach-HTTP checks; 156 production relay/runner checks with actual isolated HTTP and controlled coroutine/response timing, including thirteen authored actions and ten lost committed responses; 33 production bridge checks with SDK/transport doubles; and 68 actual-scene coach-binding checks. Ten real subscription/reconnect/attempt checks passed on the throwaway module and then on fresh test-owned sessions in the local demo database. Its module was updated with data deletion disabled; the coach process was restarted with the corrected source. These checks neither record a participant nor authenticate a voice agent. Read [failure harness details](../scripts/quest/session-check/README.md).
+
+Confirmed regressions: stale/unknown coach step metadata no longer scores the current step, including a retry after a lost rejection response; terminal coach command outcomes cannot be overwritten. Shared retry state clears old selections/registration, and authored exercise events reject abandoned or foreign-session attempt IDs. Uncertain native events are still not blindly retried: Nathan's reducer has no durable event identity field.
+
+## Remaining Required Interfaces
+
+- Existing ElevenLabs agent credentials are currently absent locally; `/jarvis/connection` reports unconfigured. Spoken headset input/output remains unverified.
+- Main includes Matthew's shared tool/alert/context-key service. The native six-tool path now posts complete JSON parameters to the explicit coach-session tool endpoint. Context updates use the meaningful `contextKey`. Fifty actual Unity coroutine/HTTP checks passed against isolated synthetic Hono fixtures, including pending/applied highlights and stale connections; WSS, microphone and provider calls did not run. Polled alerts/reflex pacing remains an adapter gap.
+- Conversational selection and native visual preview actions need to be connected to the same single agent; controller selection is the bounded first integration.
+- MR body registration and camera acquisition remain in the separate camera experiment, not this scene.
+- Native video production/WebRTC publishing and upload are absent; the companion must not claim a live headset video feed.
+- Silas's video-to-motion processor is merged on main. Its latest frozen-dependency suite passed 30 tests (one external sample-video test skipped), including output-path traversal and malformed job regressions. A 60-frame synthetic kinematic replay encoded successfully and preserved ten explicit gap frames. Nathan's lease/artifact worker adapter and compatible trajectory conversion are now implemented. Actual permitted Quest-video validation remains absent; synthetic checks do not prove first-person reconstruction quality.
+
+See [system integration](system-integration.md) for exact audited commits and [native workbench evidence](native-workbench.md) for the earlier physical controller result.

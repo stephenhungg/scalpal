@@ -1,0 +1,64 @@
+{
+ "schema": "scalpal.motion_result/0",
+ "job_id": "job-demo-001",
+ "run_id": "run-demo-001-a",
+ "attempt_id": "attempt-demo-001",
+ "input_artifact_id": "artifact-demo-clip-001",
+ "status": "ready",
+ "processor": {
+  "name": "scalpal-motion",
+  "version": "0.1.0",
+  "output_schema": "scalpal.robot_motion/0",
+  "retarget_config": "shadow_right_vector/2 (knuckle-origin fingers, per-vector bone-length scale, wrist fixed at 0)",
+  "robot": "shadow_hand_right"
+ },
+ "config": {
+  "hand": "Right",
+  "mirrored": true,
+  "smooth": null
+ },
+ "quality": {
+  "frames": 30,
+  "valid_frames": 30,
+  "valid_fraction": 1.0,
+  "longest_valid_segment_s": 0.9666666666666667,
+  "vector_error_m_median": 0.004124053352943052,
+  "vector_error_m_p95": 0.007372038019643756,
+  "segments": [
+   {
+    "status": "valid",
+    "start_frame": 0,
+    "end_frame": 29,
+    "start_ms": 0.0,
+    "end_ms": 966.6666666666666
+   }
+  ],
+  "note": "vector error is fit to the estimated human hand, not reconstruction accuracy"
+ },
+ "artifacts": [
+  {
+   "kind": "hand_track",
+   "file": "hand_track.json",
+   "content_type": "application/json",
+   "bytes": 89242,
+   "sha256": "8d8a7b2c82f2e3349e311bf514f6812424799f2482b8484b3d907a0b6ef3ffd6"
+  },
+  {
+   "kind": "robot_motion",
+   "file": "motion.json",
+   "content_type": "application/json",
+   "bytes": 19872,
+   "sha256": "f2071efb0dbfc8bf44059be60d49db2554d865247a1f39cbe8ff2ea695d31554"
+  },
+  {
+   "kind": "replay_video",
+   "file": "replay.mp4",
+   "content_type": "video/mp4",
+   "bytes": 42296,
+   "sha256": "630959a7cb8607aa4185bfb48602d096888f33d46d46639f1940c165f22968fc"
+  }
+ ],
+ "processing_s": 2.23,
+ "finished_at": "2026-10-03T19:57:54.205764+00:00",
+ "output_dir": "<output-root>/run-demo-001-a"
+}

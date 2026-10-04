@@ -73,6 +73,10 @@ Two saved low-light images missed a visible shaker bottle in host inference. Lat
 
 The supplied 80-class detector does not identify surgical instrument categories and does not output body or hand joint poses. A bottle detector is infrastructure evidence; it is not a torso tracker or motion-capture system.
 
+## Native Workbench Follow-Up
+
+The repository now has a separate OpenXR full-VR tool workbench. Its build/install, live tracking/pickup telemetry and the user-reported motion lag are recorded in [native workbench evidence](native-workbench.md). The user confirmed that held tools keep up after the interpolation/before-render correction; quantitative latency remains unmeasured. These new results do not change the earlier camera/inference measurements or establish surgery, MR fit or capture integration.
+
 ## Next Hardware Evidence
 
 Test torso registration and video-to-hand replay as separate bounded experiments. For torso tracking, measure normal-visibility coverage, external-point alignment in both eyes, occlusion behavior, and recovery on the actual reclining participant. For recording, first establish a valid capture route and frame/pose/scene timing, then evaluate a short clip with visible fingers, known movement, and documented camera motion.

@@ -1,5 +1,7 @@
 # Nathan's Implementation Plan: Companion Website and SpacetimeDB
 
+> Implementation update: team feature branches now contain component code. Read the [system integration map](system-integration.md) for audited commits, actual routes, missing adapters and verification. The plan below describes intended responsibilities, not proof of a connected deployment.
+
 Assigned scope: October 3, 2026. The user requested this implementation work order after removing Solana and confirming that the companion website should show the headset session live. This document updates the plan; no application, stream, backend, bucket, or public deployment is implemented by this documentation change.
 
 ## Outcome

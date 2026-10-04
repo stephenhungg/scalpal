@@ -6,6 +6,8 @@ Research snapshot: October 3, 2026. This page consolidates the sources relevant 
 
 Start with the [repository overview](../../README.md) for the thesis and product scope. See [sponsor alignment](../sponsors.md) for event eligibility. Sources below support decisions; they do not automatically validate Scalpal's educational effectiveness or robotics results.
 
+Latest research: [TAPNet family and video tracking](tapnet.md) and [reusable comprehensive anatomy and case coverage](comprehensive-anatomy.md). These are researched directions, not newly implemented tracking or tissue physics.
+
 ## Current Research Position
 
 Scalpal connects two goals: AI-guided learning in mixed reality, and useful human demonstrations for robot learning. The first visible robotics result is **video-derived robot-hand replay**, not an autonomous learned policy.
@@ -14,7 +16,7 @@ The current input proposal is **Quest passthrough video**, processed on the Mac 
 
 The physical subject is a reclining real person. The anatomy overlay is a generic teaching model registered to their torso, not an estimate of their actual internal organs. Tools and interactions are simulated. A rotating anatomy preview belongs to the conversational selection phase; the practice overlay follows the participant rather than spinning.
 
-One bounded exercise should connect the educational and robotics components. A gallbladder anatomy lesson and instrument pick-and-place have been discussed as candidates, but no exact exercise or robot hand has been selected. Do not implement multiple procedures based on these examples.
+One bounded exercise should connect the educational and robotics components. The current native integration selects an authored appendectomy rehearsal; Silas's source selects a right Shadow hand. Their recording/worker/replay connection remains absent. The broader anatomy/case library is a reusable content direction, not a reason to ship unverified procedures.
 
 ## Surgical Education: What We Can Reasonably Teach
 

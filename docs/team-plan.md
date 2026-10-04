@@ -1,5 +1,7 @@
 # Repository Structure and Four-Person Work Split
 
+> Implementation update: team feature branches now contain component code. Read the [system integration map](system-integration.md) for audited commits, actual routes, missing adapters and verification. The plan below describes intended responsibilities, not proof of a connected deployment.
+
 > Current scope: Solana and monetary completion rewards are removed. Nathan now owns the companion website + SpacetimeDB/routing lane, and Matthew continues his Jarvis work. Read [current direction](current-direction.md) and [Nathan's implementation plan](nathan-plan.md) before older design notes.
 
 Updated October 3, 2026. This is an ownership plan and folder scaffold, not a running application. Nathan's companion/realtime lane is the latest explicit assignment. Stephen's hardware/integration, Matthew's broader anatomy-experience, and Silas's robotics responsibilities retain the earlier split; Matthew's current Jarvis work is confirmed by the user. Nathan's GitHub identity is not assumed from the earlier `nakim12` entry.

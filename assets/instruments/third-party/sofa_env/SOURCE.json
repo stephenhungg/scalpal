@@ -1,0 +1,547 @@
+{
+  "repository": "https://github.com/ScheiklP/sofa_env",
+  "commit": "85bf7e05dd088b824794dda0046679df13b13e6e",
+  "retrievedDate": "2026-10-03",
+  "license": "MIT",
+  "licenseFile": "LICENSE",
+  "status": "Unmodified source STL candidates; not yet converted to Unity prefabs or judged visually on Quest. Repository root license retained; no distinct instrument/endoscope license was found. Anatomy/robot assets deliberately excluded because they have separate SOURCES provenance.",
+  "units": "Source coordinates appear millimeters (shaft extent roughly 350); verify upstream assembly transform before conversion; STL has no inherent units.",
+  "files": [
+    {
+      "sourcePath": "LICENSE",
+      "localPath": "LICENSE",
+      "url": "https://raw.githubusercontent.com/ScheiklP/sofa_env/85bf7e05dd088b824794dda0046679df13b13e6e/LICENSE",
+      "sha256": "39e43d43a94bf3012e27f43f289d6c77e499056b9f9080544cf891c34270be04",
+      "bytes": 1069
+    },
+    {
+      "sourcePath": "assets/meshes/endoscopes/laparoscope_body.stl",
+      "localPath": "endoscopes/laparoscope_body.stl",
+      "url": "https://raw.githubusercontent.com/ScheiklP/sofa_env/85bf7e05dd088b824794dda0046679df13b13e6e/assets/meshes/endoscopes/laparoscope_body.stl",
+      "sha256": "6a91b58858ba3cc6f770fc764406ef68665ba8ae669c6503535435360e71ce97",
+      "bytes": 11484,
+      "triangles": 228,
+      "boundsMinSourceUnits": [
+        -19.578514099121094,
+        -30.112348556518555,
+        -50.191368103027344
+      ],
+      "boundsMaxSourceUnits": [
+        19.578514099121094,
+        24.236408233642578,
+        6.75277853012085
+      ],
+      "sizeSourceUnits": [
+        39.15702819824219,
+        54.34875679016113,
+        56.94414663314819
+      ]
+    },
+    {
+      "sourcePath": "assets/meshes/endoscopes/laparoscope_cable.stl",
+      "localPath": "endoscopes/laparoscope_cable.stl",
+      "url": "https://raw.githubusercontent.com/ScheiklP/sofa_env/85bf7e05dd088b824794dda0046679df13b13e6e/assets/meshes/endoscopes/laparoscope_cable.stl",
+      "sha256": "c3ba37c8609b28aaa577976098ceba3982b3892eefb4f89c010169077e0c4cbd",
+      "bytes": 19084,
+      "triangles": 380,
+      "boundsMinSourceUnits": [
+        -12.038240432739258,
+        -61.1407585144043,
+        -112.7486572265625
+      ],
+      "boundsMaxSourceUnits": [
+        12.03824234008789,
+        -8.915299415588379,
+        -38.46303939819336
+      ],
+      "sizeSourceUnits": [
+        24.07648277282715,
+        52.22545909881592,
+        74.28561782836914
+      ]
+    },
+    {
+      "sourcePath": "assets/meshes/endoscopes/laparoscope_optics.stl",
+      "localPath": "endoscopes/laparoscope_optics.stl",
+      "url": "https://raw.githubusercontent.com/ScheiklP/sofa_env/85bf7e05dd088b824794dda0046679df13b13e6e/assets/meshes/endoscopes/laparoscope_optics.stl",
+      "sha256": "fe01b02a8dd9544cb0e1cee34bb66c42e77ea2f1f7b34c348c4cd322eec9a768",
+      "bytes": 69484,
+      "triangles": 1388,
+      "boundsMinSourceUnits": [
+        -15.940122604370117,
+        -40.802303314208984,
+        -380.5
+      ],
+      "boundsMaxSourceUnits": [
+        15.940122604370117,
+        15.940122604370117,
+        0.02587890625
+      ],
+      "sizeSourceUnits": [
+        31.880245208740234,
+        56.7424259185791,
+        380.52587890625
+      ]
+    },
+    {
+      "sourcePath": "assets/meshes/endoscopes/laparoscope_optics_30_degree.stl",
+      "localPath": "endoscopes/laparoscope_optics_30_degree.stl",
+      "url": "https://raw.githubusercontent.com/ScheiklP/sofa_env/85bf7e05dd088b824794dda0046679df13b13e6e/assets/meshes/endoscopes/laparoscope_optics_30_degree.stl",
+      "sha256": "983dfa7fdb4c5506fb2106c420ad0dbf070d79f1d92e7f1e1ae5c5919c4e5cdc",
+      "bytes": 69484,
+      "triangles": 1388,
+      "boundsMinSourceUnits": [
+        -15.940122604370117,
+        -40.802303314208984,
+        -380.5
+      ],
+      "boundsMaxSourceUnits": [
+        15.940122604370117,
+        15.940122604370117,
+        2.9212646484375
+      ],
+      "sizeSourceUnits": [
+        31.880245208740234,
+        56.7424259185791,
+        383.4212646484375
+      ]
+    },
+    {
+      "sourcePath": "assets/meshes/endoscopes/laparoscope_ring_coupler.stl",
+      "localPath": "endoscopes/laparoscope_ring_coupler.stl",
+      "url": "https://raw.githubusercontent.com/ScheiklP/sofa_env/85bf7e05dd088b824794dda0046679df13b13e6e/assets/meshes/endoscopes/laparoscope_ring_coupler.stl",
+      "sha256": "61161302a8c1c76be04d7cc376eb708c3c4504d3e0ac284ac0fe03f54f6501dd",
+      "bytes": 25484,
+      "triangles": 508,
+      "boundsMinSourceUnits": [
+        -22.820884704589844,
+        -21.22878646850586,
+        35.79852294921875
+      ],
+      "boundsMaxSourceUnits": [
+        22.82088279724121,
+        21.228784561157227,
+        50.557945251464844
+      ],
+      "sizeSourceUnits": [
+        45.641767501831055,
+        42.457571029663086,
+        14.759422302246094
+      ]
+    },
+    {
+      "sourcePath": "assets/meshes/endoscopes/laparoscope_ring_focus.stl",
+      "localPath": "endoscopes/laparoscope_ring_focus.stl",
+      "url": "https://raw.githubusercontent.com/ScheiklP/sofa_env/85bf7e05dd088b824794dda0046679df13b13e6e/assets/meshes/endoscopes/laparoscope_ring_focus.stl",
+      "sha256": "f32c280dbfb8a2d1640bcd0baf9aaa51c54fa9a79b2131d2c2f8d4dd06a07eb3",
+      "bytes": 27884,
+      "triangles": 556,
+      "boundsMinSourceUnits": [
+        -20.359323501586914,
+        -20.359323501586914,
+        21.823209762573242
+      ],
+      "boundsMaxSourceUnits": [
+        20.35932159423828,
+        20.359315872192383,
+        37.77702331542969
+      ],
+      "sizeSourceUnits": [
+        40.718645095825195,
+        40.7186393737793,
+        15.953813552856445
+      ]
+    },
+    {
+      "sourcePath": "assets/meshes/endoscopes/laparoscope_ring_zoom.stl",
+      "localPath": "endoscopes/laparoscope_ring_zoom.stl",
+      "url": "https://raw.githubusercontent.com/ScheiklP/sofa_env/85bf7e05dd088b824794dda0046679df13b13e6e/assets/meshes/endoscopes/laparoscope_ring_zoom.stl",
+      "sha256": "d1a8fc8f2c78748c3870a4651211f32641c0b9a84fd837e6564d1e9ae937e716",
+      "bytes": 23084,
+      "triangles": 460,
+      "boundsMinSourceUnits": [
+        -18.755504608154297,
+        -16.093181610107422,
+        4.966658115386963
+      ],
+      "boundsMaxSourceUnits": [
+        18.755512237548828,
+        16.09317970275879,
+        23.088951110839844
+      ],
+      "sizeSourceUnits": [
+        37.511016845703125,
+        32.18636131286621,
+        18.12229299545288
+      ]
+    },
+    {
+      "sourcePath": "assets/meshes/instruments/atraumatic_forceps_jaw_left.stl",
+      "localPath": "instruments/atraumatic_forceps_jaw_left.stl",
+      "url": "https://raw.githubusercontent.com/ScheiklP/sofa_env/85bf7e05dd088b824794dda0046679df13b13e6e/assets/meshes/instruments/atraumatic_forceps_jaw_left.stl",
+      "sha256": "cfac3c6b1bb2d98cd76faf100d3cd616126e3ed2575fca9696e78f5d274a85df",
+      "bytes": 24884,
+      "triangles": 496,
+      "boundsMinSourceUnits": [
+        -2.2680001258850098,
+        -2.364138126373291,
+        -2.3848235607147217
+      ],
+      "boundsMaxSourceUnits": [
+        2.268000364303589,
+        2.351926326751709,
+        17.743000030517578
+      ],
+      "sizeSourceUnits": [
+        4.536000490188599,
+        4.716064453125,
+        20.1278235912323
+      ]
+    },
+    {
+      "sourcePath": "assets/meshes/instruments/atraumatic_forceps_jaw_right.stl",
+      "localPath": "instruments/atraumatic_forceps_jaw_right.stl",
+      "url": "https://raw.githubusercontent.com/ScheiklP/sofa_env/85bf7e05dd088b824794dda0046679df13b13e6e/assets/meshes/instruments/atraumatic_forceps_jaw_right.stl",
+      "sha256": "a2024a53f27428b77b6e4e66e7004d04c572aeadeed80371a4f0e17d60568472",
+      "bytes": 24884,
+      "triangles": 496,
+      "boundsMinSourceUnits": [
+        -2.268000364303589,
+        -2.351926565170288,
+        -2.3848235607147217
+      ],
+      "boundsMaxSourceUnits": [
+        2.2680001258850098,
+        2.364137887954712,
+        17.743000030517578
+      ],
+      "sizeSourceUnits": [
+        4.536000490188599,
+        4.716064453125,
+        20.1278235912323
+      ]
+    },
+    {
+      "sourcePath": "assets/meshes/instruments/dissection_electrode.stl",
+      "localPath": "instruments/dissection_electrode.stl",
+      "url": "https://raw.githubusercontent.com/ScheiklP/sofa_env/85bf7e05dd088b824794dda0046679df13b13e6e/assets/meshes/instruments/dissection_electrode.stl",
+      "sha256": "b4b7a1558fa30e9e441ecd20d154b7cdebecfced7f08e10c1a336ecede0aa339",
+      "bytes": 83284,
+      "triangles": 1664,
+      "boundsMinSourceUnits": [
+        -2.2284138202667236,
+        -2.1684021949768066,
+        -349.3105773925781
+      ],
+      "boundsMaxSourceUnits": [
+        2.2284138202667236,
+        2.2700557708740234,
+        15.16744613647461
+      ],
+      "sizeSourceUnits": [
+        4.456827640533447,
+        4.43845796585083,
+        364.47802352905273
+      ]
+    },
+    {
+      "sourcePath": "assets/meshes/instruments/forceps_jaw_left.stl",
+      "localPath": "instruments/forceps_jaw_left.stl",
+      "url": "https://raw.githubusercontent.com/ScheiklP/sofa_env/85bf7e05dd088b824794dda0046679df13b13e6e/assets/meshes/instruments/forceps_jaw_left.stl",
+      "sha256": "cd461e29c2a950f743b092ea667af5c330f7cd2d5a5e065e1f6e2513f8b98404",
+      "bytes": 54184,
+      "triangles": 1082,
+      "boundsMinSourceUnits": [
+        -2.2685322761535645,
+        -2.3641371726989746,
+        -2.3848230838775635
+      ],
+      "boundsMaxSourceUnits": [
+        2.2685062885284424,
+        2.351926803588867,
+        25.94024085998535
+      ],
+      "sizeSourceUnits": [
+        4.537038564682007,
+        4.716063976287842,
+        28.325063943862915
+      ]
+    },
+    {
+      "sourcePath": "assets/meshes/instruments/forceps_jaw_right.stl",
+      "localPath": "instruments/forceps_jaw_right.stl",
+      "url": "https://raw.githubusercontent.com/ScheiklP/sofa_env/85bf7e05dd088b824794dda0046679df13b13e6e/assets/meshes/instruments/forceps_jaw_right.stl",
+      "sha256": "03eaa2c854c89658c597706bc05b52c07f7e838f3a02972c5537f9dafae27d2e",
+      "bytes": 136784,
+      "triangles": 2734,
+      "boundsMinSourceUnits": [
+        -2.268523931503296,
+        -2.3519256114959717,
+        -2.3848230838775635
+      ],
+      "boundsMaxSourceUnits": [
+        2.268514633178711,
+        2.36413836479187,
+        25.94024085998535
+      ],
+      "sizeSourceUnits": [
+        4.537038564682007,
+        4.716063976287842,
+        28.325063943862915
+      ]
+    },
+    {
+      "sourcePath": "assets/meshes/instruments/instrument_shaft.stl",
+      "localPath": "instruments/instrument_shaft.stl",
+      "url": "https://raw.githubusercontent.com/ScheiklP/sofa_env/85bf7e05dd088b824794dda0046679df13b13e6e/assets/meshes/instruments/instrument_shaft.stl",
+      "sha256": "b1d1b27b27ab3c9ca6b2cda1fe0f3a20f16b9640d6d5d437de2def222a0f806c",
+      "bytes": 52084,
+      "triangles": 1040,
+      "boundsMinSourceUnits": [
+        -2.2284138202667236,
+        -2.1439080238342285,
+        -349.31060791015625
+      ],
+      "boundsMaxSourceUnits": [
+        2.2284138202667236,
+        2.1584675312042236,
+        2.138476848602295
+      ],
+      "sizeSourceUnits": [
+        4.456827640533447,
+        4.302375555038452,
+        351.44908475875854
+      ]
+    },
+    {
+      "sourcePath": "assets/meshes/instruments/laparoscopic_handle_body.stl",
+      "localPath": "instruments/laparoscopic_handle_body.stl",
+      "url": "https://raw.githubusercontent.com/ScheiklP/sofa_env/85bf7e05dd088b824794dda0046679df13b13e6e/assets/meshes/instruments/laparoscopic_handle_body.stl",
+      "sha256": "192ed29d41698c495a87f7f7d38b4b3b168f2e1c1d6f342ef709346a4abad816",
+      "bytes": 62484,
+      "triangles": 1248,
+      "boundsMinSourceUnits": [
+        -18.95616340637207,
+        -79.52549743652344,
+        -96.55503845214844
+      ],
+      "boundsMaxSourceUnits": [
+        18.678430557250977,
+        15.010075569152832,
+        39.03086853027344
+      ],
+      "sizeSourceUnits": [
+        37.63459396362305,
+        94.53557300567627,
+        135.58590698242188
+      ]
+    },
+    {
+      "sourcePath": "assets/meshes/instruments/laparoscopic_handle_body_only.stl",
+      "localPath": "instruments/laparoscopic_handle_body_only.stl",
+      "url": "https://raw.githubusercontent.com/ScheiklP/sofa_env/85bf7e05dd088b824794dda0046679df13b13e6e/assets/meshes/instruments/laparoscopic_handle_body_only.stl",
+      "sha256": "1d53bf4f550421a463adc71fbce201acb705eecb580c242d6fa0d0244b78ff07",
+      "bytes": 21084,
+      "triangles": 420,
+      "boundsMinSourceUnits": [
+        -11.096012115478516,
+        -39.67776107788086,
+        -96.55503845214844
+      ],
+      "boundsMaxSourceUnits": [
+        11.096014976501465,
+        15.010075569152832,
+        39.03086853027344
+      ],
+      "sizeSourceUnits": [
+        22.19202709197998,
+        54.68783664703369,
+        135.58590698242188
+      ]
+    },
+    {
+      "sourcePath": "assets/meshes/instruments/laparoscopic_handle_body_screw.stl",
+      "localPath": "instruments/laparoscopic_handle_body_screw.stl",
+      "url": "https://raw.githubusercontent.com/ScheiklP/sofa_env/85bf7e05dd088b824794dda0046679df13b13e6e/assets/meshes/instruments/laparoscopic_handle_body_screw.stl",
+      "sha256": "9fdfa378ab202bc1594c70c5f631964ca94e2d5fb29081800f7eca2255d29faf",
+      "bytes": 41484,
+      "triangles": 828,
+      "boundsMinSourceUnits": [
+        -18.95616340637207,
+        -79.52549743652344,
+        -2.8853516578674316
+      ],
+      "boundsMaxSourceUnits": [
+        18.678430557250977,
+        -36.56413650512695,
+        34.749473571777344
+      ],
+      "sizeSourceUnits": [
+        37.63459396362305,
+        42.961360931396484,
+        37.634825229644775
+      ]
+    },
+    {
+      "sourcePath": "assets/meshes/instruments/laparoscopic_handle_lever.stl",
+      "localPath": "instruments/laparoscopic_handle_lever.stl",
+      "url": "https://raw.githubusercontent.com/ScheiklP/sofa_env/85bf7e05dd088b824794dda0046679df13b13e6e/assets/meshes/instruments/laparoscopic_handle_lever.stl",
+      "sha256": "6130fef684816a0c4224f9e9eac6abd4695c42214f3ba99a1287d20a1301a89f",
+      "bytes": 13384,
+      "triangles": 266,
+      "boundsMinSourceUnits": [
+        -4.986069679260254,
+        -8.899706840515137,
+        -67.48556518554688
+      ],
+      "boundsMaxSourceUnits": [
+        4.986069679260254,
+        45.23573303222656,
+        9.050640106201172
+      ],
+      "sizeSourceUnits": [
+        9.972139358520508,
+        54.1354398727417,
+        76.53620529174805
+      ]
+    },
+    {
+      "sourcePath": "assets/meshes/instruments/maryland_dissector_jaw_left.stl",
+      "localPath": "instruments/maryland_dissector_jaw_left.stl",
+      "url": "https://raw.githubusercontent.com/ScheiklP/sofa_env/85bf7e05dd088b824794dda0046679df13b13e6e/assets/meshes/instruments/maryland_dissector_jaw_left.stl",
+      "sha256": "e6b9d14ea0e931ee0d939df1d62b6eee17afca7ad7a5aefa1b54a4d90f187ddf",
+      "bytes": 47684,
+      "triangles": 952,
+      "boundsMinSourceUnits": [
+        -2.2570371627807617,
+        -6.181344985961914,
+        -2.384822368621826
+      ],
+      "boundsMaxSourceUnits": [
+        2.2570154666900635,
+        2.3519287109375,
+        25.69588851928711
+      ],
+      "sizeSourceUnits": [
+        4.514052629470825,
+        8.533273696899414,
+        28.080710887908936
+      ]
+    },
+    {
+      "sourcePath": "assets/meshes/instruments/maryland_dissector_jaw_right.stl",
+      "localPath": "instruments/maryland_dissector_jaw_right.stl",
+      "url": "https://raw.githubusercontent.com/ScheiklP/sofa_env/85bf7e05dd088b824794dda0046679df13b13e6e/assets/meshes/instruments/maryland_dissector_jaw_right.stl",
+      "sha256": "f3192e93ea1f9d8cc9d0d5b39767f83e7c173e4745d99f17da33b3dad487eee6",
+      "bytes": 49484,
+      "triangles": 988,
+      "boundsMinSourceUnits": [
+        -2.2592897415161133,
+        -5.035342216491699,
+        -2.384822368621826
+      ],
+      "boundsMaxSourceUnits": [
+        2.2592835426330566,
+        2.364140272140503,
+        26.211191177368164
+      ],
+      "sizeSourceUnits": [
+        4.51857328414917,
+        7.399482488632202,
+        28.59601354598999
+      ]
+    },
+    {
+      "sourcePath": "assets/meshes/instruments/scissors_jaw_left.stl",
+      "localPath": "instruments/scissors_jaw_left.stl",
+      "url": "https://raw.githubusercontent.com/ScheiklP/sofa_env/85bf7e05dd088b824794dda0046679df13b13e6e/assets/meshes/instruments/scissors_jaw_left.stl",
+      "sha256": "aaae35850fc23e36152a46f43b25bf312f252c156470c718c9ac64e72e908e8e",
+      "bytes": 4584,
+      "triangles": 90,
+      "boundsMinSourceUnits": [
+        -0.2004517912864685,
+        -2.364138126373291,
+        -2.3848235607147217
+      ],
+      "boundsMaxSourceUnits": [
+        1.2170298099517822,
+        2.351926326751709,
+        14.905517578125
+      ],
+      "sizeSourceUnits": [
+        1.4174816012382507,
+        4.716064453125,
+        17.29034113883972
+      ]
+    },
+    {
+      "sourcePath": "assets/meshes/instruments/scissors_jaw_right.stl",
+      "localPath": "instruments/scissors_jaw_right.stl",
+      "url": "https://raw.githubusercontent.com/ScheiklP/sofa_env/85bf7e05dd088b824794dda0046679df13b13e6e/assets/meshes/instruments/scissors_jaw_right.stl",
+      "sha256": "3e015dd563eeb8a1b483e7a4afbd985ed8a20e458725da14cc6f407c8c5d6586",
+      "bytes": 4484,
+      "triangles": 88,
+      "boundsMinSourceUnits": [
+        -1.216883897781372,
+        -2.351926565170288,
+        -2.3848235607147217
+      ],
+      "boundsMaxSourceUnits": [
+        0.7293930053710938,
+        2.364137887954712,
+        14.884505271911621
+      ],
+      "sizeSourceUnits": [
+        1.9462769031524658,
+        4.716064453125,
+        17.269328832626343
+      ]
+    },
+    {
+      "sourcePath": "assets/meshes/instruments/single_action_forceps_jaw.stl",
+      "localPath": "instruments/single_action_forceps_jaw.stl",
+      "url": "https://raw.githubusercontent.com/ScheiklP/sofa_env/85bf7e05dd088b824794dda0046679df13b13e6e/assets/meshes/instruments/single_action_forceps_jaw.stl",
+      "sha256": "fe8be403ff7628f71deaa521182ae7b4897952e7c45dd9edbcabf3f97996ae2b",
+      "bytes": 55584,
+      "triangles": 1110,
+      "boundsMinSourceUnits": [
+        -2.2685327529907227,
+        -2.364137887954712,
+        -1.9010250568389893
+      ],
+      "boundsMaxSourceUnits": [
+        2.268505811691284,
+        1.810837745666504,
+        25.94024085998535
+      ],
+      "sizeSourceUnits": [
+        4.537038564682007,
+        4.174975633621216,
+        27.84126591682434
+      ]
+    },
+    {
+      "sourcePath": "assets/meshes/instruments/single_action_forceps_shaft.stl",
+      "localPath": "instruments/single_action_forceps_shaft.stl",
+      "url": "https://raw.githubusercontent.com/ScheiklP/sofa_env/85bf7e05dd088b824794dda0046679df13b13e6e/assets/meshes/instruments/single_action_forceps_shaft.stl",
+      "sha256": "95fd543a47e6b375393f441ad91dd78f4f80d78d3505b1ba8f497c3d68ddd06e",
+      "bytes": 181884,
+      "triangles": 3636,
+      "boundsMinSourceUnits": [
+        -2.268523931503296,
+        -2.1439080238342285,
+        -349.31060791015625
+      ],
+      "boundsMaxSourceUnits": [
+        2.26851487159729,
+        2.1872446537017822,
+        25.94024085998535
+      ],
+      "sizeSourceUnits": [
+        4.537038803100586,
+        4.331152677536011,
+        375.2508487701416
+      ]
+    }
+  ]
+}

@@ -349,4 +349,3 @@ export const VerifiedOutput = __t.object("VerifiedOutput", {
   verifiedBytes: __t.u64(),
 });
 export type VerifiedOutput = __Infer<typeof VerifiedOutput>;
-

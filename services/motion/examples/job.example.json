@@ -1,0 +1,15 @@
+{
+ "schema": "scalpal.motion_job/0",
+ "job_id": "job-demo-001",
+ "run_id": "run-demo-001-a",
+ "attempt_id": "attempt-demo-001",
+ "input": {
+  "artifact_id": "artifact-demo-clip-001",
+  "source": "https://<private-store>/signed/clip.mp4?expires=...  (or a local path on the worker machine)"
+ },
+ "config": {
+  "hand": "Right",
+  "mirrored": true,
+  "smooth": null
+ }
+}

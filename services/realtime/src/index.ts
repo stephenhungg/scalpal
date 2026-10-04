@@ -648,9 +648,14 @@ export const startAttempt = spacetimedb.reducer(
         mode: 'Selecting',
         stepId: undefined,
         stepIndex: 0,
+        stepCount: 0,
+        selectedStructureId: undefined,
         paused: false,
         recording: 'off',
         highlightedStructureId: undefined,
+        previewRotating: false,
+        registration: 'unaligned',
+        registrationReason: undefined,
       },
       true
     );
@@ -741,8 +746,10 @@ export const appendExerciseEvent = spacetimedb.reducer(
   },
   (ctx, a) => {
     requireRole(ctx, a.sessionId, ['headset']);
-    activeSession(ctx, a.sessionId);
-    if (!ctx.db.attempt.attemptId.find(a.attemptId)) fail('unknown attempt');
+    const session = activeSession(ctx, a.sessionId);
+    const attempt = ctx.db.attempt.attemptId.find(a.attemptId) ?? fail('unknown attempt');
+    if (attempt.sessionId !== a.sessionId) fail('attempt belongs to another session');
+    if (session.currentAttemptId !== a.attemptId) fail('stale attempt');
     checkText(a.kind, 'kind', 60);
     checkText(a.message, 'message');
     emit(ctx, a.sessionId, a.attemptId, a.kind, a.message, {
