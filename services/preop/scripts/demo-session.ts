@@ -18,7 +18,7 @@ const conn = await new Promise<DbConnection>((resolve, reject) => {
 });
 
 const sessionId = `ses_demo_${Date.now().toString(36)}`;
-await conn.reducers.createSession({ sessionId, label: "Scalpal demo", exerciseId: "lap_appendectomy", exerciseVersion: "1", displayName: "Demo setup" });
+await conn.reducers.createSession({ sessionId, label: "Scalpal demo", exerciseId: "open_appendectomy", exerciseVersion: "1", displayName: "Demo setup" });
 let invites: { role: string; code: string }[] = [];
 for (let i = 0; i < 100 && invites.length < 4; i++) {
   invites = [...conn.db.sessionInvites.iter()].filter((x) => x.sessionId === sessionId).map((x) => ({ role: x.role, code: x.code }));
@@ -31,7 +31,7 @@ const joined = (await res.json()) as { sessionId?: string; error?: { message: st
 
 console.log(`
 Session ${sessionId}
-  operator (companion, you)  ${code("operator")}
+  operator (dashboard, you)  ${code("operator")}
   headset  (Quest)           ${code("headset")}
   viewer   (judges)          ${code("viewer")}
   coach    (Scalpal)          ${code("coach")}  ${joined.sessionId === sessionId ? "joined" : `NOT joined: ${joined.error?.message ?? res.status}`}
