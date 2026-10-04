@@ -43,6 +43,7 @@ export interface AppOptions {
   // Extra browser origins allowed besides localhost/127.0.0.1 (any port) and same-origin pages
   // (PREOP_CORS_ORIGINS in index.ts). Native clients send no Origin header and are unaffected.
   corsOrigins?: readonly string[];
+  robotDataDir?: string; // robot demos and replays (tests use a temp dir)
 }
 
 const LOCAL_ORIGIN = /^https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/;
@@ -536,6 +537,7 @@ export function createApp(options: AppOptions = {}) {
     encounterFor: (id) => encounters.get(id) ?? interviews.get(id),
     patientStatus: (id) => patientStatusFor(id, options.interviewContentRoot),
     vitalsUrl: options.vitalsUrl,
+    robotDataDir: options.robotDataDir,
     // VR baseline (and AR until Presage is captured): the patient's latest charted vitals and weight.
     baselineFor: async (kase) => {
       const record = await client.getRecord(kase.patientId).catch(() => null);

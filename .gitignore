@@ -28,3 +28,6 @@ services/preop/.cache/
 # SpacetimeDB coach identity token (services/preop)
 .coach-token*
 .demo/
+
+# Robot demos and replay videos (services/preop robot routes)
+services/preop/.robot/

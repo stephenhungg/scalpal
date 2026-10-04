@@ -1,5 +1,6 @@
 import { validBodyAction, type BodyAction } from "./open-body.js";
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import type { Context, Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { ANATOMY, ANATOMY_BY_ID } from "./catalog/anatomy.js";
@@ -20,6 +21,7 @@ import { briefingLines } from "./briefing.js";
 import { createContextFeed, type ContextFeed } from "./jarvis/context-feed.js";
 import type { EncounterVoices } from "./encounter-routes.js";
 import type { Action, SurgicalCase } from "./types.js";
+import { registerRobotRoutes } from "./robot-routes.js";
 
 // Live coach API. Unity (or the SpacetimeDB bridge) posts exercise events here; the Scalpal voice
 // page reads state, hints, and alerts from it. Sessions live in memory: fine for one demo laptop,
@@ -44,6 +46,7 @@ export interface CoachRouteOptions {
   // Baseline vitals for a case from the patient's chart (VR, and AR until the Presage baseline is captured).
   baselineFor?: (kase: SurgicalCase) => Promise<{ baseline: Baseline; weightKg: number; spo2: number | null; mlPerKg?: number } | null>;
   vitalsUrl?: string; // services/vitals (Presage); POST /baseline/capture at Time-Out in AR
+  robotDataDir?: string; // robot demos and replay videos (gitignored); SCALPAL_ROBOT_DIR or services/preop/.robot
 }
 
 const MAX_FRAME_CHARS = 4_000_000; // about 3 MB of JPEG
@@ -534,6 +537,13 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
   // Robot hand attempts (services/motion teleop, scalpal.robot_attempt.v1): the simulated Shadow hand driven
   // by the Quest controllers, labeled with the surgery step. Kept per session and logged to the dashboard.
   const robotAttempts = new Map<string, Record<string, unknown>[]>();
+  const pushRobotAttempt = (sid: string, attempt: Record<string, unknown>) => {
+    const list = robotAttempts.get(sid) ?? [];
+    list.push(attempt);
+    if (list.length > 50) list.shift();
+    robotAttempts.set(sid, list);
+    return list;
+  };
   app.post("/coach/sessions/:sid/robot-attempts", async (c) => {
     const s = getSession(c);
     if (!s) return missing(c);
@@ -549,10 +559,7 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
       heldInstruments: Array.isArray(a.heldInstruments) ? a.heldInstruments.filter((x): x is string => typeof x === "string").slice(0, 4) : [],
       source: str(a.source), createdAt: str(a.createdAt, 40),
     };
-    const list = robotAttempts.get(s.id) ?? [];
-    list.push(attempt);
-    if (list.length > 50) list.shift();
-    robotAttempts.set(s.id, list);
+    const list = pushRobotAttempt(s.id, attempt);
     options.realtime?.simLog?.({
       coachSessionId: s.id,
       kind: "event",
@@ -566,6 +573,15 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
     if (!s) return missing(c);
     const list = robotAttempts.get(s.id) ?? [];
     return c.json({ attempts: list, successes: list.filter((x) => x.success).length, actions: coachActions(s.id) });
+  });
+
+  // Headset demos -> simulated arm + hand policy -> graded replay (services/motion robot-serve).
+  registerRobotRoutes(app, {
+    dataDir: options.robotDataDir ?? process.env.SCALPAL_ROBOT_DIR ?? fileURLToPath(new URL("../.robot", import.meta.url)),
+    now: options.now,
+    session: (sid) => (SESSION_ID.test(sid) ? (sessions.get(sid) ?? null) : null),
+    realtime: options.realtime,
+    recordAttempt: (sid, attempt) => void pushRobotAttempt(sid, attempt),
   });
 
   // Demo driver: lets the laptop exercise Scalpal before the headset is wired in.
