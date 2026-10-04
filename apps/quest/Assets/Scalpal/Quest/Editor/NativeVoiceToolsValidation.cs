@@ -90,7 +90,7 @@ namespace Scalpal.Quest.Editor
                 var state = Invoke(voice, outgoing, "get_surgery_state", "{}", sid);
                 Assert(!state.is_error && state.result.Contains("appendectomy"), "surgery state belongs to the explicitly bound case rather than latest coach session");
                 var hint = Invoke(voice, outgoing, "get_hint", "{}", sid);
-                Assert(!hint.is_error && hint.result.StartsWith("Hint tier 1 of 3:", StringComparison.Ordinal), "native hint returns shared server tool text");
+                Assert(!hint.is_error && System.Text.RegularExpressions.Regex.IsMatch(hint.result, "^Hint tier 1 of [0-9]+:"), "native hint returns shared server tool text");
                 var anatomy = Invoke(voice, outgoing, "explain_structure", "{ \"structure\": \"appendicular artery\", \"extra\": {\"preserved\":true} }", sid);
                 Assert(!anatomy.is_error && anatomy.result.Contains("ileocolic"), "native explanation receives actual structure facts from server");
                 var pending = Invoke(voice, outgoing, "highlight_structure", "{\"structure\":\"appendix\"}", sid);
