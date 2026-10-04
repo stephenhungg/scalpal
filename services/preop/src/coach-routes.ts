@@ -173,6 +173,30 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
     return c.json({ snapshot, context: renderContext(snapshot), contextKey: contextKey(snapshot), actions: coachActions(s.id) });
   });
 
+  // Recap has no conversational agent, client prompt override, or surgery tools.
+  // The path is the actual server-issued coach run id; client body fields are not trusted.
+  const reactionQuestion = "How did that feel?";
+  const selfAssessmentQuestion = "What is one thing you would do differently?";
+  app.post("/coach/sessions/:sid/recap", (c) => {
+    const s = getSession(c);
+    if (!s) return missing(c);
+    c.header("Cache-Control", "no-store");
+    return c.json({ runId: s.id, reactionQuestion, selfAssessmentQuestion,
+      reactionAudioRoute: `/coach/sessions/${s.id}/recap/reaction.mp3`,
+      voiceConfigured: Boolean(reflex?.configured) });
+  });
+  app.get("/coach/sessions/:sid/recap/reaction.mp3", async (c) => {
+    const s = getSession(c);
+    if (!s) return missing(c);
+    if (!reflex?.configured) return bad(c, 503, "recap_voice_unconfigured", "Jarvis speech is unavailable. Use the reflection panel.", []);
+    try {
+      const audio = await reflex.render(reactionQuestion);
+      return c.body(new Uint8Array(audio), 200, { "Content-Type": "audio/mpeg", "Cache-Control": "no-store" });
+    } catch {
+      return bad(c, 503, "recap_voice_failed", "Jarvis speech is unavailable. Use the reflection panel.", []);
+    }
+  });
+
   app.post("/coach/sessions/:sid/events", async (c) => {
     const s = getSession(c);
     if (!s) return missing(c);

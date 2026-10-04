@@ -38,6 +38,22 @@ export interface Storage {
   head(key: string): Promise<number | null>;
   sha256(key: string): Promise<string>;
   delete(key: string): Promise<void>;
+  /** Bounded read for small manifests; never buffers arbitrary video. */
+  readSmall(key: string, maxBytes: number): Promise<Buffer>;
+}
+
+async function readBounded(stream: Readable, maxBytes: number): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  let size = 0;
+  try {
+    for await (const chunk of stream) {
+      const bytes = Buffer.from(chunk);
+      size += bytes.length;
+      if (size > maxBytes) throw new Error("manifest exceeds size limit");
+      chunks.push(bytes);
+    }
+    return Buffer.concat(chunks);
+  } finally { stream.destroy(); }
 }
 
 export function createStorage(config: Config): Storage {
@@ -138,6 +154,10 @@ export class LocalStorage implements Storage {
     await rm(this.pathFor(key), { force: true });
   }
 
+  async readSmall(key: string, maxBytes: number): Promise<Buffer> {
+    return readBounded(createReadStream(this.pathFor(key)), maxBytes);
+  }
+
   /** Stream a request body to disk atomically, enforcing the size cap. */
   async write(key: string, body: Readable): Promise<number> {
     const full = this.pathFor(key);
@@ -229,6 +249,12 @@ export class S3Storage implements Storage {
     const hash = createHash('sha256');
     await pipeline(out.Body as Readable, hash);
     return hash.digest('hex');
+  }
+
+  async readSmall(key: string, maxBytes: number): Promise<Buffer> {
+    assertSafeKey(key);
+    const out = await this.#client.send(new GetObjectCommand({ Bucket: this.#bucket, Key: key }));
+    return readBounded(out.Body as Readable, maxBytes);
   }
 
   async delete(key: string): Promise<void> {

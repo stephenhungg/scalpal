@@ -356,7 +356,7 @@ export function createApp(config: Config, rt: Realtime, storage: Storage, author
           framesValid: q.framesValid as number,
           invalidIntervals: q.invalidIntervals as number,
           robotModel: String(q.robotModel ?? 'unspecified').slice(0, 120),
-          replayKind: q.replayKind === 'physics' ? 'physics' : 'kinematic',
+          replayKind: q.replayKind === 'physics' || q.replayKind === 'kinematic' ? q.replayKind : 'unknown',
           notes: String(q.notes ?? '').slice(0, 2000),
         },
       });

@@ -121,3 +121,7 @@ cp .env.example .env && npm run jarvis:setup && npm run dev   # then open http:/
 ## Data
 
 `test/fixtures/` holds recorded responses from the public FinchNode demo API. They are fictional synthetic records, not participant or patient data.
+
+### Recap reaction speech
+
+`POST /coach/sessions/:sid/recap` binds reflection to an existing server-issued coach session/run id and returns `runId`, `reactionQuestion`, `selfAssessmentQuestion`, `reactionAudioRoute`, and `voiceConfigured`. It ignores client prompt/text/tool overrides. The returned `GET /coach/sessions/:sid/recap/reaction.mp3` renders only “How did that feel?” through the existing ReflexAudio/ElevenLabs TTS cache. The headset plays this with `QuestJarvisVoice.PlayLocalSpeech`; no recap conversational agent is started, and no surgery tools are offered. The panel owns the learner's reflection and self-assessment progression. Unknown runs return 404; missing/failed TTS returns 503 so the panel's written question remains the fallback. This uses the same local-demo coach session boundary as other preop endpoints, not a new authentication mechanism.

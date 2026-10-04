@@ -71,7 +71,7 @@ async function upload(
   r: Roles,
   who: Client,
   bytes: Buffer,
-  opts: { kind?: string; declaredBytes?: number; sha256?: string; attemptId?: string } = {}
+  opts: { kind?: string; declaredBytes?: number; sha256?: string; attemptId?: string; contentType?: string } = {}
 ) {
   const artifactId = uid('art');
   const grantId = uid('grant');
@@ -81,8 +81,8 @@ async function upload(
     sessionId: r.sessionId,
     attemptId: opts.attemptId ?? r.attemptId,
     kind: opts.kind ?? 'raw_clip',
-    filename: 'clip.mp4',
-    contentType: 'video/mp4',
+    filename: opts.contentType === 'application/json' ? 'capture.json' : 'clip.mp4',
+    contentType: opts.contentType ?? 'video/mp4',
     declaredBytes: BigInt(opts.declaredBytes ?? bytes.length),
     sha256: opts.sha256 ?? createHash('sha256').update(bytes).digest('hex'),
   });
@@ -92,7 +92,7 @@ async function upload(
   );
   const put = await fetch(grant.url!, {
     method: 'PUT',
-    headers: { 'content-type': 'video/mp4' },
+    headers: { 'content-type': opts.contentType ?? 'video/mp4' },
     body: bytes,
   });
   assert.equal(put.status, 200, await put.text());
@@ -402,8 +402,12 @@ describe('motion jobs', () => {
     const outsider = await connect();
     try {
       const clip = await availableClip(r);
+      const manifest = await upload(r, r.headset, Buffer.from(JSON.stringify({
+        schemaVersion: 'scalpal.capture-provenance.v1', sessionId: r.sessionId, attemptId: r.attemptId, inputArtifactId: clip, source: 'rehearsal',
+      })), { kind: 'capture_manifest', contentType: 'application/json' });
+      await eventually(() => artifactOf(r.headset, manifest)?.status === 'available', 'provenance manifest available');
       const jobId = uid('job');
-      await r.operator.conn.reducers.requestMotionJob({ jobId, inputArtifactId: clip, extraArtifactIds: [], configVersion: 'motion-v1' });
+      await r.operator.conn.reducers.requestMotionJob({ jobId, inputArtifactId: clip, extraArtifactIds: [manifest], configVersion: 'motion-v1' });
       await eventually(() => jobsOf(r.viewer, r.sessionId).some(j => j.jobId === jobId), 'job visible');
       const url = `${GATEWAY}/v1/sessions/${r.sessionId}/replay/${jobId}`;
       assert.equal((await fetch(url)).status, 401);
@@ -415,6 +419,9 @@ describe('motion jobs', () => {
         assert.equal(body.status, 'queued');
         assert.equal(body.replayVideoUrl, '');
         assert.equal(body.sessionId, r.sessionId);
+        assert.equal(body.source, 'rehearsal');
+        assert.equal(body.sourceArtifactId, clip);
+        assert.doesNotMatch(body.label, /Your hand motion/);
         assert.equal((await fetch(body.sourceVideoUrl)).status, 200);
       }
       const membership = [...r.operator.conn.db.sessionMembers.iter()].find(m => m.identity.isEqual(r.viewer.identity));
