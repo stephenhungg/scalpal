@@ -15,7 +15,7 @@ Approved plan, October 3, 2026. How the operating room knows what is happening s
 
 | Piece | Owner | Status |
 | --- | --- | --- |
-| Unity events, `seq`, 1 Hz tick, telemetry events, derived state, hash, golden logs | Surgery Codex thread | Pending (after its open-body build) |
+| Unity events, `seq`, 1 Hz tick, telemetry events, derived state, hash, golden logs | Surgery Codex thread | Partly landed: one committed action per blade/marker stroke, rough handling once per tool+tissue per 3 s, 1 Hz tick only while bleeding, change-only ≤1 Hz fluid snapshots, `BodyAction.Quantize` at the event boundary, and one shared golden log (`services/preop/test/fixtures/open-body-golden.json`) replayed by vitest and `OpenBodyValidation` with exact fact equality. `seq`, hash and resync remain pending; until then a body action the coach drops as tracking-invalid fails relay sync. |
 | State card with unmet milestone facts, hands line, `get_surgery_state` | Matthew (`services/preop/src/coach.ts`) | Landed in `9501b8b` |
 | Full card on structural change or about every 10 s, `[STATE DELTA vN]` lines between (`services/preop/src/jarvis/context-feed.js`); queued bleeding alerts dropped once the state no longer shows the bleed | Matthew; Quest side Stephen | Landed: laptop page in the browser, native Quest voice through `POST /coach/sessions/:id/voice-context` (`916215e`) |
 | Service-side replay checker, hash compare and resync, versioned alert drop, time-window guardrails | Matthew, coordinated with the surgery thread | Pending |
