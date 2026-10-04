@@ -10,6 +10,7 @@ namespace UnityEngine
         public string name { get; set; }
         public static T Instantiate<T>(T original) where T : Object => original;
         public static T FindFirstObjectByType<T>() where T : Object => null;
+        public static implicit operator bool(Object exists) => !ReferenceEquals(exists, null);
         public static void Destroy(Object obj) { }
     }
 
@@ -141,6 +142,7 @@ namespace UnityEngine
     public class MonoBehaviour : Behaviour
     {
         public Coroutine StartCoroutine(IEnumerator routine) => new Coroutine();
+        public void StopAllCoroutines() { }
     }
 
     [AttributeUsage(AttributeTargets.Field)]
@@ -185,6 +187,7 @@ namespace UnityEngine
         public static float Min(float a, float b) => Math.Min(a, b);
         public const float Deg2Rad = (float)(Math.PI / 180.0);
         public static float Clamp(float v, float min, float max) => Math.Max(min, Math.Min(max, v));
+        public static int Clamp(int v, int min, int max) => Math.Max(min, Math.Min(max, v));
         public static float Tan(float f) => (float)Math.Tan(f);
         public static float Sqrt(float f) => (float)Math.Sqrt(f);
         public static float Abs(float f) => Math.Abs(f);
@@ -211,6 +214,20 @@ namespace UnityEngine
     public class AsyncOperation : YieldInstruction { }
 
     public class YieldInstruction { }
+
+    public sealed class WaitForSecondsRealtime : CustomYieldInstruction
+    {
+        public WaitForSecondsRealtime(float time) { }
+        public override bool keepWaiting => false;
+    }
+
+    public abstract class CustomYieldInstruction : IEnumerator
+    {
+        public abstract bool keepWaiting { get; }
+        public object Current => null;
+        public bool MoveNext() => keepWaiting;
+        public void Reset() { }
+    }
 }
 
 namespace UnityEngine.Networking
@@ -246,6 +263,8 @@ namespace UnityEngine.Networking
         public Result result => Result.Success;
         public long responseCode => 200;
         public void SetRequestHeader(string name, string value) { }
+        public string GetResponseHeader(string name) => null;
+        public void Abort() { }
         public UnityWebRequestAsyncOperation SendWebRequest() => new UnityWebRequestAsyncOperation();
         public void Dispose() { }
     }

@@ -10,18 +10,31 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import re
 import tempfile
 import time
 import urllib.request
+from collections.abc import Mapping
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from importlib.metadata import version
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from . import ROBOT_MOTION_SCHEMA
 
 JOB_SCHEMA = "scalpal.motion_job/0"
 RESULT_SCHEMA = "scalpal.motion_result/0"
 DEFAULT_CONFIG = {"hand": "Right", "mirrored": False, "smooth": None}
+# Upper bound for any downloaded input clip (matches the gateway's LOCAL_MAX_BYTES default).
+MAX_INPUT_BYTES = int(os.environ.get("SCALPAL_MOTION_MAX_INPUT_BYTES", str(2 * 1024**3)))
+RUN_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}")
+
+
+def valid_run_id(value: object) -> bool:
+    """Run IDs are literal directory names; reject rather than sanitize aliases."""
+    return isinstance(value, str) and RUN_ID.fullmatch(value) is not None
 
 
 class JobError(Exception):
@@ -48,17 +61,105 @@ def _artifact(kind: str, path: Path, content_type: str) -> dict:
     }
 
 
-def _fetch_input(source: str, workdir: Path) -> Path:
-    if source.startswith(("http://", "https://")):
+class InputTooLarge(Exception):
+    """A download went past its byte cap."""
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *args, **kwargs):  # a 3xx surfaces as HTTPError instead
+        return None
+
+
+def download_capped(url: str, dest: Path, max_bytes: int, headers: dict | None = None,
+                    timeout: float = 120.0, follow_redirects: bool = True) -> tuple[int, str]:
+    """Stream url to dest, stopping past max_bytes. Returns (bytes, sha256 hex)."""
+    handlers = [] if follow_redirects else [_NoRedirect]
+    req = urllib.request.Request(url, headers=headers or {})
+    digest, size = hashlib.sha256(), 0
+    with urllib.request.build_opener(*handlers).open(req, timeout=timeout) as res, dest.open("wb") as f:
+        declared = res.headers.get("Content-Length", "")
+        if declared.isdigit() and int(declared) > max_bytes:
+            raise InputTooLarge(f"input is {declared} bytes, larger than the {max_bytes} byte limit")
+        while chunk := res.read(1 << 20):
+            size += len(chunk)
+            if size > max_bytes:
+                raise InputTooLarge(f"input is larger than the {max_bytes} byte limit")
+            digest.update(chunk)
+            f.write(chunk)
+    return size, digest.hexdigest()
+
+
+DEFAULT_URL_PREFIXES = "http://localhost:8788/files/,http://127.0.0.1:8788/files/"
+
+
+def _is_url(source: str) -> bool:
+    return "://" in source
+
+
+@dataclass(frozen=True)
+class InputPolicy:
+    """Where a job may read its input from. The HTTP server always applies one;
+    `scalpal-motion process` (a local operator's own job file) runs without."""
+
+    url_prefixes: tuple[str, ...] = ()
+    input_dir: Path | None = None  # local paths allowed only under here (resolved)
+    max_bytes: int = MAX_INPUT_BYTES
+
+    @classmethod
+    def from_env(cls, env: Mapping[str, str] = os.environ) -> InputPolicy:
+        raw = env.get("SCALPAL_MOTION_ALLOWED_URL_PREFIXES", DEFAULT_URL_PREFIXES)
+        input_dir = env.get("SCALPAL_MOTION_INPUT_DIR")
+        return cls(
+            url_prefixes=tuple(p.strip() for p in raw.split(",") if p.strip()),
+            input_dir=Path(input_dir).expanduser().resolve() if input_dir else None,
+            max_bytes=int(env.get("SCALPAL_MOTION_MAX_INPUT_BYTES", MAX_INPUT_BYTES)),
+        )
+
+    def allows_url(self, url: str) -> bool:
+        u = urlsplit(url)
+        if u.scheme not in ("http", "https") or ".." in u.path.split("/"):
+            return False
+        for prefix in self.url_prefixes:
+            p = urlsplit(prefix)
+            # Exact scheme and host:port (no lookalike hosts or userinfo), then path prefix.
+            if (u.scheme, u.netloc.lower()) == (p.scheme, p.netloc.lower()) and u.path.startswith(p.path):
+                return True
+        return False
+
+    def check(self, source: str) -> None:
+        if _is_url(source):
+            if not self.allows_url(source):
+                raise JobError("input_not_allowed", "input URL is not under an allowed prefix "
+                               "(SCALPAL_MOTION_ALLOWED_URL_PREFIXES)")
+            return
+        if self.input_dir is None:
+            raise JobError("input_not_allowed", "local input paths are disabled; set SCALPAL_MOTION_INPUT_DIR")
+        # resolve() follows symlinks, so a link inside input_dir cannot point out of it.
+        if not Path(source).expanduser().resolve().is_relative_to(self.input_dir):
+            raise JobError("input_not_allowed", "input path is outside SCALPAL_MOTION_INPUT_DIR")
+
+
+def _fetch_input(source: str, workdir: Path, policy: InputPolicy | None) -> Path:
+    max_bytes = policy.max_bytes if policy else MAX_INPUT_BYTES
+    if _is_url(source):
+        if not source.startswith(("http://", "https://")):
+            raise JobError("input_unavailable", "input URL must be http(s)")
         dest = workdir / "input_clip"
         try:
-            urllib.request.urlretrieve(source, dest)
+            # Under a policy, a redirect could leave the allowed prefix: refuse it.
+            download_capped(source, dest, max_bytes, follow_redirects=policy is None)
+        except InputTooLarge as e:
+            raise JobError("input_too_large", str(e)) from e
         except Exception as e:  # network/storage failures are reported, not raised
             raise JobError("input_unavailable", f"could not download input: {e}") from e
         return dest
     path = Path(source).expanduser()
+    if policy:
+        path = path.resolve()
     if not path.is_file():
         raise JobError("input_unavailable", f"input file not found: {path.name}")
+    if policy and path.stat().st_size > max_bytes:
+        raise JobError("input_too_large", f"input is larger than the {max_bytes} byte limit")
     return path
 
 
@@ -80,28 +181,43 @@ def _quality(motion: dict) -> dict:
 
 
 def validate_job(job: dict) -> dict:
+    if not isinstance(job, dict):
+        raise JobError("bad_job", "job must be an object")
     if job.get("schema") != JOB_SCHEMA:
         raise JobError("bad_job", f"expected schema {JOB_SCHEMA}")
     for key in ("job_id", "run_id", "input"):
         if not job.get(key):
             raise JobError("bad_job", f"missing {key}")
-    if not job["input"].get("source"):
+    if not isinstance(job["job_id"], str):
+        raise JobError("bad_job", "job_id must be a string")
+    if not valid_run_id(job["run_id"]):
+        raise JobError("bad_job", "run_id must start with an ASCII letter or digit and contain only letters, digits, -, _, or . (maximum 128 characters)")
+    if not isinstance(job["input"], dict):
+        raise JobError("bad_job", "input must be an object")
+    if not isinstance(job["input"].get("source"), str) or not job["input"]["source"]:
         raise JobError("bad_job", "missing input.source")
+    if not isinstance(job.get("config", {}), dict):
+        raise JobError("bad_job", "config must be an object")
     config = {**DEFAULT_CONFIG, **job.get("config", {})}
     if config["hand"] not in ("Right", "Left"):
         raise JobError("unsupported_config", "hand must be Right or Left")
     return config
 
 
-def run_job(job: dict, output_root: str | Path) -> dict:
-    """Process one job. Always returns a result dict; never raises for job-level failures."""
+def run_job(job: dict, output_root: str | Path, policy: InputPolicy | None = None) -> dict:
+    """Process one job. Always returns a result dict; never raises for job-level failures.
+
+    `policy` restricts where the input may come from (always set by the HTTP server).
+    """
     started = time.perf_counter()
+    fields = job if isinstance(job, dict) else {}
+    input_fields = fields.get("input") if isinstance(fields.get("input"), dict) else {}
     result = {
         "schema": RESULT_SCHEMA,
-        "job_id": job.get("job_id"),
-        "run_id": job.get("run_id"),
-        "attempt_id": job.get("attempt_id"),
-        "input_artifact_id": (job.get("input") or {}).get("artifact_id"),
+        "job_id": fields.get("job_id"),
+        "run_id": fields.get("run_id"),
+        "attempt_id": fields.get("attempt_id"),
+        "input_artifact_id": input_fields.get("artifact_id"),
         "status": "failed",
         "processor": {
             "name": "scalpal-motion",
@@ -113,8 +229,9 @@ def run_job(job: dict, output_root: str | Path) -> dict:
     try:
         config = validate_job(job)
         result["config"] = config
-        safe_run = "".join(c for c in str(job["run_id"]) if c.isalnum() or c in "-_.")
-        run_dir = Path(output_root) / safe_run
+        if policy is not None:
+            policy.check(job["input"]["source"])  # before any run directory exists
+        run_dir = Path(output_root) / job["run_id"]
         try:
             run_dir.mkdir(parents=True)
         except FileExistsError:
@@ -127,7 +244,7 @@ def run_job(job: dict, output_root: str | Path) -> dict:
         from .retarget import RETARGET_CONFIG_VERSION, retarget_frames
 
         with tempfile.TemporaryDirectory() as tmp:
-            clip = _fetch_input(job["input"]["source"], Path(tmp))
+            clip = _fetch_input(job["input"]["source"], Path(tmp), policy)
             try:
                 track = track_hand(clip, hand=config["hand"], mirrored=config["mirrored"])
             except FileNotFoundError as e:

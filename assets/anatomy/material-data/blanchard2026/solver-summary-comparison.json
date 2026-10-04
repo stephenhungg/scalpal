@@ -1,0 +1,92 @@
+{
+    "sourceDoi": "10.1038/s41598-026-42371-9",
+    "evidenceKind": "Source summary comparison through synthetic affine volume coupons; not measured specimen reproduction",
+    "runtimeProfileCalibrated": false,
+    "assumedRampSeconds": 0.01666666753590107,
+    "assumedPoissonRatio": 0.30000001192092898,
+    "geometry": "Authored 20x10x2mm rectangular coupon; all nodes prescribed with zero transverse second-Piola stress",
+    "stressConvention": "Nominal axial reaction/original area, divided by engineering strain; source convention/ramp must be confirmed",
+    "identifiability": "Two fit points plus an approximate end interval admit distinct passive spectra; equivalent branch viscosities are estimates, not measured tissue viscosities",
+    "candidates": [
+        {
+            "branchFraction": 0.33000001311302187,
+            "tauSeconds": 9.652814865112305,
+            "youngPascals": 28386.25,
+            "equivalentUniaxialBranchViscosityPascalSeconds": 90422.38486144468,
+            "initialApparentModulusPascals": 36500.05078125,
+            "thirtySecondApparentModulusPascals": 25000.013671875,
+            "endApparentModulusPascals": 24462.28125,
+            "initialRelativeError": 0.0000013912671192883864,
+            "thirtySecondRelativeError": 5.468750146064849e-7,
+            "endRelaxationFraction": 0.32980144023895266,
+            "endSummaryIntervalSatisfied": false
+        },
+        {
+            "branchFraction": 0.3700000047683716,
+            "tauSeconds": 15.712282180786133,
+            "youngPascals": 28383.734375,
+            "equivalentUniaxialBranchViscosityPascalSeconds": 165010.10234902349,
+            "initialApparentModulusPascals": 36500.05859375,
+            "thirtySecondApparentModulusPascals": 25000.013671875,
+            "endApparentModulusPascals": 23006.0625,
+            "initialRelativeError": 0.0000016053081708378159,
+            "thirtySecondRelativeError": 5.468750146064849e-7,
+            "endRelaxationFraction": 0.3696979284286499,
+            "endSummaryIntervalSatisfied": true
+        },
+        {
+            "branchFraction": 0.38999998569488528,
+            "tauSeconds": 18.173564910888673,
+            "youngPascals": 28383.240234375,
+            "equivalentUniaxialBranchViscosityPascalSeconds": 201171.60954556589,
+            "initialApparentModulusPascals": 36500.05078125,
+            "thirtySecondApparentModulusPascals": 25000.037109375,
+            "endApparentModulusPascals": 22288.314453125,
+            "initialRelativeError": 0.0000013912671192883864,
+            "thirtySecondRelativeError": 0.0000014843750477666618,
+            "endRelaxationFraction": 0.389362096786499,
+            "endSummaryIntervalSatisfied": true
+        },
+        {
+            "branchFraction": 0.4099999964237213,
+            "tauSeconds": 20.494630813598634,
+            "youngPascals": 28382.896484375,
+            "equivalentUniaxialBranchViscosityPascalSeconds": 238495.76171550886,
+            "initialApparentModulusPascals": 36500.05859375,
+            "thirtySecondApparentModulusPascals": 25000.037109375,
+            "endApparentModulusPascals": 21581.484375,
+            "initialRelativeError": 0.0000016053081708378159,
+            "thirtySecondRelativeError": 0.0000014843750477666618,
+            "endRelaxationFraction": 0.40872740745544436,
+            "endSummaryIntervalSatisfied": true
+        },
+        {
+            "branchFraction": 0.5,
+            "tauSeconds": 30.155057907104493,
+            "youngPascals": 28382.087890625,
+            "equivalentUniaxialBranchViscosityPascalSeconds": 427931.75193316306,
+            "initialApparentModulusPascals": 36500.05859375,
+            "thirtySecondApparentModulusPascals": 25000.162109375,
+            "endApparentModulusPascals": 18593.732421875,
+            "initialRelativeError": 0.0000016053081708378159,
+            "thirtySecondRelativeError": 0.0000064843748077692,
+            "endRelaxationFraction": 0.49058347940444949,
+            "endSummaryIntervalSatisfied": false
+        },
+        {
+            "branchFraction": 0.699999988079071,
+            "tauSeconds": 50.16255187988281,
+            "youngPascals": 28381.466796875,
+            "equivalentUniaxialBranchViscosityPascalSeconds": 996580.7434661203,
+            "initialApparentModulusPascals": 36500.05859375,
+            "thirtySecondApparentModulusPascals": 25000.611328125,
+            "endApparentModulusPascals": 13287.3408203125,
+            "initialRelativeError": 0.0000016053081708378159,
+            "thirtySecondRelativeError": 0.000024453125661239028,
+            "endRelaxationFraction": 0.6359638571739197,
+            "endSummaryIntervalSatisfied": false
+        }
+    ],
+    "candidatesSatisfyingEndInterval": 3,
+    "refinedMeshAndTimestepRelativeDifference": 0.000006171866061777109
+}

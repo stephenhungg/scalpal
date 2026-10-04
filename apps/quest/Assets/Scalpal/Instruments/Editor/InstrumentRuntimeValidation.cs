@@ -45,6 +45,8 @@ namespace Scalpal.Instruments.Editor
                 var interactor = hand.AddComponent<InstrumentInteractor>();
                 var toolObject = UnityEngine.Object.Instantiate(AssetDatabase.LoadAssetAtPath<GameObject>(Root + "inst_scalpel.prefab"), scope.transform);
                 var tool = toolObject.GetComponent<InstrumentBehaviour>();
+                var toolRestPosition = tool.transform.position;
+                var toolRestRotation = tool.transform.rotation;
                 interactor.SetTrackedPose(Vector3.zero, Quaternion.identity, true);
                 Physics.SyncTransforms();
                 interactor.SetGrip(1);
@@ -76,8 +78,38 @@ namespace Scalpal.Instruments.Editor
                 }
                 Require(patch.IsCut && cuts == 1, "active tracked scalpel separates authored seam and publishes once");
                 Require((patch.leftHalf.localPosition - patch.rightHalf.localPosition).magnitude > 0.06f, "cut visibly separates halves");
-                interactor.SetTrackedPose(hand.transform.position, hand.transform.rotation, false);
-                Require(!tool.Held && !tool.TrackingValid && interactor.HeldInstrument == null, "lost tracking releases held tool and disables effects");
+                var frozenPosition = tool.transform.position;
+                var frozenRotation = tool.transform.rotation;
+                var recoveryPosition = hand.transform.position;
+                var recoveryRotation = hand.transform.rotation;
+                double clock = Time.unscaledTimeAsDouble;
+                interactor.SetTrackedPose(Vector3.one * 100, Quaternion.identity, false, clock);
+                interactor.SetGrip(0); // Missing XR button data must not masquerade as a grip release.
+                interactor.SetActivation(1);
+                interactor.AdvanceTrackingLoss(clock + 0.1);
+                Require(tool.Held && interactor.HeldInstrument == tool && !tool.TrackingValid && tool.Activation == 0,
+                    "brief tracking loss keeps held equipment but blocks every action");
+                Require(toolObject.GetComponent<Rigidbody>().isKinematic && !toolObject.GetComponent<Rigidbody>().useGravity,
+                    "tracking grace freezes a kinematic tool rather than dropping it");
+                hand.transform.position += Vector3.one; // Simulate tracking-origin movement while paused.
+                Require((tool.transform.position - frozenPosition).sqrMagnitude < 0.000001f && Quaternion.Angle(tool.transform.rotation, frozenRotation) < 0.001f,
+                    "world-frozen equipment ignores invalid pose and parent movement");
+                interactor.SetTrackedPose(recoveryPosition, recoveryRotation, true, clock + 0.1);
+                interactor.SetGrip(1);
+                interactor.SetActivation(1);
+                Require(tool.Held && tool.TrackingValid && tool.Activation == 0 &&
+                    (tool.transform.position - frozenPosition).sqrMagnitude < 0.000001f,
+                    "brief recovery retains calibrated pose and requires deliberate trigger rearm");
+                interactor.SetActivation(0);
+                interactor.SetActivation(1);
+                Require(tool.Activation == 1, "observed trigger release enables subsequent actions");
+                interactor.SetTrackedPose(recoveryPosition, recoveryRotation, false, clock + 0.2);
+                interactor.AdvanceTrackingLoss(clock + 0.39);
+                Require(interactor.HeldInstrument == tool, "tracking grace does not expire early");
+                interactor.AdvanceTrackingLoss(clock + 0.401);
+                Require(!tool.Held && !tool.TrackingValid && interactor.HeldInstrument == null, "sustained loss returns held equipment and disables effects");
+                Require((tool.transform.position - toolRestPosition).sqrMagnitude < 0.000001f && Quaternion.Angle(tool.transform.rotation, toolRestRotation) < 0.001f,
+                    "sustained loss restores the tool's captured rest pose");
                 Require(!toolObject.GetComponent<Rigidbody>().isKinematic && toolObject.GetComponent<Rigidbody>().useGravity, "release restores physics");
                 Require(toolObject.GetComponent<Rigidbody>().interpolation == RigidbodyInterpolation.Interpolate, "release restores the original interpolation policy");
                 interactor.SetTrackedPose(tool.gripAnchor.position, Quaternion.identity, true);
@@ -87,6 +119,13 @@ namespace Scalpal.Instruments.Editor
                 Physics.SyncTransforms();
                 interactor.SetGrip(1);
                 Require(interactor.HeldInstrument == tool, "explicit release and new grip reenable pickup after tracking recovery");
+                interactor.SetActivation(0);
+                interactor.SetTrackedPose(hand.transform.position, hand.transform.rotation, false, clock + 1);
+                interactor.SetTrackedPose(hand.transform.position + Vector3.right, hand.transform.rotation, true, clock + 1.1);
+                Require(interactor.HeldInstrument == null && (tool.transform.position - toolRestPosition).sqrMagnitude < 0.000001f,
+                    "discontinuous tracking recovery cannot teleport a held blade across the patient");
+                interactor.SetGrip(0);
+                interactor.SetActivation(0);
                 interactor.Release();
                 patch.ResetTeachingTarget();
                 Require(!patch.IsCut && patch.ClipCount == 0 && patch.FluidRemaining == 1, "target reset restores authored state");
@@ -96,12 +135,85 @@ namespace Scalpal.Instruments.Editor
                 VerifyGrasp(patch, hand, interactor, scope.transform);
                 VerifyContinuous("hook_cautery", patch, hand, interactor, scope.transform);
                 VerifyContinuous("suction_irrigator", patch, hand, interactor, scope.transform);
+                VerifyOpenTools(scope.transform);
                 VerifyProjection(scope.transform);
                 VerifyAnatomyContact(scope.transform);
                 Require(AssetDatabase.LoadAssetAtPath<SceneAsset>("Assets/Scalpal/Instruments/Samples/InstrumentSandbox.unity") != null, "sandbox scene exists");
                 Debug.Log("SCALPAL_INSTRUMENT_VALIDATION_OK: " + checks + " checks. Editor physics/contact tests; physical Quest input not tested.");
             }
             finally { UnityEngine.Object.DestroyImmediate(scope); }
+        }
+
+        static void VerifyOpenTools(Transform parent)
+        {
+            var kit = Resources.Load<GameObject>("OpenSurgeryInstruments");
+            Require(kit != null, "open surgery runtime Resources kit exists");
+            var kitTools = kit.GetComponentsInChildren<InstrumentBehaviour>(true);
+            int retractors = 0, hemostats = 0;
+            var ids = new System.Collections.Generic.HashSet<string>();
+            foreach (var item in kitTools)
+            {
+                ids.Add(item.instrumentId);
+                if (item.instrumentId == "retractor") retractors++;
+                if (item.instrumentId == "hemostat") hemostats++;
+            }
+            Require(kitTools.Length == 10 && retractors == 2 && hemostats == 2, "open tray has two independent retractors and two independent hemostats");
+            Require(ids.SetEquals(OpenInstrumentModels.Ids), "open tray contains every open instrument ID");
+            var hand = new GameObject("OpenToolValidationHand");
+            hand.transform.SetParent(parent);
+            var interactor = hand.AddComponent<InstrumentInteractor>();
+            foreach (string id in OpenInstrumentModels.Ids)
+            {
+                var model = UnityEngine.Object.Instantiate(AssetDatabase.LoadAssetAtPath<GameObject>(Root + "inst_" + id + ".prefab"), parent);
+                try
+                {
+                    var tool = model.GetComponent<InstrumentBehaviour>();
+                    Require(model.GetComponentsInChildren<InstrumentTipContact>(true).Length == 1,
+                        id + " uses one distal contact adapter");
+                    foreach (var filter in model.GetComponentsInChildren<MeshFilter>(true))
+                    {
+                        var mesh = filter.sharedMesh;
+                        Require(mesh != null && AssetDatabase.Contains(mesh), id + " mesh persists as an asset");
+                        bool valid = true;
+                        var vertices = mesh.vertices;
+                        var triangles = mesh.triangles;
+                        foreach (var point in vertices)
+                            valid &= !float.IsNaN(point.x) && !float.IsNaN(point.y) && !float.IsNaN(point.z)
+                                && !float.IsInfinity(point.x) && !float.IsInfinity(point.y) && !float.IsInfinity(point.z);
+                        for (int triangle = 0; triangle < triangles.Length; triangle += 3)
+                            valid &= Vector3.Cross(vertices[triangles[triangle + 1]] - vertices[triangles[triangle]],
+                                vertices[triangles[triangle + 2]] - vertices[triangles[triangle]]).sqrMagnitude > 1e-20f;
+                        Require(valid, id + " mesh has finite vertices and no degenerate triangles");
+                    }
+                    interactor.SetTrackedPose(Vector3.zero, Quaternion.identity, true);
+                    Require(interactor.TryPickup(tool), id + " tracked pickup");
+                    interactor.SetTrackedPose(new Vector3(.31f, .52f, -.4f), Quaternion.Euler(20, 30, 40), true);
+                    Require((tool.gripAnchor.position - hand.transform.position).magnitude < .001f, id + " grip follows tracked hand");
+                    tool.SetActivation(0);
+                    Quaternion open = tool.upperJaw ? tool.upperJaw.localRotation : Quaternion.identity;
+                    tool.SetActivation(1);
+                    if (tool.upperJaw) Require(Quaternion.Angle(open, tool.upperJaw.localRotation) > 5, id + " trigger articulates jaws");
+                    if (id == "metzenbaum_scissors")
+                    {
+                        Transform start = null, end = null;
+                        foreach (var anchor in model.GetComponentsInChildren<Transform>())
+                        { if (anchor.name == "CutStart") start = anchor; if (anchor.name == "CutEnd") end = anchor; }
+                        Require(start && end && Vector3.Distance(start.position, end.position) >= .002f && Vector3.Distance(start.position, end.position) <= .06f,
+                            "Metzenbaum supplies one metric blade segment to the tissue driver");
+                    }
+                    double lostAt = Time.unscaledTimeAsDouble;
+                    Vector3 frozen = tool.transform.position;
+                    interactor.SetTrackedPose(hand.transform.position, hand.transform.rotation, false, lostAt);
+                    Require(tool.Held && !tool.TrackingValid && tool.Activation == 0 && tool.GetComponent<Rigidbody>().isKinematic,
+                        id + " brief tracking loss freezes held equipment and deactivates");
+                    Require((tool.transform.position-frozen).sqrMagnitude < 1e-8f, id + " lost pose does not move tool");
+                    interactor.AdvanceTrackingLoss(lostAt + interactor.trackingGraceSeconds + .01);
+                    Require(!tool.Held && tool.Activation == 0, id + " sustained tracking loss returns equipment");
+                    Require(!tool.GetComponent<Rigidbody>().isKinematic && tool.GetComponent<Rigidbody>().useGravity,
+                        id + " release restores pickup physics");
+                }
+                finally { interactor.Release(); UnityEngine.Object.DestroyImmediate(model); }
+            }
         }
 
         static void VerifyProjection(Transform parent)

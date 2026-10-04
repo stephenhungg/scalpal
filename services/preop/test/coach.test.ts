@@ -1,7 +1,8 @@
+import { legacyAppendectomyCase, legacyAppendectomyApp } from "./legacy-appendectomy-fixture.js";
 import { describe, expect, it } from "vitest";
 import { createApp } from "../src/app.js";
 import { buildCase } from "../src/case-builder.js";
-import { CoachSession, renderContext, type CoachAlert } from "../src/coach.js";
+import { CoachSession, reflexLines, renderContext, type CoachAlert } from "../src/coach.js";
 import { buildSystemPrompt } from "../src/coach-prompt.js";
 import { resolveStructure } from "../src/coach-routes.js";
 import { unitySafetyErrors } from "../src/unity-safe.js";
@@ -211,19 +212,27 @@ describe("coach routes", () => {
     expect(ev.json.alerts[0].kind).toBe("step_complete");
     expect(ev.json.snapshot.step.id).toBe("working_ports");
 
-    expect((await call("POST", `/coach/sessions/${sid}/events`, { event: { type: "touch", structureId: "spleen", instrumentId: "x" } })).status).toBe(400);
-    expect((await call("POST", `/coach/sessions/${sid}/events`, { event: { type: "place_port", portId: "left_lower" } })).status).toBe(400);
+    expect((await call("POST", `/coach/sessions/${sid}/events`, { event: { type: "touch", structureId: "Spleen!", instrumentId: "x" } })).status).toBe(400);
+
+    // An atlas part outside the catalog, or another procedure's port, is an off-target attempt, not an error.
+    const rib = await call("POST", `/coach/sessions/${sid}/events`, { event: { type: "touch", structureId: "skeletal__rib_7_l", instrumentId: "trocar_5mm" } });
+    expect(rib.json.results[0]).toMatchObject({ accepted: true, applied: true });
+    expect(rib.json.snapshot.lastEvent).toMatch(/rib 7 l/);
+    expect(rib.json.snapshot.offTargetAttempts).toBe(1);
+    const wrongPort = await call("POST", `/coach/sessions/${sid}/events`, { event: { type: "place_port", portId: "left_lower" } });
+    expect(wrongPort.json.results[0]).toMatchObject({ accepted: true, applied: true });
+    expect(wrongPort.json.snapshot.step.progressText).toBe("0 of 3 ports placed");
 
     // A batch with one unknown instrument still applies the valid events around it.
     const mixed = await call("POST", `/coach/sessions/${sid}/events`, {
       events: [
-        { type: "touch", structureId: "abdominal_wall", instrumentId: "laser_scalpel" },
+        { type: "touch", structureId: "abdominal_wall", instrumentId: "Laser Scalpel!" },
         { type: "place_port", portId: "epigastric" },
       ],
     });
     expect(mixed.status).toBe(200);
     expect(mixed.json.results[0]).toMatchObject({ accepted: false });
-    expect(mixed.json.results[0].reason).toMatch(/unknown instrumentId/);
+    expect(mixed.json.results[0].reason).toMatch(/not a well-formed id/);
     expect(mixed.json.results[1]).toMatchObject({ accepted: true });
     expect(mixed.json.snapshot.step.progressText).toBe("1 of 3 ports placed");
 
@@ -267,5 +276,208 @@ describe("coach routes", () => {
     const page = await app.request("/jarvis");
     expect(page.status).toBe(200);
     expect(await page.text()).toMatch(/<title>/);
+  });
+});
+
+// /jarvis/connection hands out a credential for an agent billed to the owner. It must only be minted for a
+// live session, and the prompt the voice runs with must be the one the server built for that session.
+describe("voice connection", () => {
+  const app = createApp({ client: fixtureClient(), now: () => NOW, coachTickMs: 0, elevenLabs: { apiKey: "", agentId: "agent-jarvis", patientAgentId: "agent-patient" } });
+  const call = async (method: string, route: string, body?: unknown) => {
+    const res = await app.request(route, { method, headers: body ? { "Content-Type": "application/json" } : {}, body: body ? JSON.stringify(body) : undefined });
+    return { status: res.status, json: (await res.json()) as Record<string, any> };
+  };
+
+  it("refuses to mint a connection when nothing is live", async () => {
+    expect((await call("GET", "/jarvis/connection")).status).toBe(409);
+    expect((await call("GET", "/jarvis/connection?agent=patient")).status).toBe(409);
+    expect((await call("GET", "/jarvis/connection?sessionId=coach-doesnotexist")).status).toBe(404);
+    expect((await call("GET", "/jarvis/connection?encounterId=enc-doesnotexist")).status).toBe(404);
+  });
+
+  it("returns the server-built prompt for a coach session", async () => {
+    const created = (await call("POST", "/coach/sessions", { patientId: "patient-demo-pediatric-asthma" })).json;
+    const conn = await call("GET", `/jarvis/connection?sessionId=${created.sessionId}`);
+    expect(conn.status).toBe(200);
+    expect(conn.json).toMatchObject({ agentId: "agent-jarvis", prompt: created.systemPrompt, firstMessage: created.firstMessage });
+    expect((await call("GET", "/jarvis/connection")).status).toBe(200); // the headset's legacy call while a session is live
+  });
+
+  it("picks the agent and prompt from the encounter phase, never from the client", async () => {
+    const enc = (await call("POST", "/encounters", { patientId: "patient-demo-sparse" })).json;
+    const patient = await call("GET", `/jarvis/connection?encounterId=${enc.encounterId}&agent=jarvis`);
+    expect(patient.json).toMatchObject({ agentId: "agent-patient", role: "patient", prompt: enc.patientPrompt, firstMessage: enc.patientFirstMessage, voiceId: enc.voiceId });
+    expect((await call("GET", "/jarvis/connection?agent=patient")).status).toBe(200);
+    const attending = (await call("POST", `/encounters/${enc.encounterId}/attending`)).json;
+    const jarvis = await call("GET", `/jarvis/connection?encounterId=${enc.encounterId}`);
+    expect(jarvis.json).toMatchObject({ agentId: "agent-jarvis", role: "attending", prompt: attending.attendingPrompt, firstMessage: attending.attendingFirstMessage, voiceId: "" });
+    await call("POST", `/encounters/${enc.encounterId}/tools/record_assessment`, { diagnosis: "appendicitis", differential: [], procedure: "appendectomy", urgency: "emergency" });
+    expect((await call("GET", `/jarvis/connection?encounterId=${enc.encounterId}`)).status).toBe(409);
+  });
+});
+
+describe("danger focus", () => {
+  it("does not warn when the learner looks at the step's own target", () => {
+    const s = new CoachSession("coach-f", legacyAppendectomyCase(), () => NOW);
+    while (s.engine.current?.id !== "find_appendix") s.handle(s.nextCorrectEvent()!);
+    expect(s.handle({ type: "focus", structureId: "appendix" }).alerts).toEqual([]);
+    while ((s.engine.current?.id as string) !== "divide_mesoappendix") s.handle(s.nextCorrectEvent()!);
+    expect(s.handle({ type: "focus", structureId: "terminal_ileum" }).alerts[0]?.kind).toBe("danger_focus");
+  });
+});
+
+describe("presentation modes", () => {
+  it("describes the scene and tracking loss for the chosen mode", async () => {
+    const app = createApp({ client: fixtureClient(), now: () => NOW, coachTickMs: 0 });
+    const start = async (mode?: string) =>
+      app.request("/coach/sessions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ patientId: "patient-demo-pediatric-asthma", ...(mode ? { mode } : {}) }) });
+    expect(((await (await start()).json()) as { snapshot: { mode: string } }).snapshot.mode).toBe("mixed_reality"); // the operating room is MR on a real person
+    const mr = (await (await start("mixed_reality")).json()) as { systemPrompt: string; snapshot: { mode: string } };
+    expect(mr.snapshot.mode).toBe("mixed_reality");
+    expect(mr.systemPrompt).toMatch(/real person reclining/);
+    const vr = (await (await start("virtual")).json()) as { sessionId: string; systemPrompt: string };
+    expect(vr.systemPrompt).toMatch(/fully virtual operating room/);
+    expect(vr.systemPrompt).not.toMatch(/real person/);
+    const lines = (await (await app.request(`/jarvis/reflex/${vr.sessionId}`)).json()) as { lines: { key: string; text: string }[] };
+    expect(lines.lines.find((l) => l.key === "tracking_lost")?.text).toMatch(/headset tracking/);
+    expect((await start("hologram")).status).toBe(400);
+  });
+});
+
+describe("headset relay compatibility", () => {
+  const app = legacyAppendectomyApp();
+  const post = async (route: string, body: unknown) =>
+    (await (await app.request(route, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })).json()) as Record<string, any>;
+
+  it("reports events ignored during tracking loss as received but not applied", async () => {
+    const { sessionId: sid } = await post("/coach/sessions", { patientId: "patient-demo-pediatric-asthma" });
+    const r = await post(`/coach/sessions/${sid}/events`, { events: [{ type: "tracking", valid: false }, { type: "place_port", portId: "umbilical" }] });
+    expect(r.results).toEqual([
+      { accepted: true, applied: true, reason: "" },
+      { accepted: true, applied: false, reason: "tracking_invalid" },
+    ]);
+  });
+
+  it("counts exercise input so the headset can tell an untouched attempt from a busy one", async () => {
+    const created = await post("/coach/sessions", { patientId: "patient-demo-pediatric-asthma" });
+    const sid = created.sessionId;
+    expect(created.snapshot.eventCount).toBe(0);
+    await post(`/coach/sessions/${sid}/hint`, {});
+    await post(`/coach/sessions/${sid}/commands`, { action: "highlight", structure: "cecum" });
+    const busyButUntouched = (await (await app.request(`/coach/sessions/${sid}`)).json()) as Record<string, any>;
+    expect(busyButUntouched.snapshot.version).toBeGreaterThan(0); // hints and highlights change state
+    expect(busyButUntouched.snapshot.eventCount).toBe(0); // but nothing was done to the patient yet
+    const r = await post(`/coach/sessions/${sid}/events`, { event: { type: "focus", structureId: "cecum" } });
+    expect(r.snapshot.eventCount).toBe(0); // looking is not exercise input
+    expect((await post(`/coach/sessions/${sid}/events`, { event: { type: "place_port", portId: "umbilical" } })).snapshot.eventCount).toBe(1);
+  });
+});
+
+describe("headset authority and retries", () => {
+  const app = legacyAppendectomyApp();
+  const post = async (route: string, body: unknown) =>
+    (await (await app.request(route, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })).json()) as Record<string, any>;
+  const start = async () => (await post("/coach/sessions", { patientId: "patient-demo-pediatric-asthma" })).sessionId as string;
+
+  it("applies a retried event once", async () => {
+    const sid = await start();
+    const event = { type: "place_port", portId: "umbilical", eventId: "evt-1" };
+    expect((await post(`/coach/sessions/${sid}/events`, { event })).results[0]).toMatchObject({ accepted: true, applied: true });
+    const again = await post(`/coach/sessions/${sid}/events`, { event });
+    expect(again.results[0]).toMatchObject({ accepted: true, applied: false, reason: "duplicate" });
+    expect(again.snapshot.eventCount).toBe(1);
+  });
+
+  it("catches up to a headset that is one step ahead (its completing event was lost)", async () => {
+    const sid = await start();
+    await post(`/coach/sessions/${sid}/simulate`, { kind: "complete_step" });
+    await post(`/coach/sessions/${sid}/simulate`, { kind: "complete_step" });
+    await post(`/coach/sessions/${sid}/simulate`, { kind: "complete_step" });
+    const r = await post(`/coach/sessions/${sid}/events`, { event: { type: "touch", structureId: "mesoappendix", instrumentId: "maryland_dissector", stepId: "mesoappendix_window" } });
+    expect(r.snapshot).toMatchObject({ desynced: false, resyncCount: 1, headsetStepId: "mesoappendix_window" });
+    expect(r.snapshot.step.id).toBe("divide_mesoappendix"); // caught up, then the touch completed the window
+    expect(r.alerts[0].kind).toBe("step_complete");
+  });
+
+  // One forged or buggy event must not award the whole procedure: skipped steps were never performed, so
+  // the coach flags the gap instead of synthesizing a perfect record for them.
+  it("refuses to skip steps on a single event's stepId", async () => {
+    const sid = await start();
+    const last = (await post(`/coach/sessions/${sid}/simulate`, { kind: "tracking_restored" })).snapshot.stepCount as number;
+    expect(last).toBeGreaterThan(2);
+    const kase = (await (await app.request("/patients/patient-demo-pediatric-asthma/case")).json()) as { procedure: { steps: { id: string }[] } };
+    const finalStep = kase.procedure.steps.at(-1)!.id;
+    const r = await post(`/coach/sessions/${sid}/events`, { event: { type: "confirm", stepId: finalStep, eventId: "evt-skip" } });
+    expect(r.results[0]).toMatchObject({ accepted: false, reason: "step_desynchronized" });
+    expect(r.snapshot.status).not.toBe("completed");
+    expect(r.snapshot.completedCount).toBe(0);
+    expect(r.snapshot.desynced).toBe(true);
+    const jump = await post(`/coach/sessions/${sid}/events`, { event: { type: "touch", structureId: "mesoappendix", instrumentId: "maryland_dissector", stepId: "mesoappendix_window" } });
+    expect(jump.snapshot.completedCount).toBe(0);
+    expect(jump.snapshot.step.id).toBe(kase.procedure.steps[0]!.id);
+  });
+
+  it("does not catch up while tracking is invalid", async () => {
+    const sid = await start();
+    await post(`/coach/sessions/${sid}/simulate`, { kind: "tracking_lost" });
+    const r = await post(`/coach/sessions/${sid}/events`, { event: { type: "place_port", portId: "left_lower", stepId: "working_ports" } });
+    expect(r.results[0]).toMatchObject({ applied: false, reason: "tracking_invalid" });
+    expect(r.snapshot.completedCount).toBe(0);
+  });
+
+  it("flags a headset that is behind and tells Jarvis to trust it", async () => {
+    const sid = await start();
+    await post(`/coach/sessions/${sid}/simulate`, { kind: "complete_step" });
+    await post(`/coach/sessions/${sid}/simulate`, { kind: "complete_step" });
+    const r = await post(`/coach/sessions/${sid}/events`, { event: { type: "place_port", portId: "left_lower", stepId: "working_ports" } });
+    expect(r.snapshot.desynced).toBe(true);
+    expect(r.context).toMatch(/HEADSET DISAGREES/);
+    const back = await post(`/coach/sessions/${sid}/events`, { event: { type: "confirm", stepId: "find_appendix" } });
+    expect(back.snapshot.desynced).toBe(false);
+  });
+});
+
+describe("bleeding and checkpoints", () => {
+  const theo = () => new CoachSession("coach-bleed", legacyAppendectomyCase(), () => NOW, undefined, "virtual");
+
+  it("warns instantly when a vessel opens, coaches control first, then reports it controlled", () => {
+    const s = theo();
+    while (s.engine.current?.id !== "divide_mesoappendix") s.handle(s.nextCorrectEvent()!);
+    const [warn] = s.handle({ type: "bleeding", structureId: "appendicular_artery", active: true, rateMlPerMin: 40, totalMl: 15 }).alerts;
+    expect(warn).toMatchObject({ kind: "bleeding", tier: "warning", reflexKey: "bleeding.appendicular_artery" });
+    expect(warn!.say).toMatch(/^Stop\. Bleeding from the appendicular artery/);
+    expect(s.handle({ type: "bleeding", structureId: "appendicular_artery", active: true, rateMlPerMin: 25, totalMl: 40 }).alerts).toEqual([]);
+    const snap = s.snapshot();
+    expect(snap.activeBleeds).toEqual([{ structure: { id: "appendicular_artery", name: "Appendicular artery" }, rateMlPerMin: 25 }]);
+    expect(snap.guidance.say).toMatch(/Control the bleeding from the appendicular artery first/);
+    expect(renderContext(snap)).toMatch(/ACTIVE BLEEDING: Appendicular artery at 25 ml\/min\. Total blood loss 40 ml/);
+    const [ok] = s.handle({ type: "bleeding", structureId: "appendicular_artery", active: false, rateMlPerMin: 0, totalMl: 55 }).alerts;
+    expect(ok).toMatchObject({ kind: "bleeding_controlled", tier: "advisory" });
+    expect(renderContext(s.snapshot())).toMatch(/Blood loss so far: 55 ml/);
+  });
+
+  it("pre-renders a bleeding clip for every vessel in the case", () => {
+    const keys = reflexLines(theo().kase).map((l) => l.key);
+    expect(keys).toContain("bleeding.appendicular_artery");
+    expect(keys.some((k) => k === "bleeding.cystic_artery")).toBe(false);
+  });
+
+  it("checkpoints each completed step with mistakes, hints, and blood loss for Jarvis to refer back to", () => {
+    const s = theo();
+    s.handle(s.nextCorrectEvent()!); // umbilical access
+    s.handle({ type: "touch", structureId: "urinary_bladder", instrumentId: "trocar_5mm" }); // mistake on ports step
+    s.requestHint();
+    while (s.engine.current?.id === "working_ports") s.handle(s.nextCorrectEvent()!);
+    const ports = s.snapshot().completedSteps.find((c) => c.stepId === "working_ports")!;
+    expect(ports).toMatchObject({ mistakes: 1, hints: 1, bloodLossMl: 0 });
+    expect(renderContext(s.snapshot())).toMatch(/Earlier: Place working ports \(1 mistake, 1 hint\)/);
+  });
+
+  it("accepts bleeding over HTTP and rejects malformed reports", async () => {
+    const app = legacyAppendectomyApp();
+    const sid = ((await (await app.request("/coach/sessions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ patientId: "patient-demo-pediatric-asthma" }) })).json()) as { sessionId: string }).sessionId;
+    const post = async (event: unknown) => (await app.request(`/coach/sessions/${sid}/events`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ event }) })).status;
+    expect(await post({ type: "bleeding", structureId: "appendicular_artery", active: true, rateMlPerMin: 30, totalMl: 5 })).toBe(200);
+    expect(await post({ type: "bleeding", structureId: "appendicular_artery", active: true, rateMlPerMin: -1, totalMl: 5 })).toBe(400);
   });
 });

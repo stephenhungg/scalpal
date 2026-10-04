@@ -121,3 +121,9 @@ cp .env.example .env && npm run jarvis:setup && npm run dev   # then open http:/
 ## Data
 
 `test/fixtures/` holds recorded responses from the public FinchNode demo API. They are fictional synthetic records, not participant or patient data.
+
+### Recap reaction speech
+
+`POST /coach/sessions` accepts optional `runId` from the canonical `HandoffTicket` (a 32-character or dashed UUID), returning that id separately from the generated coach `sessionId`. Same-patient coach recovery/retry can rebind that run to the newest session; cross-patient reuse returns 409. Bindings expire with the bounded 50-session store and do not survive a service restart. Legacy session creation may omit the run id.
+
+`POST /coach/runs/:runId/recap` resolves that binding and returns the canonical `runId`, `reactionQuestion`, `selfAssessmentQuestion`, `reactionAudioRoute`, and `voiceConfigured`. It ignores client prompt/text/tool/session overrides. The returned `GET /coach/runs/:runId/recap/reaction.mp3` renders only “How did that feel?” through the existing ReflexAudio/ElevenLabs TTS cache. The headset plays this with `QuestJarvisVoice.PlayLocalSpeech`; no recap conversational agent is started, and no surgery tools are offered. The panel owns the learner's reflection and self-assessment progression. Unknown/offline/evicted runs return 404; missing/failed TTS returns 503 so the panel's written question remains the fallback. Compatibility `/coach/sessions/:sid/recap` routes still accept a coach session id. These routes use the same local-demo coach session boundary as other preop endpoints, not a new authentication mechanism.

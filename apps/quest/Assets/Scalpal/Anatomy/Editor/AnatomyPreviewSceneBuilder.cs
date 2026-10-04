@@ -10,6 +10,14 @@ namespace Scalpal.Anatomy.EditorTools
     public static class AnatomyPreviewSceneBuilder
     {
         public const string ScenePath = "Assets/Scalpal/Anatomy/Scenes/AnatomyPreview.unity";
+        public const string DemoScenePath = "Assets/Scalpal/Anatomy/Scenes/AppendectomyDemo.unity";
+
+        [MenuItem("Scalpal/Anatomy/Build Appendectomy Demo Scene")]
+        public static void BuildDemoFromMenu()
+        {
+            Build(true);
+            Selection.activeObject = AssetDatabase.LoadAssetAtPath<SceneAsset>(DemoScenePath);
+        }
 
         [MenuItem("Scalpal/Anatomy/Build Atlas Preview Scene")]
         public static void BuildFromMenu()
@@ -27,7 +35,9 @@ namespace Scalpal.Anatomy.EditorTools
             }
         }
 
-        public static void Build()
+        public static void Build() { Build(false); }
+
+        public static void Build(bool exerciseDemo)
         {
             var prefab = AnatomyAtlasBuilder.Build();
             const string folder = "Assets/Scalpal/Anatomy/Scenes";
@@ -39,8 +49,21 @@ namespace Scalpal.Anatomy.EditorTools
             {
                 var body = (GameObject)PrefabUtility.InstantiatePrefab(prefab, scene);
                 if (body == null) throw new InvalidOperationException("Could not instantiate the body preview prefab.");
-                var controls = body.AddComponent<AnatomyPreviewPanel>();
-                controls.anatomy = body.GetComponent<AnatomyController>();
+                if (exerciseDemo)
+                {
+                    var binding = body.AddComponent<AnatomyExerciseBinding>();
+                    binding.anatomy = body.GetComponent<AnatomyController>();
+                    binding.requireCoachSynchronization = false;
+                    var controls = body.AddComponent<AnatomyDemoPanel>();
+                    controls.exercise = binding;
+                    controls.caseBundle = AssetDatabase.LoadAssetAtPath<TextAsset>("Assets/Scalpal/Exercises/Resources/scalpal_bundle.json");
+                    if (controls.caseBundle == null) throw new InvalidOperationException("Missing packaged exercise bundle.");
+                }
+                else
+                {
+                    var controls = body.AddComponent<AnatomyPreviewPanel>();
+                    controls.anatomy = body.GetComponent<AnatomyController>();
+                }
                 var renderers = body.GetComponentsInChildren<Renderer>(true);
                 if (renderers.Length == 0) throw new InvalidOperationException("The body preview has no renderers to frame.");
                 var bounds = renderers[0].bounds;
@@ -66,9 +89,10 @@ namespace Scalpal.Anatomy.EditorTools
                 light.intensity = 1.5f;
                 light.transform.rotation = Quaternion.Euler(25f, -25f, 0f);
 
-                if (!EditorSceneManager.SaveScene(scene, ScenePath))
-                    throw new InvalidOperationException("Unity could not save " + ScenePath);
-                Debug.Log("[Scalpal anatomy] Saved desktop inspection scene at " + ScenePath
+                var targetPath = exerciseDemo ? DemoScenePath : ScenePath;
+                if (!EditorSceneManager.SaveScene(scene, targetPath))
+                    throw new InvalidOperationException("Unity could not save " + targetPath);
+                Debug.Log("[Scalpal anatomy] Saved desktop inspection scene at " + targetPath
                     + ". Open it and press Play to inspect the rotating atlas. No XR rig, participant registration, or build settings were added.");
             }
             finally

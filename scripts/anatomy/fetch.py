@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fetch immutable public atlas sources into an ignored local cache."""
+"""Verify tracked full-resolution atlas sources or recover them from pinned upstream URLs."""
 import argparse
 import concurrent.futures
 import hashlib
@@ -36,7 +36,7 @@ def main():
     args = p.parse_args()
     manifest = ROOT / "assets/anatomy/sources.json"
     doc = json.loads(manifest.read_text())
-    cache = ROOT / "assets/anatomy/cache"
+    cache = ROOT / "assets/anatomy/originals"
     cache.mkdir(parents=True, exist_ok=True)
     with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
         results = list(pool.map(lambda item: fetch(item, cache), doc["sources"]))

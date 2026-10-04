@@ -15,9 +15,11 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+from .jobs import MAX_INPUT_BYTES, InputTooLarge, download_capped
 from .trajectory import to_robot_trajectory
 
 USER_AGENT = "scalpal-motion-worker/0"
+SUPPORTED_CONFIG_VERSION = "motion-v1"
 
 
 class Stale(Exception):
@@ -86,13 +88,6 @@ class Heartbeat(threading.Thread):
             self.beat()
 
 
-def _download(url: str, headers: dict, dest: Path) -> None:
-    req = urllib.request.Request(url, headers=headers or {})
-    with urllib.request.urlopen(req, timeout=120) as res, dest.open("wb") as f:
-        while chunk := res.read(1 << 20):
-            f.write(chunk)
-
-
 def _upload(gateway: Gateway, outputs_path: str, kind: str, path: Path, content_type: str) -> str:
     status, out = gateway.call(outputs_path, {"kind": kind, "filename": path.name, "contentType": content_type})
     if status != 200 or not out:
@@ -107,8 +102,39 @@ def _upload(gateway: Gateway, outputs_path: str, kind: str, path: Path, content_
     return out["artifactId"]
 
 
+FAIL_REPORT_BACKOFF_S = (1.0, 2.0, 4.0)  # waits between attempts to report a failure
+
+
+def _report_failure(gateway: Gateway, path: str, error: str, retryable: bool, log) -> str:
+    """Report a failed run, retrying network errors and 5xx with backoff.
+
+    Never raises: if the gateway stays unreachable the run is left to its lease,
+    and the worker loop carries on. Returns "failed", "stale" or "failed_unreported".
+    """
+    body = {"error": error[:2000], "retryable": retryable}
+    problem = ""
+    for attempt in range(len(FAIL_REPORT_BACKOFF_S) + 1):
+        if attempt:
+            time.sleep(FAIL_REPORT_BACKOFF_S[attempt - 1])
+        try:
+            status, res = gateway.call(path, body)
+        except Stale:
+            return "stale"
+        except Exception as e:  # network error: retry
+            problem = f"{type(e).__name__}: {e}"
+            continue
+        if 200 <= status < 300:
+            log(f"failed ({'retryable' if retryable else 'final'}): {error}")
+            return "failed"
+        problem = f"HTTP {status} {res}"
+        if status < 500:  # the gateway refused the report; retrying will not help
+            break
+    log(f"could not report failure ({problem}); the run is left to lease expiry: {error}")
+    return "failed_unreported"
+
+
 def process_claim(gateway: Gateway, claim: dict, mirrored: bool = False, hand: str = "Right", log=print) -> str:
-    """Handle one claimed job. Returns "completed", "failed", or "stale"."""
+    """Handle one claimed job. Returns "completed", "failed", "failed_unreported", or "stale"."""
     from .perception import track_hand
     from .replay import render_replay
     from .retarget import retarget_frames
@@ -119,14 +145,11 @@ def process_claim(gateway: Gateway, claim: dict, mirrored: bool = False, hand: s
     hb.start()
 
     def fail(error: str, retryable: bool) -> str:
-        try:
-            gateway.call(endpoints["fail"], {"error": error[:2000], "retryable": retryable})
-        except Stale:
-            return "stale"
-        log(f"failed ({'retryable' if retryable else 'final'}): {error}")
-        return "failed"
+        return _report_failure(gateway, endpoints["fail"], error, retryable, log)
 
     try:
+        if job.get("configVersion") != SUPPORTED_CONFIG_VERSION:
+            return fail("unsupported motion configVersion; expected " + SUPPORTED_CONFIG_VERSION, retryable=False)
         clip_in = next((i for i in claim.get("inputs", []) if i.get("role") == "input"), None)
         if clip_in is None:
             return fail("job has no input clip", retryable=False)
@@ -134,11 +157,21 @@ def process_claim(gateway: Gateway, claim: dict, mirrored: bool = False, hand: s
             tmp = Path(tmp)
             clip = tmp / ("clip" + Path(clip_in.get("filename", "clip.mp4")).suffix)
             hb.update(0.05, "downloading clip")
+            # The claim carries the size and hash the gateway verified at upload.
+            # Never read past them, and never process bytes that do not match.
+            claimed_bytes, claimed_sha = clip_in.get("bytes"), clip_in.get("sha256")
+            cap = MAX_INPUT_BYTES if claimed_bytes is None else min(int(claimed_bytes), MAX_INPUT_BYTES)
             try:
                 dl = clip_in["download"]
-                _download(gateway.resolve(dl["url"]), dl.get("headers", {}), clip)
+                size, sha = download_capped(gateway.resolve(dl["url"]), clip, cap, headers=dl.get("headers", {}))
+            except InputTooLarge as e:
+                return fail(f"input clip rejected: {e} (claimed {claimed_bytes} bytes)", retryable=False)
             except Exception as e:
                 return fail(f"could not download input clip: {e}", retryable=True)
+            if claimed_bytes is not None and size != int(claimed_bytes):
+                return fail(f"input clip size mismatch: got {size} bytes, claimed {claimed_bytes}", retryable=False)
+            if claimed_sha and sha != str(claimed_sha).lower():
+                return fail(f"input clip sha256 mismatch: got {sha}, claimed {claimed_sha}", retryable=False)
 
             hb.update(0.15, "hand inference")
             try:
@@ -168,6 +201,7 @@ def process_claim(gateway: Gateway, claim: dict, mirrored: bool = False, hand: s
             files["quality_report"][0].write_text(json.dumps({
                 "job": job, "summary": s, "retargeting": motion["retargeting"], "robot": motion["robot"],
                 "perception": track["model"], "mirrored_input": mirrored,
+                "effective_worker_options": {"hand": hand, "mirrored": mirrored},
             }, indent=1))
             # Robot only: the companion already plays the source clip beside this video, synced.
             render_replay(motion, files["replay_video"][0], track=track)
@@ -217,8 +251,11 @@ def run_worker(url: str, token: str, lease_ms: int = 120_000, mirrored: bool = F
             log(f"claim request failed: {e}")
             status, claim = 0, None
         if status == 200 and claim:
-            log(f"claimed {claim['job']['jobId']} run {claim['job']['run']}")
-            process_claim(gateway, claim, mirrored=mirrored, hand=hand, log=log)
+            try:
+                log(f"claimed {claim['job']['jobId']} run {claim['job']['run']}")
+                process_claim(gateway, claim, mirrored=mirrored, hand=hand, log=log)
+            except Exception as e:  # one bad job must not take the worker down
+                log(f"job handler crashed: {type(e).__name__}: {e}")
             if once:
                 return
             continue

@@ -1,0 +1,101 @@
+# Native Appendectomy Integration
+
+> **Current scope:** the [latest experience flow](current-direction.md#latest-experience-flow) uses a full-VR explore hub and diagnosis office, then an operating room selected as AR on a real reclining participant or VR with an authored virtual patient. Both modes use the same anatomy/tool/exercise/coach core. The committed standalone OR defaults to AR; a handoff ticket overrides presentation before setup. Conversational selection and the rotating preview are historical flows.
+
+The original milestone assembled one full-VR rehearsal in `Assets/Scalpal/Quest/Scenes/NativeSession.unity`. It preserves the native tracked-head/controller rig and the user-confirmed held-tool motion fix. It connects Matthew's authored appendectomy case, selected anatomy, coach HTTP service, a native client for his existing Jarvis agent, and Nathan's actual SpacetimeDB session adapter.
+
+The exercise is illustrative. Tool contact advances authored procedural checks; the organs do not have validated deformable-tissue physics. The static virtual patient fit is explicitly authored. The current AR/body-fit milestone is described below; video streaming and robot replay remain absent.
+
+## Current AR / Body Fit Milestone
+
+`0.3.2-auto-body` defaults to transparent Quest passthrough and hides the virtual room/mannequin. Selection uses a 42-part/110,511-triangle organ overview; practice preserves the nine-part scored appendectomy. MediaPipe image inference is connected through an opt-in local service on 8790, official Meta MRUK 85 calibrated camera rays and a cached native environment-raycast grid. Three stable observations automatically align the generic torso; no controller-plane points are needed. Current fit validity gates anatomy/ports, effects, coach tracking and scoring. Tracking loss/movement pauses the scored path and triggers automatic reacquisition. Right stick switches AR/VR during selection/recap without creating an attempt; practice must be explicitly retried before changing modes. [Body registration](body-registration.md) contains exact coordinates, controls, model identity, bounds and remaining physical checks.
+
+The earlier `0.2.1-main` controllers-required blocker cleared: actual USB smoke showed tracked floor/head/focus, and the live Quest mirror showed the full-VR scene with Shared: Paired. That proves launch/tracking/pairing, not a complete wearer exercise or body fit. Earlier verification paragraphs below preserve historical checks and should not be interpreted as the current blocker.
+
+The permission-lifecycle Unity gate passed 76 synthetic surface/body-projection/automatic-acquisition/staleness/occlusion/identity/permission checks (the prior source-geometry revision separately passed 37 imported reference checks), alongside the existing instrument/input/playthrough/attempt/coach checks. The local registration service passed 33 tests with actual blank-image inference and loopback HTTP; positive body points and multi-person result rejection used synthetic fixtures. Physical reclining-person detection, camera orientation, stereo alignment, source-to-person accuracy and performance remain unverified. Participant images are not recorded or sent to the media worker.
+
+## Operating-Room Mode API
+
+Source `f11c3dd` exposes `NativeCaseSession.TrySelectOperatingRoomMode(string mode, out string reason)` for the handoff UI. Pass exactly `mixed_reality` or `virtual` after the case has loaded. `TryChangePresentation(bool)` forwards to that API for existing callers.
+
+A different mode is accepted only in `Selecting`, `Confirmed` or `Recap`, outside a pending request or run-ending transition. It preserves the reviewed patient, procedure, lifecycle phase and shared attempt. It clears the old fit, Time-Out, coach/voice binding and setup effects. AR requires the handoff's capability/permission/consent preflight plus three fresh body observations; VR restores the authored anatomy/port transforms and does not require camera registration. A repeated current-mode request is an idempotent no-op. Active or paused practice refuses a different mode instead of silently abandoning progress.
+
+The office ticket's selected mode is honored during scene initialization. `HandoffRun` now admits both `open_appendectomy` and the retained `lap_appendectomy` variant. **Remaining caller mismatch:** `HandoffFlow.SwitchToVirtual` still calls only `TryChangePresentation(false)` from the paused/stopped “new attempt” buttons. It must explicitly restart the OR attempt before changing mode. The existing office-bound `NativeCaseSession.Retry()` returns to the office; it is not yet an in-place OR restart API. Pre-practice mode selection works independently of that unfinished fallback route.
+
+Verification at `f11c3dd`: `verify_session.py --suite unity` passed the complete native gate, including 220 mode-selection and 111 body-registration assertions. `--suite playmode` passed 73 frame-driven checks over real Start/Update/controller callbacks, PhysX trigger contacts, a throwaway SpacetimeDB and an isolated production coach service. The exercise fixture explicitly uses the retained advanced laparoscopic port case; it does not establish a complete normal open-appendectomy run. Both modes were exercised with synthetic compositor/camera/depth observations. No physical headset alignment, live voice provider, participant capture, full product-flow or robot replay test ran.
+
+## Original Full-VR Session Flow
+
+1. Load the synthetic `patient-demo-multi-source` case from Matthew's running service; reject unknown patients, procedures, nonsynthetic briefs and unavailable cases.
+2. Join a genuine headset invitation and create a fresh `lap_appendectomy@0.1.0` attempt. Freeze its shared session/attempt IDs so external attempt changes cannot receive the old local runner's progress.
+3. Show a rotating preview containing the nine required/context anatomy meshes. **B** opens the synthetic case review. **B** again acknowledges the brief and requests a fresh coach session for that exact case in `virtual` mode.
+4. Bind one `AnatomyExerciseBinding`/`CaseRunner`. Practice remains gated until the coach acknowledges tracking and the headset has valid floor/head/focus tracking. Grip picks up tools; trigger activates them. Port placement requires actual tip overlap, the current step's instrument, and the port allowlist. **X** identifies anatomy under the actual held tip or head ray. **B** satisfies only an authored confirmation step.
+5. Publish confirmed coarse phase/step/selection/registration state and actual events to SpacetimeDB. XR poses stay local. Coach scoring events retain IDs across bounded retries and use the step that validated the action. Applied scene-command acknowledgements wait for a committed snapshot.
+6. After all ten authored steps, show a local recap and send the actual learning result. A successful send is distinct from the backend's committed acknowledgement. **A** abandons the previous local coach binding, restores tools and preview, and requests a new shared attempt.
+
+**Y** explicitly enables/disables microphone voice. If pressed before practice, it opts into the next confirmed session. Conversational procedure selection is superseded: under the current flow the procedure comes from the diagnosis office. This first slice exposes one appendectomy through controller confirmation and does not yet load the case chosen on the explore page.
+
+## Service Boundaries
+
+| Component | Local development route | Native consumer |
+| --- | --- | --- |
+| Matthew's preop/coach | HTTP `localhost:8787` | Reviewed case, fresh explicit coach session, ordered events, highlights, context |
+| Matthew's existing ElevenLabs agent | Signed WSS URL supplied by `/jarvis/connection` | `QuestJarvisVoice`: negotiated PCM microphone/speaker transport and existing bounded tools |
+| Nathan's SpacetimeDB | WS `127.0.0.1:3000`, database `scalpal` | `QuestSessionBridge`: real invitation, subscriptions, reducer acknowledgements |
+| Nathan's gateway | HTTP `localhost:8788` | Artifact/worker service available separately; native capture adapter still absent |
+| Nathan's companion | HTTP `localhost:5173` | Joined observer reads actual native snapshots and command acknowledgements |
+
+These are local development processes, not production deployment URLs. USB reverse routes make localhost services reachable by the headset. Development HTTP is enabled only for development players. Provider credentials remain on the preop service; no key, invitation or auth token belongs in a committed scene.
+
+Use `scripts/quest/configure_session.py --config /absolute/private/session-config.json` after installing a development APK. Its five fields are `uri`, `database`, `joinCode`, `preferredSessionId`, and `coachBaseUrl`. The helper sends private JSON over stdin into the app's private internal files directory and establishes needed localhost USB routes. Restart the app to read it. The native player reads this configuration only in development builds. Tokens persist per database endpoint in the app directory and are never logged.
+
+## Geometry and Input
+
+The scene contains two instances of a nine-mesh appendectomy subset, 93,399 triangles per instance. Selection preview colliders are disabled. The practice instance preserves authored renderer/collider defaults and hides geometry until its validity gate opens. All twelve runtime FBXs, original exports and the editable Blender atlas are now on main with attribution and preparation scripts. The native scene still loads only its nine-part subset.
+
+The exported anatomy is upright with a source foot origin. The illustrative fit uses X=90 degrees and uniform `1.75/1.743` scale: source +Y becomes the reclining patient's +Z. Source anterior -Z is assumed to become +Y. The source foot maps to the virtual patient's actual foot extent. Port coordinates use meters, +X patient-left, +Y anterior, +Z cranial, with an authored approximate skin umbilicus origin. These assumptions require visual headset validation and must never be reused as measured participant registration.
+
+`NativeProcedureInput` is the sole scored contact adapter. It reuses `InstrumentTipContact`, verifies selected anatomy ownership and actual tip penetration, and deduplicates per structure/port per activation cycle. Do not install an additional case director or contact scorer. `NativeCaseSession` owns the only coach command handler; no extra `AnatomyCoachBinding` is installed in this scene.
+
+Device event time is Unity monotonic elapsed milliseconds. Spacetime server timestamps use the server clock. These clocks are not calibrated and do not support cross-device motion alignment.
+
+## Build and Verification
+
+Use Unity 6000.0.66f2 with Android modules, ARM64 IL2CPP and Vulkan. `Scalpal.Quest.Editor.NativeSessionBuild.Prepare` regenerates the scene; `Validate` checks unique bindings, actual part/triangle counts, metric fit, port identities, materials and model dependencies. `Build` consumes an absolute `SCALPAL_QUEST_APK` output path and makes a development APK.
+
+`python3 scripts/quest/verify_session.py --suite all` is the repeatable gate; see [helper requirements](../scripts/README.md). `Build` now runs `Verify` before producing an APK. This includes the real scene/geometry/binding checks but does not depend on a live coach/provider. The gate's separate service stage starts an isolated recorded-fixture coach and a unique throwaway Spacetime database. It preserves the demo database and keeps physical playthrough explicitly unverified.
+
+Verification distinguishes real backend exchanges, synthetic editor checks and physical headset evidence. The backend suite passed 23 real local-server tests; preop passed 140 tests (two live-provider tests skipped); native PCM/protocol checks passed against actual Unity Android assemblies. The existing instrument runtime passed 160 editor checks. The native input fixture passed 24 checks, actual scene playthrough passed 75 checks across ten steps/thirteen actions, and attempt/retry boundary fixture passed 72 checks. These editor poses/identities are synthetic and cannot establish physical usability. The consolidated ARM64 development APK `0.2.1-main` (Android version code 4) built successfully and installed over USB; private pairing and service routes were restored. Its launch remains blocked by the controllers-required prompt. The previous `0.2.0-session` was installed and privately paired over USB, but launch was blocked at the Quest controllers-required dialog. Headset wake/controllers and an actual session playthrough remain the physical checkpoint. The full-session headset result, native voice authentication/audio and actual observer state remain unverified.
+
+The expanded gate passed after failure-path fixes: 19 real isolated coach-HTTP checks; 156 production relay/runner checks with actual isolated HTTP and controlled coroutine/response timing, including thirteen authored actions and ten lost committed responses; 33 production bridge checks with SDK/transport doubles; and 68 actual-scene coach-binding checks. Ten real subscription/reconnect/attempt checks passed on the throwaway module and then on fresh test-owned sessions in the local demo database. Its module was updated with data deletion disabled; the coach process was restarted with the corrected source. These checks neither record a participant nor authenticate a voice agent. Read [failure harness details](../scripts/quest/session-check/README.md).
+
+Confirmed regressions: stale/unknown coach step metadata no longer scores the current step, including a retry after a lost rejection response; terminal coach command outcomes cannot be overwritten. Shared retry state clears old selections/registration, and authored exercise events reject abandoned or foreign-session attempt IDs. Uncertain native events are still not blindly retried: Nathan's reducer has no durable event identity field.
+
+## Remaining Required Interfaces
+
+- Existing ElevenLabs agent credentials are currently absent locally; `/jarvis/connection` reports unconfigured. Spoken headset input/output remains unverified.
+- Main includes Matthew's shared tool/alert/context-key service. The native six-tool path now posts complete JSON parameters to the explicit coach-session tool endpoint. Context updates use the meaningful `contextKey`. Fifty actual Unity coroutine/HTTP checks passed against isolated synthetic Hono fixtures, including pending/applied highlights and stale connections; WSS, microphone and provider calls did not run. Polled alerts/reflex pacing remains an adapter gap.
+- Conversational selection and the visual preview are superseded; the session needs to load the patient/procedure decided in the diagnosis office instead of the fixed appendectomy.
+- The automatic generic-surface MR/camera route is implemented and is the AR operating-room path; its reclining-person/stereo-alignment test remains unverified; see [body registration](body-registration.md).
+- Native video production/WebRTC publishing and upload are absent; the companion must not claim a live headset video feed.
+- Silas's video-to-motion processor is merged on main. Its latest frozen-dependency suite passed 30 tests (one external sample-video test skipped), including output-path traversal and malformed job regressions. A 60-frame synthetic kinematic replay encoded successfully and preserved ten explicit gap frames. Nathan's lease/artifact worker adapter and compatible trajectory conversion are now implemented. Actual permitted Quest-video validation remains absent; synthetic checks do not prove first-person reconstruction quality.
+
+See [system integration](system-integration.md) for exact audited commits and [native workbench evidence](native-workbench.md) for the earlier physical controller result.
+
+The current corrected `0.3.0-ar` ARM64 development APK (code 5, approximately 77 MiB) built and installed over USB. Its manifest includes the required headset-camera permission; acquisition remains off until operator opt-in. The current launch check is blocked at Quest’s controllers-required dialog after reinstall, so this APK has no claimed physical passthrough/body-fit pass yet. Local pose8790 and coach8787 health checks returned 200; private USB routes were restored. Current `services` gate passed preop 140 (two provider checks skipped), backend 23, coach HTTP 19, relay 156, SDK 10 and companion type/build checks on an isolated throwaway database. The demo database was not reset.
+
+The wearer subsequently confirmed the real room and floating preview are visible in `0.3.0-ar`. This is participant-reported passthrough/preview evidence; it does not establish body calibration or alignment. The source’s final 34 synthetic body checks additionally reject the SDK historical-pose identity fallback and invalid lens rotations.
+
+The final corrected APK reinstall subsequently passed actual app-scoped XR/head/floor/focus launch smoke (`0.3.0-ar`, initial effects0). Acquisition remains opt-in. That closes the launch-dialog checkpoint for this installed build, while physical body calibration is still pending.
+
+The `0.3.2-auto-body` permission-lifecycle build (code 7) built/installed over USB. Its first-use permission request preserves opt-in across a permission-dialog pause while both acquisition sources remain off until grants and XR readiness return. The Unity gate passed 76 body/permission checks plus the existing instrument/input/playthrough/attempt/coach checks; bridge 33 passed. Actual app-scoped smoke passed XR/head/floor/focus after reinstall, with controllers untracked and effects0. No participant detection, depth-sampling timing, stereo alignment or provider voice pass is claimed. Local pose8790/coach8787 are healthy and gateway healthz reports connected/registered; voice/TURN remain unconfigured.
+
+
+## Abdominal Tissue Build Checkpoint
+
+Focused source `1a01fab`, stacked on AR `9215799`, adds 81-part layered reference overview, procedural material appearance and three local grasp-deformation targets. See [tissue simulation](tissue-simulation.md). The repeatable Unity gate passed including actual source mesh preservation, renderer/contact agreement, reset/gates and layer visibility. ARM64 IL2CPP Android build `0.4.0-tissue` / code8 succeeded; APK63.47MiB installed. USB coach/realtime/pose routes were restored, local health checks returned200, and the app launch smoke stopped at Quest's controllers-required dialog. New layer visuals, native grasp/performance, complete case and actual body registration remain physical checkpoints. This install/test did not enable participant capture.
+
+
+## Office handoff integration
+
+The unified player now accepts an explicit `HandoffRun` ticket rather than selecting the demo constants when entered from the office. `NativeCaseSession` revalidates patient/encounter/procedure against the service, opens the shared Time-Out, includes `encounterId` in coach creation and preserves the office score across OR attempts. Presentation mode is selected before `NativePresentation.Apply`; pre-practice switches keep the attempt, while practice switches create another. The existing standalone scene retains its component defaults. See [office-to-OR implementation and evidence](office-to-or-handoff.md#implementation-checkpoint) for controls, failure handling, verification and pending physical/capture/companion boundaries. No tissue or physics implementation was changed by the handoff.

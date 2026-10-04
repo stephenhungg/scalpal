@@ -128,6 +128,8 @@ describe("Unity DTO contract", () => {
     const path = join(UNITY_EXERCISES_DIR, "Resources/scalpal_bundle.json");
     expect(existsSync(path), "run `npm run export:unity`").toBe(true);
     const bundle = JSON.parse(readFileSync(path, "utf8"));
+    expect(bundle.cases.find((kase: { caseId: string }) => kase.caseId === "case_patient-demo-multi-source_open_appendectomy")?.procedureId).toBe("open_appendectomy");
+    expect(bundle.cases.find((kase: { caseId: string }) => kase.caseId === "case_patient-demo-multi-source_lap_appendectomy")?.procedureId).toBe("lap_appendectomy");
     expect(unitySafetyErrors(bundle)).toEqual([]);
     const errors: string[] = [];
     check(bundle, "ScalpalBundle", schema, "$", errors, new Map());

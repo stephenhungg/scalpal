@@ -1,0 +1,5 @@
+dist/
+*.tsbuildinfo
+.vercel
+.env*
+.vite/

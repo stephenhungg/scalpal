@@ -51,7 +51,11 @@ def main():
         pid = result.stdout.strip() if result.returncode == 0 else ""
         time.sleep(1)
     if not pid or not pid.isdecimal():
-        print("Workbench is not running. Wear Quest, wake both controllers, accept any launch prompt, then retry.")
+        activity = run("shell", "dumpsys", "activity", "activities")
+        if "LaunchCheckControllerRequiredDialogActivity" in activity.stdout:
+            print("Quest is blocking launch at its controllers-required dialog. Wear Quest, wake both controllers and accept the prompt.")
+        else:
+            print("Workbench is not running. Wear Quest, wake both controllers, accept any launch prompt, then retry.")
         return 2
     logs = run("logcat", "-d", "-v", "epoch", "--pid=" + pid)
     if logs.returncode:

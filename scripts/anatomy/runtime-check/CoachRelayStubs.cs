@@ -1,26 +1,15 @@
-using System;
-using System.Collections.Generic;
 using UnityEngine;
-
 namespace Scalpal.Exercises.Coach
 {
-    // Mirrors only the relay boundary exercised by AnatomyCoachBinding.
-    public class CoachCommand
-    {
-        public string commandId;
-        public string action;
-        public string targetId;
-    }
+    // Compile-time transport double; native relay behavior has its own Unity gate.
     public class CoachRelay : MonoBehaviour
     {
-        public event Action<CoachCommand> CommandRequested;
-        public readonly List<bool> tracking = new List<bool>();
-        public readonly List<(string id, bool applied, string reason)> acks = new List<(string, bool, string)>();
-        public void Tracking(bool valid) { tracking.Add(valid); }
-        public void Ack(string commandId, bool applied, string reason = "") { acks.Add((commandId, applied, reason)); }
-        public void Emit(string action, string target)
-        {
-            CommandRequested?.Invoke(new CoachCommand { commandId = "test-command", action = action, targetId = target });
-        }
+        public string SessionId = "", SessionPatientId = "", SessionProcedureId = "";
+        public string SessionCaseId = "", SessionMode = "", SessionInitialStepId = "";
+        public bool Connected, IsSynchronized;
+        public void UseSession(string sessionId) { }
+        public void AdoptCurrentSession(string patient, string procedure, string caseId, string mode, string firstStep) { }
+        public void AdoptSession(string sessionId, string patient, string procedure, string caseId, string mode, string firstStep) { }
+        public void Forward(Scalpal.Exercises.Engine.CaseEvent value, string outcome = "") { }
     }
 }

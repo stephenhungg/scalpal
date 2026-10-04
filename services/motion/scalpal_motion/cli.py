@@ -187,7 +187,7 @@ def main() -> None:
     import os
 
     p = sub.add_parser("gateway-worker", help="pull jobs from Nathan's gateway (worker-api v1)")
-    p.add_argument("--gateway", default=os.environ.get("GATEWAY_URL", "http://localhost:8787"))
+    p.add_argument("--gateway", default=os.environ.get("GATEWAY_URL", "http://localhost:8788"))
     p.add_argument("--lease-ms", type=int, default=120_000)
     p.add_argument("--hand", choices=["Right", "Left"], default="Right")
     p.add_argument("--mirrored", action="store_true", help="treat clips as mirrored (selfie/webcam test footage)")

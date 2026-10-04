@@ -103,3 +103,39 @@ Provide setup/run instructions, pinned versions, endpoint and network requiremen
 Open focused changes in a branch such as `nathan/companion-realtime`. Coordinate shared contracts with Stephen before merge and leave other owners' scene/agent/processor code alone. No outreach, public deployment, paid resource provisioning, screen capture, or participant recording has been performed by this plan update.
 
 See [data/storage design](data-and-realtime.md), [current direction](current-direction.md), and [team ownership](team-plan.md) for surrounding context. This work order supersedes the older payout lane and the suggestion that the companion might remain only a local mirror.
+
+## Status (October 3, 2026, evening)
+
+Implemented on branch `nathan/companion-realtime`. Everything below was tested locally against SpacetimeDB 2.10.2 and headless Chromium, **not yet on the Quest or a hosted deployment**.
+
+| Milestone | State | Evidence |
+| --- | --- | --- |
+| Shared state | Built | `services/realtime/` module. 23 gateway/module integration tests pass: propagation to every member, reconnect, outsider isolation, role checks |
+| Actual Quest integration | Bindings ready, not tested | C# bindings in `services/realtime/bindings/csharp/`; Stephen to integrate and verify IL2CPP behavior and reachability |
+| Live website | Built, locally verified | WebRTC publisher/viewer with SpacetimeDB signaling. Separate browser contexts reached video connected at 1280×720 and about 30 fps; source stop and denial states shown. Real mirror window, TURN across networks, and delay are unmeasured |
+| Storage | Built | Signed-URL grants (local disk or S3/R2), size/SHA-256 verification, tamper rejection, retry |
+| Motion integration | Built against a synthetic worker | Worker HTTP API with leases. Duplicate and stale-run protection tested. Silas's real output not yet connected |
+| Jarvis integration | Contract and credential path built | Command allowlist, applied/rejected acknowledgements, transcript and status, ElevenLabs voice grants. Matthew's agent not yet connected |
+| Rehearsal | Synthetic only | The synthetic headset page runs selection → practice → review → processing → replay |
+
+Contracts proposed for agreement: [realtime-v1](../packages/contracts/realtime-v1.md), [worker API](../packages/contracts/worker-api.md), [trajectory schema](../packages/contracts/robot-trajectory.v1.schema.json).
+
+Still needed:
+
+- a SpacetimeDB login for maincloud
+- website and gateway hosts
+- an R2 bucket and Cloudflare TURN key
+- the ElevenLabs agent id and key (from Matthew)
+- agreement with Stephen, Matthew and Silas on the contracts
+
+### Deployment (October 3, 2026)
+
+| Piece | Where | Notes |
+| --- | --- | --- |
+| Website | https://scalpal-companion.vercel.app | Vercel project `scalpal-companion` (Nathan's account), built from `apps/companion` |
+| Realtime database | SpacetimeDB maincloud, database `scalpal` | Published from `services/realtime` with Nathan's SpacetimeDB login |
+| Gateway | https://scalpal-gateway.fly.dev (Fly app `scalpal-gateway`, region `ord`) | One always-on machine; secrets in Fly, `fly.toml` in `services/api` |
+| Artifact storage | Cloudflare R2 bucket `scalpal-artifacts` | Private; CORS allows the website origin and localhost dev ports |
+| Video relay | Cloudflare Realtime TURN | Short-lived credentials minted per viewer by the gateway |
+
+Verified against the live URLs with headless Chromium, both peers forced onto the TURN relay: session creation, invite join, live video via the relay, the synthetic headset script, a headset-applied action, browser upload to R2 with gateway verification, synthetic processing, a synced replay, source stop, the phone layout, and ending the session. The real Quest mirror, Matthew's Jarvis and Silas's worker are not yet connected.

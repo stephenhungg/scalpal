@@ -137,6 +137,70 @@ namespace Scalpal.Exercises.Data
     }
 
     [Serializable]
+    public class TissueDefinition
+    {
+        public string id;
+        public string layer;
+        public int order;
+        public bool cuttable;
+        public bool splittable;
+        public bool perfused;
+        public bool hollow;
+        public bool critical;
+        public bool tentable;
+        public float flowMlPerSecond;
+        public string[] structureIds;
+    }
+
+    [Serializable]
+    public class BodyPredicate
+    {
+        public string tissueId;
+        public string fact;
+        public string op;
+        public float value;
+    }
+
+    [Serializable]
+    public class BodyMilestone
+    {
+        public string id;
+        public BodyPredicate[] predicates;
+    }
+
+    [Serializable]
+    public class BodyGuardrail
+    {
+        public string verb;
+        public BodyPredicate eventPredicate;
+        public string id;
+        public string outcome;
+        public string tissueId;
+        public string severity;
+        public string feedback;
+    }
+
+    [Serializable]
+    public class BodyDecision
+    {
+        public string id;
+        public string prompt;
+        public string correctChoice;
+        public string[] choices;
+    }
+
+    [Serializable]
+    public class OpenBodyCase
+    {
+        public int version;
+        public TissueDefinition[] tissues;
+        public BodyMilestone[] milestones;
+        public BodyGuardrail[] guardrails;
+        public BodyDecision[] decisions;
+        public bool fastPathPremarked;
+    }
+
+    [Serializable]
     public class SuccessCheck
     {
         public string type;
@@ -173,6 +237,7 @@ namespace Scalpal.Exercises.Data
     [Serializable]
     public class Procedure
     {
+        public OpenBodyCase openBody;
         public string id;
         public string title;
         public string shortTitle;
@@ -240,6 +305,7 @@ namespace Scalpal.Exercises.Data
         public string urgency;
         public string status;
         public int flagCount;
+        public bool encounterAvailable;
         public ScalpalAction[] actions;
     }
 
@@ -291,7 +357,6 @@ namespace Scalpal.Exercises.Data
     {
         public string sessionId;
         public string scenarioId;
-        // FinchNode's hosted consent page: show it on the laptop or as a QR code; the patient approves sharing there.
         public string connectUrl;
         public string state;
         public string sessionStatus;

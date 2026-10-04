@@ -1,0 +1,82 @@
+{
+  "_comment": "SYNTHETIC fixture: one session as the companion sees it through its views. No participant data. Timestamps are server time in ISO form for readability (the database stores microseconds since the Unix epoch).",
+  "session": {
+    "sessionId": "ses_fixture01",
+    "label": "Synthetic fixture",
+    "status": "active",
+    "exerciseId": "lap_appendectomy",
+    "exerciseVersion": "0.1.0",
+    "currentAttemptId": "ses_fixture01-a1",
+    "attemptCount": 1
+  },
+  "members": [
+    { "role": "operator", "displayName": "Operator", "online": true },
+    { "role": "headset", "displayName": "Quest", "online": true },
+    { "role": "coach", "displayName": "Jarvis bridge", "online": true },
+    { "role": "viewer", "displayName": "Judge", "online": true }
+  ],
+  "exerciseState": {
+    "attemptId": "ses_fixture01-a1",
+    "mode": "Practicing",
+    "stepId": "transfer-to-target",
+    "stepIndex": 2,
+    "stepCount": 5,
+    "selectedStructureId": "gallbladder",
+    "highlightedStructureId": "cystic-duct",
+    "previewRotating": false,
+    "paused": false,
+    "registration": "valid",
+    "recording": "recording",
+    "stateVersion": 14,
+    "stepVersion": 7,
+    "updatedAt": "2026-10-03T20:00:05.120Z"
+  },
+  "commands": [
+    {
+      "commandId": "cmd_fixture_1",
+      "action": "highlightStructure",
+      "targetId": "cystic-duct",
+      "expectedStepVersion": 7,
+      "requestedRole": "coach",
+      "status": "applied",
+      "requestedAt": "2026-10-03T20:00:04.900Z",
+      "resolvedAt": "2026-10-03T20:00:05.120Z"
+    },
+    {
+      "commandId": "cmd_fixture_2",
+      "action": "requestHint",
+      "expectedStepVersion": 6,
+      "requestedRole": "coach",
+      "status": "rejected",
+      "reason": "stale step version: expected 6, current 7"
+    }
+  ],
+  "artifacts": [
+    { "artifactId": "art_fixture_clip", "attemptId": "ses_fixture01-a1", "kind": "raw_clip", "filename": "clip.mp4", "contentType": "video/mp4", "status": "available", "verifiedBytes": 4812331 },
+    { "artifactId": "art_fixture_manifest", "attemptId": "ses_fixture01-a1", "kind": "capture_manifest", "filename": "capture.json", "contentType": "application/json", "status": "available" },
+    { "artifactId": "art_fixture_traj", "attemptId": "ses_fixture01-a1", "kind": "robot_trajectory", "filename": "robot_trajectory.json", "contentType": "application/json", "status": "available", "jobId": "job_fixture", "jobRun": 2 }
+  ],
+  "motionJobs": [
+    {
+      "jobId": "job_fixture",
+      "dedupeKey": "ses_fixture01-a1|art_fixture_clip|motion-v1",
+      "inputArtifactId": "art_fixture_clip",
+      "extraArtifactIds": ["art_fixture_manifest"],
+      "configVersion": "motion-v1",
+      "status": "ready",
+      "run": 2,
+      "maxRuns": 3,
+      "outputArtifactIds": ["art_fixture_traj"],
+      "quality": { "framesTotal": 150, "framesValid": 138, "invalidIntervals": 1, "robotModel": "example-hand", "replayKind": "kinematic", "notes": "run 1 lease expired and was requeued" }
+    }
+  ],
+  "attemptResult": {
+    "attemptId": "ses_fixture01-a1",
+    "practiceStatus": "completed",
+    "stepsCompleted": 5,
+    "stepsTotal": 5,
+    "mistakes": 1,
+    "hintsUsed": 1,
+    "resultSummary": "Completed; one contact with the restricted region."
+  }
+}

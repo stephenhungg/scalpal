@@ -7,6 +7,12 @@ import { buildBrief, DISCLAIMER } from "./brief.js";
 import { buildCase, routes, scorePreopCheck, unavailableCase } from "./case-builder.js";
 import type { StuckPolicy } from "./coach.js";
 import { registerCoachRoutes } from "./coach-routes.js";
+import { registerEncounterRoutes } from "./encounter-routes.js";
+import { ENCOUNTERS_BY_PLAN } from "./catalog/encounters.js";
+import type { RealtimeBridge } from "./realtime-bridge.js";
+import type { SceneVision } from "./scene-vision.js";
+import type { FrameDetector } from "./frame-detector.js";
+import type { ReflexAudio } from "./reflex.js";
 import { FinchNodeError, createFinchNodeClient, type FinchNodeClient } from "./finchnode.js";
 import type { Action, AdmissionStatus, DataGap, Scenario, SandboxSession, SurgicalCase } from "./types.js";
 
@@ -18,7 +24,29 @@ export interface AppOptions {
   simulateAdmissions?: boolean;
   coachTickMs?: number;
   stuckPolicy?: StuckPolicy;
-  elevenLabs?: { apiKey: string; agentId: string };
+  elevenLabs?: { apiKey: string; agentId: string; voiceId?: string; patientAgentId?: string };
+  reflex?: ReflexAudio;
+  toolAckWaitMs?: number;
+  realtime?: RealtimeBridge | null;
+  vision?: SceneVision | null;
+  watchMs?: number;
+  detector?: FrameDetector | null;
+  // Extra browser origins allowed besides localhost/127.0.0.1 (any port) and same-origin pages
+  // (PREOP_CORS_ORIGINS in index.ts). Native clients send no Origin header and are unaffected.
+  corsOrigins?: readonly string[];
+}
+
+const LOCAL_ORIGIN = /^https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/;
+
+// Same-origin pages (/jarvis, /jarvis/camera served by this service, at whatever host the laptop uses)
+// compare by host so a TLS-terminating tunnel still counts as same-origin.
+export function originAllowed(origin: string, requestUrl: string, extra: readonly string[] = []): boolean {
+  if (LOCAL_ORIGIN.test(origin) || extra.includes(origin)) return true;
+  try {
+    return new URL(origin).host === new URL(requestUrl).host;
+  } catch {
+    return false;
+  }
 }
 
 export interface PatientListEntry {
@@ -32,6 +60,8 @@ export interface PatientListEntry {
   urgency: string;
   status: string;
   flagCount: number;
+  // True when an authored diagnosis-office interview exists for this patient (explore page "Begin encounter").
+  encounterAvailable: boolean;
   actions: Action[];
 }
 
@@ -43,7 +73,17 @@ export function createApp(options: AppOptions = {}) {
   const now = options.now ?? (() => new Date());
   const app = new Hono();
 
-  app.use("*", cors());
+  // Browsers may call this service only from allowed origins. A disallowed Origin is refused outright,
+  // not just denied CORS headers, because simple (no-preflight) requests would otherwise still execute.
+  const corsOrigins = options.corsOrigins ?? [];
+  app.use("*", async (c, next) => {
+    const origin = c.req.header("Origin");
+    if (origin !== undefined && !originAllowed(origin, c.req.url, corsOrigins)) {
+      return c.json({ error: { code: "origin_not_allowed", message: `Browser origin ${origin} is not allowed. Add it to PREOP_CORS_ORIGINS.` }, actions: [] }, 403);
+    }
+    await next();
+  });
+  app.use("*", cors({ origin: (origin, c) => (originAllowed(origin, c.req.url, corsOrigins) ? origin : null) }));
 
   // Sandbox admissions live in memory: sessionId -> scenario, and admitted subject -> scenario.
   const admissions = new Map<string, string>();
@@ -141,6 +181,7 @@ export function createApp(options: AppOptions = {}) {
             urgency: "",
             status: "connect",
             flagCount: 0,
+            encounterAvailable: false,
             actions: [routes.connect(s.id, "Start health system connection"), routes.patients()],
           };
         }
@@ -156,6 +197,7 @@ export function createApp(options: AppOptions = {}) {
           urgency: kase.urgency,
           status: kase.status,
           flagCount: kase.brief.flags.length,
+          encounterAvailable: ENCOUNTERS_BY_PLAN.has(s.subject) && kase.status !== "blocked",
           actions: client.sandbox && s.kind !== "session" ? [routes.caseFor(s.subject), routes.admit(s.id)] : [routes.caseFor(s.subject)],
         };
       }),
@@ -184,6 +226,8 @@ export function createApp(options: AppOptions = {}) {
           urgency: kase.urgency,
           status: kase.status,
           flagCount: kase.brief.flags.length,
+          // Sandbox patients use the encounter of the demo patient their scenario mirrors.
+          encounterAvailable: ENCOUNTERS_BY_PLAN.has(scenarioDemoSubject.get(scenarioId) ?? subject) && kase.status !== "blocked",
           actions: [routes.caseFor(subject)],
         };
       }),
@@ -441,11 +485,31 @@ export function createApp(options: AppOptions = {}) {
     });
   });
 
+  const encounters = registerEncounterRoutes(app, {
+    now,
+    realtime: options.realtime ?? undefined,
+    loadCase: async (id) => {
+      const target = await resolve(id);
+      return target ? caseOrUnavailable(target.subject, target.scenarioId) : null;
+    },
+    // Sandbox patients use the encounter authored for the demo patient their scenario mirrors.
+    planSubjectFor: async (kase) => (await scenarios()).find((s) => s.id === kase.scenarioId)?.subject ?? kase.patientId,
+  });
+
   registerCoachRoutes(app, {
     now,
     tickMs: options.coachTickMs,
     stuckPolicy: options.stuckPolicy,
     elevenLabs: options.elevenLabs,
+    reflex: options.reflex,
+    toolAckWaitMs: options.toolAckWaitMs,
+    realtime: options.realtime ?? undefined,
+    bridge: options.realtime ?? null,
+    encounters,
+    encounterFor: (id) => encounters.get(id),
+    vision: options.vision ?? null,
+    watchMs: options.watchMs,
+    detector: options.detector ?? null,
     loadCase: async (id) => {
       const target = await resolve(id);
       return target ? caseOrUnavailable(target.subject, target.scenarioId) : null;

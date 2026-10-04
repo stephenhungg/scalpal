@@ -2,7 +2,7 @@
 
 Owner: Silas.
 
-Offline pipeline on the Mac: decode a short permitted passthrough clip, estimate one hand's landmarks with MediaPipe Hand Landmarker, retarget the hand-relative finger motion to a simulated Shadow Dexterous Hand (right) with dex-retargeting, and render a labeled kinematic replay in MuJoCo. Frames without a usable hand are kept and reported as invalid. They are never filled with invented motion.
+Offline pipeline on the Mac: decode a short permitted passthrough clip, estimate one hand's landmarks with MediaPipe Hand Landmarker, retarget the hand-relative finger motion to a simulated Shadow Dexterous Hand (right or left) with dex-retargeting, and render a labeled kinematic replay in MuJoCo. Frames without a usable hand are kept and reported as invalid. They are never filled with invented motion.
 
 ## Status (October 3, 2026)
 
@@ -17,7 +17,7 @@ Offline pipeline on the Mac: decode a short permitted passthrough clip, estimate
 | Nathan's gateway worker (`gateway-worker`) | Real gateway + SpacetimeDB: upload → job → claim → 4 verified outputs → `ready` → viewer download, 17.5 s for a 20 s clip. Stand-in gateway: no-hand fails without retry, stale run dropped. Trajectory validates against his schema | Local end to end, not deployed |
 | Worker job/result boundary (`process`, HTTP `serve`) | Success, no-hand, missing input, bad job, and duplicate run_id paths exercised; a duplicate run never overwrites an existing result; HTTP auth, job, and replay download checked locally | Local test, no gateway yet |
 
-`uv run pytest` covers the round trip, gap reporting, joint naming, fixed wrist, joint limits, and the job failure paths.
+`uv run pytest` covers the round trip, gap reporting, joint naming, fixed wrist, joint limits, job failures and gateway-worker handling. Current merged-source verification: frozen dependencies and 30 tests passed; one external real-hand sample-video test skipped. A prior 60-frame synthetic replay preserved ten explicit gap frames and encoded H.264/yuv420p at 640×480, 30 FPS. These results do not establish actual Quest-video reconstruction.
 
 ## Setup and Use
 
@@ -61,17 +61,21 @@ GATEWAY_URL=https://<gateway> WORKER_TOKEN=<token> uv run scalpal-motion gateway
 #   --once to handle one job; --mirrored only for selfie/webcam test clips
 ```
 
+The gateway worker accepts `configVersion: motion-v1`; other versions fail without retry before download/inference. `--hand` and `--mirrored` are worker-wide settings, not per-job options. Their effective values are recorded in the quality report. Additional capture manifests are not yet consumed; configuration identity/manifest support needs a shared contract before these jobs can be described as reproducible capture processing.
+
 For each job it claims, downloads the clip from the signed URL, runs inference, retargeting, and rendering, and heartbeats every lease/3. It then uploads four outputs and completes with the contract's `quality` fields:
 - `robot_trajectory` in `scalpal.robot_trajectory.v1`, the format the companion replay view reads
 - `replay_video`
 - `hand_estimates`
 - `quality_report`
 
-When no hand is found or the clip won't decode, it fails without retry. Download and processor errors fail with retry. A `409` at any point drops the run without completing.
+When no hand is found or the clip won't decode, it fails without retry. Download and processor errors fail with retry. The download stops at the claim's `bytes` (or `SCALPAL_MOTION_MAX_INPUT_BYTES`, default 2 GiB), and a clip whose size or sha256 differs from the claim fails without retry before inference. Failure reports are retried with backoff on network errors and 5xx; if the gateway stays unreachable the worker logs it, leaves the run to lease expiry and keeps polling. A `409` at any point drops the run without completing.
 
-**Verified end to end against Nathan's real gateway** (`nathan/companion-realtime` at 9bd6517, local SpacetimeDB 2.10.2, local storage). A headset client uploaded the 20 s sample hand clip and the operator requested a job. This worker claimed it, tracked 621/621 frames, and uploaded 4 outputs that the gateway verified. The job became `ready`, and a viewer downloaded a schema-valid trajectory (24 joints × 621 frames). Worker wall time was 17.5 s.
+**Teammate-reported verification against Nathan's real gateway** (`nathan/companion-realtime` at 9bd6517, local SpacetimeDB 2.10.2, local storage). A headset client uploaded the 20 s sample hand clip and the operator requested a job. This worker claimed it, tracked 621/621 frames, and uploaded 4 outputs that the gateway verified. The job became `ready`, and a viewer downloaded a schema-valid trajectory (24 joints × 621 frames). Worker wall time was 17.5 s.
 
-To rerun it, copy `integration/silas-e2e.test.ts` into `services/api/test/` on Nathan's branch. With `spacetime start` running, run `E2E_CLIP=<clip> MOTION_DIR=<this folder> node --import tsx --test test/silas-e2e.test.ts`. The stand-in gateway tests in `tests/test_gateway_worker.py` cover the failure paths (no hand, stale run) without SpacetimeDB.
+To rerun it, start `spacetime start`, then from `services/api` run `E2E_CLIP=<clip> MOTION_DIR=../motion node --import tsx --test ../motion/integration/silas-e2e.test.ts`. It uses the API integration harness in place and is skipped when `E2E_CLIP` or `MOTION_DIR` is unset. The stand-in gateway tests in `tests/test_gateway_worker.py` cover the failure paths (no hand, stale run) without SpacetimeDB.
+
+Current consolidated-source boundary verification also ran the real gateway, SpacetimeDB and worker on a fresh throwaway database with a generated ten-frame blank clip. Signed upload/hash verification and inference reached final no-hand failure on run 1 with zero outputs, while a previously completed learning result stayed completed. This proves that failure route, not real-hand reconstruction. The worker defaults to local gateway port 8788, the API gateway's default (preop/coach is 8787); override with `GATEWAY_URL` or `--gateway` for hosted routing.
 
 ## Local Worker Boundary (standalone)
 
@@ -79,14 +83,21 @@ For runs without the gateway, the same pipeline is available as a job-in, result
 
 ```sh
 uv run scalpal-motion process examples/job.example.json       # one job file -> out/runs/<run_id>/
-SCALPAL_MOTION_TOKEN=... uv run scalpal-motion serve --port 8765
+SCALPAL_MOTION_TOKEN=... SCALPAL_MOTION_INPUT_DIR=~/clips uv run scalpal-motion serve --port 8765
 #   POST /jobs                body: job JSON -> result JSON (synchronous, one job at a time)
 #   GET  /runs/<run_id>/<f>   hand_track.json | motion.json | replay.mp4 | result.json
 #   GET  /health
 ```
 
+The server always requires `Authorization: Bearer <token>`. Without `SCALPAL_MOTION_TOKEN` it prints a random token for that run. Served jobs may only read `input.source` from:
+- URLs under `SCALPAL_MOTION_ALLOWED_URL_PREFIXES` (comma-separated; default the local gateway's signed file route, `http://localhost:8788/files/` and `http://127.0.0.1:8788/files/`). Scheme and host:port must match exactly, and redirects are refused.
+- Local paths under `SCALPAL_MOTION_INPUT_DIR`, after resolving symlinks. When it is unset, local paths are refused.
+
+Inputs larger than `SCALPAL_MOTION_MAX_INPUT_BYTES` (default 2 GiB) are refused. `scalpal-motion process` runs your own job file and is not restricted, though URL downloads are still capped.
+
 - **Job** (`scalpal.motion_job/0`, [example](examples/job.example.json)): `job_id`, `run_id`, optional `attempt_id`, `input.artifact_id`, `input.source` (local path or signed http(s) URL), and optional `config` (`hand`, `mirrored`, `smooth`).
-- **Result** (`scalpal.motion_result/0`, [example](examples/result.example.json)): echoes the job/run/attempt/artifact IDs and has `status` `ready` or `failed`. On failure, `error.code` is one of `bad_job`, `unsupported_config`, `input_unavailable`, `decode_failed`, `no_hand_detected`, `run_exists`, or `processor_error`. The result also carries processor versions, the config used, `quality` (valid fraction, longest valid segment, vector error, segments), and `artifacts` with kind, content type, size, and sha256.
+- **Result** (`scalpal.motion_result/0`, [example](examples/result.example.json)): echoes the job/run/attempt/artifact IDs and has `status` `ready` or `failed`. On failure, `error.code` is one of `bad_job`, `unsupported_config`, `input_unavailable`, `input_not_allowed`, `input_too_large`, `decode_failed`, `no_hand_detected`, `run_exists`, or `processor_error`. The result also carries processor versions, the config used, `quality` (valid fraction, longest valid segment, vector error, segments), and `artifacts` with kind, content type, size, and sha256.
+- Run IDs start with an ASCII letter or digit, contain only ASCII letters/digits, `-`, `_`, or `.`, and have at most 128 characters. Invalid IDs are rejected rather than sanitized; output reads reject paths or symlinks outside the output root.
 - **Run isolation:** outputs go to `<output-root>/<run_id>/`. A repeated `run_id` is refused with `run_exists` and never touches the existing files, so a retry needs a new `run_id`. Deciding which run is current stays with SpacetimeDB.
 - **Not decided here:** learning completion and whether a clip counts as a useful contribution. The worker reports quality, and acceptance thresholds should come from measured clips.
 - **For the companion:** `replay.mp4` is the display artifact (source with landmarks next to the robot, H.264). `motion.json` has named joint angles per frame if a 3D web viewer is wanted later.
