@@ -36,8 +36,8 @@ Everything he sees and says is logged to SpacetimeDB `sim_log` for the companion
 ```sh
 cd services/preop
 cp .env.example .env
-npm run jarvis:setup   # creates or updates the ElevenLabs agents
-npm run dev            # http://localhost:8787/jarvis (for a demo, use npx tsx src/server.ts: watch mode restarts on edits)
+npm run scalpal:setup   # creates or updates the ElevenLabs agents
+npm run dev            # http://localhost:8787/scalpal (for a demo, use npx tsx src/server.ts: watch mode restarts on edits)
 ```
 
 ## Environment
@@ -47,7 +47,7 @@ npm run dev            # http://localhost:8787/jarvis (for a demo, use npx tsx s
 | `ELEVENLABS_API_KEY`, `ELEVENLABS_AGENT_ID` | Scalpal voice agent |
 | `PATIENT_AGENT_ID` | Legacy free-form patient agent |
 | `INTERVIEW_PATIENT_AGENT_ID` | Patient voice in the office interview (no tools) |
-| `JARVIS_VOICE_ID` | Scalpal's voice |
+| `SCALPAL_VOICE_ID` | Scalpal's voice |
 | `ANTHROPIC_API_KEY` | Vision and spoken-answer matching |
 | `VITALS_URL` | Presage vitals service for the AR Time-Out baseline (http://127.0.0.1:8791) |
 | `VISION_DETECT_URL` | OWLv2 tool detector (http://127.0.0.1:8792) |
