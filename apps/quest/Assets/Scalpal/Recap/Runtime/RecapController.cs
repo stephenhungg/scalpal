@@ -27,6 +27,14 @@ namespace Scalpal.Recap
         {
             public string schemaVersion, sessionId, attemptId, jobId, status, reason, sourceVideoUrl, replayVideoUrl, replayKind;
         }
+        void OnEnable() { if (voice) voice.StatusChanged += VoiceStatus; }
+        void VoiceStatus(string status)
+        {
+            if (Phase != "reaction") return;
+            if (status == "error") Notice = "Jarvis voice unavailable: " + voice.LastError + ". Use the question on screen.";
+            else if (status == "connected") Notice = "Hold grip to answer Jarvis. Your reaction is unscored.";
+            panel.Refresh();
+        }
         void Start()
         {
             context = RecapRunContext.Ensure();
@@ -134,10 +142,16 @@ namespace Scalpal.Recap
             {
                 // No stale procedure score or replay may survive a retry, even without a shell callback.
                 if (retry) { Notice = "Retry needs the shell to create a fresh attempt. No stale result was reused."; panel.Refresh(); return; }
-                context.result = null; SceneManager.LoadSceneAsync(target);
+                context.result = null;
+                var transition = Scalpal.Shell.ShellTransition.Ensure();
+                transition.StartCoroutine(transition.Load(target, "Choose another patient", () =>
+                {
+                    var hub = FindFirstObjectByType<Scalpal.Shell.HubController>();
+                    if (hub) hub.Enter();
+                }));
             }
             else { Notice = "Scene handoff not connected: " + target + ". Connect the run-context navigation callback."; panel.Refresh(); }
         }
-        void OnDisable() { generation++; StopAllCoroutines(); if (voice) voice.Disconnect(); if (replay) replay.Pause(); }
+        void OnDisable() { if (voice) voice.StatusChanged -= VoiceStatus; generation++; StopAllCoroutines(); if (voice) voice.Disconnect(); if (replay) replay.Pause(); }
     }
 }

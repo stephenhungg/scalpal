@@ -10,7 +10,7 @@ namespace Scalpal.Recap
         public RunResult result;
         public DemoFlags demo = new DemoFlags();
         public string gatewayUrl = "http://127.0.0.1:8788", voiceServiceUrl = "http://127.0.0.1:8787";
-        public string coachSessionId, exploreScene = "Explore", surgeryScene = "NativeSession";
+        public string coachSessionId, exploreScene = "Launch", surgeryScene = "NativeSession";
         [NonSerialized] public string clientToken;
         public event Action<RunResult> SegmentEnded;
         public event Action ChooseAnotherPatient, RetrySurgery;

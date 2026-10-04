@@ -135,7 +135,7 @@ namespace Scalpal.Recap.Editor
             typeof(RecapController).GetProperty("Phase").GetSetMethod(true).Invoke(c,new object[]{"scores"});c.panel.Refresh();Capture(dir+"/recap.png");
             Debug.Log("SCALPAL_RECAP_PREVIEWS "+dir);
         }
-        static void Capture(string path)
+        public static void Capture(string path)
         {
             var camera=Camera.main;var rt=new RenderTexture(1800,1200,24);camera.targetTexture=rt;camera.Render();RenderTexture.active=rt;
             var image=new Texture2D(1800,1200,TextureFormat.RGB24,false);image.ReadPixels(new Rect(0,0,1800,1200),0,0);image.Apply();File.WriteAllBytes(path,image.EncodeToPNG());camera.targetTexture=null;RenderTexture.active=null;UnityEngine.Object.DestroyImmediate(image);UnityEngine.Object.DestroyImmediate(rt);
