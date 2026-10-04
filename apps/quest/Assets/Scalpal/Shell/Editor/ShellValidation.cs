@@ -66,7 +66,10 @@ namespace Scalpal.Shell.Editor
             model.Select(retry.patientId); model.ApplyBrief(Brief(retry.patientId));
             Check(!model.CanBegin, "retry state never begins an encounter from an old or cached chart");
             model.Select(canonical.patientId); model.ApplyBrief(Brief(canonical.patientId));
-            Check(model.CanBegin && !ExplorePatientModel.HasAuthoredEncounter(canonical.patientId), "matching synthetic canonical subject delegates authored interview eligibility to the authoritative office case lookup");
+            canonical.encounterAvailable = false;
+            Check(!model.CanBegin && model.AvailabilityReason == "Interview coming soon", "ready synthetic chart cannot invent an interview when the service denies encounter availability");
+            canonical.encounterAvailable = true;
+            Check(model.CanBegin && !ExplorePatientModel.HasAuthoredEncounter(canonical.patientId), "service-confirmed canonical subject can begin without a fixed demo ID gate");
             model.Select(pediatric.patientId); model.ApplyBrief(Brief(pediatric.patientId));
             Check(model.CanBegin, "authored child encounter remains available independently of adult avatar support");
             foreach (var id in new string[] { null, "", "patient/invalid", "patient invalid" })
@@ -237,7 +240,7 @@ namespace Scalpal.Shell.Editor
             Check(hub.content.GetComponentsInChildren<ShellButton>(true).All(button => { var bounds = button.GetComponent<BoxCollider>().size; return bounds.x >= .022f && bounds.y >= .022f; }), "all shell buttons meet the 22 mm minimum target size");
             var adult = hub.Model.Patients.Single(patient => patient.patientId == Female);
             patientCards.Single(button => button.name == "Patient_" + adult.scenarioId).Press();
-            Check(hub.Model.SelectedPatientId == Female && hub.Model.SelectedBrief?.patientId == Female && hub.BeginButton && !hub.BeginButton.interactable && !hub.Transitioning && hub.Model.CanBegin, "actual card action loads matching offline chart but disables network-required Begin without transitioning");
+            Check(hub.Model.SelectedPatientId == Female && hub.Model.SelectedBrief?.patientId == Female && hub.BeginButton && !hub.BeginButton.interactable && !hub.Transitioning && !hub.Model.CanBegin, "actual card action loads matching offline chart but cannot infer live encounter availability from the cache");
             Check(!hub.Begin(), "offline chart browsing never attempts to create a network-only office encounter");
             MeasureAndValidateTypography(hub, patientCards);
             var blocked = hub.Model.Patients.Single(patient => patient.status == "blocked");
@@ -250,7 +253,7 @@ namespace Scalpal.Shell.Editor
                 "cached offline grid retains all eight authored subjects even when a stale rate-limit status differs from the live list");
             foreach (var patient in available)
             {
-                Check(hub.Select(patient.patientId) && hub.Model.CanBegin && hub.BeginButton && !hub.BeginButton.interactable, "every available subject loads its matching offline chart while explicit network-only Begin remains disabled: " + patient.patientId);
+                Check(hub.Select(patient.patientId) && !hub.Model.CanBegin && hub.BeginButton && !hub.BeginButton.interactable, "every available subject loads its matching offline chart while live encounter availability is unconfirmed: " + patient.patientId);
                 hub.BeginButton.Press();
                 Check(!hub.Begin() && !hub.Transitioning, "offline browsing never transitions for an otherwise available canonical subject: " + patient.patientId);
             }
@@ -334,7 +337,7 @@ namespace Scalpal.Shell.Editor
             Check(separated, description + " measured text rows do not vertically overlap");
         }
 
-        static PatientListEntry Entry(string id, string status, string procedure, string urgency) => new PatientListEntry { patientId = id, scenarioId = id, displayLabel = id, status = status, procedureId = procedure, urgency = urgency };
+        static PatientListEntry Entry(string id, string status, string procedure, string urgency) => new PatientListEntry { patientId = id, scenarioId = id, displayLabel = id, status = status, procedureId = procedure, urgency = urgency, encounterAvailable = true };
         static PreopBrief Brief(string id) => new PreopBrief { patientId = id, synthetic = true, dataSource = "demo", patient = new PatientSummary { name = "Synthetic fixture", age = 40, sex = "female" }, chart = new[] { new ChartLine { section = "Fixture", text = "Authored test chart" } } };
         static void Configure(ScalpalPreopService client, string endpoint)
         {

@@ -9,8 +9,7 @@ namespace Scalpal.Shell
 {
     public sealed class ExplorePatientModel
     {
-        // Audited services/preop/src/catalog/encounters.ts. The service currently exposes no encounter
-        // capability list. Deliberately exact demo IDs: scenario aliases must not admit real records.
+        // Packaged demo IDs used to audit cached coverage. Live eligibility comes from the service.
         static readonly HashSet<string> AuthoredIds = new HashSet<string>(StringComparer.Ordinal)
         {
             "patient-demo-multi-source", "patient-demo-pediatric-asthma", "patient-demo-sparse",
@@ -31,14 +30,14 @@ namespace Scalpal.Shell
         public string DetailError { get; private set; } = "";
         public bool CanBegin => Selected != null && CanSelect(Selected) &&
             (Selected.status == "ready" || Selected.status == "needs_review") &&
-            HasNativeEncounter(Selected.patientId) && !DetailLoading && string.IsNullOrEmpty(DetailError) &&
+            Selected.encounterAvailable && HasNativeEncounter(Selected.patientId) && !DetailLoading && string.IsNullOrEmpty(DetailError) &&
             SelectedBrief?.patient != null && SelectedBrief.patientId == SelectedPatientId && SelectedBrief.synthetic &&
             SelectedBrief.dataSource == "demo";
 
         public string AvailabilityReason => Selected == null ? "Choose a patient" :
             !CanSelect(Selected) ? StatusReason(Selected) :
             Selected.status == "retry" ? "Chart unavailable. Try again." :
-            !HasNativeEncounter(Selected.patientId) ? "Interview coming soon" :
+            !Selected.encounterAvailable || !HasNativeEncounter(Selected.patientId) ? "Interview coming soon" :
             DetailLoading ? "Loading chart…" :
             !string.IsNullOrEmpty(DetailError) ? DetailError :
             SelectedBrief == null ? "Load the chart to begin" : "";
