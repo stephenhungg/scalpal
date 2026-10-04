@@ -358,6 +358,20 @@ export type SessionMotionJobs = __Infer<typeof SessionMotionJobs>;
 export const SessionReplayState = __t.object("SessionReplayState", {});
 export type SessionReplayState = __Infer<typeof SessionReplayState>;
 
+export const SessionSimLogs = __t.object("SessionSimLogs", {});
+export type SessionSimLogs = __Infer<typeof SessionSimLogs>;
+
+export const SimLog = __t.object("SimLog", {
+  id: __t.u64(),
+  sessionId: __t.string(),
+  coachSessionId: __t.string(),
+  kind: __t.string(),
+  text: __t.string(),
+  dataJson: __t.string(),
+  at: __t.timestamp(),
+});
+export type SimLog = __Infer<typeof SimLog>;
+
 export const SweepTimer = __t.object("SweepTimer", {
   scheduledId: __t.u64(),
   scheduledAt: __t.scheduleAt(),
