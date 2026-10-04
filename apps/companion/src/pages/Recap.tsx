@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from '../lib/router';
-import { errorMarkers, feedbackFromFacts, highlightWindow, parseRunResult, type RunResult } from '../recap/runResult';
+import { decisionSummaryText, errorMarkers, feedbackFromFacts, highlightWindow, hintsSummaryText, parseRunResult, replayClocksAligned, timedFactText, type RunResult } from '../recap/runResult';
 import { initialResult } from '../recap/sample';
 import '../recap/recap.css';
 import { acceptReplayView, loadedReplayMetadata, playbackRefresh, secureGatewayBase, type ReplayView } from '../recap/replay';
@@ -140,11 +140,16 @@ export default function Recap({ sessionId }: { sessionId?: string }) {
           </section>
           <section className="recap-glass"><span className="recap-eyebrow">PROCEDURAL SKILL</span><h2>How you worked with your hands</h2>{result.surgery.demoAssisted && <p>Demo-assisted grade · assistance was fixed when this run started.</p>}
             {result.surgery.available ? <><div className="recap-score">{result.surgery.total}<small> / {result.surgery.max}</small><span>{result.surgery.grade}</span></div>
+              {result.surgery.rubric === 'illustrative_v1_uncalibrated' && <p>Illustrative teaching rubric · uncalibrated. This score is not a proficiency assessment.</p>}
+              {result.surgery.complete === false && <p className="recap-error">Attempt ended with unmet milestones{result.surgery.completionReason === 'learner_finished' ? ' · learner chose to finish.' : '.'}</p>}
+              {result.surgery.complete === true && <p>Authored goals reached.</p>}
               <dl><div><dt>Milestones reached</dt><dd>{result.surgery.milestones.length}</dd></div><div><dt>Guardrail violations</dt><dd>{result.surgery.guardrailViolations.length}</dd></div>
-                <div><dt>Blood loss</dt><dd>{result.surgery.bloodLossMl} mL</dd></div><div><dt>Decisions correct</dt><dd>{result.surgery.decisions.filter(d => d.correct).length} / {result.surgery.decisions.length}</dd></div>
-                <div><dt>Hints</dt><dd>{result.surgery.hints.length}</dd></div><div><dt>Hand travel / time</dt><dd>{result.surgery.economy.available ? `${(result.surgery.economy.leftPathMeters + result.surgery.economy.rightPathMeters).toFixed(2)} m / ${result.surgery.economy.durationSeconds.toFixed(0)} s` : 'Not measured'}</dd></div></dl>
-              <FactList title="Milestones" items={result.surgery.milestones.map(f => `${f.label} · ${f.atSeconds.toFixed(1)} s`)} />
-              <FactList title="Guardrail violations" items={result.surgery.guardrailViolations.map(f => `${f.label} · ${f.atSeconds.toFixed(1)} s`)} />
+                <div><dt>Blood loss</dt><dd>{result.surgery.bloodLossMl} mL</dd></div><div><dt>Decisions correct</dt><dd>{decisionSummaryText(result.surgery)}</dd></div>
+                <div><dt>Hints</dt><dd>{hintsSummaryText(result.surgery)}</dd></div><div><dt>Hand travel / time</dt><dd>{result.surgery.economy.available ? `${(result.surgery.economy.leftPathMeters + result.surgery.economy.rightPathMeters).toFixed(2)} m / ${result.surgery.economy.durationSeconds.toFixed(0)} s` : 'Not measured'}</dd></div></dl>
+              <FactList title="Milestones" items={result.surgery.milestones.map(timedFactText)} />
+              <FactList title="Guardrail violations" items={result.surgery.guardrailViolations.map(timedFactText)} />
+              {!!result.surgery.missingMilestones?.length && <FactList title="Milestones not reached" items={result.surgery.missingMilestones.map(readableMetric)} />}
+              {!!result.surgery.missingMetrics?.length && <FactList title="Not measured" items={result.surgery.missingMetrics.map(readableMetric)} />}
             </> : <p>Surgery grade unavailable. No procedural score has been inferred.</p>}
           </section>
         </div>
@@ -163,7 +168,7 @@ export default function Recap({ sessionId }: { sessionId?: string }) {
         </div><div className="recap-controls"><button className="recap-button" disabled={!!mediaError} onClick={() => void play()}>{playing ? 'Pause' : 'Play both'}</button>
           <label>Replay position <input type="range" min={window.start} max={limit || 1} step="0.1" value={seconds} onChange={e => seek(Number(e.target.value))} /></label><span>{seconds.toFixed(1)} / {limit.toFixed(1)} s</span></div>
           <div className="recap-markers">{markers.map((f, i) => <button key={`${f.id}-${i}`} className="recap-button" onClick={() => seek(f.clipSeconds)}>{f.clipSeconds.toFixed(1)} s · {f.label}</button>)}</div>
-          <p className="recap-caption">{replay!.clockAligned && shownSource === 'learner' ? 'Markers use run-event time minus the capture start time.' : 'Error markers are hidden: this replay has no verified alignment to the learner’s run clock.'}</p>
+          <p className="recap-caption">{replayClocksAligned(result) && shownSource === 'learner' ? 'Markers use the declared event clock minus the aligned capture start time.' : 'Error markers are hidden: this replay has no verified alignment to the learner’s run clock.'}</p>
         </>}
         {mediaError && <p role="alert" className="recap-error">{mediaError}</p>}
         {!fallback && (replay!.status !== 'ready' || mediaError) && <button className="recap-button" onClick={useSample}>Watch labeled sample fallback</button>}
@@ -175,4 +180,9 @@ export default function Recap({ sessionId }: { sessionId?: string }) {
 }
 function FactList({ title, items }: { title: string; items: string[] }) {
   return <div className="recap-facts"><h3>{title}</h3>{items.length ? <ul>{items.map((s, i) => <li key={i}>{s}</li>)}</ul> : <p className="recap-caption">None logged.</p>}</div>;
+}
+
+function readableMetric(id: string) {
+  const labels: Record<string, string> = { leftHandPathLengthM: 'Left-hand travel', rightHandPathLengthM: 'Right-hand travel', calibratedEconomyThresholds: 'Calibrated motion-efficiency thresholds', hintsUsed: 'Hints used' };
+  return labels[id] ?? id.replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2');
 }

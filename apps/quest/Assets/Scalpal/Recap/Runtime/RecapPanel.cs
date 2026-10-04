@@ -56,7 +56,7 @@ namespace Scalpal.Recap
                 errors[i].gameObject.SetActive(visible);
                 if (!visible) continue;
                 bool aligned = !controller.replay.Fallback && RunResultContract.TryClipTime(r, items[index], out var seconds) && seconds >= controller.replay.WindowStart && seconds <= controller.replay.WindowEnd;
-                errors[i].label.text = items[index].atSeconds.ToString("0.0") + " s · " + items[index].label + (aligned ? " · seek" : " · outside playback / unaligned");
+                errors[i].label.text = (items[index].timeKnown ? items[index].atSeconds.ToString("0.0") + " s" : "Time unavailable") + " · " + items[index].label + (aligned ? " · seek" : " · outside playback / unaligned");
             }
             foreach (var fit in GetComponentsInChildren<Scalpal.EncounterOffice.EncounterOfficeText>(true)) fit.Fit();
         }
@@ -76,11 +76,17 @@ namespace Scalpal.Recap
             var s = r.surgery;
             if (s?.available != true) return "PROCEDURAL SKILL\n\nNot available\nAwaiting the surgery grader.\nNo score has been inferred.";
             var b = new StringBuilder("PROCEDURAL SKILL\n" + (r.isSample ? "SAMPLE · not your run\n" : "") + (s.demoAssisted ? "DEMO-ASSISTED\n" : "") + s.total.ToString("0.#") + " / " + s.max.ToString("0.#") + "  ·  " + s.grade + "\n");
+            if (!string.IsNullOrEmpty(s.rubric))
+            {
+                b.AppendLine(s.complete ? "Goals reached" : "Ended with unmet goals: " + string.Join(", ", s.missingMilestones ?? Array.Empty<string>()));
+                b.AppendLine("Times: " + (s.eventClock == "active_interaction" ? "active practice (pauses excluded)" : "run clock"));
+            }
             b.AppendLine("Milestones reached: " + (s.milestones?.Length ?? 0));
-            foreach (var item in (s.milestones ?? Array.Empty<TimedFact>()).Take(4)) b.AppendLine(item.atSeconds.ToString("0.0") + " s · " + item.label);
+            foreach (var item in (s.milestones ?? Array.Empty<TimedFact>()).Take(4)) b.AppendLine((item.timeKnown ? item.atSeconds.ToString("0.0") + " s" : "Time unavailable") + " · " + item.label);
             b.AppendLine("Guardrails: " + (s.guardrailViolations?.Length ?? 0) + "  ·  Order deviations: " + (s.orderDeviations?.Length ?? 0));
-            b.AppendLine("Blood loss: " + s.bloodLossMl.ToString("0.#") + " mL  ·  Hints: " + (s.hints?.Length ?? 0));
-            b.AppendLine("Decisions: " + string.Join(", ", (s.decisions ?? Array.Empty<DecisionFact>()).Select(x => x.label + (x.correct ? " (correct)" : " (review)"))));
+            b.AppendLine("Blood loss: " + s.bloodLossMl.ToString("0.#") + " mL  ·  Hints: " + (s.hintsAvailable ? (s.hints?.Length ?? 0).ToString() : "not measured"));
+            if (s.decisionSummaryAvailable) b.AppendLine("Decisions: " + s.correctDecisions + " / " + s.decisionCount + " correct (grader)");
+            b.AppendLine("Recorded choices: " + string.Join(", ", (s.decisions ?? Array.Empty<DecisionFact>()).Select(x => x.label + (x.correctnessAvailable ? (x.correct ? " (correct)" : " (review)") : " (recorded)"))));
             b.AppendLine(s.economy?.available == true ? "Path L/R: " + s.economy.leftPathMeters.ToString("0.00") + " / " + s.economy.rightPathMeters.ToString("0.00") + " m · " + s.economy.durationSeconds.ToString("0") + " s" : "Motion economy: not measured");
             return b.ToString();
         }

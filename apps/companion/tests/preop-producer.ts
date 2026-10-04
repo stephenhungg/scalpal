@@ -10,3 +10,17 @@ export function producedScorecard() {
   session.answer('onset'); session.answer('medications'); session.examine('abdomen_palpation');
   return session.score();
 }
+
+import { StepEngine, perfectEvents } from '../../../services/preop/src/engine.ts';
+import { bodyAction } from '../../../services/preop/src/open-body.ts';
+import { PROCEDURES_BY_ID } from '../../../services/preop/src/catalog/procedures.ts';
+// Same authored incomplete-attempt route exercised by preop's open-body-grade.test.ts.
+export function producedBodyGrade() {
+  const procedure = PROCEDURES_BY_ID.get('open_appendectomy')!;
+  const engine = new StepEngine(procedure);
+  for (const step of procedure.steps.slice(0, 3)) for (const event of perfectEvents(step)) engine.handle(event);
+  engine.handle({ type: 'surgery', evidence: bodyAction('cut', 'muscle', { actionId: 'harm', lengthMm: 4, timeMs: 1000 }) });
+  engine.handle({ type: 'finish' });
+  if (!engine.grade) throw new Error('Real open-body grader did not produce a completed record.');
+  return engine.grade;
+}

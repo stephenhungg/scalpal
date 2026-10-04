@@ -34,6 +34,7 @@ namespace Scalpal.Anatomy
         public ProcedureStep Current => runner?.Current;
         public BodyState Body => runner?.Body;
         public BodyGrade Grade => runner?.Grade;
+        public IReadOnlyList<string> OrderDeviations => runner?.OrderDeviations;
         public bool Completed => runner != null && runner.Completed;
         public bool CanScore => isActiveAndEnabled && runner != null && anatomy != null &&
             anatomy == selectedAnatomy && anatomy.isActiveAndEnabled && anatomy.RegistrationValid && !anatomy.PreviewMode &&
@@ -44,6 +45,7 @@ namespace Scalpal.Anatomy
             coach.SessionCaseId == selectedCase.caseId && coach.SessionMode == selectedPresentationMode &&
             coach.SessionInitialStepId == selectedCase.procedure.firstStep;
         public event Action<ProcedureStep> StepStarted;
+        public event Action<ProcedureStep> StepCompleted;
         public event Action<ProcedureStep, StepMistake> MistakeMade;
         public event Action CaseCompleted;
         public event Action<CaseEvent, CaseResult> EventHandled;
@@ -134,6 +136,7 @@ namespace Scalpal.Anatomy
             SelectedInstrumentId = "";
             runner = new CaseRunner(procedure);
             runner.StepStarted += step => StepStarted?.Invoke(step);
+            runner.StepCompleted += step => StepCompleted?.Invoke(step);
             runner.MistakeMade += (step, mistake) => MistakeMade?.Invoke(step, mistake);
             runner.CaseCompleted += () => CaseCompleted?.Invoke();
             if (requireCoachSynchronization && coach != null)

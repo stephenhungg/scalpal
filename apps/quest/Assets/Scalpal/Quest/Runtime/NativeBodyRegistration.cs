@@ -410,7 +410,7 @@ namespace Scalpal.Quest
         public void ResetFit() { epoch++; Accepted = candidateValid = false; stableFrames = failedFrames = 0; Hide(); }
         public void StopTracking()
         {
-            if (EnabledByOperator || awaitingPermissions) ResetFit();
+            if (EnabledByOperator || awaitingPermissions || Accepted || candidateValid) ResetFit();
             EnabledByOperator = awaitingPermissions = false;
             if (cameraAccess) cameraAccess.enabled = false;
             if (surfaceAccess) surfaceAccess.enabled = false;

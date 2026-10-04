@@ -1,5 +1,5 @@
 /** scalpal.run_result.v1. Transport only: the encounter and surgery graders own scores. */
-export interface Fact { id: string; label: string; atSeconds: number }
+export interface Fact { id: string; label: string; atSeconds: number; timeKnown?: boolean }
 export interface FoundItem { kind: string; id: string; label: string; why: string }
 // Type-only import: the server remains the sole clinical grading authority.
 import type { Scorecard } from '../../../../services/preop/src/encounter';
@@ -10,14 +10,17 @@ export interface RunResult {
   diagnosisAvailable: boolean; diagnosis: Diagnosis | null;
   surgery: {
     available: boolean; demoAssisted: boolean; total: number; max: number; grade: string;
+    rubric?: string; complete?: boolean; completionReason?: string; eventClock?: string;
+    missingMilestones?: string[]; missingMetrics?: string[]; hintsAvailable?: boolean;
+    decisionSummaryAvailable?: boolean; correctDecisions?: number; decisionCount?: number;
     milestones: Fact[]; guardrailViolations: Fact[]; orderDeviations: Fact[];
-    decisions: (Fact & { correct: boolean })[]; bloodLossMl: number;
+    decisions: (Fact & { correct: boolean; correctnessAvailable?: boolean })[]; bloodLossMl: number;
     economy: { available: boolean; leftPathMeters: number; rightPathMeters: number; durationSeconds: number };
     hints: Fact[];
   };
   replay: { jobId: string; status: 'queued' | 'processing' | 'ready' | 'failed'; failureReason: string;
     sourceArtifactId: string; replayArtifactId: string; jobRun: number; source: 'learner' | 'rehearsal' | 'sample' | 'unknown';
-    durationSeconds: number; captureStartRunSeconds: number; clockAligned: boolean };
+    durationSeconds: number; captureStartRunSeconds: number; clockAligned: boolean; eventClock?: string };
   demo: { enabled: boolean; patientId: string; showSuggestedQuestions: boolean; skipMarking: boolean;
     preExpose: boolean; timeLapseNonKeySteps: boolean; replayHighlightSeconds: number };
 }
@@ -29,7 +32,7 @@ function finite(value: unknown) { return typeof value === 'number' && Number.isF
 function textFields(value: Record<string, unknown>, fields: string[]) { fields.forEach(k => ensure(typeof value[k] === 'string', `Missing or invalid ${k}.`)); }
 function numberFields(value: Record<string, unknown>, fields: string[]) { fields.forEach(k => ensure(finite(value[k]), `Invalid ${k}: expected a nonnegative finite number.`)); }
 function boolFields(value: Record<string, unknown>, fields: string[]) { fields.forEach(k => ensure(typeof value[k] === 'boolean', `Invalid ${k}: expected boolean.`)); }
-function facts(value: unknown) { return Array.isArray(value) && value.every(x => object(x) && typeof x.id === 'string' && typeof x.label === 'string' && finite(x.atSeconds)); }
+function facts(value: unknown) { return Array.isArray(value) && value.every(x => object(x) && typeof x.id === 'string' && typeof x.label === 'string' && finite(x.atSeconds) && (x.timeKnown === undefined || typeof x.timeKnown === 'boolean')); }
 function videoUrl(value: unknown) {
   if (typeof value !== 'string') return false;
   if (!value) return true;
@@ -63,9 +66,21 @@ export function parseRunResult(raw: string, expectedSessionId?: string): RunResu
   numberFields(s, ['total', 'max', 'bloodLossMl']); textFields(s, ['grade']);
   ensure(!s.available || (Number(s.max) > 0 && Number(s.total) <= Number(s.max)), 'Invalid surgery score range.');
   ['milestones', 'guardrailViolations', 'orderDeviations', 'hints', 'decisions'].forEach(k => ensure(facts(s[k]), `Invalid surgery ${k}.`));
-  ensure((s.decisions as Record<string, unknown>[]).every(x => typeof x.correct === 'boolean'), 'Invalid decision result.');
+  ensure((s.decisions as Record<string, unknown>[]).every(x => typeof x.correct === 'boolean' && (x.correctnessAvailable === undefined || typeof x.correctnessAvailable === 'boolean')), 'Invalid decision result.');
+  s.eventClock ??= 'run'; textFields(s, ['eventClock']); ensure(s.eventClock, 'Missing surgery event clock.');
+  for (const field of ['rubric', 'completionReason']) if (s[field] !== undefined) textFields(s, [field]);
+  for (const field of ['complete', 'hintsAvailable', 'decisionSummaryAvailable']) if (s[field] !== undefined) boolFields(s, [field]);
+  for (const field of ['missingMilestones', 'missingMetrics']) if (s[field] !== undefined) ensure(strings(s[field]), `Invalid surgery ${field}.`);
+  for (const field of ['correctDecisions', 'decisionCount']) if (s[field] !== undefined) {
+    numberFields(s, [field]); ensure(Number.isInteger(s[field]), `Invalid surgery ${field}.`);
+  }
+  if (s.decisionSummaryAvailable === true) {
+    numberFields(s, ['correctDecisions', 'decisionCount']);
+    ensure(Number(s.correctDecisions) <= Number(s.decisionCount), 'Invalid decision aggregate.');
+  }
   ensure(object(s.economy), 'Missing economy.'); boolFields(s.economy, ['available']); numberFields(s.economy, ['leftPathMeters', 'rightPathMeters', 'durationSeconds']);
   const r = v.replay; ensure(object(r), 'Missing replay.');
+  r.eventClock ??= 'run'; textFields(r, ['eventClock']); ensure(r.eventClock, 'Missing replay event clock.');
   textFields(r, ['jobId', 'failureReason']); boolFields(r, ['clockAligned']); numberFields(r, ['durationSeconds', 'captureStartRunSeconds']);
   ensure(['queued', 'processing', 'ready', 'failed'].includes(String(r.status)), 'Invalid replay status.');
   ensure(['learner', 'rehearsal', 'sample', 'unknown'].includes(String(r.source)), 'Invalid replay source.');
@@ -94,15 +109,16 @@ export function feedbackFromFacts(result: RunResult) {
   for (const fact of result.diagnosis?.criticalMissed ?? []) if (fact.label && improvements.length < 2) improvements.push(`Revisit: ${fact.label}`);
   if (result.surgery.available) {
     for (const fact of result.surgery.milestones) if (strengths.length < 2) strengths.push(`Reached: ${fact.label}`);
-    for (const fact of result.surgery.guardrailViolations) if (improvements.length < 2) improvements.push(`Review: ${fact.label} at ${fact.atSeconds.toFixed(1)} s`);
+    for (const fact of result.surgery.guardrailViolations) if (improvements.length < 2) improvements.push(`Review: ${timedFactText(fact)}`);
   }
   return { strengths, improvements,
     takeaway: improvements.length ? `Next attempt — ${improvements[0]}` : strengths.length ? `Carry forward — ${strengths[0]}` : 'No logged facts yet. Reflect on one deliberate action for your next attempt.' };
 }
 export function errorMarkers(result: RunResult) {
   const r = result.replay;
-  if (!r.clockAligned || r.source !== 'learner' || !result.surgery.available) return [];
+  if (!replayClocksAligned(result) || r.source !== 'learner' || !result.surgery.available) return [];
   return [...result.surgery.guardrailViolations, ...result.surgery.orderDeviations]
+    .filter(f => f.timeKnown !== false)
     .map(f => ({ ...f, clipSeconds: f.atSeconds - r.captureStartRunSeconds }))
     .filter(f => f.clipSeconds >= 0 && f.clipSeconds <= r.durationSeconds);
 }
@@ -113,13 +129,32 @@ export function highlightWindow(result: RunResult) {
   if (!result.demo.enabled || result.demo.replayHighlightSeconds <= 0) return { start: 0, end: duration };
   const length = Math.min(20, result.demo.replayHighlightSeconds, duration);
   let at = 0;
-  if (result.replay.source === 'learner' && result.replay.clockAligned && result.surgery.available) {
+  if (result.replay.source === 'learner' && replayClocksAligned(result) && result.surgery.available) {
     const toClip = (f: Fact) => f.atSeconds - result.replay.captureStartRunSeconds;
-    const valid = (f: Fact) => toClip(f) >= 0 && toClip(f) <= duration;
+    const valid = (f: Fact) => f.timeKnown !== false && toClip(f) >= 0 && toClip(f) <= duration;
     const key = result.surgery.guardrailViolations.filter(valid).sort((a, b) => a.atSeconds - b.atSeconds)[0]
       ?? result.surgery.milestones.filter(f => /incis|ligat/i.test(`${f.id} ${f.label}`) && valid(f)).sort((a, b) => a.atSeconds - b.atSeconds)[0];
     if (key) at = Math.max(0, toClip(key) - 3);
   }
   const start = Math.min(at, Math.max(0, duration - length));
   return { start, end: start + length };
+}
+
+/** Optional v1 additions default to legacy measured facts when omitted. */
+export function timedFactText(fact: Fact) {
+  return `${fact.label} · ${fact.timeKnown === false ? 'time not recorded' : `${fact.atSeconds.toFixed(1)} s`}`;
+}
+export function hintsSummaryText(surgery: RunResult['surgery']) {
+  return surgery.hintsAvailable === false ? 'Not measured' : String(surgery.hints.length);
+}
+export function decisionSummaryText(surgery: RunResult['surgery']) {
+  if (surgery.decisionSummaryAvailable === true) return `${surgery.correctDecisions} / ${surgery.decisionCount}`;
+  const assessed = surgery.decisions.filter(d => d.correctnessAvailable !== false);
+  if (!assessed.length && surgery.decisions.length) return 'Not measured';
+  const label = `${assessed.filter(d => d.correct).length} / ${assessed.length}`;
+  return assessed.length === surgery.decisions.length ? label : `${label} assessed`;
+}
+
+export function replayClocksAligned(result: RunResult) {
+  return result.replay.clockAligned && (result.replay.eventClock ?? 'run') === (result.surgery.eventClock ?? 'run');
 }

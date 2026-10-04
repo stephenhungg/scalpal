@@ -13,6 +13,7 @@ namespace Scalpal.Recap
     {
         public const string EndingScene = "RunEnding";
         RecapRunContext context;
+        BodyGradeAdapter bodyGrade;
         EncounterSurgeryHandoff office;
         string officeAttempt = "";
         static EncounterSurgeryHandoff pendingOffice;
@@ -36,7 +37,7 @@ namespace Scalpal.Recap
             context = next;
             if (context) context.RetrySurgery += Retry;
         }
-        void OnDestroy() { if (context) context.RetrySurgery -= Retry; }
+        void OnDestroy() { bodyGrade?.Dispose(); if (context) context.RetrySurgery -= Retry; }
 
         public static RunResult FromSession(EncounterSurgeryHandoff handoff, SurgicalCase selected,
             string sessionId, string attemptId, string coachSessionId, DemoFlags demo)
@@ -74,6 +75,7 @@ namespace Scalpal.Recap
             string coachSessionId, string voiceServiceUrl, string clientToken)
         {
             context.Begin(FromHandoff(ticket, selected, sessionId, attemptId));
+            Observe(null);
             office = JsonUtility.FromJson<EncounterSurgeryHandoff>(JsonUtility.ToJson(ticket.sourceOffice));
             officeAttempt = ticket.sourceOffice.attemptId;
             context.coachSessionId = coachSessionId; context.voiceServiceUrl = voiceServiceUrl; context.clientToken = clientToken;
@@ -82,18 +84,25 @@ namespace Scalpal.Recap
             string attemptId, string coachSessionId, string voiceServiceUrl, string clientToken, string encounterAttemptId = "")
         {
             context.Begin(FromSession(handoff, selected, sessionId, attemptId, coachSessionId, context.demo));
+            Observe(null);
             office = handoff == null ? null : JsonUtility.FromJson<EncounterSurgeryHandoff>(JsonUtility.ToJson(handoff));
             officeAttempt = string.IsNullOrEmpty(encounterAttemptId) ? handoff?.attemptId ?? "" : encounterAttemptId;
             context.coachSessionId = coachSessionId;
             context.voiceServiceUrl = voiceServiceUrl;
             context.clientToken = clientToken;
         }
+        public void Observe(AnatomyExerciseBinding exercise)
+        {
+            bodyGrade?.Dispose(); bodyGrade = exercise ? new BodyGradeAdapter(exercise) : null;
+        }
         public bool Complete(AnatomyExerciseBinding exercise, string attemptId, SurgeryGrade grade = null)
         {
             if (!exercise || !exercise.Completed || exercise.SelectedCase == null || context.result == null
                 || context.result.patientId != exercise.SelectedCase.patientId || context.result.procedureId != exercise.SelectedCase.procedureId) return false;
-            // The open-body aggregate grader has not landed. Missing data stays unavailable.
-            return context.EndSurgery(attemptId, grade);
+            // Consume the final body rubric, including learner-finished incomplete runs.
+            // Legacy exercises without that producer keep the supplied grade or unavailable.
+            var produced = exercise.Grade == null ? grade : BodyGradeAdapter.Snapshot(exercise, bodyGrade);
+            return context.EndSurgery(attemptId, produced);
         }
         public static bool IsFreshRetry(string previousSession, string previousAttempt, string session, string attempt)
             => !string.IsNullOrWhiteSpace(previousSession) && previousSession == session

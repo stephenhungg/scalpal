@@ -20,7 +20,9 @@ namespace Scalpal.Shell
         float savedScale = 1;
         bool previousMenu, menuArmed, focused = true, suspended, wasPresent = true, confirming;
         bool savedAudioPause;
-        bool officeWasEnabled, menuTransition;
+        bool officeWasEnabled, menuTransition, officeAligned;
+        string transitionFailure;
+        bool failureCanResume;
         readonly List<XRInputSubsystem> inputs = new List<XRInputSubsystem>();
         readonly List<XRInputSubsystem> subscribed = new List<XRInputSubsystem>();
         public static ShellPause Ensure()
@@ -45,12 +47,19 @@ namespace Scalpal.Shell
         public void RememberOfficeInput(bool wasEnabled) { officeWasEnabled = wasEnabled; }
         void SceneLoaded(Scene scene, LoadSceneMode mode)
         {
-            officeRig = FindFirstObjectByType<EncounterOfficeRig>(); officePresentationYaw = 0;
+            officeRig = FindFirstObjectByType<EncounterOfficeRig>(); officePresentationYaw = 0; officeAligned=false;
             if (IsPaused) { SuspendOffice(); BuildMenu(); }
         }
-        void TrackingOriginUpdated(XRInputSubsystem system) => Recenter();
+        public void MarkOfficeAligned() { officeAligned=true; }
+        void TrackingOriginUpdated(XRInputSubsystem system)
+        {
+            if (officeRig && (!officeAligned || !officeRig.Ready)) return;
+            if (hubInput && !hubInput.Ready) return;
+            Recenter();
+        }
         void Update()
         {
+            if (officeRig && officeRig.Ready) officeAligned=true;
             SubsystemManager.GetSubsystems(inputs);
             foreach (var system in inputs)
                 if (!subscribed.Contains(system)) { subscribed.Add(system); system.trackingOriginUpdated += TrackingOriginUpdated; }
@@ -71,7 +80,7 @@ namespace Scalpal.Shell
         {
             if (IsPaused) return;
             IsPaused = true; savedScale = Time.timeScale; Time.timeScale = 0; savedAudioPause=AudioListener.pause; AudioListener.pause=true; confirming = false;
-            hubInput?.Release(); SuspendOffice(); BuildMenu();
+            if (hubInput) hubInput.Release(); SuspendOffice(); BuildMenu();
         }
         void SuspendOffice()
         {
@@ -82,12 +91,18 @@ namespace Scalpal.Shell
         public void Resume()
         {
             // Focus/headset return alone never resumes. A deliberate menu action is required.
-            if (!IsPaused || !focused || suspended || !wasPresent) return;
+            if (!IsPaused || !focused || suspended || !wasPresent || (!string.IsNullOrEmpty(transitionFailure) && !failureCanResume)) return;
+            transitionFailure=null;
             IsPaused = false; confirming = false; Time.timeScale = savedScale; AudioListener.pause=savedAudioPause;
             if (panel) { Destroy(panel.gameObject); panel = null; }
             if (pauseInput) { pauseInput.Release(); pauseInput.enabled = false; }
             if (officeRig) officeRig.enabled = officeWasEnabled;
-            hubInput?.Release();
+            if (hubInput) hubInput.Release();
+        }
+        public void ShowTransitionFailure(string message,bool canResume=false)
+        {
+            transitionFailure=message; failureCanResume=canResume;
+            Pause(); BuildMenu();
         }
         void BuildMenu()
         {
@@ -95,10 +110,17 @@ namespace Scalpal.Shell
             var head = Camera.main; if (!head || !ShellView.Font || !ShellView.Glass) return;
             menuTransition=ShellTransition.Busy;
             panel = ShellView.Panel(transform, "Paused", Vector3.zero, new Vector2(.82f,.67f));
-            ShellView.Text(panel, confirming ? "Leave this encounter?" : "Paused · press to continue", new Vector3(-.36f,.27f,-.012f), .035f,.72f);
+            ShellView.Text(panel, confirming ? "Leave this encounter?" : string.IsNullOrEmpty(transitionFailure) ? "Paused · press to continue" : "Unable to begin", new Vector3(-.36f,.27f,-.012f), .035f,.72f);
             string phase = SceneManager.GetActiveScene().name == "DiagnosisOffice" ? "Explore  ›  OFFICE  ›  OR  ›  Replay  ›  Recap" : "EXPLORE  ›  Office  ›  OR  ›  Replay  ›  Recap";
             ShellView.Text(panel, phase, new Vector3(-.36f,.19f,-.012f), .022f,.72f);
-            if (confirming)
+            if (!string.IsNullOrEmpty(transitionFailure) && !confirming)
+            {
+                ShellView.Text(panel,EncounterOfficePanel.Wrap(transitionFailure,42),new Vector3(-.36f,.10f,-.012f),.025f,.72f);
+                if (failureCanResume) ShellView.Button(panel,"Resume previous scene",new Vector3(0,-.11f,-.014f),new Vector2(.66f,.075f),Resume);
+                else ShellView.Button(panel,"Recenter menu",new Vector3(0,-.11f,-.014f),new Vector2(.66f,.075f),()=>PlaceMenu(Camera.main));
+                ShellView.Button(panel,"Back to explore",new Vector3(0,-.22f,-.014f),new Vector2(.66f,.075f),BackToExplore,!ShellTransition.Busy);
+            }
+            else if (confirming)
             {
                 ShellView.Text(panel, "Return to the patient grid.\nA new encounter starts next time.",new Vector3(-.36f,.09f,-.012f),.025f,.72f);
                 ShellView.Button(panel,"Keep practising",new Vector3(0,-.09f,-.014f),new Vector2(.66f,.07f),()=>{confirming=false;BuildMenu();});
@@ -125,7 +147,7 @@ namespace Scalpal.Shell
         {
             if (hubInput) hubInput.Recenter();
             // Office tracking origin is owned by its rig. Move presentation roots, never its tracked camera.
-            if (officeRig && officeRig.head)
+            if (officeAligned && officeRig && officeRig.head && officeRig.origin)
             {
                 var head = officeRig.head.transform;
                 var roomForward = officeRig.origin.rotation * Vector3.forward;
@@ -141,13 +163,15 @@ namespace Scalpal.Shell
                 // Record presentation facing separately: no XR origin/camera movement.
                 officePresentationYaw += angle;
             }
-            PlaceMenu(Camera.main); pauseInput?.Release();
+            PlaceMenu(Camera.main); if (pauseInput) pauseInput.Release();
         }
         float officePresentationYaw;
         void BackToExplore()
         {
             if (ShellTransition.Busy) return;
-            ReturningToExplore = true; Resume();
+            transitionFailure=null; Resume();
+            if (IsPaused) return;
+            ReturningToExplore = true;
             StartCoroutine(ShellTransition.Ensure().Load("Launch", "Explore · Choose a synthetic patient"));
         }
         void OnApplicationFocus(bool value) { focused = value; if (!value) { menuArmed=false; Pause(); } }

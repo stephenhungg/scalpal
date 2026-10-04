@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using Scalpal.Anatomy;
 using Scalpal.Instruments;
+using Scalpal.Exercises.Coach;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -128,6 +129,12 @@ namespace Scalpal.Quest.Editor
             Check(session.presentation.passthrough&&!session.RegistrationReady&&!session.bodyRegistration.Accepted&&!session.bodyRegistration.EnabledByOperator,"MR starts with body registration and scoring gates closed");
             Check(session.GetComponent<NativeProcedureInput>(),"real Start adds missing input using Unity null semantics");
             Check(!session.presentation.virtualRoom.activeInHierarchy&&!session.presentation.virtualMannequin.enabled&&session.presentation.cameraManager.enabled,"MR hides authored room/mannequin and enables the real camera manager");
+            var authoredFit=new Pose(session.bodyRegistration.anatomyFit.position,session.bodyRegistration.anatomyFit.rotation);
+            Vector3 authoredFitScale=session.bodyRegistration.anatomyFit.localScale;
+            var authoredFrame=new Pose(session.patientFrame.position,session.patientFrame.rotation);
+            Vector3 authoredFrameScale=session.patientFrame.localScale;
+            Check(!session.TrySelectOperatingRoomMode("ar",out var modeReason)&&!string.IsNullOrEmpty(modeReason),"unknown presentation mode is rejected with an explanation");
+            Check(session.TrySelectOperatingRoomMode("mixed_reality",out modeReason)&&session.Phase=="Selecting","same MR mode is an accepted lifecycle-preserving no-op");
             string attempt=session.realtime.AttemptId;
             yield return Button(reset:true);
             Check(session.realtime.AttemptId==attempt&&session.Phase=="Selecting","A resets tools without requesting a new attempt");
@@ -142,15 +149,53 @@ namespace Scalpal.Quest.Editor
             yield return new WaitForSecondsRealtime(.3f);ObserveBody();yield return Frames();
             Check(session.bodyRegistration.Accepted&&session.RegistrationReady,"third synthetic calibrated observation opens real body registration gate");
             Check(Vector3.Distance(session.patientFrame.position,session.bodyRegistration.anatomyFit.TransformPoint(BodyRegistrationMath.SourceUmbilicus))<.001f,"port frame follows accepted anatomy world transform");
+            // Presentation is separate from the reviewed case and shared attempt. These
+            // choices use the public session entry point before either practice segment.
+            string patient=session.SelectedPatientId,procedure=session.SelectedProcedureId,caseId=session.ReviewedCase.caseId;
+            Check(Vector3.Distance(session.bodyRegistration.anatomyFit.position,authoredFit.position)>.01f,
+                "synthetic registered fit differs from authored pose, making restoration observable");
+            Check(session.TrySelectOperatingRoomMode("virtual",out modeReason),"confirmed case accepts virtual mode through the public entry point");
+            yield return Frames();
+            Check(session.Phase=="Confirmed"&&session.realtime.AttemptId==attempt&&session.SelectedPatientId==patient&&session.SelectedProcedureId==procedure&&session.ReviewedCase.caseId==caseId,
+                "AR to VR preserves reviewed case, selected patient, lifecycle and shared attempt");
+            Check(!session.bodyRegistration.Accepted&&!session.bodyRegistration.CandidateValid&&!session.bodyRegistration.EnabledByOperator,
+                "leaving AR clears its accepted fit and stops body acquisition");
+            CheckVirtualPresentation();
+            Check(PoseMatches(session.bodyRegistration.anatomyFit,authoredFit,authoredFitScale)&&PoseMatches(session.patientFrame,authoredFrame,authoredFrameScale),
+                "VR restores authored anatomy and port positions, rotations and scales after AR registration");
+            Check(session.TrySelectOperatingRoomMode("mixed_reality",out modeReason),"confirmed case can return to AR before practice");
+            yield return Frames();
+            Check(session.Phase=="Confirmed"&&session.realtime.AttemptId==attempt&&!session.RegistrationReady&&!session.bodyRegistration.Accepted,
+                "VR to AR keeps the same reviewed attempt but closes practice until a new fit");
+            Check(session.presentation.passthrough&&!session.presentation.virtualRoom.activeInHierarchy&&!session.presentation.virtualMannequin.enabled&&session.presentation.cameraManager.enabled&&session.presentation.headCamera.backgroundColor.a==0,
+                "AR return hides virtual patient and room and restores transparent camera");
+            yield return Button();
+            Check(session.Phase=="Confirmed"&&!session.Practicing&&!session.exercise.CanScore,"AR return cannot reuse the fit from before the mode change");
+            ObserveBody();yield return Frames();
+            Check(!session.bodyRegistration.Accepted&&session.bodyRegistration.StableObservations==1&&!session.RegistrationReady,
+                "first fresh observation after roundtrip cannot reuse old stability history");
+            yield return new WaitForSecondsRealtime(.3f);ObserveBody();yield return Frames();
+            Check(!session.bodyRegistration.Accepted&&session.bodyRegistration.StableObservations==2&&!session.RegistrationReady,
+                "second fresh observation after roundtrip keeps registration gate closed");
+            yield return new WaitForSecondsRealtime(.3f);ObserveBody();yield return Frames();
+            Check(session.bodyRegistration.Accepted&&session.RegistrationReady,"third fresh observation after roundtrip accepts a new fit");
+            Check(session.TrySelectOperatingRoomMode("mixed_reality",out modeReason)&&session.bodyRegistration.Accepted&&session.realtime.AttemptId==attempt,
+                "choosing the current AR mode preserves an accepted fit and attempt");
             feedBody=true;
             yield return Button();
             yield return Wait(()=>session.Practicing&&session.exercise.CanScore,"real B confirmation starts synchronized registered MR practice",20);
             Check(session.exercise.Body==null,"legacy port case is not routed into an empty deserialized open-body model");
+            string mrCoachId=session.exercise.explicitCoachSessionId;
+            yield return CoachMode("mixed_reality");
+            Check(!session.TrySelectOperatingRoomMode("virtual",out modeReason)&&!string.IsNullOrEmpty(modeReason)&&session.Practicing&&session.presentation.passthrough&&session.realtime.AttemptId==attempt,
+                "public entry point rejects a mode change during active MR practice");
             yield return Command("highlightStructure");
             yield return Wait(()=>session.anatomy.HighlightedPartId=="appendix","real subscribed command applies actual highlight");
             yield return Command("pausePractice");
             yield return Wait(()=>!session.Practicing&&!session.anatomy.CanDisplay,"real pause command hides anatomy");
             Check(session.anatomy.HighlightedPartId=="","hidden anatomy publishes no actual highlight");
+            Check(!session.TrySelectOperatingRoomMode("virtual",out modeReason)&&!string.IsNullOrEmpty(modeReason)&&session.Phase=="Practicing"&&!session.Practicing&&session.presentation.passthrough,
+                "paused MR practice still rejects presentation changes");
             yield return Frames(20);
             yield return StateHighlight("");
             yield return Command("resumePractice");
@@ -176,7 +221,58 @@ namespace Scalpal.Quest.Editor
             yield return Button(retry:true);
             yield return Wait(()=>session.realtime.AttemptId!=attempt&&session.Phase=="Selecting","left menu explicitly creates a new attempt",15);
             Check(session.anatomy.HighlightedPartId=="","new attempt clears desired highlight");
-            Debug.Log("SCALPAL_NATIVE_PLAYMODE_OK checks="+checks+" realStart=true realUpdate=true realButtons=true realPhysicsTrigger=true liveLocalDb=true isolatedCoachHttp=true syntheticCompositor=true syntheticBodyFrames=true headsetValidated=false completeDemoFlow=false");
+            feedBody=false;
+            yield return Wait(()=>!session.realtime.AttemptPending,"new explicit retry is committed before choosing VR");
+            attempt=session.realtime.AttemptId;
+            Check(session.TrySelectOperatingRoomMode("virtual",out modeReason),"selection chooses VR through the same shared session entry point");
+            yield return Frames();
+            Check(session.Phase=="Selecting"&&session.realtime.AttemptId==attempt&&session.SelectedPatientId==patient&&session.SelectedProcedureId==procedure,
+                "VR selection preserves lifecycle and selected case without another attempt");
+            CheckVirtualPresentation();
+            Check(!session.bodyRegistration.Accepted&&!session.bodyRegistration.CandidateValid&&!session.bodyRegistration.EnabledByOperator,
+                "VR practice does not acquire or consume a participant fit");
+            Check(PoseMatches(session.bodyRegistration.anatomyFit,authoredFit,authoredFitScale)&&PoseMatches(session.patientFrame,authoredFrame,authoredFrameScale),
+                "later VR run again restores authored transforms rather than the latest AR fit");
+            yield return Button();Check(session.Phase=="Confirmed","real B edge reviews the same case in VR");
+            yield return Button();
+            yield return Wait(()=>session.Practicing&&session.exercise.CanScore,"real B confirmation starts synchronized VR practice without a body fit",20);
+            Check(!session.bodyRegistration.Accepted&&session.RegistrationReady&&session.patientFrame.gameObject.activeInHierarchy,
+                "VR practice exposes authored ports while body registration remains absent");
+            Check(session.exercise.explicitCoachSessionId!=mrCoachId,"VR run binds a fresh coach instead of reusing the MR session");
+            yield return CoachMode("virtual");
+            Check(!session.TrySelectOperatingRoomMode("mixed_reality",out modeReason)&&!string.IsNullOrEmpty(modeReason)&&session.Practicing&&!session.presentation.passthrough,
+                "active VR practice rejects a mid-procedure switch to AR");
+            access=session.patientFrame.GetComponentsInChildren<NativePortMarker>(true).Single(p=>p.portId=="umbilical");
+            yield return PickUp("trocar_12mm");
+            held=session.workbench.inputs.Single(i=>i.controller==XRNode.RightHand).GetComponent<InstrumentInteractor>().HeldInstrument;
+            MoveTip(held,access.transform.position);source.trigger=1;
+            yield return Wait(()=>session.exercise.Current?.id=="working_ports","VR actual FixedUpdate OnTriggerStay places the same authored port",12);
+            source.trigger=0;source.grip=0;yield return Frames();
+            Check(session.exercise.Current?.id=="working_ports"&&session.Practicing,"VR uses the same authored exercise core and actual tool physics");
+            yield return Button(reset:true);
+            Check(session.realtime.AttemptId==attempt&&session.exercise.Current?.id=="working_ports"&&session.Practicing,
+                "VR A reset also preserves the shared attempt and authored progress");
+            Debug.Log("SCALPAL_NATIVE_PLAYMODE_OK checks="+checks+" realStart=true realUpdate=true realButtons=true realPhysicsTrigger=true liveLocalDb=true isolatedCoachHttp=true operatingRoomModes=mixed_reality,virtual syntheticCompositor=true syntheticBodyFrames=true headsetValidated=false completeDemoFlow=false");
+        }
+        static bool PoseMatches(Transform target,Pose expected,Vector3 scale) =>
+            Vector3.Distance(target.position,expected.position)<.001f&&Quaternion.Angle(target.rotation,expected.rotation)<.01f&&(target.localScale-scale).sqrMagnitude<1e-8f;
+        void CheckVirtualPresentation()
+        {
+            Check(!session.presentation.passthrough&&session.RegistrationReady&&session.presentation.virtualRoom.activeInHierarchy&&session.presentation.virtualMannequin.enabled
+                &&!session.presentation.cameraManager.enabled&&session.presentation.headCamera.backgroundColor.a==1,
+                "VR has an authored room and patient, opaque camera and no camera-registration readiness dependency");
+        }
+        IEnumerator CoachMode(string expected)
+        {
+            string id=session.exercise.explicitCoachSessionId;
+            Check(!string.IsNullOrEmpty(id),"practice bound an explicit isolated coach session");
+            using(var request=UnityWebRequest.Get(endpoint+"/coach/sessions/"+Uri.EscapeDataString(id)))
+            {
+                yield return request.SendWebRequest();Check(request.result==UnityWebRequest.Result.Success,"read actual live coach HTTP session");
+                var state=JsonUtility.FromJson<CoachSessionState>(request.downloadHandler.text);
+                Check(state?.snapshot!=null&&state.snapshot.mode==expected&&state.snapshot.patientId==session.SelectedPatientId&&state.snapshot.procedureId==session.SelectedProcedureId,
+                    "coach service holds the requested "+expected+" presentation for the selected case");
+            }
         }
         void MoveTip(InstrumentBehaviour tool,Vector3 target)
         {

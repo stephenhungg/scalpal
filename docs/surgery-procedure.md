@@ -106,3 +106,7 @@ Pending: physically supported appendix mobilization/delivery (163.2 mm needed ve
 The shell packaging gate currently has a stale exact-count assertion (10 offline cases versus11 with the retained advanced variant). Its owner must update that fixture; the separate surgery packaging method does not claim the shell gate passed.
 
 The standalone native coach HTTP exchange also passed168 assertions, including open-body injury, incomplete finish, lost-response retry and local/service grade parity. This uses the actual relay and an isolated service, without a live voice provider.
+
+Android packaging succeeded at `91467b1`:79,779,574-byte ARM64 IL2CPP development APK, locally `artifacts/open-surgery.apk`, not installed. It contains the three scenes enabled at that source snapshot; later merged recap changes are outside this artifact. The open verification gate passed again during packaging.
+
+Final synchronized checks: preop274 passing / two skipped, typecheck, and the open Unity gate85 body /118 interaction-fluid assertions plus coach and scene bindings.

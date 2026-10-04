@@ -131,8 +131,9 @@ namespace Scalpal.Recap.Editor
                         Check(exercise.Submit(action, out _, out reason), "authored action accepted at real boundary: " + reason);
                 Check(exercise.Completed && endings == 1 && context.SegmentClosed, "actual exercise completion closes recap exactly once");
                 Check(!integration.Complete(exercise, handoff.attemptId) && !integration.Complete(exercise, "stale-attempt"), "duplicate and stale completion rejected");
-                Check(context.result.replay.status == "failed" && !context.result.surgery.available,
-                    "missing capture and aggregate grader remain honest");
+                Check(context.result.replay.status == "failed" && context.result.surgery.available
+                    && context.result.surgery.total == exercise.Grade.earnedPoints && context.result.surgery.max == exercise.Grade.availablePoints,
+                    "missing capture remains honest and real aggregate grader is consumed");
                 Check(!RecapSessionIntegration.IsFreshRetry(handoff.sharedSessionId, handoff.attemptId, handoff.sharedSessionId, handoff.attemptId), "same attempt cannot retry");
                 Check(!RecapSessionIntegration.IsFreshRetry(handoff.sharedSessionId, handoff.attemptId, "other-session", "new-attempt"), "cross-session retry rejected");
                 Check(RecapSessionIntegration.IsFreshRetry(handoff.sharedSessionId, handoff.attemptId, handoff.sharedSessionId, "new-attempt"), "new confirmed attempt allowed");

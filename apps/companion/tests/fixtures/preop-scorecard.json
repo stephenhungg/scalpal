@@ -2,7 +2,7 @@
   "patientId": "patient-demo-multi-source",
   "patientName": "Priya Ramaswamy",
   "urgency": "urgent",
-  "site": "Abdomen — appendix / right lower quadrant",
+  "site": "Abdomen — open appendix incision / right lower quadrant",
   "carryoverItems": [
     {
       "flagId": "flag_latex",
@@ -14,7 +14,7 @@
       "historyTopics": [],
       "testIds": [],
       "stepIds": [
-        "access_umbilical"
+        "mark_incision"
       ]
     },
     {
@@ -27,7 +27,7 @@
       "historyTopics": [],
       "testIds": [],
       "stepIds": [
-        "irrigate"
+        "inspect_clean"
       ]
     },
     {
@@ -42,15 +42,15 @@
       ],
       "testIds": [],
       "stepIds": [
-        "access_umbilical"
+        "mark_incision"
       ]
     }
   ],
   "total": 8,
   "max": 100,
   "grade": "Needs work",
-  "procedureId": "lap_appendectomy",
-  "procedureTitle": "Laparoscopic appendectomy",
+  "procedureId": "open_appendectomy",
+  "procedureTitle": "Open appendectomy",
   "procedureChosenCorrectly": false,
   "sections": [
     {
@@ -118,7 +118,7 @@
       "score": 0,
       "found": [],
       "missed": [
-        "laparoscopic appendectomy",
+        "open appendectomy",
         "urgent timing"
       ]
     },
@@ -177,7 +177,7 @@
     "Must fix: you did not cover pregnancy test. History alone does not exclude pregnancy. Order a beta-hCG before imaging and surgery.",
     "Must fix: you did not cover last oral intake. Last oral intake sets anesthesia timing and aspiration risk.",
     "The diagnosis was acute appendicitis.",
-    "The surgery this patient needs is a laparoscopic appendectomy, and that is what we will do in the operating room.",
+    "The surgery this patient needs is a open appendectomy, and that is what we will do in the operating room.",
     "Timing: this case is urgent.",
     "Broaden the differential: consider ectopic pregnancy, ovarian torsion, ruptured ovarian cyst.",
     "Also missed pain migration: Pain that starts at the umbilicus and moves to the right lower quadrant is the classic appendicitis pattern.",

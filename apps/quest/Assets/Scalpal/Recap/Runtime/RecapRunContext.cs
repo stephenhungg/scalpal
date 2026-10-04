@@ -53,11 +53,11 @@ namespace Scalpal.Recap
             else SegmentEnded.Invoke(result);
             return true;
         }
-        public bool AttachMotionJob(string attemptId, string jobId, double captureStartRunSeconds, bool clockAligned, string source = "unknown", string sourceArtifactId = "", string replayArtifactId = "", uint jobRun = 0)
+        public bool AttachMotionJob(string attemptId, string jobId, double captureStartRunSeconds, bool clockAligned, string source = "unknown", string sourceArtifactId = "", string replayArtifactId = "", uint jobRun = 0, string eventClock = "run")
         {
             if (result == null || result.attemptId != attemptId || !SegmentClosed || string.IsNullOrWhiteSpace(jobId) || double.IsNaN(captureStartRunSeconds) || double.IsInfinity(captureStartRunSeconds) || captureStartRunSeconds < 0) return false;
             if (source != "learner" && source != "rehearsal" && source != "sample" && source != "unknown") return false;
-            result.replay = new ReplayResult { source = source, sourceArtifactId = sourceArtifactId, replayArtifactId = replayArtifactId, jobRun = jobRun, jobId = jobId, status = "queued", failureReason = "", captureStartRunSeconds = captureStartRunSeconds, clockAligned = clockAligned };
+            result.replay = new ReplayResult { eventClock = eventClock, source = source, sourceArtifactId = sourceArtifactId, replayArtifactId = replayArtifactId, jobRun = jobRun, jobId = jobId, status = "queued", failureReason = "", captureStartRunSeconds = captureStartRunSeconds, clockAligned = clockAligned };
             MotionJobAttached?.Invoke();
             return true;
         }
