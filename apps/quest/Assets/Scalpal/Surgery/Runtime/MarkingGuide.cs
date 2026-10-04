@@ -263,19 +263,22 @@ namespace Scalpal.Surgery
             var body = exercise.Body;
             bool ready = body != null && gate != null && gate();
             bool opened = body != null && body.Get("skin", "opened") > 0;
-            // Until the skin is opened there is nothing under it to show: the patient's skin stays whole.
-            bool concealed = body != null && !opened;
+            bool closed = body != null && body.Get("skin", "closed") > 0;
+            // Intact or closed skin covers the teaching surfaces. Closure restores the opaque
+            // patient presentation; the underlying fractured volume is not healed or reset.
+            bool concealed = body != null && (!opened || closed);
             wound.Concealed = concealed;
             if (concealed && volume && volume.Wall) { var wall = volume.Wall.GetComponent<MeshRenderer>(); if (wall) wall.enabled = false; }
             if (inkOnPatient != concealed) { inkOnPatient = concealed; Project(ink, inkPoints); liveInk.positionCount = 0; }
-            inkRoot.SetActive(ready);
+            inkRoot.SetActive(ready && !closed);
             ink.enabled = ink.positionCount >= 2 && body != null && body.Get("skin", "marked") > 0 && body.Get("skin", "closed") == 0;
-            bool wanted = ready && !opened && !Accepted;
-            if (wanted) alpha = 1;
+            bool wanted = ready && !opened && !closed && !Accepted;
+            if (closed) alpha = 0;
+            else if (wanted) alpha = 1;
             else alpha = ready ? Mathf.Max(0, alpha - Mathf.Max(0, seconds) / FadeSeconds) : 0;
             root.SetActive(alpha > 0);
             if (alpha > 0) Fade();
-            if (pendingReason != null && hint && ready) hint.Say(pendingAnchor ? pendingAnchor : instructionAnchor, pendingReason, null, head, 4, .6f);
+            if (pendingReason != null && hint && ready && !closed) hint.Say(pendingAnchor ? pendingAnchor : instructionAnchor, pendingReason, null, head, 4, .6f);
             pendingReason = null;
             Instruct(wanted);
         }

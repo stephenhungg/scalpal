@@ -44,6 +44,7 @@ namespace Scalpal.Surgery.Editor
                 int ink = MarkAlongGuide(s);
                 AcceptedFades(s);
                 Reveal(s);
+                Closure(s);
                 OffTarget(s);
                 Debug.Log($"SCALPAL_MARKING_GUIDE_OK: {checks} checks; inkPixels={ink} renders={(renders == "" ? "skipped (no graphics device)" : renders)}; "
                     + "actual scene, synthetic tracked marker, no headset test");
@@ -239,6 +240,38 @@ namespace Scalpal.Surgery.Editor
                 && s.adapter.Wound.transform.Find("MeasuredWoundSurfaces").gameObject.activeInHierarchy, "an opened skin reveals the wound and wall again");
             var ink = s.guide.Ink; var points = new Vector3[ink.positionCount]; ink.GetPositions(points);
             Require(points.All(p => p.z < 0 && p.z > -.002f), "revealed, the ink lies on the wall's skin plane");
+            Render(s, "opened", s.wound.position - s.wound.forward * .25f, 40);
+        }
+
+        // Actual close event changes presentation, not physical topology. Runtime ordering must
+        // keep the solver's subsequent visibility refresh from exposing the fractured slab again.
+        static void Closure(Rig s)
+        {
+            Require(s.Fact("opened") == 1 && !s.adapter.Wound.Concealed && s.volume.Wall.GetComponent<MeshRenderer>().enabled,
+                "closure starts with opened skin and a visible teaching wall");
+            int cuts = s.volume.Wall.Volume.CutFaceCount, topology = s.volume.Wall.Volume.TopologyRevision;
+            Require(cuts > 0, "closure fixture contains actual fractured wall faces before hiding them");
+            var close = s.input.CreateMeasurement("assistant", "close", "skin", s.wound.position, "closure-visual-validation");
+            Require(close != null && s.input.SubmitMeasured(close), "actual assistant close event accepted through the body action route");
+            Require(s.Fact("closed") == 1 && s.Fact("opened") == 1, "closed skin retains its prior opening history");
+            s.Step();
+            Require(Shader.GetGlobalFloat("_ScalpalWoundWindow") == 0, "closure restores opaque patient skin by disabling the window");
+            Require(s.adapter.Wound.Concealed && !s.adapter.Wound.transform.Find("MeasuredWoundSurfaces").gameObject.activeInHierarchy,
+                "closed skin conceals the authored wound surfaces");
+            Require(!s.volume.Wall.GetComponent<MeshRenderer>().enabled, "closed skin hides the fractured teaching wall");
+            Require(s.volume.Wall.Volume.CutFaceCount == cuts && s.volume.Wall.Volume.TopologyRevision == topology,
+                "visual closure does not reset or claim to heal the physical wall topology");
+            s.Step(3);
+            Require(!s.guide.Showing && !s.guide.Root.activeInHierarchy && !s.guide.Ink.gameObject.activeInHierarchy
+                && !s.guide.LiveInk.gameObject.activeInHierarchy && s.hint.Text != MarkingGuide.Instruction,
+                "closed skin shows neither marking guidance nor ink on subsequent runtime refreshes");
+            Require(Shader.GetGlobalFloat("_ScalpalWoundWindow") == 0 && !s.volume.Wall.GetComponent<MeshRenderer>().enabled,
+                "the solver visibility refresh cannot reveal the closed wall again");
+            Render(s, "closed", s.wound.position - s.wound.forward * .25f, 40);
+            s.NewAttempt();
+            Require(s.Fact("closed") == 0 && s.Fact("opened") == 0 && s.guide.Showing
+                && Shader.GetGlobalFloat("_ScalpalWoundWindow") == 0 && !s.volume.Wall.GetComponent<MeshRenderer>().enabled,
+                "retry restores the intact skin and the initial marking guide");
         }
 
         static void OffTarget(Rig s)
