@@ -1,0 +1,39 @@
+---
+title: "Pre-op API"
+description: "services/preop on port 8787."
+---
+
+Every response carries `actions` (`{id, label, method, route}`), and every route resolves, failures included. Payloads map one to one onto the Unity C# DTOs.
+
+## Cases
+
+| Method | Route | Returns |
+| --- | --- | --- |
+| GET | `/` | `ServiceIndex`: entry actions |
+| GET | `/patients` | `PatientList`: every scenario with procedure, urgency and status |
+| GET | `/patients/:id/case` | `SurgicalCase`: everything to render one case |
+| GET | `/patients/:id/brief` | `PreopBrief`: flags, chart lines, gaps and a Jarvis line |
+| POST | `/patients/:id/preop-check` | `PreopCheckResult`. Body: `{"selected": ["bleeding"]}` |
+| GET | `/procedures`, `/procedures/:id` | Procedures |
+| GET | `/anatomy`, `/instruments` | Catalogs |
+| POST | `/admit/:scenarioId` | Starts a FinchNode sandbox admission (needs a key) |
+| GET | `/admissions/:sessionId` | Poll until `state` is `completed` |
+| GET | `/unity/bundle` | Catalogs plus every case, for offline use |
+| GET | `/health` | `HealthStatus` |
+
+`:id` takes a FinchNode subject (`patient-demo-polypharmacy`) or a scenario id (`polypharmacy-senior`).
+
+## Jarvis tools
+
+ElevenLabs webhook tools, all `POST` with a JSON body. Each returns 200 with a `say` field, even on failure, so Jarvis always has something true to say.
+
+| Tool | Route | Body |
+| --- | --- | --- |
+| `list_patients` | `/tools/list_patients` | `{}` |
+| `get_case` | `/tools/get_case` | `{"patientId": string}` |
+| `check_preop` | `/tools/check_preop` | `{"patientId": string, "selected": string[]}` |
+| `get_step` | `/tools/get_step` | `{"patientId": string, "stepId"?: string}` |
+
+## Coach
+
+`/coach/sessions` creates a coach session and takes events, hints, explanations, command acks and an SSE stream. `/coach/current` is what the headset polls, `/jarvis` is the browser voice page and `/jarvis/connection` returns a signed ElevenLabs URL.

@@ -1,0 +1,67 @@
+---
+title: "Vitals API"
+description: "services/vitals on port 8791. CORS is open."
+---
+
+All responses are JSON unless noted. Values only appear as numbers when Presage marks them stable; otherwise they're `null`.
+
+| Method | Route | Returns |
+| --- | --- | --- |
+| GET | `/vitals` | The latest snapshot |
+| GET | `/vitals/stream` | The same snapshot as server-sent events, about 10 a second |
+| POST | `/baseline/capture` | Freezes the baseline from the last 12 s of stable readings (median) |
+| GET | `/baseline` | The current baseline |
+| GET | `/monitor` | OR monitor values: baseline plus the simulated change |
+| GET | `/preview.jpg` | One JPEG from the configured camera, no quota. `409` while a live session holds the camera |
+| GET | `/health` | Mode and status |
+
+## Snapshot
+
+```json
+{
+  "schema": "scalpal.vitals/0",
+  "mode": "live",
+  "label": "Volunteer · real vitals · Presage",
+  "status": { "ok": true, "code": 0, "reason": "Measuring" },
+  "pulse": { "bpm": 85.3, "confidence": 97.7 },
+  "breathing": { "bpm": 17.6, "confidence": 72.0, "heldMs": 4000 },
+  "measuring": { "pulse": false, "breathing": true },
+  "traces": { "pulse": [[77660000, 0.17]], "breathing": [[77660000, -0.41]] },
+  "cameraBusy": true,
+  "updatedAt": 1791093163288
+}
+```
+
+- `mode` is `demo` or `live`. Demo payloads are always labeled.
+- `heldMs` means the reading dipped below Presage's stable threshold and this is the last stable value, that many milliseconds old. It's held for up to 10 s, then becomes `null`.
+- `traces` are `[timestamp in microseconds, value]` pairs.
+- `status.reason` carries Presage's hint when it isn't measuring, like `Move down, or tilt the camera up.`
+
+## Baseline
+
+```json
+{ "hr": 85, "rr": 18, "sys": 118, "dia": 76, "source": "measured" }
+```
+
+`source` is `measured` (live), `demo`, or `authored` when there weren't enough stable readings. Blood pressure always comes from the authored baseline, since Presage doesn't measure it here.
+
+## Monitor
+
+`GET /monitor?bloodLostMl=1000&bleedMlPerMin=200&weightKg=70`
+
+| Parameter | Default | Meaning |
+| --- | --- | --- |
+| `bloodLostMl` | 0 | Blood lost so far |
+| `bleedMlPerMin` | 0 | Current uncontrolled bleeding rate |
+| `weightKg` | 70 | Chart weight, for estimated blood volume |
+| `critical` | off | `1` adds an acute spike |
+
+```json
+{
+  "hr": 110, "rr": 25, "sys": 116, "dia": 78,
+  "hemorrhageClass": 2, "bloodLossPct": 22.4,
+  "baseline": { "hr": 85, "rr": 18, "source": "measured" },
+  "label": "HR 110 · simulated from baseline 85 (measured)",
+  "simulated": true, "mode": "live"
+}
+```

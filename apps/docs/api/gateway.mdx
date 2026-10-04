@@ -1,0 +1,54 @@
+---
+title: "Gateway API"
+description: "services/api on port 8788."
+---
+
+Owner: Nathan. The gateway does the I/O that SpacetimeDB reducers can't. It connects to the database as a service identity and:
+
+- fills upload and download requests with short-lived signed URLs (local disk in dev, S3 or R2 in production)
+- verifies uploads by size and SHA-256 before marking them available
+- issues ElevenLabs voice and Cloudflare TURN credentials as grants
+- runs the pull API for the motion worker: claim, heartbeat, outputs, complete, fail
+
+State lives in SpacetimeDB, so after a restart the gateway picks up whatever is outstanding.
+
+## Run it
+
+```sh
+cd services/api
+npm install && cp .env.example .env
+npm run dev                 # watch mode
+npm run worker:synthetic    # a labeled synthetic motion worker
+npm test                    # needs a local `spacetime start`
+```
+
+`GET /healthz` reports the database connection, service registration, storage driver and configured providers.
+
+## Replay
+
+`GET /v1/sessions/:sessionId/replay/:jobId`
+
+Needs `Authorization: Bearer <client SpacetimeDB token>`. Membership is checked on every request.
+
+```json
+{
+  "schemaVersion": "scalpal.replay.v1",
+  "sessionId": "...", "attemptId": "...", "jobId": "...",
+  "status": "ready", "reason": "", "progress": 1, "stage": "",
+  "sourceVideoUrl": "...", "replayVideoUrl": "...",
+  "expiresAtUnixMs": 0, "replayKind": "kinematic", "label": "..."
+}
+```
+
+`status` is `queued`, `processing`, `ready` or `failed`. Video URLs expire within five minutes, so resolve them when opening a view rather than storing them. Errors: 401 without a token, 403 for non-members, 404 for unknown jobs, 503 on an authorization timeout. Requests are limited to 30 a minute per token.
+
+## Environment
+
+| Variable | Meaning |
+| --- | --- |
+| `PORT` | Defaults to 8788 |
+| `SPACETIMEDB_URI`, `SPACETIMEDB_DB` | Database |
+| `SPACETIMEDB_TOKEN` | Service identity token. Required in production |
+| `STORAGE_DRIVER` | `local` or `s3` |
+| `URL_SIGNING_SECRET` | Signs local file URLs |
+| `WORKER_TOKENS` | Tokens the motion worker uses |

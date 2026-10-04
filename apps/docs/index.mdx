@@ -1,0 +1,43 @@
+---
+title: "Scalpal"
+description: "A mixed reality operating room experience guided by Jarvis, your all-knowing assistant."
+---
+
+Scalpal is a surgical practice app for Meta Quest 3S, built at MHacks 2026. You interview a synthetic patient, figure out what's wrong, then walk into an operating room and do the surgery yourself, with Jarvis coaching you by voice the whole way. When you're done, your recorded motion drives a simulated robot hand.
+
+The longer-term idea is that people practicing surgery can produce useful demonstrations for robots. The demo proves a smaller chain: one guided procedure, feedback on it, and one replay of the recorded motion on a simulated robot hand. The replay is a replay. It isn't a learned robot policy.
+
+<Note>
+Scalpal is an illustrative simulator for practice and demos. It is not clinical guidance and it doesn't measure surgical competence.
+</Note>
+
+<CardGroup cols={2}>
+  <Card title="The run" icon="route" href="/experience">
+    From the patient board to the robot replay, step by step.
+  </Card>
+  <Card title="Architecture" icon="sitemap" href="/architecture">
+    How the headset, Jarvis, the companion and the services fit together.
+  </Card>
+  <Card title="Run it locally" icon="terminal" href="/quickstart">
+    Ports, services and the order to start them.
+  </Card>
+  <Card title="Patient vitals" icon="heart-pulse" href="/components/vitals">
+    Real pulse and breathing from a phone camera with Presage.
+  </Card>
+</CardGroup>
+
+## What's in the repo
+
+| Folder | What it is |
+| --- | --- |
+| `apps/quest` | The Unity project for Quest (Unity 6000.0.66f2) |
+| `apps/companion` | Browser companion for watching a session live |
+| `apps/site` | The landing site |
+| `apps/docs` | These docs |
+| `services/preop` | FinchNode patient cases plus the Jarvis coach |
+| `services/realtime` | SpacetimeDB module, the shared session state |
+| `services/api` | Gateway for uploads, provider credentials and the motion worker API |
+| `services/motion` | Video to hand landmarks to a simulated robot hand |
+| `services/vitals` | Presage pulse and breathing from a fixed camera |
+| `services/registration` | Local body pose for fitting anatomy to a real person |
+| `services/vision` | Open-vocabulary object detection on real camera frames |

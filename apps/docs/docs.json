@@ -1,0 +1,89 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "Scalpal",
+  "description": "A mixed reality operating room experience guided by Jarvis.",
+  "colors": {
+    "primary": "#2f9e2d",
+    "light": "#8ef08a",
+    "dark": "#2f9e2d"
+  },
+  "appearance": {
+    "default": "dark"
+  },
+  "background": {
+    "color": {
+      "dark": "#000000"
+    }
+  },
+  "fonts": {
+    "heading": {
+      "family": "Instrument Serif"
+    },
+    "body": {
+      "family": "Geist Mono"
+    }
+  },
+  "favicon": "/favicon.svg",
+  "logo": {
+    "light": "/logo/light.svg",
+    "dark": "/logo/dark.svg",
+    "href": "https://scalpal.vercel.app"
+  },
+  "navbar": {
+    "links": [
+      {
+        "label": "Site",
+        "href": "https://scalpal.vercel.app"
+      },
+      {
+        "label": "Companion",
+        "href": "https://scalpal-companion.vercel.app"
+      }
+    ]
+  },
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Docs",
+        "groups": [
+          {
+            "group": "Get started",
+            "pages": ["index", "experience", "architecture", "quickstart"]
+          },
+          {
+            "group": "Components",
+            "pages": [
+              "components/quest",
+              "components/jarvis",
+              "components/companion",
+              "components/realtime",
+              "components/vitals",
+              "components/motion",
+              "components/registration",
+              "components/vision"
+            ]
+          },
+          {
+            "group": "Project",
+            "pages": ["status", "team"]
+          }
+        ]
+      },
+      {
+        "tab": "API reference",
+        "groups": [
+          {
+            "group": "Services",
+            "pages": ["api/vitals", "api/preop", "api/gateway", "api/vision"]
+          }
+        ]
+      }
+    ]
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/stephenhungg/scalpal"
+    }
+  }
+}

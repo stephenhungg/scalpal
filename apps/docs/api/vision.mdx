@@ -1,0 +1,42 @@
+---
+title: "Vision API"
+description: "services/vision on 127.0.0.1:8792."
+---
+
+## Detect
+
+`POST /detect`
+
+```json
+{
+  "image": "<base64 JPEG, PNG or WebP>",
+  "labels": ["scissors", "forceps", "gloved hand", "lap_scissors"],
+  "threshold": 0.2
+}
+```
+
+- `labels` is optional and defaults to the instrument and hand set. Labels can be free text or catalog ids, up to 32.
+- `threshold` defaults to 0.2. Use 0.3 or more on cluttered scenes.
+- Images are downscaled so the long side is at most 1024 px. Encoded images over 8 MB are rejected.
+
+```json
+{
+  "detections": [
+    {
+      "label": "scissors", "score": 0.91,
+      "box": { "x": 0.0, "y": 0.057, "w": 0.971, "h": 0.89 },
+      "id": "lap_scissors", "kind": "instrument", "candidateIds": ["lap_scissors"]
+    }
+  ],
+  "model": "owlv2", "ms": 458.0, "image": { "width": 278, "height": 480 }
+}
+```
+
+Boxes are normalized 0 to 1 with the origin at the top left, in camera image coordinates. `id` is set when a label maps to exactly one catalog tool; otherwise check `candidateIds`.
+
+Errors return `{"error": code}`: `invalid_request` (422), `invalid_base64`, `invalid_image`, `unsupported_image_format`, `empty_image` and `image_too_large` (413).
+
+## Other routes
+
+- `GET /health` returns `{status, model, device, warmupMs}`.
+- `GET /models` returns the active model, the backends and the default labels.

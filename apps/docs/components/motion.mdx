@@ -1,0 +1,40 @@
+---
+title: "Motion pipeline"
+description: "From a video of a hand to a simulated robot hand."
+---
+
+Owner: Silas.
+
+`services/motion` is an offline pipeline on the Mac. It decodes a short clip, estimates one hand's landmarks with MediaPipe Hand Landmarker, retargets the finger motion to a simulated Shadow Dexterous Hand (right or left) with dex-retargeting, and renders a labeled replay in MuJoCo.
+
+Frames without a usable hand are kept and reported as invalid. They're never filled with invented motion. The replay is kinematic: it plays back recorded motion and isn't a learned policy.
+
+## Run it
+
+```sh
+cd services/motion
+uv sync
+uv run pytest
+uv run scalpal-motion synthetic                 # known-motion test
+uv run scalpal-motion run path/to/clip.mp4      # clip -> out/<clip name>/
+uv run scalpal-motion run clip.mp4 --hand Right --smooth 0.3
+```
+
+`run` writes `hand_track.json`, `motion.json` and `replay.mp4`, which shows the source clip with landmarks next to the robot. Inputs are assumed unmirrored, like Quest passthrough. Pass `--mirrored` for selfie footage.
+
+## As a gateway worker
+
+```sh
+GATEWAY_URL=https://<gateway> WORKER_TOKEN=<token> uv run scalpal-motion gateway-worker
+```
+
+It claims jobs from the [gateway](/api/gateway), downloads the clip, runs the pipeline and uploads four outputs: a `scalpal.robot_trajectory.v1` trajectory (what the companion replay reads), the replay video, the hand estimates and a quality report. No hand found fails without retry. Network errors retry.
+
+## What's been measured
+
+| Check | Result |
+| --- | --- |
+| Known motion round trip, simulated | Link vectors within 1.9 mm median, 2.8 mm p95 |
+| Real moving hand, 20 s sample webcam clip | 621 of 621 frames tracked; finger bend follows the estimate at r = 0.93 to 0.97 |
+| Full gateway round trip, local | Upload, claim, 4 verified outputs, ready, viewer download in 17.5 s |
+| Real Quest passthrough clip | Not run yet |

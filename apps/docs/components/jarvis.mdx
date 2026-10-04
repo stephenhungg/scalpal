@@ -1,0 +1,45 @@
+---
+title: "Pre-op and Jarvis"
+description: "FinchNode patient cases and the live voice coach."
+---
+
+Owner: Matthew.
+
+`services/preop` does two jobs: it turns FinchNode's synthetic health records into surgical cases, and it runs Jarvis, the voice coach in the operating room.
+
+## Patient cases
+
+Every synthetic patient gets an authored surgical scenario that fits their chart. A 78-year-old on apixaban with kidney disease gets an urgent cholecystectomy. A 9-year-old with asthma gets an appendectomy. The chart is real FinchNode data, and the acute story is authored fiction, labeled as such.
+
+- **Risks are rules, not a model.** Flags come from coded data (RxNorm, LOINC, SNOMED), each with the record entries behind it. Missing data is reported as unknown, never as none.
+- **Everything renders in Unity.** Every payload maps one to one onto the C# DTOs in `apps/quest/Assets/Scalpal/Exercises/Data/`.
+- **No dead ends.** Every response carries `actions`, and every failure renders a state with a way forward.
+
+There are two ways in. **Demo records** need nothing and read FinchNode's public demo API. **Connect admission** uses a sandbox key (`ck_test_...`) to run FinchNode's real consent flow on synthetic patients.
+
+## Jarvis
+
+Jarvis is an ElevenLabs voice agent on top of the same catalogs. It first speaks in the operating room, runs the Time-Out, then coaches live.
+
+- Hints escalate from why, to where to look, to the explicit move.
+- It tracks time on step, off-target attempts, wrong instruments, gaze on danger structures and tracking loss.
+- Its prompt only contains the current case's patient, steps and anatomy, and it only states patient facts that its tools return.
+
+```sh
+cd services/preop
+cp .env.example .env
+npm run jarvis:setup   # creates or updates the ElevenLabs agent
+npm run dev            # http://localhost:8787/jarvis
+```
+
+## Environment
+
+| Variable | Meaning |
+| --- | --- |
+| `ELEVENLABS_API_KEY`, `ELEVENLABS_AGENT_ID` | Jarvis voice agent |
+| `PATIENT_AGENT_ID` | Patient voice in the office |
+| `FINCHNODE_API_KEY` | Optional sandbox key for Connect admission |
+| `PORT` | Defaults to 8787 |
+| `SPACETIMEDB_URI`, `SPACETIMEDB_DB` | Where the coach posts its transcript and status |
+
+See the [API reference](/api/preop) for every route.
