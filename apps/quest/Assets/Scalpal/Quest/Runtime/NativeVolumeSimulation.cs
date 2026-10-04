@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Scalpal.Anatomy;
 using Scalpal.Anatomy.Tissue;
 using Scalpal.Instruments;
 using UnityEngine;
@@ -29,7 +30,7 @@ namespace Scalpal.Quest
             if(!sourceFrame||!rig) return;
             if(Wall){Wall.SetVisible(false);if(Application.isPlaying)Destroy(Wall.gameObject);else DestroyImmediate(Wall.gameObject);}
             var wall=new GameObject("GenericAbdominalWall_Unscored");wall.transform.SetParent(sourceFrame,false);
-            Wall=wall.AddComponent<VolumetricTissue>();Wall.Initialize(TissueVolumeFactory.AbdominalWall());
+            Wall=wall.AddComponent<VolumetricTissue>();Wall.Initialize(TissueVolumeFactory.AbdominalWall(AppendixProjection(sourceFrame)));
             workbench=rig;ready=canInteract;blades.Clear();
             foreach(var tool in rig.tools??Array.Empty<InstrumentBehaviour>())
             {
@@ -45,6 +46,22 @@ namespace Scalpal.Quest
                 else Debug.LogWarning("SCALPAL_VOLUME_BLADE_UNAVAILABLE id="+tool.instrumentId);
             }
             ClearTransient();
+        }
+        // This remains a generic anterior teaching coupon, not a laparoscopic port/incision model.
+        static Vector2? AppendixProjection(Transform sourceFrame)
+        {
+            AnatomyPart appendix=null;
+            foreach(var part in sourceFrame.GetComponentsInChildren<AnatomyPart>(true))
+            {
+                if(part.stableId!="appendix")continue;
+                if(appendix)return null; // Ambiguous duplicate atlas: retain the standalone coupon position.
+                appendix=part;
+            }
+            if(!appendix)return null;
+            var filter=appendix.GetComponent<MeshFilter>();
+            if(!filter||!filter.sharedMesh)return null;
+            Vector3 center=sourceFrame.InverseTransformPoint(filter.transform.TransformPoint(filter.sharedMesh.bounds.center));
+            return TissueCage.Finite(center)?new Vector2(center.x,center.y):(Vector2?)null;
         }
         bool ValidTool(InstrumentBehaviour tool)=>workbench&&tool&&Array.IndexOf(workbench.tools??Array.Empty<InstrumentBehaviour>(),tool)>=0&&
             tool.isActiveAndEnabled&&tool.Held&&tool.TrackingValid&&tool.Activation>=.7f;

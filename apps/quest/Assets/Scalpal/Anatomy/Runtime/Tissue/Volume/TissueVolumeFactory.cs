@@ -13,15 +13,17 @@ namespace Scalpal.Anatomy.Tissue
             return Grid(bounds,nx,ny,depths,new[]{material},new int[nz],pinPerimeter);
         }
         // Generic local wall coupon, not segmented tissue or a measured participant thickness.
-        public static TissueVolume AbdominalWall()
+        public static TissueVolume AbdominalWall(Vector2? projectedCenter=null)
         {
+            Vector2 center=projectedCenter??new Vector2(0,1.017768f);
+            if(float.IsNaN(center.x)||float.IsInfinity(center.x)||float.IsNaN(center.y)||float.IsInfinity(center.y))throw new ArgumentException("Invalid wall projection");
             var materials=new[] {
                 new VolumeMaterial {id="synthetic_wall_skin",youngPascals=100000,poissonRatio=.45f,densityKgPerCubicMeter=1000,color=new Color(.72f,.49f,.38f),measurementSource="unfit demo; thickness2mm authored"},
                 new VolumeMaterial {id="synthetic_wall_fat",youngPascals=20000,poissonRatio=.45f,densityKgPerCubicMeter=900,color=new Color(.94f,.73f,.26f),measurementSource="unfit demo; thickness12mm authored"},
                 new VolumeMaterial {id="synthetic_wall_peritoneum",youngPascals=6790000,poissonRatio=.45f,densityKgPerCubicMeter=1000,color=new Color(.73f,.58f,.57f),measurementSource="Kriener2023 Table5 FNF tensile median6.79MPa; isotropic approximation, not full constitutive calibration; thickness1mm authored"}
             };
             // +X anatomical left, +Y cranial, +Z inward from source anterior torso surface.
-            return Grid(new Bounds(new Vector3(0,1.017768f,-.115287f),new Vector3(.16f,.10f,.015f)),8,5,
+            return Grid(new Bounds(new Vector3(center.x,center.y,-.115287f),new Vector3(.16f,.10f,.015f)),8,5,
                 new[]{-.115287f,-.113287f,-.110287f,-.106287f,-.101287f,-.100287f},materials,new[]{0,1,1,1,2},true);
         }
         static TissueVolume Grid(Bounds bounds,int nx,int ny,float[] depths,VolumeMaterial[] materials,int[] layer,bool pinPerimeter)

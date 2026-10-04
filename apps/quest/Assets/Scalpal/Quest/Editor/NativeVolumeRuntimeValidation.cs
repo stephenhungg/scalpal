@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using Scalpal.Anatomy;
 using Scalpal.Anatomy.Tissue;
 using Scalpal.Instruments;
 using UnityEditor;
@@ -20,6 +21,7 @@ namespace Scalpal.Quest.Editor
         public static void Run()
         {
             checks = 0;
+            WallProjection();
             GraspSurvival();
             RejectedGraspTrial();
             WarmedAllocations();
@@ -28,6 +30,50 @@ namespace Scalpal.Quest.Editor
             Discontinuities();
             AuthoredScalpel();
             Debug.Log("SCALPAL_NATIVE_VOLUME_RUNTIME_VALIDATION_OK checks=" + checks + " synthetic Editor interaction fixtures; no headset or clinical validation");
+        }
+
+        static void WallProjection()
+        {
+            using(var f=new Fixture())
+            {
+                var model=new GameObject("RotatedAppendixPlacementFixture");model.transform.SetParent(f.frame,false);
+                var mesh=new Mesh();
+                try
+                {
+                    model.transform.localPosition=new Vector3(-.055f,.94f,-.04f);
+                    model.transform.localRotation=Quaternion.Euler(23,71,-18);model.transform.localScale=Vector3.one*.01f;
+                    model.AddComponent<AnatomyPart>().stableId="appendix";
+                    mesh.vertices=new[]{new Vector3(-2,0,0),new Vector3(2,4,1),new Vector3(0,1,2)};mesh.triangles=new[]{0,1,2};mesh.RecalculateBounds();
+                    model.AddComponent<MeshFilter>().sharedMesh=mesh;
+                    Vector3 projection=f.frame.InverseTransformPoint(model.transform.TransformPoint(mesh.bounds.center));
+                    f.simulation.Initialize(f.frame,f.rig,()=>f.ready);
+                    Vector3 low=Vector3.one*float.PositiveInfinity,high=Vector3.one*float.NegativeInfinity;
+                    for(int i=0;i<f.Volume.NodeCount;i++){low=Vector3.Min(low,f.Volume.Rest[i]);high=Vector3.Max(high,f.Volume.Rest[i]);}
+                    Vector3 center=(low+high)*.5f;
+                    Assert(Mathf.Abs(center.x-projection.x)<1e-6f&&Mathf.Abs(center.y-projection.y)<1e-6f,"wall projects appendix through rotated/scaled atlas and world frames");
+                    Assert(Mathf.Abs(low.z+.115287f)<1e-6f&&Mathf.Abs(high.z+.100287f)<1e-6f,"projection preserves authored anterior depths and thickness");
+                    Assert(Mathf.Abs(center.y-CenterY)>.04f,"placement regression moves away from the umbilical default");
+                }
+                finally{UnityEngine.Object.DestroyImmediate(model);UnityEngine.Object.DestroyImmediate(mesh);}
+            }
+            var session=UnityEngine.Object.FindFirstObjectByType<NativeCaseSession>();
+            Assert(session&&session.anatomy,"wall projection checks the authored scene atlas");
+            var source=session.anatomy.GetComponentsInChildren<AnatomyPart>(true).Single(part=>part.stableId=="appendix");
+            var sourceFrame=session.anatomy.transform.parent;
+            Vector3 expected=sourceFrame.InverseTransformPoint(source.transform.TransformPoint(source.GetComponent<MeshFilter>().sharedMesh.bounds.center));
+            using(var f=new Fixture())
+            {
+                var model=UnityEngine.Object.Instantiate(source.gameObject,f.frame);
+                model.transform.SetLocalPositionAndRotation(sourceFrame.InverseTransformPoint(source.transform.position),Quaternion.Inverse(sourceFrame.rotation)*source.transform.rotation);
+                model.transform.localScale=source.transform.lossyScale/sourceFrame.lossyScale.x;
+                f.simulation.Initialize(f.frame,f.rig,()=>f.ready);
+                Vector3 low=Vector3.one*float.PositiveInfinity,high=Vector3.one*float.NegativeInfinity;
+                foreach(var point in f.Volume.Rest){low=Vector3.Min(low,point);high=Vector3.Max(high,point);}
+                var center=(low+high)*.5f;
+                Assert(Mathf.Abs(center.x-expected.x)<1e-6f&&Mathf.Abs(center.y-expected.y)<1e-6f,"actual atlas appendix determines wall field");
+                Assert(center.x<-.01f&&center.y<CenterY-.025f,"actual appendix field is right and caudal of the umbilical coupon");
+                Debug.Log($"SCALPAL_VOLUME_WALL_PROJECTION sourceCenter={expected:F6} wallCenter={center:F6} unscored=true incisionRubric=false");
+            }
         }
 
         sealed class Fixture : IDisposable
