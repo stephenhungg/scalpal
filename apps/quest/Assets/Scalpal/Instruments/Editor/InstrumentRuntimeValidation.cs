@@ -122,8 +122,21 @@ namespace Scalpal.Instruments.Editor
                 interactor.SetActivation(0);
                 interactor.SetTrackedPose(hand.transform.position, hand.transform.rotation, false, clock + 1);
                 interactor.SetTrackedPose(hand.transform.position + Vector3.right, hand.transform.rotation, true, clock + 1.1);
-                Require(interactor.HeldInstrument == null && (tool.transform.position - toolRestPosition).sqrMagnitude < 0.000001f,
-                    "discontinuous tracking recovery cannot teleport a held blade across the patient");
+                interactor.SetActivation(1);
+                Require(interactor.HeldInstrument == tool && tool.TrackingValid && tool.Activation == 0 &&
+                    (tool.gripAnchor.position - hand.transform.position).sqrMagnitude < 0.000001f,
+                    "fast reach within grace retains calibrated tool with effects blocked until release");
+                interactor.Release();
+                hand.transform.localScale = Vector3.one * 1.7f;
+                tool.transform.position = hand.transform.position;
+                Physics.SyncTransforms();
+                Require(interactor.TryPickup(tool), "scaled parent fixture picks up actual instrument");
+                var heldScale = tool.transform.localScale;
+                interactor.SetTrackedPose(hand.transform.position, hand.transform.rotation, false, clock + 2);
+                interactor.SetTrackedPose(hand.transform.position, hand.transform.rotation, true, clock + 2.1);
+                Require((tool.transform.localScale - heldScale).sqrMagnitude < 1e-12f,
+                    "freeze and recovery preserve grip-local scale under a scaled ancestor");
+                interactor.Release(); hand.transform.localScale = Vector3.one;
                 interactor.SetGrip(0);
                 interactor.SetActivation(0);
                 interactor.Release();

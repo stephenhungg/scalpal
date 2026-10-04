@@ -17,9 +17,8 @@ namespace Scalpal.Instruments
         RigidbodyInterpolation previousInterpolation;
         bool gripPressed, requireGripRelease, requireTriggerRelease, trackingSuspended;
         double trackingLostAt;
-        Vector3 trackingLostPosition;
-        Quaternion trackingLostRotation;
         Vector3 heldLocalPosition;
+        Vector3 heldLocalScale;
         Quaternion heldLocalRotation;
 
         void Update() => AdvanceTrackingLoss(Time.unscaledTimeAsDouble);
@@ -35,8 +34,6 @@ namespace Scalpal.Instruments
                 if (!trackingSuspended)
                 {
                     trackingLostAt = monotonicSeconds; trackingSuspended = true;
-                    trackingLostPosition = transform.position;
-                    trackingLostRotation = transform.rotation;
                     // World freeze also survives a tracking-origin/recenter change during the pause.
                     if (HeldInstrument) HeldInstrument.transform.SetParent(null, true);
                 }
@@ -48,10 +45,8 @@ namespace Scalpal.Instruments
                 return;
             }
             AdvanceTrackingLoss(monotonicSeconds);
-            // A recenter or discontinuous recovery must not teleport a held blade across anatomy.
-            if (trackingSuspended && HeldInstrument &&
-                ((position - trackingLostPosition).sqrMagnitude > 0.15f * 0.15f || Quaternion.Angle(rotation, trackingLostRotation) > 60))
-                ReturnHeldToRest();
+            // Recover even after a fast reach/recenter within grace. Trigger release
+            // is required before any effect can run at the recovered pose.
             trackingSuspended = false;
             TrackingValid = valid;
             transform.SetPositionAndRotation(position, rotation);
@@ -59,6 +54,7 @@ namespace Scalpal.Instruments
             {
                 HeldInstrument.transform.SetParent(transform, false);
                 HeldInstrument.transform.SetLocalPositionAndRotation(heldLocalPosition, heldLocalRotation);
+                HeldInstrument.transform.localScale = heldLocalScale;
                 HeldInstrument.SetTrackingValid(valid);
             }
         }
@@ -151,6 +147,7 @@ namespace Scalpal.Instruments
             instrument.transform.position += transform.position - anchor.position;
             heldLocalPosition = instrument.transform.localPosition;
             heldLocalRotation = instrument.transform.localRotation;
+            heldLocalScale = instrument.transform.localScale;
             instrument.SetTrackingValid(true);
             instrument.SetHeld(true);
             return true;

@@ -207,7 +207,7 @@ namespace Scalpal.Quest
         {
             ToolsReset?.Invoke();
             foreach (var input in inputs ?? Array.Empty<XRInstrumentInput>())
-                if (input) input.GetComponent<InstrumentInteractor>()?.ReturnHeldToRest();
+                if (input && input.TryGetComponent<InstrumentInteractor>(out var interactor)) interactor.ReturnHeldToRest();
             for (int i = 0; i < tools.Length; i++)
             {
                 var tool = tools[i];

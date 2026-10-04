@@ -4,6 +4,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using Scalpal.Anatomy;
 using Scalpal.Instruments;
 using Scalpal.Exercises.Coach;
@@ -21,8 +22,8 @@ namespace Scalpal.Quest.Editor
         {
             public bool DisplayRunning=>true;
             public bool FloorTracking=>true;
-            public bool HasFocus=>true;
-            public bool headValid=true,rightValid=true;
+            public bool HasFocus=>focused;
+            public bool headValid=true,rightValid=true,focused=true;
             public Pose head=new Pose(new Vector3(0,1.6f,0),Quaternion.identity), right=new Pose(new Vector3(.25f,1,-.3f),Quaternion.identity);
             public float grip,trigger;
             public bool primary,secondary,menu;
@@ -34,7 +35,12 @@ namespace Scalpal.Quest.Editor
         Input source;
         IXRInputSource previous;
         NativeCaseSession session;
-        int checks, bodyFrame;
+        int checks, bodyFrame, retryRequests, toolResets;
+        InstrumentBehaviour resetObservedTool;
+        Pose observedResetPose;
+        Transform observedResetParent;
+        bool resetObservationPending, resetObserved, observedToolHeld, observedHandOccupied;
+        int resetEventFrame, resetObservedFrame;
         bool feedBody;
         float nextBodyFrame;
         NativePresentation syntheticPresentation;
@@ -53,6 +59,18 @@ namespace Scalpal.Quest.Editor
         void Update()
         {
             if(feedBody&&session&&Time.realtimeSinceStartup>=nextBodyFrame)ObserveBody();
+        }
+        void LateUpdate()
+        {
+            if(!resetObservationPending||!resetObservedTool)return;
+            // ToolsReset is emitted before the restoring loop. LateUpdate observes
+            // its result in that frame, before a subsequent FixedUpdate can settle it.
+            observedResetPose=new Pose(resetObservedTool.transform.position,resetObservedTool.transform.rotation);
+            observedResetParent=resetObservedTool.transform.parent;
+            observedToolHeld=resetObservedTool.Held;
+            observedHandOccupied=RightHand().HeldInstrument!=null;
+            resetObservedFrame=Time.frameCount;
+            resetObserved=true;resetObservationPending=false;
         }
         void ObserveBody()
         {
@@ -116,10 +134,29 @@ namespace Scalpal.Quest.Editor
             source.secondary=!retry&&!reset;source.menu=retry;source.primary=reset;
             yield return Frames();source.secondary=source.menu=source.primary=false;yield return Frames();
         }
+        void CountRetry() => retryRequests++;
+        void CountToolReset()
+        {
+            toolResets++;
+            if(resetObservedTool)
+            {
+                resetEventFrame=Time.frameCount;
+                resetObservationPending=true;
+            }
+        }
+        T[] SavedWorkbenchRest<T>(string field)
+        {
+            var member=typeof(NativeWorkbench).GetField(field,BindingFlags.Instance|BindingFlags.NonPublic);
+            if(member==null||!(member.GetValue(session.workbench) is T[] values))
+                throw new InvalidOperationException("Missing workbench reset oracle: "+field);
+            return values;
+        }
         IEnumerator Exercise()
         {
             session=UnityEngine.Object.FindFirstObjectByType<NativeCaseSession>();
             Check(session&&session.enabled,"committed native scene has enabled coordinator");
+            session.workbench.RetryRequested+=CountRetry;
+            session.workbench.ToolsReset+=CountToolReset;
             bool attemptConfirmed=false;
             Action<string> onAttempt=ignored=>attemptConfirmed=true;
             session.realtime.AttemptStarted+=onAttempt;
@@ -136,8 +173,34 @@ namespace Scalpal.Quest.Editor
             Check(!session.TrySelectOperatingRoomMode("ar",out var modeReason)&&!string.IsNullOrEmpty(modeReason),"unknown presentation mode is rejected with an explanation");
             Check(session.TrySelectOperatingRoomMode("mixed_reality",out modeReason)&&session.Phase=="Selecting","same MR mode is an accepted lifecycle-preserving no-op");
             string attempt=session.realtime.AttemptId;
+            // Observe the local events: a wrongly fired RetryRequested must fail before
+            // any reducer round-trip changes AttemptId. Also make the reset observable.
+            var resetTool=session.workbench.tools.Single(t=>t.instrumentId=="trocar_12mm");
+            // Read the Awake-captured authored reset target independently of the
+            // settled physics transform; no production callback is invoked by reflection.
+            int resetIndex=Array.IndexOf(session.workbench.tools,resetTool);
+            var toolRest=new Pose(SavedWorkbenchRest<Vector3>("toolPositions")[resetIndex],SavedWorkbenchRest<Quaternion>("toolRotations")[resetIndex]);
+            var toolRestParent=SavedWorkbenchRest<Transform>("toolParents")[resetIndex];
+            yield return PickUp(resetTool.instrumentId);
+            source.right.position+=new Vector3(.04f,.04f,.04f);yield return Frames();
+            Check(resetTool.Held&&Vector3.Distance(resetTool.transform.position,toolRest.position)>.02f,
+                "authored tool is actually held away from its rest pose before A reset");
+            yield return WorkbenchTrackingLoss(resetTool,focusLoss:false);
+            yield return WorkbenchTrackingLoss(resetTool,focusLoss:true);
+            int retryBefore=retryRequests,resetBefore=toolResets;
+            resetObservedTool=resetTool;resetObserved=false;
             yield return Button(reset:true);
-            Check(session.realtime.AttemptId==attempt&&session.Phase=="Selecting","A resets tools without requesting a new attempt");
+            resetObservedTool=null;
+            Check(retryRequests==retryBefore&&toolResets==resetBefore+1,
+                "A emits one equipment reset and no immediate retry request before reducer confirmation");
+            Check(resetObserved&&resetObservedFrame==resetEventFrame&&!observedToolHeld&&!observedHandOccupied&&observedResetParent==toolRestParent
+                &&Vector3.Distance(observedResetPose.position,toolRest.position)<.001f&&Quaternion.Angle(observedResetPose.rotation,toolRest.rotation)<.01f,
+                "A releases held tool and restores Awake-authored tray pose in the reset frame"
+                +" observed="+resetObserved+" sameFrame="+(resetObservedFrame==resetEventFrame)+" held="+observedToolHeld
+                +" handOccupied="+observedHandOccupied+" parentMatches="+(observedResetParent==toolRestParent)
+                +" positionError="+Vector3.Distance(observedResetPose.position,toolRest.position)+" angleError="+Quaternion.Angle(observedResetPose.rotation,toolRest.rotation));
+            source.grip=0;yield return Frames();
+            Check(session.realtime.AttemptId==attempt&&!session.realtime.AttemptPending&&session.Phase=="Selecting","A resets tools without requesting a new attempt");
             yield return Button();
             Check(session.Phase=="Confirmed","real B edge reviews synthetic case");
             yield return Button();
@@ -196,11 +259,10 @@ namespace Scalpal.Quest.Editor
             Check(session.anatomy.HighlightedPartId=="","hidden anatomy publishes no actual highlight");
             Check(!session.TrySelectOperatingRoomMode("virtual",out modeReason)&&!string.IsNullOrEmpty(modeReason)&&session.Phase=="Practicing"&&!session.Practicing&&session.presentation.passthrough,
                 "paused MR practice still rejects presentation changes");
-            yield return Frames(20);
             yield return StateHighlight("");
             yield return Command("resumePractice");
             yield return Wait(()=>session.Practicing&&session.anatomy.HighlightedPartId=="appendix","resume restores desired highlight");
-            yield return Frames(20);yield return StateHighlight("appendix");
+            yield return StateHighlight("appendix");
             var access=session.patientFrame.GetComponentsInChildren<NativePortMarker>(true).Single(p=>p.portId=="umbilical");
             yield return PickUp("trocar_12mm");
             var held=session.workbench.inputs.Single(i=>i.controller==XRNode.RightHand).GetComponent<InstrumentInteractor>().HeldInstrument;
@@ -216,9 +278,13 @@ namespace Scalpal.Quest.Editor
             Check(session.exercise.Current?.id=="working_ports","physics contact advanced actual authored runner");
             // A reset in active practice must preserve the live attempt and completed port.
             attempt=session.realtime.AttemptId;string step=session.exercise.Current.id;
+            retryBefore=retryRequests;resetBefore=toolResets;
             yield return Button(reset:true);
+            Check(retryRequests==retryBefore&&toolResets==resetBefore+1,
+                "MR practice A resets equipment without an immediate retry event");
             Check(session.realtime.AttemptId==attempt&&session.exercise.Current.id==step&&session.Practicing,"A reset in practice preserves attempt and progress");
             yield return Button(retry:true);
+            Check(retryRequests==retryBefore+1,"left menu emits the explicit retry event through real Update");
             yield return Wait(()=>session.realtime.AttemptId!=attempt&&session.Phase=="Selecting","left menu explicitly creates a new attempt",15);
             Check(session.anatomy.HighlightedPartId=="","new attempt clears desired highlight");
             feedBody=false;
@@ -249,7 +315,10 @@ namespace Scalpal.Quest.Editor
             yield return Wait(()=>session.exercise.Current?.id=="working_ports","VR actual FixedUpdate OnTriggerStay places the same authored port",12);
             source.trigger=0;source.grip=0;yield return Frames();
             Check(session.exercise.Current?.id=="working_ports"&&session.Practicing,"VR uses the same authored exercise core and actual tool physics");
+            retryBefore=retryRequests;resetBefore=toolResets;
             yield return Button(reset:true);
+            Check(retryRequests==retryBefore&&toolResets==resetBefore+1,
+                "VR practice A resets equipment without an immediate retry event");
             Check(session.realtime.AttemptId==attempt&&session.exercise.Current?.id=="working_ports"&&session.Practicing,
                 "VR A reset also preserves the shared attempt and authored progress");
             Debug.Log("SCALPAL_NATIVE_PLAYMODE_OK checks="+checks+" realStart=true realUpdate=true realButtons=true realPhysicsTrigger=true liveLocalDb=true isolatedCoachHttp=true operatingRoomModes=mixed_reality,virtual syntheticCompositor=true syntheticBodyFrames=true headsetValidated=false completeDemoFlow=false");
@@ -280,6 +349,33 @@ namespace Scalpal.Quest.Editor
             Vector3 world=hand.position+(target-tool.actionPoint.position);
             source.right=new Pose(session.workbench.trackingOrigin.InverseTransformPoint(world),source.right.rotation);
         }
+        IEnumerator WorkbenchTrackingLoss(InstrumentBehaviour held,bool focusLoss)
+        {
+            var hand=RightHand();
+            float grace=hand.trackingGraceSeconds;
+            // Leave a generous grace for the frame-path assertions on slow Editor
+            // machines. The separate right-hand check still uses the runtime default.
+            hand.trackingGraceSeconds=2;
+            Vector3 frozen=held.transform.position;
+            try
+            {
+                if(focusLoss)source.focused=false;else source.headValid=false;
+                yield return Frames(2);
+                Check(!session.workbench.IsReady&&session.workbench.inputs.All(input=>!input.enabled)
+                    &&held.Held&&!held.TrackingValid&&(held.transform.position-frozen).sqrMagnitude<1e-8f,
+                    (focusLoss?"focus":"head tracking")+" loss gates real-frame inputs and freezes held tool");
+                source.focused=source.headValid=true;
+                yield return Frames();
+                Check(session.workbench.IsReady&&session.workbench.inputs.All(input=>input.enabled)&&held.Held&&held.TrackingValid,
+                    (focusLoss?"focus":"head tracking")+" recovery re-enables inputs and retains the same tool");
+            }
+            finally
+            {
+                source.focused=source.headValid=true;
+                hand.trackingGraceSeconds=grace;
+            }
+        }
+        InstrumentInteractor RightHand() => session.workbench.inputs.Single(i=>i.controller==XRNode.RightHand).GetComponent<InstrumentInteractor>();
         IEnumerator PickUp(string id)
         {
             var tool=session.workbench.tools.Single(t=>t.instrumentId==id);
@@ -299,11 +395,30 @@ namespace Scalpal.Quest.Editor
         [Serializable] sealed class State {public string highlighted;}
         IEnumerator StateHighlight(string expected)
         {
-            using(var request=UnityWebRequest.Get(endpoint+"/fixture/state"))
+            // Publish is throttled by elapsed time, so an uncapped frame count cannot
+            // establish that the subscribed reducer state has caught up after resume.
+            float deadline=Time.realtimeSinceStartup+12;
+            string observed=null;
+            do
             {
-                yield return request.SendWebRequest();Check(request.result==UnityWebRequest.Result.Success,"read actual reducer state");
-                Check(JsonUtility.FromJson<State>(request.downloadHandler.text).highlighted==expected,"published highlight matches rendered state");
-            }
+                if(runtimeException!=null)throw new InvalidOperationException(runtimeException);
+                using(var request=UnityWebRequest.Get(endpoint+"/fixture/state"))
+                {
+                    request.timeout=3;
+                    yield return request.SendWebRequest();
+                    Check(request.result==UnityWebRequest.Result.Success,"read actual reducer state");
+                    var state=JsonUtility.FromJson<State>(request.downloadHandler.text);
+                    Check(state!=null,"fixture returns a reducer state");
+                    observed=state.highlighted;
+                    if(observed==expected)
+                    {
+                        Check(true,"published highlight matches rendered state");
+                        yield break;
+                    }
+                }
+                yield return new WaitForSecondsRealtime(.05f);
+            } while(Time.realtimeSinceStartup<deadline);
+            throw new InvalidOperationException("Play Mode timeout: published highlight expected="+expected+" actual="+observed);
         }
         IEnumerator Guard(IEnumerator work)
         {
@@ -322,6 +437,11 @@ namespace Scalpal.Quest.Editor
         }
         void OnDestroy()
         {
+            if(session&&session.workbench)
+            {
+                session.workbench.RetryRequested-=CountRetry;
+                session.workbench.ToolsReset-=CountToolReset;
+            }
             Application.logMessageReceived-=Log;XRInput.Source=previous;
             if(syntheticPresentation)syntheticPresentation.SyntheticCompositorReady=false;
         }
