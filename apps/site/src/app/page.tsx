@@ -2,6 +2,7 @@ import { BlurWords } from "@/components/BlurWords";
 import { wordCount } from "@/lib/text";
 import { FadeIn } from "@/components/FadeIn";
 import { HandsField } from "@/components/HandsField";
+import { WaveBackground } from "@/components/WaveBackground";
 import { RollButton } from "@/components/RollButton";
 import { Shell } from "@/components/Shell";
 
@@ -12,6 +13,9 @@ export default function Home() {
   return (
     <main className="h-dvh overflow-hidden">
       <Shell className="h-dvh">
+        <div className="absolute inset-0 z-0">
+          <WaveBackground />
+        </div>
         <div className="absolute inset-0 z-0">
           <HandsField />
         </div>

@@ -91,17 +91,18 @@ void main() {
   outColor = vec4(0.0, 0.0, 0.0, level * shape);
 }`;
 
-// Placement fitted to aeterna's hero silhouettes at a 1200px container / 900px viewport
-// (best-overlap search over scale, rotation, and position), scaled with container width
-// and anchored to the viewport bottom. Angles are clockwise.
+// Placement fitted to aeterna's hero silhouettes (best-overlap search over scale, rotation,
+// and position) at a 1440x900 viewport, where the reference composition sits in a centered
+// 1200px band. Scales with viewport width; arms run off the screen edges. Angles clockwise.
 const DEG = Math.PI / 180;
 function layout(w: number, h: number, aspL: number, aspR: number) {
-  const k = w / 1200;
-  const lw = 979 * k, rw = 825 * k;
+  const k = w / 1440;
+  const ox = 120 * k; // left edge of the reference's 1200px band
+  const lw = 1228 * k, rw = 1117 * k;
   const lift = w < 810 ? 55 * (h / 844) : 0; // phones sit the pair a little higher
   return {
-    L: [-10 * k, h - 215 * k - lift, lw, lw / aspL, 4 * DEG],
-    R: [1133 * k, h - 267 * k - lift, rw, rw / aspR, 1 * DEG],
+    L: [ox - 130 * k, h - 160 * k - lift, lw, lw / aspL, 1 * DEG],
+    R: [ox + 1295 * k, h - 250 * k - lift, rw, rw / aspR, -1 * DEG],
   };
 }
 
@@ -116,6 +117,9 @@ function loadImage(src: string) {
 
 export function HandsField({ className = "" }: { className?: string }) {
   const ref = useRef<HTMLCanvasElement>(null);
+  // Blurs whatever is drawn behind the hands (the wave background), shaped by a soft copy
+  // of the hand silhouettes.
+  const blurRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const canvas = ref.current;
@@ -198,13 +202,46 @@ export function HandsField({ className = "" }: { className?: string }) {
     };
     const request = () => { if (!raf) raf = requestAnimationFrame(draw); };
 
-    Promise.all([loadImage("/hands/adam.webp"), loadImage("/hands/creator.webp")]).then(([a, c]) => {
+    let imgs: [HTMLImageElement, HTMLImageElement] | null = null;
+    let maskKey = "";
+    const updateMask = () => {
+      const el = blurRef.current;
+      if (!el || !imgs) return;
+      const w = canvas.clientWidth, h = canvas.clientHeight;
+      const key = `${w}x${h}`;
+      if (key === maskKey || !w || !h) return;
+      maskKey = key;
+      const f = 0.25; // draw the mask at quarter size; CSS stretches it back
+      const m = document.createElement("canvas");
+      m.width = Math.max(1, Math.round(w * f));
+      m.height = Math.max(1, Math.round(h * f));
+      const ctx = m.getContext("2d");
+      if (!ctx) return;
+      const { L, R } = layout(w, h, aspL, aspR);
+      ctx.filter = `blur(${Math.round(28 * f)}px)`;
+      for (const [im, r] of [[imgs[0], L], [imgs[1], R]] as const) {
+        for (let pass = 0; pass < 2; pass++) {
+          ctx.save();
+          ctx.translate(r[0] * f, r[1] * f);
+          ctx.rotate(r[4]);
+          ctx.drawImage(im, (-r[2] / 2) * f, (-r[3] / 2) * f, r[2] * f, r[3] * f);
+          ctx.restore();
+        }
+      }
+      const url = `url(${m.toDataURL("image/png")})`;
+      el.style.maskImage = url;
+      el.style.webkitMaskImage = url;
+    };
+
+    Promise.all([loadImage("/hands/arm-left.webp"), loadImage("/hands/arm-right.webp")]).then(([a, c]) => {
       if (disposed) return;
+      imgs = [a, c];
       aspL = a.width / a.height;
       aspR = c.width / c.height;
       texture(a, 0);
       texture(c, 1);
       ready = true;
+      updateMask();
       request();
     });
 
@@ -220,7 +257,7 @@ export function HandsField({ className = "" }: { className?: string }) {
       request();
     };
     const onLeave = () => { lensTarget = 0; request(); };
-    const ro = new ResizeObserver(request);
+    const ro = new ResizeObserver(() => { updateMask(); request(); });
     ro.observe(canvas);
     window.addEventListener("pointermove", onMove);
     document.addEventListener("pointerleave", onLeave);
@@ -233,5 +270,15 @@ export function HandsField({ className = "" }: { className?: string }) {
     };
   }, []);
 
-  return <canvas ref={ref} aria-hidden className={`pointer-events-none block h-full w-full ${className}`} />;
+  return (
+    <>
+      <div
+        ref={blurRef}
+        aria-hidden
+        className="pointer-events-none absolute inset-0 backdrop-blur-[10px]"
+        style={{ maskSize: "100% 100%", WebkitMaskSize: "100% 100%", maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat", maskImage: "linear-gradient(transparent, transparent)" }}
+      />
+      <canvas ref={ref} aria-hidden className={`pointer-events-none relative block h-full w-full ${className}`} />
+    </>
+  );
 }

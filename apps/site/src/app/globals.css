@@ -6,9 +6,7 @@
   --ink: rgb(0, 0, 0);
   --ink-70: rgba(0, 0, 0, 0.7);
   --ink-50: rgba(0, 0, 0, 0.5);
-  --rule: rgb(220, 220, 220);
   --cross: rgb(190, 190, 190);
-  --container: 1200px;
 }
 
 @theme inline {
@@ -16,7 +14,6 @@
   --font-mono: var(--font-mono);
   --color-bg: var(--bg);
   --color-ink: var(--ink);
-  --color-rule: var(--rule);
 }
 
 html,
