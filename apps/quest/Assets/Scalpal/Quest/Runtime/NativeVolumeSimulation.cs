@@ -82,13 +82,15 @@ namespace Scalpal.Quest
                 Wall.Volume.Step(1f/90,grasper?Wall.transform.InverseTransformPoint(grasper.actionPoint.position)+handleOffset:Vector3.zero,Vector3.zero);
                 clock-=1f/90;
             }
+            // Numerical rejection retains the material handle and retries next tick.
+            // Detach only on explicit loss/release or a topology cut invalidating its fan.
             if(grasper&&Wall.Volume.Handle<0)ReleaseHandle();
             surfaceClock+=Mathf.Clamp(seconds,0,.05f);
             if(surfaceClock>=1f/30){Wall.CommitSurface();surfaceClock%=1f/30;}
             peakFrameMs=Mathf.Max(peakFrameMs,(float)((Time.realtimeSinceStartupAsDouble-begin)*1000));
             if(Application.isPlaying&&Time.realtimeSinceStartupAsDouble>=nextTiming)
             {
-                Debug.Log($"SCALPAL_NATIVE_VOLUME_TIMING cells={Wall.Volume.Cells.Length} nodes={Wall.Volume.NodeCount} cuts={Wall.Volume.CutFaceCount} peakCpuMs={peakFrameMs:F2}");
+                Debug.Log($"SCALPAL_NATIVE_VOLUME_TIMING cells={Wall.Volume.Cells.Length} nodes={Wall.Volume.NodeCount} cuts={Wall.Volume.CutFaceCount} graspNodes={Wall.Volume.HandleNodeCount} stepRetries={Wall.Volume.LastStepRetries} stepBacktracks={Wall.Volume.LastStepBacktracks} stepAccepted={Wall.Volume.LastStepAccepted} peakCpuMs={peakFrameMs:F2}");
                 nextTiming=Time.realtimeSinceStartupAsDouble+5;peakFrameMs=0;
             }
         }
@@ -99,11 +101,7 @@ namespace Scalpal.Quest
                 if(!ValidTool(tool)||!tool.actionPoint||(tool.action!=InstrumentAction.Grasp&&tool.action!=InstrumentAction.Retrieve))continue;
                 Vector3 point=Wall.transform.InverseTransformPoint(tool.actionPoint.position);
                 // Actual generated boundary/cut triangles; a distant bounding box is not contact.
-                var vertices=Wall.Surface.vertices;var indices=Wall.Surface.triangles;
-                float nearest=.003f*.003f;
-                for(int i=0;i<indices.Length;i+=3)
-                    nearest=Mathf.Min(nearest,(TissueVolume.ClosestTriangle(point,vertices[indices[i]],vertices[indices[i+1]],vertices[indices[i+2]])-point).sqrMagnitude);
-                if(nearest>=.003f*.003f||!Wall.Volume.BeginHandle(point,.02f))continue;
+                if(Wall.Volume.SurfaceDistanceSquared(point,.003f)>=.003f*.003f||!Wall.Volume.BeginHandle(point,.02f))continue;
                 grasper=tool;handleOffset=Wall.Volume.HandlePosition-point;break;
             }
         }

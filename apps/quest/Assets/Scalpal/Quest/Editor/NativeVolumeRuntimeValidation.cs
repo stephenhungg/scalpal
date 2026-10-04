@@ -20,6 +20,9 @@ namespace Scalpal.Quest.Editor
         public static void Run()
         {
             checks = 0;
+            GraspSurvival();
+            RejectedGraspTrial();
+            WarmedAllocations();
             GatesAndRetry();
             InvalidTools();
             Discontinuities();
@@ -147,6 +150,93 @@ namespace Scalpal.Quest.Editor
                 Assert(Near(volume.TotalMass, mass) && Near(volume.ReferenceVolume, referenceVolume), reason + ": reference mass/volume");
                 Assert(cuts.SequenceEqual(volume.Faces.Select(face => face.cut)), reason + ": fracture flags");
                 Assert(binding.SequenceEqual(Enumerable.Range(0, binding.Length).Select(i => volume.NodeFor(i / 4, i % 4))), reason + ": cell bindings");
+            }
+        }
+
+        static void GraspSurvival()
+        {
+            // The actual layered wall, public instrument route, and 90 Hz solver:
+            // holding the tool identity alone cannot pass; tissue must visibly move.
+            foreach(var direction in new[]{Vector3.forward,Vector3.back,Vector3.left,Vector3.right})
+                using(var f=new Fixture())
+                {
+                    f.blade.SetHeld(false);f.ready=true;
+                    var contact=new Vector3(.02f,CenterY,-.115287f);
+                    f.grasper.transform.position=f.frame.TransformPoint(contact);Enable(f.grasper);f.Tick();
+                    int handle=f.Volume.Handle;
+                    Assert(handle>=0,"layered wall acquires runtime grasp");
+                    Assert(f.Volume.HandleNodeCount>=6,"attachment spreads through a finite neighboring material patch");
+                    var start=f.Volume.HandlePosition;
+                    for(int frame=1;frame<=25;frame++)
+                    {
+                        float travel=frame*.0004f; // 36 mm/s, reaching 10 mm.
+                        f.grasper.transform.position=f.frame.TransformPoint(contact+direction*travel);f.Tick();
+                        Assert(f.Volume.Handle==handle,"5-10 mm push/pull/lateral never drops or reacquires the material handle");
+                        AssertCells(f.Volume,"grasp movement");
+                        if(frame==13)Assert(Vector3.Dot(f.Volume.HandlePosition-start,direction)>.0025f,"5 mm commanded grasp produces at least 2.5 mm tissue motion direction="+direction+" motionMm="+(1000*Vector3.Dot(f.Volume.HandlePosition-start,direction))+" backtracks="+f.Volume.LastStepBacktracks);
+                    }
+                    for(int frame=0;frame<20;frame++){f.Tick();Assert(f.Volume.Handle==handle,"held 10 mm target survives settling");AssertCells(f.Volume,"grasp settling");}
+                    Assert(Vector3.Dot(f.Volume.HandlePosition-start,direction)>.006f,"10 mm commanded grasp produces at least 6 mm tissue motion");
+                    Assert(f.Volume.LastStepAccepted,"settled grasp continues accepting solver steps direction="+direction+" motionMm="+(1000*Vector3.Dot(f.Volume.HandlePosition-start,direction))+" retries="+f.Volume.LastStepRetries+" rejectedJ="+f.Volume.LastRejectedJacobian+" cell="+f.Volume.LastRejectedCell);
+                    f.grasper.SetActivation(0);f.Tick();Assert(f.Volume.Handle<0,"explicit grasper release still detaches");
+                    AssertUnscored(f);
+                }
+        }
+        static void RejectedGraspTrial()
+        {
+            var volume=TissueVolumeFactory.AbdominalWall();
+            Assert(volume.BeginHandle(new Vector3(.02f,CenterY,-.115287f),.02f),"rollback fixture acquires layered grasp");
+            var target=volume.HandlePosition+Vector3.back*.002f;
+            for(int i=0;i<8;i++)volume.Step(Step,target,Vector3.zero);
+            int handle=volume.Handle;var positions=(Vector3[])volume.Positions.Clone();
+            var force=new Vector3[volume.NodeCount];volume.MeasureNodalForces(force);
+            // An impossible *prescribed boundary*, independent of attachment strength,
+            // makes every retry fail, rather than assuming a compliant grip must invert.
+            Assert(volume.SetBoundaryTarget(0,volume.Original[0]+Vector3.right*.3f),"prescribe independently invalid boundary");
+            volume.Step(Step,target+Vector3.forward*.01f,Vector3.zero);
+            Assert(!volume.LastStepAccepted&&volume.LastStepRetries==4,"invalid boundary rejects all bounded attachment retries");
+            Assert(volume.Handle==handle,"rejected trial preserves user's material grasp");
+            AssertPositions(positions,volume.Positions,"rejected trial keeps exactly accepted positions");
+            var after=new Vector3[volume.NodeCount];volume.MeasureNodalForces(after);AssertPositions(force,after,"rejection retains material force cache");
+            Assert(volume.SetBoundaryTarget(0,volume.Original[0]),"restore valid boundary without reacquiring grasp");
+            volume.Step(Step,target,Vector3.zero);
+            Assert(volume.LastStepAccepted&&volume.Handle==handle,"same grasp resumes after rejected pending boundary is corrected");
+            AssertCells(volume,"resumed grasp");
+        }
+        static void AssertCells(TissueVolume volume,string reason)
+        {
+            for(int cell=0;cell<volume.Cells.Length;cell++)
+            {
+                var source=volume.Cells[cell];
+                var dm=new TissueTensor(volume.Original[source.b]-volume.Original[source.a],volume.Original[source.c]-volume.Original[source.a],volume.Original[source.d]-volume.Original[source.a]);
+                var a=volume.Positions[volume.NodeFor(cell,0)];
+                var f=new TissueTensor(volume.Positions[volume.NodeFor(cell,1)]-a,volume.Positions[volume.NodeFor(cell,2)]-a,volume.Positions[volume.NodeFor(cell,3)]-a).Multiply(dm.Inverse());
+                Assert(!float.IsNaN(f.Determinant)&&!float.IsInfinity(f.Determinant)&&f.Determinant>.02f,reason+": finite noninverted cell "+cell);
+            }
+        }
+
+        static void WarmedAllocations()
+        {
+            using(var f=new Fixture())
+            {
+                f.ready=true;f.blade.SetHeld(false);
+                // Activated near-surface grasper stays just outside acquisition distance:
+                // this reproduces the old per-frame Mesh array-copy path.
+                f.grasper.transform.position=f.frame.TransformPoint(new Vector3(.02f,CenterY,-.119287f));Enable(f.grasper);
+                for(int i=0;i<8;i++)f.Tick(Step*.5f);
+                long before=GC.GetAllocatedBytesForCurrentThread();
+                for(int i=0;i<64;i++)f.Tick(Step*.5f);
+                long acquireAllocated=GC.GetAllocatedBytesForCurrentThread()-before;
+                Assert(f.Volume.Handle<0,"warmed acquisition fixture remains outside exact surface distance");
+                Assert(acquireAllocated<=4096,"warmed actual runtime acquisition path avoids mesh-copy GC; bytes="+acquireAllocated);
+                var a=Vector3.one;var b=a+Vector3.right*.01f;var c=a+Vector3.up*.01f;
+                for(int i=0;i<4;i++){f.Volume.CutSweep(a,b,c,.0005f);f.Volume.WriteSurface(f.Wall.Surface);}
+                before=GC.GetAllocatedBytesForCurrentThread();
+                for(int i=0;i<32;i++){f.Volume.CutSweep(a,b,c,.0005f);f.Volume.WriteSurface(f.Wall.Surface);}
+                long geometryAllocated=GC.GetAllocatedBytesForCurrentThread()-before;
+                Assert(geometryAllocated<=4096,"warmed cut-query/surface-write reuses managed buffers; bytes="+geometryAllocated);
+                Debug.Log("SCALPAL_VOLUME_ALLOCATION_VALIDATION acquire64TicksBytes="+acquireAllocated+" geometry32WritesBytes="+geometryAllocated);
+                Assert(f.Volume.CutFaceCount==0,"distant allocation fixture does not trigger topology rebuild");
             }
         }
 
