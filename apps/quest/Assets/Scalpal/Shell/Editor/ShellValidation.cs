@@ -533,10 +533,13 @@ namespace Scalpal.Shell.Editor
                     fit.Fit(); var bounds = fit.LocalBounds();
                     var first = panel.InverseTransformPoint(fit.transform.TransformPoint(bounds.min));
                     var second = panel.InverseTransformPoint(fit.transform.TransformPoint(bounds.max));
-                    return new Vector2(Mathf.Min(first.y, second.y), Mathf.Max(first.y, second.y));
-                }).OrderByDescending(region => region.y).ToArray();
-            Check(regions.All(region => region.x >= -halfHeight - .0005f && region.y <= halfHeight + .0005f), description + " measured glyph bounds stay inside panel");
-            bool separated = Enumerable.Range(1, Math.Max(0, regions.Length - 1)).All(index => regions[index - 1].x >= regions[index].y - .0005f);
+                    return new Rect(Mathf.Min(first.x, second.x), Mathf.Min(first.y, second.y), Mathf.Abs(second.x - first.x), Mathf.Abs(second.y - first.y));
+                }).OrderByDescending(region => region.yMax).ToArray();
+            Check(regions.All(region => region.yMin >= -halfHeight - .0005f && region.yMax <= halfHeight + .0005f), description + " measured glyph bounds stay inside panel");
+            // Side-by-side buttons (Begin + Skip to surgery) share a row; text only collides if both axes overlap.
+            bool separated = regions.SelectMany((a, i) => regions.Skip(i + 1).Select(b => (a, b))).All(pair =>
+                pair.a.xMax <= pair.b.xMin + .0005f || pair.b.xMax <= pair.a.xMin + .0005f ||
+                pair.a.yMin >= pair.b.yMax - .0005f || pair.b.yMin >= pair.a.yMax - .0005f);
             if (!separated) foreach (var fit in panel.GetComponentsInChildren<ScalpalTextFit>())
             {
                 var bounds = fit.LocalBounds();
