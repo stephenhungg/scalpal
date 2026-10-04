@@ -39,7 +39,8 @@ namespace Scalpal.Quest.Editor
                 anatomy.RebuildIndex();
                 Assert(workbench.tools.Length == 15 && workbench.tools.All(tool => tool && tool.actionPoint), "15 actual tools with authored tips");
                 Assert(anatomy.Parts.Count == 9, "nine actual practice anatomy parts");
-                var input = session.GetComponent<NativeProcedureInput>() ?? session.gameObject.AddComponent<NativeProcedureInput>();
+                var input = session.GetComponent<NativeProcedureInput>();
+                if (!input) input = session.gameObject.AddComponent<NativeProcedureInput>();
                 input.portMarkers = session.patientFrame.GetComponentsInChildren<NativePortMarker>(true);
                 bool practicing = true;
                 input.Initialize(exercise, workbench, () => practicing);

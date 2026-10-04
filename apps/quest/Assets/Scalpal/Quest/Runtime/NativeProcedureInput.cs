@@ -23,12 +23,17 @@ namespace Scalpal.Quest
         readonly Dictionary<InstrumentBehaviour, HashSet<string>> reported = new Dictionary<InstrumentBehaviour, HashSet<string>>();
         readonly RaycastHit[] gazeHits = new RaycastHit[48];
         readonly Collider[] overlaps = new Collider[48];
+        readonly List<Collider> anatomyColliders = new List<Collider>();
+        readonly Dictionary<AnatomyPart, string> targetKeys = new Dictionary<AnatomyPart, string>();
+        readonly Dictionary<MeshCollider, ClosedMeshInterior> interiors = new Dictionary<MeshCollider, ClosedMeshInterior>();
+        IReadOnlyList<AnatomyPart> cachedParts;
+        float nextInteriorPoll;
 
         sealed class ContactBinding
         {
             public InstrumentTipContact contact;
             public InstrumentBehaviour tool;
-            public Action<string, string> handler;
+            public Func<Collider, string, string, bool> handler;
             public Func<bool> gate;
         }
 
@@ -45,9 +50,9 @@ namespace Scalpal.Quest
                     if (contact.GetComponentInParent<InstrumentBehaviour>() != tool) continue;
                     var item = new ContactBinding { contact = contact, tool = tool };
                     item.gate = CanScore;
-                    item.handler = (partId, instrumentId) => HandleTouch(item, partId, instrumentId);
+                    item.handler = (collider, partId, instrumentId) => HandleTouch(item, collider, partId, instrumentId);
                     contact.RegistrationIsValid = item.gate;
-                    contact.TouchApplied += item.handler;
+                    contact.TouchAcceptor = item.handler;
                     contacts.Add(item);
                 }
             }
@@ -64,25 +69,39 @@ namespace Scalpal.Quest
         {
             foreach (var tool in workbench ? workbench.tools ?? Array.Empty<InstrumentBehaviour>() : Array.Empty<InstrumentBehaviour>())
                 if (tool && (!tool.Held || !tool.TrackingValid || tool.Activation <= 0.2f)) reported.Remove(tool);
-            RefreshFocus();
+            if (!CanScore()) { FocusedPartId = ""; FocusedPortId = ""; return; }
+            if (!string.IsNullOrEmpty(FocusedPartId) && (!exercise.anatomy.TryGetPart(FocusedPartId, out var focused) ||
+                !focused.IsVisible || !focused.HasVisibleGeometry)) FocusedPartId = "";
+            if (Time.unscaledTime >= nextInteriorPoll)
+            {
+                nextInteriorPoll = Time.unscaledTime + 1f / 30f;
+                // Automatic focus/interior work is bounded to 30 Hz; button actions query freshly.
+                RefreshFocus();
+                ProbeInteriorContacts();
+            }
         }
 
-        void HandleTouch(ContactBinding source, string partId, string instrumentId)
+        bool HandleTouch(ContactBinding source, Collider callbackCollider, string partId, string instrumentId)
         {
             if (!CanScore() || exercise.Current?.check == null || exercise.Current.check.type == "place_ports" ||
                 !ValidTool(source.tool, true) || instrumentId != source.tool.instrumentId || !source.contact || !source.contact.isActiveAndEnabled ||
-                source.contact.GetComponentInParent<InstrumentBehaviour>() != source.tool) return;
+                source.contact.GetComponentInParent<InstrumentBehaviour>() != source.tool) return false;
+            var callbackPart = OwnedPart(callbackCollider);
+            if (!callbackPart || callbackPart.stableId != partId) return false;
             var owned = FindTouchCollider(source.tool, partId, source.contact);
-            if (!owned || !Remember(source.tool, "part:" + partId)) return;
-            if (!exercise.SelectInstrument(source.tool.instrumentId)) return;
-            exercise.TouchCollider(owned, out _, out _);
+            var key = "part:" + partId;
+            if (!owned || AlreadyReported(source.tool, key) || !exercise.SelectInstrument(source.tool.instrumentId)) return false;
+            if (!exercise.TouchCollider(owned, out _, out _)) return false;
+            Remember(source.tool, key);
+            return true;
         }
 
         Collider FindTouchCollider(InstrumentBehaviour tool, string partId, InstrumentTipContact sourceContact)
         {
             if (!exercise || !exercise.anatomy || !tool.actionPoint ||
                 !exercise.anatomy.TryGetPart(partId, out var part) || !part.IsVisible || !part.HasVisibleGeometry) return null;
-            foreach (var collider in part.GetComponentsInChildren<Collider>(true))
+            CacheAnatomyColliders();
+            foreach (var collider in anatomyColliders)
                 if (OwnedPart(collider) == part && TipOverlaps(tool, collider, sourceContact)) return collider;
             return null;
         }
@@ -102,20 +121,66 @@ namespace Scalpal.Quest
         }
 
         // Verify collision against a real trigger belonging to this tool's actual tip.
-        static bool TipOverlaps(InstrumentBehaviour tool, Collider target, InstrumentTipContact sourceContact = null)
+        bool TipOverlaps(InstrumentBehaviour tool, Collider target, InstrumentTipContact sourceContact = null)
         {
             if (!target || !target.enabled || !target.gameObject.activeInHierarchy || !tool || !tool.actionPoint) return false;
-            foreach (var contact in tool.GetComponentsInChildren<InstrumentTipContact>(true))
+            foreach (var binding in contacts)
             {
-                if (!contact.isActiveAndEnabled || contact.GetComponentInParent<InstrumentBehaviour>() != tool) continue;
+                var contact = binding.contact;
+                if (binding.tool != tool || !contact || !contact.isActiveAndEnabled || contact.GetComponentInParent<InstrumentBehaviour>() != tool) continue;
                 if (sourceContact && contact != sourceContact) continue;
                 var tip = contact.GetComponent<Collider>();
                 if (!tip || !tip.enabled || !tip.isTrigger || !tip.gameObject.activeInHierarchy ||
                     Vector3.Distance(contact.transform.position, tool.actionPoint.position) > tool.contactRadius) continue;
                 if (Physics.ComputePenetration(tip, tip.transform.position, tip.transform.rotation,
                     target, target.transform.position, target.transform.rotation, out _, out _)) return true;
+                // A non-convex shell has no PhysX overlap when the whole tip is inside it.
+                // Only selected, visible, closed, outward-wound anatomy gets this fallback.
+                if (target is MeshCollider shell && OwnedPart(shell) && InteriorContains(shell, tip.bounds.center)) return true;
             }
             return false;
+        }
+
+        bool AlreadyReported(InstrumentBehaviour tool, string target) =>
+            reported.TryGetValue(tool, out var cycle) && cycle.Contains(target);
+
+        void CacheAnatomyColliders()
+        {
+            var parts = exercise && exercise.anatomy ? exercise.anatomy.Parts : null;
+            if (ReferenceEquals(parts, cachedParts)) return;
+            cachedParts = parts; anatomyColliders.Clear(); interiors.Clear(); targetKeys.Clear();
+            if (parts == null) return;
+            foreach (var part in parts)
+            {
+                if (!part) continue;
+                targetKeys[part] = "part:" + part.stableId;
+                foreach (var collider in part.GetComponentsInChildren<Collider>(true))
+                    if (collider.GetComponentInParent<AnatomyPart>(true) == part) anatomyColliders.Add(collider);
+            }
+        }
+
+        bool InteriorContains(MeshCollider shell, Vector3 point)
+        {
+            if (!shell.bounds.Contains(point)) return false;
+            if (!interiors.TryGetValue(shell, out var interior)) interiors.Add(shell, interior = new ClosedMeshInterior());
+            return interior.Contains(shell, point);
+        }
+
+        // Same callback and acceptance path as OnTriggerStay; never a second score producer.
+        public void ProbeInteriorContacts()
+        {
+            if (!CanScore() || exercise.Current?.check == null || exercise.Current.check.type == "place_ports") return;
+            CacheAnatomyColliders();
+            foreach (var item in contacts)
+            {
+                if (!item.contact || !ValidTool(item.tool, true)) continue;
+                foreach (var collider in anatomyColliders)
+                {
+                    var part = OwnedPart(collider);
+                    if (!part || AlreadyReported(item.tool, targetKeys[part]) || !(collider is MeshCollider shell)) continue;
+                    if (TipOverlaps(item.tool, shell, item.contact)) item.contact.TryReportContact(shell);
+                }
+            }
         }
 
         bool Remember(InstrumentBehaviour tool, string target)
@@ -178,6 +243,17 @@ namespace Scalpal.Quest
                     if (distance < closest && SetFocus(overlaps[i])) closest = distance;
                 }
             }
+            CacheAnatomyColliders();
+            foreach (var tool in workbench.tools ?? Array.Empty<InstrumentBehaviour>())
+            {
+                if (!ValidTool(tool, false)) continue;
+                foreach (var collider in anatomyColliders)
+                {
+                    if (!(collider is MeshCollider) || !OwnedPart(collider) || !TipOverlaps(tool, collider)) continue;
+                    float distance = (collider.bounds.center - tool.actionPoint.position).sqrMagnitude;
+                    if (distance < closest && SetFocus(collider)) closest = distance;
+                }
+            }
             if (!string.IsNullOrEmpty(FocusedPartId) || !string.IsNullOrEmpty(FocusedPortId) || !workbench.headCamera) return;
             var camera = workbench.headCamera.transform;
             int hits = Physics.RaycastNonAlloc(camera.position, camera.forward, gazeHits, Mathf.Max(0, gazeDistance), ~0, QueryTriggerInteraction.Collide);
@@ -228,10 +304,10 @@ namespace Scalpal.Quest
             foreach (var item in contacts)
             {
                 if (!item.contact) continue;
-                item.contact.TouchApplied -= item.handler;
+                if (item.contact.TouchAcceptor == item.handler) item.contact.TouchAcceptor = null;
                 if (item.contact.RegistrationIsValid == item.gate) item.contact.RegistrationIsValid = null;
             }
-            contacts.Clear(); reported.Clear();
+            contacts.Clear(); reported.Clear(); anatomyColliders.Clear(); interiors.Clear(); targetKeys.Clear(); cachedParts = null; nextInteriorPoll = 0;
         }
         static bool Reject(string value, out string reason) { reason = value; return false; }
     }

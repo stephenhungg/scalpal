@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using Scalpal.Instruments;
 using UnityEngine;
 using UnityEngine.XR;
@@ -20,10 +19,8 @@ namespace Scalpal.Quest
         public bool externalSessionControls;
         public NativePresentation presentation;
         public bool IsReady { get; private set; }
-        public event Action ResetRequested;
+        public event Action RetryRequested;
 
-        readonly List<XRInputSubsystem> inputSystems = new List<XRInputSubsystem>();
-        readonly List<XRDisplaySubsystem> displays = new List<XRDisplaySubsystem>();
         Vector3[] toolPositions;
         Quaternion[] toolRotations;
         Transform[] toolParents;
@@ -31,7 +28,7 @@ namespace Scalpal.Quest
         Quaternion[] targetRotations;
         Transform[] targetParents;
         Renderer[] gripMarkers;
-        bool aligned, headTracked, focused = true, paused, resetPressed;
+        bool aligned, headTracked, paused, resetPressed, retryPressed;
         float nextStatus;
         int effects, frames;
         float sampleStart;
@@ -52,6 +49,7 @@ namespace Scalpal.Quest
                 toolPositions[i] = tools[i].transform.position;
                 toolRotations[i] = tools[i].transform.rotation;
                 toolParents[i] = tools[i].transform.parent;
+                tools[i].CaptureRestPose();
                 tools[i].ActionApplied += Applied;
             }
             targetPositions = new Vector3[targets.Length];
@@ -84,17 +82,8 @@ namespace Scalpal.Quest
 
         void Update()
         {
-            SubsystemManager.GetSubsystems(inputSystems);
-            SubsystemManager.GetSubsystems(displays);
-            bool running = displays.Exists(display => display.running);
-            bool floor = false;
-            foreach (var system in inputSystems)
-            {
-                if (!system.running) continue;
-                if (system.GetTrackingOriginMode() != TrackingOriginModeFlags.Floor)
-                    system.TrySetTrackingOriginMode(TrackingOriginModeFlags.Floor);
-                floor |= system.GetTrackingOriginMode() == TrackingOriginModeFlags.Floor;
-            }
+            bool running = XRInput.Source.DisplayRunning;
+            bool floor = XRInput.Source.FloorTracking;
             UpdateHeadPose();
             if (!aligned && running && floor && headTracked)
             {
@@ -108,17 +97,13 @@ namespace Scalpal.Quest
                 aligned = true;
                 Debug.Log("SCALPAL_NATIVE_ALIGNED origin=floor");
             }
+            bool focused = XRInput.Source.HasFocus;
             bool valid = running && floor && aligned && headTracked && focused && !paused
                 && (!presentation || presentation.Ready);
             Gate(valid);
-            var right = InputDevices.GetDeviceAtXRNode(XRNode.RightHand);
-            right.TryGetFeatureValue(CommonUsages.primaryButton, out bool reset);
-            if (valid && reset && !resetPressed)
-            {
-                if (externalSessionControls) ResetRequested?.Invoke();
-                else ResetWorkbench();
-            }
-            resetPressed = reset;
+            bool reset = XRInput.Button(XRNode.RightHand, XRInputButton.Primary);
+            bool retry = XRInput.Button(XRNode.LeftHand, XRInputButton.Menu);
+            HandleSessionButtons(reset, retry);
             frames++;
             if (Time.unscaledTime >= nextStatus)
             {
@@ -130,17 +115,24 @@ namespace Scalpal.Quest
             }
         }
 
+        // Hardware and frame-driven validation use this same gated rising-edge route.
+        public void HandleSessionButtons(bool resetTools, bool retryAttempt)
+        {
+            if (IsReady && resetTools && !resetPressed)
+            {
+                if (externalSessionControls) ResetTools();
+                else ResetWorkbench();
+            }
+            if (IsReady && externalSessionControls && retryAttempt && !retryPressed) RetryRequested?.Invoke();
+            resetPressed = resetTools; retryPressed = retryAttempt;
+        }
+
         [BeforeRenderOrder(-200)]
         void UpdateHeadPose()
         {
             if (!headCamera) return;
-            var device = InputDevices.GetDeviceAtXRNode(XRNode.Head);
-            Vector3 position = Vector3.zero;
-            Quaternion rotation = Quaternion.identity;
-            headTracked = device.isValid && device.TryGetFeatureValue(CommonUsages.devicePosition, out position)
-                && device.TryGetFeatureValue(CommonUsages.deviceRotation, out rotation);
-            if (device.TryGetFeatureValue(CommonUsages.isTracked, out bool tracked)) headTracked &= tracked;
-            if (headTracked) headCamera.transform.SetLocalPositionAndRotation(position, rotation);
+            headTracked = XRInput.TryPose(XRNode.Head, out var pose);
+            if (headTracked) headCamera.transform.SetLocalPositionAndRotation(pose.position, pose.rotation);
         }
 
         void LateUpdate()
@@ -181,16 +173,7 @@ namespace Scalpal.Quest
 
         public void ResetWorkbench()
         {
-            // Invalidating held input also requires a physical grip release before another pickup.
-            Gate(false);
-            for (int i = 0; i < tools.Length; i++)
-            {
-                var tool = tools[i];
-                tool.transform.SetParent(toolParents[i], true);
-                tool.transform.SetPositionAndRotation(toolPositions[i], toolRotations[i]);
-                var body = tool.GetComponent<Rigidbody>();
-                if (body && !body.isKinematic) { body.linearVelocity = Vector3.zero; body.angularVelocity = Vector3.zero; }
-            }
+            ResetTools();
             for (int i = 0; i < targets.Length; i++)
             {
                 targets[i].ResetTeachingTarget();
@@ -201,7 +184,23 @@ namespace Scalpal.Quest
             Debug.Log("SCALPAL_NATIVE_RESET");
         }
 
-        void OnApplicationFocus(bool value) { focused = value; if (!value) Gate(false); }
+        // A in a session resets only equipment: no case, attempt, target or coach reset.
+        public void ResetTools()
+        {
+            foreach (var input in inputs ?? Array.Empty<XRInstrumentInput>())
+                if (input) input.GetComponent<InstrumentInteractor>()?.ReturnHeldToRest();
+            for (int i = 0; i < tools.Length; i++)
+            {
+                var tool = tools[i];
+                tool.transform.SetParent(toolParents[i], true);
+                tool.transform.SetPositionAndRotation(toolPositions[i], toolRotations[i]);
+                var body = tool.GetComponent<Rigidbody>();
+                if (body && !body.isKinematic) { body.linearVelocity = Vector3.zero; body.angularVelocity = Vector3.zero; }
+            }
+            Debug.Log("SCALPAL_NATIVE_TOOLS_RESET");
+        }
+
+        void OnApplicationFocus(bool value) { if (!value) Gate(false); }
         void OnApplicationPause(bool value) { paused = value; if (value) Gate(false); }
     }
 }

@@ -17,7 +17,7 @@ UNITY_DEFAULT = "/Applications/Unity/Hub/Editor/6000.0.66f2/Unity.app/Contents/M
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--suite", choices=("all", "services", "unity", "voice", "encounter", "motion", "registration"), default="all")
+    parser.add_argument("--suite", choices=("all", "services", "unity", "voice", "encounter", "motion", "registration", "playmode"), default="all")
     parser.add_argument("--headset", action="store_true", help="Also check the installed player over USB.")
     parser.add_argument("--config", type=Path, help="Private development pairing JSON for --headset.")
     args = parser.parse_args()
@@ -125,7 +125,7 @@ def main():
         command = [unity, "-batchmode", "-nographics", "-projectPath", str(REPO / "apps/quest"),
                    "-buildTarget", "Android", "-executeMethod", "Scalpal.Quest.Editor.NativeSessionBuild.Verify",
                    "-quit", "-logFile", str(log)]
-        passed = check("Unity scene + inputs + playthrough + attempt boundaries", command, timeout=240)
+        passed = check("Editor scene/components + synthetic scoring/attempt fixtures", command, timeout=240)
         output = log.read_text(errors="replace") if log.exists() else ""
         # Require the terminal marker: an editor exit alone is not proof the method ran.
         if passed and "SCALPAL_NATIVE_SESSION_VERIFY_OK" not in output:
@@ -136,6 +136,10 @@ def main():
             if line.startswith("SCALPAL_") or "error CS" in line:
                 print(line)
         print("Unity diagnostic log:", log)
+
+    if args.suite in {"all", "playmode"}:
+        check("real NativeSession Play Mode lifecycle/buttons/physics + isolated backend",
+              [sys.executable, str(REPO / "scripts/quest/play-mode-check/run.py")], timeout=300)
 
     if args.suite in {"all", "registration"}:
         if not shutil.which("uv"):
