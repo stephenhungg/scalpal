@@ -161,6 +161,22 @@ namespace Scalpal.Surgery.Editor
             }
             Require(Mathf.Abs(mesh.vertices[0].z-.12f)<1e-6f&&mesh.normals.All(OpenSurgeryStroke.Finite)&&mesh.triangles.All(i=>i>=0&&i<mesh.vertexCount),"actual bowl bottom, normals and indices are valid");
         }
+        // Bowel loops under the opened membrane and the field's pooled blood: the same finite-ellipse guard as every
+        // other wound surface, behind the skin and no deeper than the illustrative cavity, on the retained material.
+        static void OpeningSurfaceBounds(OpenWoundView wound,MeshFilter filter)
+        {
+            var mesh=filter.sharedMesh;var opening=wound.SkinOpeningLocal;var axis=wound.IncisionAxisLocal;var across=new Vector2(-axis.y,axis.x);
+            Require(mesh&&mesh.vertexCount>0&&mesh.triangles.Length>0&&mesh.triangles.All(i=>i>=0&&i<mesh.vertexCount),filter.name+" has a finite valid mesh");
+            foreach(var vertex in mesh.vertices)
+            {
+                var q=new Vector2(vertex.x-opening.x,vertex.y-opening.y);
+                float x=Vector2.Dot(q,axis)/opening.z,y=Vector2.Dot(q,across)/opening.w;
+                Require(OpenSurgeryStroke.Finite(vertex)&&x*x+y*y<=1.0001f,filter.name+" stays inside the published incision ellipse");
+                Require(vertex.z>=0&&vertex.z<=.12001f,filter.name+" lies inside the wound, behind the skin and within the illustrative cavity depth");
+            }
+            Require(mesh.normals.All(OpenSurgeryStroke.Finite),filter.name+" normals are finite");
+            var mat=filter.GetComponent<MeshRenderer>().sharedMaterial;Require(mat.shader.name=="Scalpal/OpenTissueSurface",filter.name+" uses the retained wound surface material");
+        }
         static float CurvedDepth(Vector3 point)=>-.003f-3*point.x*point.x-5*point.y*point.y;
         static void CurvedSkinProjection(OpenWoundView wound,BodyState body)
         {
@@ -220,6 +236,7 @@ namespace Scalpal.Surgery.Editor
             {
                 var mesh=filter.sharedMesh;
                 if(filter.name=="IllustrativeCavityLining"){CavityBounds(wound,mesh);continue;}
+                if(filter.name=="IllustrativeBowelLoops"||filter.name=="FieldBlood"){OpeningSurfaceBounds(wound,filter);continue;}
                 Require(mesh&&mesh.vertexCount==325,"active layer uses its finite wound mesh");
                 foreach(var vertex in mesh.vertices)
                 {

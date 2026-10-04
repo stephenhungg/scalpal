@@ -71,10 +71,17 @@ namespace Scalpal.Surgery
         float previousLength=-1;
         BodyState previousBody;
         int lastBodyLog;
-        GameObject surfaces, decisions, cavity;
-        Mesh cavityMesh;
-        float previousCavityWidth = -1;
+        GameObject surfaces, decisions, cavity, bowel, film;
+        Mesh cavityMesh, bowelMesh, filmMesh;
+        float previousCavityWidth = -1, previousFilm = -1;
         public bool RenderingCavity => RenderingWound && cavity && cavity.activeInHierarchy;
+        // Bowel loops seen through the opened peritoneum, and blood in the field (0..1) that suction clears.
+        public bool BowelVisible => RenderingCavity && bowel && bowel.activeInHierarchy;
+        public float FieldWetness { get; private set; }
+        public bool FieldBloodVisible => RenderingWound && film && film.activeInHierarchy;
+        public float LayerWidth(int layer) => layer >= 0 && layer < previousWidths.Length ? Mathf.Max(0, previousWidths[layer]) : 0;
+        double wetFromLog;
+        readonly HashSet<string> bledFrom = new HashSet<string>();
         LineRenderer mark;
         Material inkMaterial;
         bool built, registered = true, marked, showDecision, concealed;
@@ -113,6 +120,11 @@ namespace Scalpal.Surgery
             cavityMaterial.SetFloat("_Layer",4);cavityMaterial.SetFloat("_Glossiness",.8f);materials.Add(cavityMaterial);
             var cavityRenderer = cavity.AddComponent<MeshRenderer>();cavityRenderer.sharedMaterial = cavityMaterial;
             cavityRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;cavity.SetActive(false);
+            // Glistening small-bowel loops just below the opened peritoneum, ringed around the opening so the deeper
+            // caecum and appendix stay visible to grasp. Presentation only: no collider, identity or event.
+            bowel = Surface("IllustrativeBowelLoops", new Color(.86f,.56f,.50f), .86f, out bowelMesh);
+            // Blood in the field from the incisions and divisions, pooled at the wound's dependent side.
+            film = Surface("FieldBlood", new Color(.55f,.03f,.03f), .95f, out filmMesh);
             var ink = new GameObject("MeasuredMarkerInk"); ink.transform.SetParent(surfaces.transform, false);
             mark = ink.AddComponent<LineRenderer>(); mark.useWorldSpace = false; mark.positionCount = 0;
             mark.startWidth = mark.endWidth = .0012f; mark.numCapVertices = 3;
@@ -122,6 +134,28 @@ namespace Scalpal.Surgery
             var basePoint = new GameObject("AnatomicalBasePoint"); basePoint.transform.SetParent(surfaces.transform, false);
             basePoint.transform.localPosition = new Vector3(-.022f,0,-.024f); BasePoint = basePoint.transform;
             decisions.SetActive(false);PublishOpening();
+        }
+        GameObject Surface(string name, Color color, float gloss, out Mesh mesh)
+        {
+            var go = new GameObject(name); go.transform.SetParent(surfaces.transform, false);
+            mesh = new Mesh { name = name }; mesh.MarkDynamic(); meshes.Add(mesh);
+            go.AddComponent<MeshFilter>().sharedMesh = mesh;
+            // The same retained wet tissue surface as the layers and cavity (Scalpal/OpenTissueSurface, membrane relief).
+            var material = new Material(Resources.Load<Material>("OpenTissueSurface")) { name = name, color = color };
+            material.SetFloat("_Layer", 4); material.SetFloat("_Glossiness", gloss); materials.Add(material);
+            var renderer = go.AddComponent<MeshRenderer>(); renderer.sharedMaterial = material;
+            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; go.SetActive(false);
+            return go;
+        }
+        // Each first division of a layer or vessel bleeds a little into the field; suction (any dwell) clears it.
+        static double Wet(string tissueId)
+        {
+            switch (tissueId)
+            {
+                case "skin": return .3; case "fat": return .1; case "muscle": return .15; case "peritoneum": return .1;
+                case "mesoappendix": case "appendicular_artery": return .3; case "appendix": return .1;
+                default: return 0;
+            }
         }
         // The active case supplies the labels; the wound renderer never decides the correct answer.
         public void SetDecisionChoices(string[] choices)
@@ -182,10 +216,17 @@ namespace Scalpal.Surgery
             // Only inspect newly appended authoritative records; do not scan or
             // rebuild every surface on each headset frame when the facts are unchanged.
             if(!ReferenceEquals(previousBody,body)||lastBodyLog>body.Log.Count)
-            {previousBody=body;lastBodyLog=0;hasTentPoint=false;}
+            {previousBody=body;lastBodyLog=0;hasTentPoint=false;wetFromLog=0;bledFrom.Clear();}
             for(int i=lastBodyLog;i<body.Log.Count;i++)
             {
                 var action=body.Log[i].action;
+                if(action!=null&&Array.IndexOf(body.Log[i].outcomes,"not_exposed")<0)
+                {
+                    if(action.verb=="cut"&&bledFrom.Add(action.tissueId))wetFromLog+=Wet(action.tissueId);
+                    if(action.verb=="retract"&&action.tissueId==layerIds[3]&&action.separationMm>=15&&bledFrom.Add("muscle_split"))wetFromLog+=.15;
+                    if(action.verb=="suction")wetFromLog-=action.durationMs/1200;
+                    wetFromLog=Math.Max(0,Math.Min(1,wetFromLog));
+                }
                 if(action==null||action.tissueId!=layerIds[4]||(action.verb!="grasp"&&action.verb!="retract")||action.coordinateFrame!="registered_torso_m"||!transform.parent)continue;
                 Vector3 local=transform.InverseTransformPoint(transform.parent.TransformPoint(new Vector3(action.position.x,action.position.y,action.position.z)));
                 if(OpenSurgeryStroke.Finite(local)){tentCenter=new Vector2(local.x,local.y);hasTentPoint=true;}
@@ -218,8 +259,18 @@ namespace Scalpal.Surgery
             }
             // 'exposed' now includes the peritoneum's actual opened/not-closed fact.
             if(cavity.activeSelf!=exposed)cavity.SetActive(exposed);
-            if(exposed&&(frameChanged||Mathf.Abs(previousCavityWidth-parentWidth)>1e-5f))ShapeCavity(parentWidth);
+            if(bowel.activeSelf!=exposed)bowel.SetActive(exposed);
+            if(exposed&&(frameChanged||Mathf.Abs(previousCavityWidth-parentWidth)>1e-5f)){ShapeCavity(parentWidth);ShapeBowel(parentWidth);}
             previousCavityWidth=parentWidth;
+            // The field's blood pools on the deepest visible floor: the first closed layer, else the bowel.
+            FieldWetness=skinOpened?Mathf.Clamp01((float)(wetFromLog+Math.Max(0,body.Get("","poolMl"))/4)):0;
+            int floorLayer=0;while(floorLayer<5&&LayerWidth(floorLayer)>0)floorLayer++;
+            float floorDepth=floorLayer<5?depths[floorLayer]:.031f,floorWidth=floorLayer<5?(floorLayer==0?0:LayerWidth(floorLayer-1)):parentWidth;
+            bool wet=skinOpened&&FieldWetness>.05f&&floorWidth>0;
+            if(film.activeSelf!=wet)film.SetActive(wet);
+            float filmKey=wet?Mathf.Round(FieldWetness*20)+floorLayer*100+floorWidth*1e5f:-1;
+            if(wet&&(frameChanged||Mathf.Abs(filmKey-previousFilm)>1e-3f))ShapeFilm(floorDepth,floorWidth,floorLayer==5);
+            previousFilm=filmKey;
             previousCenter=incisionCenter;previousAxis=incisionAxis;previousLength=halfLength;previousTent=tentCenter;
             PublishOpening();
             marked = body.Get(layerIds[0],"marked") > 0 && body.Get(layerIds[0],"closed") == 0;
@@ -281,6 +332,50 @@ namespace Scalpal.Surgery
                 }
             }
             mesh.Clear();mesh.vertices=vertices;mesh.uv=uv;mesh.SetTriangles(triangles,0);mesh.RecalculateNormals();mesh.RecalculateTangents();mesh.RecalculateBounds();
+        }
+        // Loops: a bumpy ring under the peritoneal opening, from inside its edge to beneath the membrane.
+        void ShapeBowel(float width)
+        {
+            const int segments=64,rings=6;
+            var vertices=new List<Vector3>();var uv=new List<Vector2>();var triangles=new List<int>();
+            Vector2 across=new Vector2(-incisionAxis.y,incisionAxis.x);
+            for(int ring=0;ring<=rings;ring++)
+            {
+                float radius=Mathf.Lerp(.5f,1f,ring/(float)rings);
+                for(int i=0;i<=segments;i++)
+                {
+                    float angle=2*Mathf.PI*i/segments;
+                    Vector2 q=incisionCenter+incisionAxis*(halfLength*radius*Mathf.Cos(angle))+across*(width*.5f*radius*Mathf.Sin(angle));
+                    // Rounded loops: tubes side by side around the opening, each a few millimetres proud.
+                    float loop=Mathf.Pow(Mathf.Abs(Mathf.Sin(angle*5+radius*2.5f)),.6f)*Mathf.Sin(Mathf.PI*ring/rings);
+                    vertices.Add(new Vector3(q.x,q.y,.038f-.007f*loop));uv.Add(q*40);
+                    if(ring<rings&&i<segments){int a=ring*(segments+1)+i,b=a+segments+1;triangles.AddRange(new[]{a,b+1,b,a,a+1,b+1});}
+                }
+            }
+            bowelMesh.Clear();bowelMesh.SetVertices(vertices);bowelMesh.SetUVs(0,uv);bowelMesh.SetTriangles(triangles,0);
+            bowelMesh.RecalculateNormals();bowelMesh.RecalculateBounds();
+        }
+        // A wet pool on the floor's downhill side, shrinking as the field is suctioned dry.
+        void ShapeFilm(float depth,float width,bool onBowel)
+        {
+            const int segments=32;
+            float scale=.12f+.2f*FieldWetness;
+            Vector3 down=transform.InverseTransformDirection(Vector3.down);
+            Vector2 across=new Vector2(-incisionAxis.y,incisionAxis.x);
+            float side=Vector2.Dot(new Vector2(down.x,down.y),across)>=0?1:-1;
+            // On a closed floor the pool lies at its downhill edge; with the peritoneum open it lies among the loops.
+            Vector2 centre=incisionCenter+across*(side*width*.5f*(onBowel?.9f:(1-scale)*.85f));
+            float along=onBowel?.5f*scale:scale,acrossScale=onBowel?.3f*scale:scale;
+            var vertices=new List<Vector3>{new Vector3(centre.x,centre.y,depth-.0012f)};var uv=new List<Vector2>{centre};var triangles=new List<int>();
+            for(int i=0;i<=segments;i++)
+            {
+                float angle=2*Mathf.PI*i/segments;
+                Vector2 q=centre+incisionAxis*(halfLength*along*Mathf.Cos(angle))+across*(width*.5f*acrossScale*Mathf.Sin(angle));
+                vertices.Add(new Vector3(q.x,q.y,depth-.0009f));uv.Add(q);
+                if(i<segments)triangles.AddRange(new[]{0,i+2,i+1});
+            }
+            filmMesh.Clear();filmMesh.SetVertices(vertices);filmMesh.SetUVs(0,uv);filmMesh.SetTriangles(triangles,0);
+            filmMesh.RecalculateNormals();filmMesh.RecalculateBounds();
         }
         void ShapeCavity(float width)
         {

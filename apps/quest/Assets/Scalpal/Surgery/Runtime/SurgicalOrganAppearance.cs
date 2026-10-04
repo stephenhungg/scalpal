@@ -22,6 +22,9 @@ namespace Scalpal.Surgery
         Texture2D detail;
         MaterialPropertyBlock highlight;
         bool originalSuppressed;
+        // Appendicitis: the appendix is drawn swollen-red (presentation tint only; mesh, collider and contact unchanged).
+        public static readonly Color Inflamed = new Color(.82f,.20f,.15f);
+        Renderer appendix; MaterialPropertyBlock inflamed; bool appendixTinted;
         public Mesh PresentationMesh => mesh;
         public MeshRenderer PresentationRenderer => shown;
         public AnatomyPart SourcePart => part;
@@ -30,6 +33,12 @@ namespace Scalpal.Surgery
         {
             Dispose(); session = owner;
             if (highlight == null) highlight = new MaterialPropertyBlock();
+            if (inflamed == null) inflamed = new MaterialPropertyBlock();
+            if (owner && owner.anatomy && owner.anatomy.TryGetPart("appendix", out var inflamedPart) && (appendix = inflamedPart.GetComponent<Renderer>()))
+            {
+                appendix.GetPropertyBlock(inflamed); appendixTinted = inflamed.isEmpty;
+                inflamed.SetColor("_BaseColor", Inflamed); inflamed.SetColor("_Color", Inflamed); appendix.SetPropertyBlock(inflamed);
+            }
             if (!owner || !owner.anatomy || !interaction || !owner.anatomy.TryGetPart("cecum", out part)) return;
             var filter = part.GetComponent<MeshFilter>(); original = part.GetComponent<MeshRenderer>();
             if (!filter || !filter.sharedMesh || !original) { part = null; original = null; return; }
@@ -131,6 +140,8 @@ namespace Scalpal.Surgery
         void OnDestroy()=>Dispose();
         public void Dispose()
         {
+            if(appendix&&appendixTinted)appendix.SetPropertyBlock(null);
+            appendix=null;appendixTinted=false;
             if(original)original.forceRenderingOff=originalSuppressed;
             if(view){view.SetActive(false);Release(view);}
             Release(mesh);Release(serosa);Release(taenia);Release(detail);
