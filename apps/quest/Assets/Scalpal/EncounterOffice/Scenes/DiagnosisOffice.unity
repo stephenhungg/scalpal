@@ -10752,7 +10752,7 @@ MonoBehaviour:
   stateLabel: {fileID: 1785704307}
   voice: {fileID: 1081365773}
   companionSeat: {x: 1.15, y: 0, z: -0.3}
-  companionYaw: -20
+  companionYaw: 0
 --- !u!4 &1081365772
 Transform:
   m_ObjectHideFlags: 0

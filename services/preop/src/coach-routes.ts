@@ -666,6 +666,8 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
   // The coach is called Scalpal now; /jarvis paths stay so existing headset builds keep working.
   app.get("/scalpal", (c) => c.redirect("/jarvis"));
   app.get("/scalpal/camera", (c) => c.redirect("/jarvis/camera"));
+  app.get("/scalpal/connection", (c) => c.redirect(`/jarvis/connection${new URL(c.req.url).search}`));
+  app.get("/scalpal/reflex/:sid/:key", (c) => c.redirect(`/jarvis/reflex/${c.req.param("sid")}/${c.req.param("key")}`));
   // Camera test rig: a webcam or iPhone (Continuity Camera) stands in for the Quest camera.
   app.get("/jarvis/camera", (c) => c.html(readFileSync(new URL("./jarvis/camera.html", import.meta.url), "utf8")));
   for (const file of ["app.js", "arbiter.js", "context-feed.js", "interview.js", "encounter.js", "camera.js", "camera-rig.js", "body-map.js"]) {

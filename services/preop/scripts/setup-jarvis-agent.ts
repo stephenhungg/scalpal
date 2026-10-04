@@ -15,9 +15,9 @@ if (!key) {
   process.exit(1);
 }
 
-const LLM = process.env.JARVIS_LLM || "claude-sonnet-5-5";
-const VOICE = process.env.JARVIS_VOICE_ID || "";
-const REASONING = process.env.JARVIS_REASONING || "";
+const LLM = process.env.SCALPAL_LLM || process.env.JARVIS_LLM || "claude-sonnet-5-5";
+const VOICE = process.env.SCALPAL_VOICE_ID || process.env.JARVIS_VOICE_ID || "";
+const REASONING = process.env.SCALPAL_REASONING || process.env.JARVIS_REASONING || "";
 
 const str = (description: string) => ({ type: "string", description });
 

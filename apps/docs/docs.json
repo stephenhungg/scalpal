@@ -55,7 +55,7 @@
             "group": "Components",
             "pages": [
               "components/quest",
-              "components/coach",
+              "components/scalpal",
               "components/companion",
               "components/realtime",
               "components/vitals",
