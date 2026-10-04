@@ -12,6 +12,50 @@ The long-term thesis is that human learning can supply useful robot demonstratio
 
 The backend uses [SpacetimeDB for shared state plus private file storage for video](docs/data-and-realtime.md). Main now includes the native session, full anatomy sources, Scalpal service, companion/realtime/gateway and video-motion processor. Physical end-to-end verification is pending. Live headset video and motion processing still need capture/worker adapters. The integration map records exact source snapshots and routing gaps.
 
+## Architecture
+
+SpacetimeDB is the shared operating room. The left side writes into it through role-checked reducers; the right side reads it live through subscriptions. The patient's vitals tick inside the database every second.
+
+```mermaid
+flowchart LR
+  subgraph Learner["Learner (VR)"]
+    Quest["Quest 3S · Unity<br/>office · briefing · OR"]
+    Sim["Surgery sim<br/>tools · cuts · bleeds"]
+  end
+  subgraph Sources["Sources"]
+    Nurse["Scrub nurse<br/>(browser)"]
+    Data["FinchNode charts<br/>Presage vitals"]
+    Voice["ElevenLabs<br/>Jarvis + patient voices"]
+  end
+
+  STDB[("SpacetimeDB<br/>session · command<br/>patient_condition · sim_log<br/>coach_message · robot_result<br/>⏱ 1 Hz patient tick")]
+
+  subgraph Intelligence["Intelligence"]
+    Coach["Coach service · Jarvis<br/>Node :8787"]
+    Robot["Robot learner<br/>MuJoCo · Panda + Shadow hand"]
+  end
+  subgraph Observers["Observers"]
+    Dash["Live OR dashboard<br/>vitals · transcript · nurse tray"]
+    Recap["Recap<br/>scores · robot replay"]
+  end
+
+  Quest --> Sim
+  Sim -->|tool & body events| Coach
+  Sim <-->|exercise state · commands| STDB
+  Nurse -->|hand / highlight tool| STDB
+  Data --> Coach
+  Voice <-->|mic · tool calls| Quest
+  Coach <-->|patient facts · vitals · transcript| STDB
+  Coach --> Voice
+  Quest -->|marking stroke| Robot
+  Robot -->|robot_result| STDB
+  STDB -->|live subscriptions| Dash
+  Robot -->|replay video| Recap
+  STDB --> Recap
+```
+
+Runs locally on the demo laptop (SpacetimeDB `:3000`, Quest over USB) with a hosted mirror on Maincloud (`scalpal-live`).
+
 ## Start Here
 
 Main contains documentation, the complete source atlas and team services, a native Quest tool workbench and an assembled single-case full-VR session. Open `apps/quest` in Unity 6000.0.66f2; see [project setup](apps/quest/README.md). Start with the [system integration map](docs/system-integration.md): actual contents, routes, shared scene bindings and shipping checks. Then read these:
