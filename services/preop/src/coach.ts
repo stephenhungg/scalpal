@@ -218,6 +218,8 @@ export class CoachSession {
   private completed: StepCheckpoint[] = [];
   private stepHints = 0;
   private bleeds = new Map<string, number>(); // structureId -> ml/min
+  private bleedStartMs = new Map<string, number>(); // open body: headset time each active bleed began
+  private bleedEscalated = new Set<string>();
   private bloodLossMl = 0;
   private scene = { summary: "", at: "", source: "" }; // latest vision summary of the learner's view
   private commands: CoachCommand[] = [];
@@ -513,6 +515,18 @@ export class CoachSession {
     for (const [id] of this.bleeds) if (!nowBleeding.has(id))
       alerts.push(this.alert("bleeding_controlled", "low", "Bleeding controlled. Check the field.", [id], ""));
     this.bleeds = nowBleeding;
+    // Uses the headset clock from the event (1 Hz ticks while bleeding), so it is replayable.
+    const at = event.evidence.timeMs;
+    for (const id of [...this.bleedStartMs.keys()]) if (!nowBleeding.has(id)) { this.bleedStartMs.delete(id); this.bleedEscalated.delete(id); }
+    for (const [id] of nowBleeding) {
+      const start = this.bleedStartMs.get(id);
+      if (start === undefined) this.bleedStartMs.set(id, at);
+      else if (at - start >= UNCONTROLLED_BLEED_MS && !this.bleedEscalated.has(id)) {
+        this.bleedEscalated.add(id);
+        this.note(`Bleeding from the ${this.name(id).toLowerCase()} uncontrolled for ${Math.round((at - start) / 1000)} s.`);
+        alerts.push(this.alert("bleeding", "urgent", uncontrolledBleedLine(this.name(id)), [id], "", `bleeding_uncontrolled.${id}`));
+      }
+    }
     const newly = this.kase.procedure.steps.filter(s => this.engine.completedMilestones.has(s.id) && !achieved.has(s.id));
     for (const milestone of newly) {
       this.completed.push(this.checkpoint(milestone, Math.round((this.ms() - this.stepStartedAt) / 1000)));
@@ -900,6 +914,12 @@ export function nextStepLine(title: string): string {
 }
 
 // Every pre-renderable line for a case: high-severity mistake warnings, tracking loss, and next-step callouts.
+// Coaching escalation (not grading): a bleed still active this long on the headset clock gets a second warning.
+export const UNCONTROLLED_BLEED_MS = 30000;
+export function uncontrolledBleedLine(structureName: string): string {
+  return `Still bleeding from the ${structureName.toLowerCase()} after thirty seconds. Control it now: clamp, tie, or seal.`;
+}
+
 export function bleedingLine(structureName: string): string {
   return `Stop. Bleeding from the ${structureName.toLowerCase()}. Get control first.`;
 }
@@ -924,6 +944,8 @@ export function reflexLines(kase: SurgicalCase, mode: PresentationMode = "mixed_
   const bleeds = bleedingStructures(kase).map((b) => ({ key: `bleeding.${b.id}`, text: bleedingLine(b.name) }));
   for (const tissue of kase.procedure.openBody?.tissues ?? []) if (tissue.perfused && !bleeds.some(b => b.key === `bleeding.${tissue.id}`))
     bleeds.push({ key: `bleeding.${tissue.id}`, text: bleedingLine(kase.anatomy.find(a => a.id === tissue.id)?.displayName ?? tissue.id.replaceAll("_", " ")) });
+  for (const tissue of kase.procedure.openBody?.tissues ?? []) if (tissue.perfused)
+    bleeds.push({ key: `bleeding_uncontrolled.${tissue.id}`, text: uncontrolledBleedLine(kase.anatomy.find(a => a.id === tissue.id)?.displayName ?? tissue.id.replaceAll("_", " ")) });
   return [...unique, { key: "tracking_lost", text: trackingLostLine(mode) }, ...bleeds, ...callouts, ...hints];
 }
 
