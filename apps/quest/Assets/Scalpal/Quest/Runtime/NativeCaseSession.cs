@@ -228,6 +228,7 @@ namespace Scalpal.Quest
         void Update()
         {
             if (!workbench) return;
+            PumpSharedTools(Time.realtimeSinceStartup);
             if (sharedAttemptReady && realtime.Paired && !SharedMatches)
             {
                 generation++; ResetHandoffRecovery();
@@ -601,7 +602,11 @@ namespace Scalpal.Quest
 
         void SharedCommand(Command command)
         {
-            if (!SharedMatches) { realtime.ResolveCommand(command, "rejected", "The native case is not bound to this shared attempt"); return; }
+            if (!SharedMatches)
+            {
+                realtime.ResolveCommand(command, "rejected", "The native case is not bound to this shared attempt");
+                FinishSharedTool(command.CommandId, "failed: the native case is not bound to this shared attempt", true); return;
+            }
             bool applied = false; string reason = "Action unavailable in this native phase";
             var activeAnatomy = Phase == "Selecting" || Phase == "Confirmed" ? preview : anatomy;
             switch (command.Action)
@@ -626,6 +631,7 @@ namespace Scalpal.Quest
                     if (Phase == "Practicing") { practicePaused = true; anatomy.SetRegistrationValid(false); coach.Tracking(false); applied = true; } break;
                 case "resumePractice":
                     if (Phase == "Practicing" && RegistrationReady) { practicePaused = false; applied = true; } break;
+                case "handInstrument": case "highlightInstrument": SharedInstrumentCommand(command); return;
                 case "requestHint":
                     realtime.ResolveCommand(command, "unavailable", "Coach hints are available through native Jarvis; async hint confirmation is not implemented"); return;
             }

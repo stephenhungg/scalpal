@@ -108,7 +108,7 @@ namespace Scalpal.Surgery.Editor
                     && Quaternion.Angle(scalpel.transform.rotation, stand.rotation) < .01f, "the scalpel is back at its stand rest pose, not dropped");
                 Report();
                 Assert(Sent() == "scalpel/right/False,hemostat/right/True", "coach hears the scalpel put down and the hemostat picked up");
-                Assert(hint.Text == "Hemostat", "the hand-over shows a short cue at the hand");
+                Assert(hint.Text == "Hemostat · from Scalpal", "the hand-over shows a short attributed cue at the hand: " + hint.Text);
                 var handed = rightGrip.HeldInstrument;
                 for (int frame = 0; frame < 3; frame++) { rightGrip.SetGrip(1); rightGrip.SetTrackedPose(new Vector3(.2f, 1.1f, -.1f + frame * .01f), Quaternion.identity, true, clock); }
                 Assert(rightGrip.HeldInstrument == handed, "the handed tool stays held while the learner keeps squeezing grip");
