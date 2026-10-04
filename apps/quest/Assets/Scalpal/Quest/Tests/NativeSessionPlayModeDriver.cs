@@ -389,7 +389,7 @@ namespace Scalpal.Quest.Editor
             using(var request=new UnityWebRequest(endpoint+"/fixture/command/"+action,"POST"))
             {
                 request.downloadHandler=new DownloadHandlerBuffer();request.timeout=8;
-                yield return request.SendWebRequest();Check(request.result==UnityWebRequest.Result.Success,"fixture command accepted: "+action);
+                yield return request.SendWebRequest();Check(request.result==UnityWebRequest.Result.Success,"fixture command accepted: "+action+" HTTP="+request.responseCode+" outcome="+request.downloadHandler.text);
             }
         }
         [Serializable] sealed class State {public string highlighted;}
