@@ -16,6 +16,7 @@ import type { Baseline } from "./physiology.js";
 import { plausibleBaseline } from "./chart-vitals.js";
 import { NO_REALTIME, type RealtimeBridge, type RealtimeSink } from "./realtime-bridge.js";
 import { buildSystemPrompt, firstMessage } from "./coach-prompt.js";
+import { briefingLines } from "./briefing.js";
 import { createContextFeed, type ContextFeed } from "./jarvis/context-feed.js";
 import type { EncounterVoices } from "./encounter-routes.js";
 import type { Action, SurgicalCase } from "./types.js";
@@ -630,6 +631,15 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
 
   // Pre-rendered warning clips for a session's case. The page fetches them all at start so a warning
   // plays instantly, without an LLM turn.
+  // The flythrough narration: one line per briefing beat with its pre-rendered clip route. The headset
+  // plays clip N when the camera reaches beat N; the text doubles as captions.
+  app.get("/coach/sessions/:sid/briefing", (c) => {
+    const s = getSession(c);
+    if (!s) return missing(c);
+    const lines = briefingLines(s.kase).map((l) => ({ ...l, route: reflex?.configured ? `/jarvis/reflex/${s.id}/${l.key}` : "" }));
+    return c.json({ sessionId: s.id, procedureId: s.kase.procedureId, lines, actions: coachActions(s.id) });
+  });
+
   app.get("/jarvis/reflex/:sid", (c) => {
     const s = getSession(c);
     if (!s) return missing(c);

@@ -299,3 +299,12 @@ The coach now models the simulated patient's condition (`services/preop/src/pati
   - classes 3 and 4: warnings with clips `vitals.class3` and `vitals.class4`.
 - **Checklist:** snapshot `checklist: [{id, title, done, current}]` for the top-left HUD. It is guidance only and never gates actions.
 - **Dashboard logs:** every timeline line, alert, vitals sample (at most every 2 s and on class changes), checklist change and outcome goes to SpacetimeDB `sim_log` for the companion's Live logs panel.
+
+## Flythrough narration (pre-surgery briefing)
+
+`GET /coach/sessions/:id/briefing` returns `lines: [{key, stepId, title, text, route}]`:
+- `brief.intro` first, with the procedure, patient, urgency and up to two high-severity chart risks;
+- one line per beat, with `stepId` matching `apps/quest/Assets/Scalpal/Briefing/Resources/briefing_parts.json` steps;
+- `brief.outro` last.
+
+Each `route` is a pre-rendered Jarvis clip (`/jarvis/reflex/:sid/brief.<stepId>`). Play beat N's clip when the camera arrives there, and use `text` as captions. Lines stay under 40 words, so a beat lasts roughly 5 to 12 s. Run it after the Time-Out, before the case starts.
