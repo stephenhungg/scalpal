@@ -24,6 +24,7 @@ namespace Scalpal.Handoff
         public string sharedSessionId = "", attemptId = "", serviceUrl, issuedAt, learnerProcedure;
         public EncounterSurgeryHandoff sourceOffice;
         public EncounterScore scorecard;
+        public bool demoMode; // Snapshot at canonical run creation; recap cannot change assistance after the run.
         public bool escalated, challengeSeen, consequenceSeen, practiceStarted, timeOutConfirmed, revisedAfterPrompt;
         public bool patientConfirmed, procedureConfirmed, siteConfirmed, risksConfirmed, antibioticsReviewed, imagingReviewed;
         public bool AllConfirmed => patientConfirmed && procedureConfirmed && siteConfirmed && risksConfirmed && antibioticsReviewed && imagingReviewed;
@@ -51,7 +52,7 @@ namespace Scalpal.Handoff
             Current = new HandoffTicket { runId = Guid.NewGuid().ToString("N"), encounterId = state.encounterId,
                 patientId = state.patientId, procedureId = score.procedureId, procedureTitle = score.procedureTitle,
                 scorecard = score, learnerProcedure = state.assessment?.procedure ?? "", escalated = NeedsEscalation(score), serviceUrl = endpoint.TrimEnd('/'),
-                presentationMode = Preflight.DefaultMode, issuedAt = DateTime.UtcNow.ToString("O") };
+                demoMode = Preflight.demoMode, presentationMode = Preflight.DefaultMode, issuedAt = DateTime.UtcNow.ToString("O") };
             return Current;
         }
         public static void BindOfficeSource(HandoffTicket ticket, EncounterSurgeryHandoff source)

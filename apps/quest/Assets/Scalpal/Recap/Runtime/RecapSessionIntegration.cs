@@ -2,6 +2,7 @@ using System;
 using Scalpal.Anatomy;
 using Scalpal.EncounterOffice;
 using Scalpal.Exercises.Data;
+using Scalpal.Handoff;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -55,6 +56,28 @@ namespace Scalpal.Recap
                 replay = new ReplayResult { source = "unknown", status = "failed", failureReason = "No capture adapter has supplied a recording for this attempt." }
             };
         }
+        public static RunResult FromHandoff(HandoffTicket ticket, SurgicalCase selected, string sessionId, string attemptId)
+        {
+            if (ticket == null || string.IsNullOrWhiteSpace(ticket.runId) || ticket.sourceOffice == null || ticket.scorecard == null
+                || ticket.sharedSessionId != sessionId || ticket.attemptId != attemptId || selected == null
+                || ticket.patientId != selected.patientId || ticket.procedureId != selected.procedureId)
+                throw new ArgumentException("The canonical handoff must match the current surgical attempt.");
+            // sourceOffice belongs to the original scored encounter. Adapt a copy for this
+            // surgical attempt without mutating that provenance, including on repeated retries.
+            var source = JsonUtility.FromJson<EncounterSurgeryHandoff>(JsonUtility.ToJson(ticket.sourceOffice));
+            source.sharedSessionId = sessionId; source.attemptId = attemptId; source.scorecard = ticket.scorecard;
+            var result = FromSession(source, selected, sessionId, attemptId, ticket.runId, DemoFlags.JudgePath(ticket.demoMode));
+            result.runId = ticket.runId;
+            return result;
+        }
+        public void Begin(HandoffTicket ticket, SurgicalCase selected, string sessionId, string attemptId,
+            string coachSessionId, string voiceServiceUrl, string clientToken)
+        {
+            context.Begin(FromHandoff(ticket, selected, sessionId, attemptId));
+            office = JsonUtility.FromJson<EncounterSurgeryHandoff>(JsonUtility.ToJson(ticket.sourceOffice));
+            officeAttempt = ticket.sourceOffice.attemptId;
+            context.coachSessionId = coachSessionId; context.voiceServiceUrl = voiceServiceUrl; context.clientToken = clientToken;
+        }
         public void Begin(EncounterSurgeryHandoff handoff, SurgicalCase selected, string sessionId,
             string attemptId, string coachSessionId, string voiceServiceUrl, string clientToken, string encounterAttemptId = "")
         {
@@ -93,6 +116,13 @@ namespace Scalpal.Recap
             pendingOffice = office == null ? null : JsonUtility.FromJson<EncounterSurgeryHandoff>(JsonUtility.ToJson(office));
             pendingSession = context.result.sessionId; pendingAttempt = context.result.attemptId; pendingOfficeAttempt = officeAttempt;
             pendingDemo = JsonUtility.FromJson<DemoFlags>(JsonUtility.ToJson(context.result.demo));
+            if (HandoffRun.Current != null)
+            {
+                var ticket = HandoffRun.Current;
+                if (ticket.runId != context.result.runId || ticket.sharedSessionId != context.result.sessionId || ticket.attemptId != context.result.attemptId)
+                { pendingOffice = null; pendingSession = pendingAttempt = pendingOfficeAttempt = ""; pendingDemo = null; reason = "Retry context no longer matches the canonical run."; return false; }
+                ticket.attemptId = ""; ticket.practiceStarted = false; ticket.ResetTimeOut();
+            }
             reason = ""; return true;
         }
         public static bool TakeRetry(out EncounterSurgeryHandoff handoff, out string sessionId, out string previousAttempt, out string encounterAttemptId)

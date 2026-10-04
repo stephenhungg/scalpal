@@ -7,6 +7,8 @@ using Scalpal.EncounterOffice;
 using Scalpal.Exercises.Data;
 using Scalpal.Exercises.Engine;
 using Scalpal.Quest;
+using Scalpal.Handoff;
+using Scalpal.Handoff.Editor;
 using UnityEditor;
 using UnityEngine;
 
@@ -30,8 +32,60 @@ namespace Scalpal.Recap.Editor
                 "native completion must close the segment and open RunEnding");
             Check(EditorBuildSettings.scenes.Any(s => s.enabled && s.path == "Assets/Scalpal/Recap/Scenes/RunEnding.unity"),
                 "RunEnding is included in the single-player build");
+            Check(ScalpalPlayerBuild.PlayerScenes().Last().path == "Assets/Scalpal/Recap/Scenes/RunEnding.unity", "canonical unified builder retains RunEnding last");
             VerifyRealProducers();
+            VerifyCanonicalHandoff();
             Debug.Log("SCALPAL_RECAP_INTEGRATION_OK checks=" + checks + " physicalHeadset=false liveService=false");
+        }
+        static void VerifyCanonicalHandoff()
+        {
+            var score = JsonUtility.FromJson<EncounterScore>(File.ReadAllText("../companion/tests/fixtures/preop-scorecard.json"));
+            var bundle = JsonUtility.FromJson<ScalpalBundle>(Resources.Load<TextAsset>("scalpal_bundle").text);
+            var selected = bundle.cases.First(c => c.patientId == score.patientId && c.procedureId == score.procedureId);
+            var state = new EncounterState { patientId = score.patientId, encounterId = "enc-canonicalrecap", phase = "scored",
+                assessment = new EncounterAssessment { procedure = score.procedureId } };
+            Check(EncounterOfficeRoute.PrepareSurgery(state, score, selected.procedureId, "http://localhost:8787", out _, "canonical-session", "office-attempt"), "canonical source prepared by office");
+            EncounterOfficeRoute.TakeSurgery(out var office);
+            HandoffRun.Preflight.demoMode = true;
+            var ticket = HandoffRun.Begin(state, score, office.serviceUrl);
+            HandoffRun.BindOfficeSource(ticket, office);
+            HandoffRun.Preflight.demoMode = false;
+            Check(ticket.demoMode && JsonUtility.FromJson<HandoffTicket>(JsonUtility.ToJson(ticket)).demoMode, "canonical run freezes and serializes producer demo flag");
+            var integration = RecapSessionIntegration.Ensure();
+            var context = integration.GetComponent<RecapRunContext>();
+            var nativeRoot = new GameObject("Canonical coach request fixture");
+            try
+            {
+                var native = nativeRoot.AddComponent<NativeCaseSession>();
+                Check(native.CoachRequest().runId == ticket.runId && native.CoachRequest().encounterId == ticket.encounterId,
+                    "actual native initial/recovery coach request carries canonical run identity");
+                integration.Begin(ticket, selected, ticket.sharedSessionId, ticket.attemptId, "", office.serviceUrl, "");
+                Check(context.result.runId == ticket.runId && context.result.diagnosis.total == score.total && context.result.demo.enabled,
+                    "caption-only native attempt keeps canonical run and frozen flags without inventing coach ID");
+                Check(context.EndSurgery(ticket.attemptId, null), "caption-only ending remains available with missing grader");
+                ticket.practiceStarted = ticket.timeOutConfirmed = true;
+                Check(integration.PrepareRetry(out _), "canonical completed run can retry");
+                Check(!ticket.practiceStarted && !ticket.timeOutConfirmed && ticket.attemptId == "" && ticket.sourceOffice.attemptId == "office-attempt",
+                    "retry clears practice/time-out/current attempt while preserving original scored provenance");
+                Check(RecapSessionIntegration.TakeRetry(out _, out var session, out var previous, out var original)
+                    && previous == "office-attempt" && original == "office-attempt", "retry carries old IDs for fresh-attempt comparison");
+                ticket.attemptId = "surgery-retry";
+                Check(RecapSessionIntegration.IsFreshRetry(session, previous, ticket.sharedSessionId, ticket.attemptId), "confirmed retry id differs from original");
+                integration.Begin(ticket, selected, ticket.sharedSessionId, ticket.attemptId, "coach-recovered", office.serviceUrl, "");
+                Check(context.result.attemptId == "surgery-retry" && context.result.runId == ticket.runId && !context.SegmentClosed
+                    && !context.result.surgery.available && context.result.surgery.demoAssisted && context.result.replay.jobId == "",
+                    "new surgical attempt preserves canonical run/assistance but clears result and motion job");
+                context.EndSurgery(ticket.attemptId, null);
+                Check(integration.PrepareRetry(out _) && RecapSessionIntegration.TakeRetry(out _, out _, out previous, out original)
+                    && previous == "surgery-retry" && original == "office-attempt" && ticket.sourceOffice.scorecard.total == score.total,
+                    "second retry still preserves original scored encounter and diagnosis");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(nativeRoot);
+                UnityEngine.Object.DestroyImmediate(context.gameObject);
+                HandoffRun.Clear(); HandoffRun.Preflight.demoMode = false; EncounterOfficeRoute.ClearSurgery();
+            }
         }
         static void VerifyRealProducers()
         {

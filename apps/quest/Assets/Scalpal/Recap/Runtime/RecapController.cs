@@ -62,7 +62,7 @@ namespace Scalpal.Recap
         {
             if (!voice || Result.isSample || !SafeEndpoint(context.voiceServiceUrl))
             { Notice = "Jarvis voice unavailable; reflect using the question on screen."; panel.Refresh(); yield break; }
-            string route = "/coach/sessions/" + Uri.EscapeDataString(Result.runId) + "/recap";
+            string route = (Result.runId == context.coachSessionId ? "/coach/sessions/" : "/coach/runs/") + Uri.EscapeDataString(Result.runId) + "/recap";
             PromptReply data = null;
             using (var request = new UnityWebRequest(context.voiceServiceUrl.TrimEnd('/') + route, "POST"))
             {
@@ -135,6 +135,8 @@ namespace Scalpal.Recap
         public static bool ApplyGateway(RunResult result, GatewayReplay reply)
         {
             if (reply == null || reply.schemaVersion != "scalpal.replay.v1" || reply.sessionId != result.sessionId || reply.attemptId != result.attemptId || reply.jobId != result.replay.jobId) return false;
+            if (result.replay.jobRun != 0 && result.replay.jobRun != reply.jobRun) return false;
+            if (result.replay.status == "ready" && !string.IsNullOrEmpty(result.replay.replayArtifactId) && reply.status == "ready" && result.replay.replayArtifactId != reply.replayArtifactId) return false;
             if (reply.status != "queued" && reply.status != "processing" && reply.status != "ready" && reply.status != "failed") return false;
             if (reply.source != "learner" && reply.source != "rehearsal" && reply.source != "sample" && reply.source != "unknown") return false;
             if (result.isSample && reply.source == "learner") return false;
@@ -159,7 +161,12 @@ namespace Scalpal.Recap
         public void Navigate(bool retry)
         {
             if (voice) voice.Disconnect(); replay.Pause();
-            if (context.RequestNavigation(retry)) return;
+            if (context.RequestNavigation(retry))
+            {
+                var integration = context.GetComponent<RecapSessionIntegration>();
+                if (integration && !string.IsNullOrEmpty(integration.LastNavigationError)) { Notice = integration.LastNavigationError; panel.Refresh(); }
+                return;
+            }
             // Standalone scene may navigate only when its owner explicitly includes destination scenes.
             string target = retry ? context.surgeryScene : context.exploreScene;
             if (Application.CanStreamedLevelBeLoaded(target))

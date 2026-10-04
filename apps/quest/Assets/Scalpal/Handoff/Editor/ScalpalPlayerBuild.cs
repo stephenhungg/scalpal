@@ -25,7 +25,8 @@ namespace Scalpal.Handoff.Editor
             return new[] {
                 new EditorBuildSettingsScene(shell ?? ReservedShellScene, shell != null),
                 new EditorBuildSettingsScene(EncounterOfficeBuild.ScenePath, true),
-                new EditorBuildSettingsScene(NativeSessionBuild.ScenePath, true)
+                new EditorBuildSettingsScene(NativeSessionBuild.ScenePath, true),
+                new EditorBuildSettingsScene("Assets/Scalpal/Recap/Scenes/RunEnding.unity", true)
             };
         }
 
@@ -83,7 +84,7 @@ namespace Scalpal.Handoff.Editor
             var actual = EditorBuildSettings.scenes;
             if (actual.Length != expected.Length || actual.Where((scene, index) =>
                 scene.path != expected[index].path || scene.enabled != expected[index].enabled).Any())
-                throw new InvalidOperationException("Unified scene order must be Shell (reserved if absent), DiagnosisOffice, NativeSession.");
+                throw new InvalidOperationException("Unified scene order must be Shell (reserved if absent), DiagnosisOffice, NativeSession, RunEnding.");
             foreach (var scene in actual.Where(scene => scene.enabled))
                 if (!AssetDatabase.LoadAssetAtPath<SceneAsset>(scene.path))
                     throw new InvalidOperationException("Unified player scene missing: " + scene.path);

@@ -53,6 +53,8 @@ namespace Scalpal.Handoff
         void BindScene()
         {
             office = FindFirstObjectByType<NativeEncounterSession>(); surgery = FindFirstObjectByType<NativeCaseSession>();
+            if (!office && !surgery && FindFirstObjectByType<Scalpal.Recap.RecapController>())
+            { loading = false; phase = "ending"; if (card) card.Hide(); return; }
             if (!office && !surgery) { HandoffRun.Clear(); loading = false; phase = "office"; if (card) card.Hide(); }
             if (surgery && Ticket != null && !loading) SetPhase("register");
         }
@@ -129,7 +131,7 @@ namespace Scalpal.Handoff
                     new[] { "I would choose " + Ticket.procedureTitle }, _ => { Ticket.challengeSeen = true; SetPhase("consequence"); });
             else if (phase == "consequence")
             {
-                float wait = (HandoffRun.Preflight.demoMode ? 6 : 8) - (Time.unscaledTime - entered);
+                float wait = (Ticket.demoMode ? 6 : 8) - (Time.unscaledTime - entered);
                 string text = Ticket.procedureId == "lap_appendectomy" ? "6 hours later · teaching scenario\nHR 118 · T 38.9 °C · BP 98/60\nPerforated appendix. The surgical team takes the case." : "Case escalated · teaching scenario\nDelayed treatment risks deterioration. The surgical team takes the case.";
                 Show("Case escalated", text + "\nYou will scrub in for " + Ticket.procedureTitle + ".", new[] { wait > 0 ? "Continue in " + Mathf.CeilToInt(wait) + " s" : "Continue" }, _ => { Ticket.consequenceSeen = true; SetPhase("theatre"); }, new[] { wait <= 0 });
             }
@@ -216,7 +218,7 @@ namespace Scalpal.Handoff
                 for (int i = 0; i < 4; i++) if (!registration.VisibleLandmarks[i]) { hint = "Can't see " + names[i].ToLowerInvariant() + ". Move the arm or blanket off it."; break; }
             if (registration.PersonCount == 1 && !registration.SurfaceMeasured && elapsed >= 8) hint = "Hold still. Measuring the torso surface.";
             if (registration.SurfaceMeasured && !valid) hint = "Hold still while the fit settles.";
-            bool offer = elapsed >= (HandoffRun.Preflight.demoMode ? 20 : 30) || realigns >= 2 || !HandoffRun.Preflight.ArAvailable;
+            bool offer = elapsed >= (Ticket.demoMode ? 20 : 30) || realigns >= 2 || !HandoffRun.Preflight.ArAvailable;
             Show(offer ? "Switch to the virtual OR?" : "You're in the real room now", "Stay where you are. Check the space around you.\nPatient face-up, arms at sides. Stand at their right side about an arm's length away.\n1 Person found: " + registration.PersonCount + "\n" + dots +
                 "\n2 Measuring torso surface: " + (registration.SurfaceMeasured ? "Ready" : "Waiting") + "\n3 Holding still: " + registration.StableObservations + "/3\nFit: Check alignment\n" + hint,
                 new[] { "Keep trying", "Virtual OR", "End AR" }, i => { if (i == 0) entered = Time.unscaledTime; else if (i == 1) SwitchToVirtual(); else EndAR(); });

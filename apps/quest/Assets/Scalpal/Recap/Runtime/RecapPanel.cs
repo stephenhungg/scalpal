@@ -25,7 +25,9 @@ namespace Scalpal.Recap
                 continueButton.gameObject.SetActive(true); continueButton.label.text = "Open labeled sample demo";
                 exploreButton.gameObject.SetActive(true); retryButton.gameObject.SetActive(false); errorsNext.gameObject.SetActive(false);
                 foreach (var error in errors) error.gameObject.SetActive(false);
-                demoLabel.text = "Sample demo: select explicitly"; return;
+                demoLabel.text = "Sample demo: select explicitly";
+                foreach (var fit in GetComponentsInChildren<Scalpal.EncounterOffice.EncounterOfficeText>(true)) fit.Fit();
+                return;
             }
             bool replay = controller.Phase == "replay", scores = controller.Phase == "scores";
             videoRoot.SetActive(replay); scoreRoot.SetActive(scores); reflectionRoot.SetActive(!replay && !scores);
@@ -62,7 +64,7 @@ namespace Scalpal.Recap
         {
             var s = r.diagnosis;
             if (!r.diagnosisAvailable || s == null) return "CLINICAL REASONING\n\nNot available\nThe encounter has not supplied its scorecard.";
-            var b = new StringBuilder("CLINICAL REASONING\n" + (r.isSample ? "SAMPLE · not your run\n" : "") + s.total + " / " + s.max + "  ·  " + s.grade + "\n");
+            var b = new StringBuilder("CLINICAL REASONING\n" + (r.isSample ? "SAMPLE · not your run\n" : "") + (r.demo?.enabled == true ? "DEMO-ASSISTED RUN\n" : "") + s.total + " / " + s.max + "  ·  " + s.grade + "\n");
             foreach (var section in s.sections ?? Array.Empty<ScoreSection>()) b.AppendLine(section.label + "  " + section.score + "/" + section.max);
             b.AppendLine("Diagnosis: " + s.diagnosisResult);
             b.AppendLine("Critical found: " + string.Join(", ", (s.criticalFound ?? Array.Empty<ClinicalFact>()).Select(x => x.label)));

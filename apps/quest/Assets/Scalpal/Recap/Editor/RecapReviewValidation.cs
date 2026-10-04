@@ -41,6 +41,14 @@ namespace Scalpal.Recap.Editor
                 typeof(RecapController).GetMethod("Start", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).Invoke(c, null);
                 Require(c.Result == null, "No result silently became sample scorecards");
             });
+            Test("terminal replay stops status polling", () =>
+            {
+                var r = Fixture(); r.replay.status = "ready"; r.replay.replayVideoUrl = "http://localhost:1/replay.mp4";
+                typeof(RecapController).GetProperty("Result").GetSetMethod(true).Invoke(c, new object[] { r });
+                var poll = (System.Collections.IEnumerator)typeof(RecapController).GetMethod("Poll", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).Invoke(c, new object[] { 0 });
+                Require(!poll.MoveNext(), "Ready media continued status polling");
+                Require(RecapController.PollDelay(0) == 3 && RecapController.PollDelay(10) == 10, "Processing poll backoff missing");
+            });
             if (failures.Count > 0) throw new InvalidOperationException(string.Join("\n", failures));
             Debug.Log("SCALPAL_RECAP_MEDIA_REGRESSION_OK");
         }
