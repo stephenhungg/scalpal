@@ -12,6 +12,21 @@ The office must accept the explore page’s FinchNode subject ID rather than its
 
 The committed FinchNode fixture contains 12 scenarios and 10 patient subjects: `connect-cancelled` and `connect-failed` have no subject. The service has three authored encounters, so seven patient encounters remain; the native office currently presents only the two adult cases. `cases.ts` has eight authored patient plans, with `patient-demo-rate-limited` and `patient-demo-consent-revoked` using `fallbackPlan`. Coordinate encounter authorship with those plans and preserve unavailable/consent states instead of inventing patient records. The entire main flow is full VR; MR remains off that path.
 
+### UX Alignment
+
+Follow [experience UX](experience-ux.md) for future office UI. The current component is a checkpoint, not compliance with the complete UX target. Source review identifies these gaps:
+
+| UX requirement | Current office | Next work |
+| --- | --- | --- |
+| Hold-to-talk by default | Voice/Stop buttons start and end a continuous microphone connection | Hold-to-talk input, release behavior, haptics, first-use hint and optional open-mic setting; measure provider latency and interruption |
+| Patient knows only patient facts | Patient prompt excludes the answer key; history tools supply facts, exams supply reactions and orders supply no results | Diagnosis/synonym output filtering and regeneration are absent; do not claim prompt instructions guarantee spoken leak prevention |
+| Presentation and dialogue | Patient disconnects before attending connects; last response appears in a paged panel | Distinct Jarvis avatar/position, speaker-colored two-line captions and full clipboard transcript with learner partials |
+| Wrong-diagnosis challenge and revision | `record_assessment` immediately scores and freezes the encounter | A logged challenge/revision stage requires an explicit service transition; preserve initial and revised assessment rather than overwrite scored evidence. Correct-surgery escalation remains a recommendation pending Stephen’s decision |
+| Pause, recenter and comfort | Voice disconnects on suspension; controller readiness automatically returns after focus; rig aligns once | Explicit Resume state and shared shell/recenter controls. Inter/glass and mesh-bound fitting exist, but minimum angular text size, contrast and physical placement have not been verified; fitting can shrink text |
+| Short exam/order lists and teaching feedback | Four choices per page; orders return immediately; score uses critical/expected items | Case-specific short lists, authored order tiers/delays, soft clock, logged hint tiers and office contribution to the separate reasoning recap |
+
+Explore-selected subjects, title-card/fade transitions, the phase stepper, same-attempt OR routing and judge fast path remain broader flow integration. Existing deterministic findings/scoring, single active voice role and gathered-fact attending summary are compatible with the spec. No new provider or physical usability evidence was produced by this source review.
+
 Office art lives in `assets/environments/doctor-office/`, with native exports under `apps/quest/Assets/Scalpal/EncounterOffice/Art/`. Runtime, editor tools, materials, fonts and the dedicated scene live under `EncounterOffice/`. The built-in renderer and existing Android OpenXR configuration are reused. The botanical direction follows the requested flowery MHacks theme; [MHacks 2026 describes its theme as Digital Garden](https://www.mhacks.org/). Original flowers, pastel colors and decorative arrangements interpret that direction without claiming official branding.
 
 ## Art and Licensing
