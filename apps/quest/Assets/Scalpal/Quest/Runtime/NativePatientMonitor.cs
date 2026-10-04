@@ -33,6 +33,8 @@ namespace Scalpal.Quest
         public string Outcome=>HasFreshSample&&condition!=null?condition.outcome.result:"";
         // A terminal outcome stays on screen after practice stops or the coach stops polling.
         public bool Holding=>HasFreshSample&&condition!=null&&condition.outcome.result!="in_progress";
+        // The fresh server condition (heart rate, region bleeds) for presentation; null without a fresh sample.
+        public CoachPatientCondition Condition=>HasFreshSample?condition:null;
         bool Frozen=>HasFreshSample&&frozen;
         public const int TracePoints=320;
         public const float TraceSeconds=4,TraceBaseline=.08f,TraceAmplitude=.055f;

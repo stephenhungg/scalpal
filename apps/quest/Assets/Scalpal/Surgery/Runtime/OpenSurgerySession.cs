@@ -28,6 +28,8 @@ namespace Scalpal.Surgery
         OpenSurgeryCoach delivery;
         SurgeryFeedback feedback;
         OpenBodyBleeding bleeding;
+        PatientIncisions incisions;
+        SurgeryBlood blood;
         SurgeryTriggerHint triggerHint;
         GameObject toolTable;
         OpenSurgeryPanel panel;
@@ -68,12 +70,14 @@ namespace Scalpal.Surgery
             if (toolTable && toolTable.activeSelf) toolTable.SetActive(false);
             bool valid = Ready;
             wound.SetRegistrationValid(valid);
-            if (!valid) { interaction.Simulate(0); bleeding.Simulate(0); return; }
+            if (!valid) { interaction.Simulate(0); bleeding.Simulate(0); incisions.Simulate(0); blood.Simulate(0); return; }
             float dt=Time.deltaTime;
-            if(!float.IsFinite(dt)||dt<=0||dt>.1f){interaction.Simulate(0);bleeding.Simulate(0);return;}
+            if(!float.IsFinite(dt)||dt<=0||dt>.1f){interaction.Simulate(0);bleeding.Simulate(0);incisions.Simulate(0);blood.Simulate(0);return;}
             bleeding.Prime();
             interaction.Simulate(dt);
             bleeding.Simulate(dt);
+            incisions.Simulate(dt);
+            blood.Simulate(dt);
             if ((judgeFastPath || session.exercise.SelectedCase.procedure.openBody.fastPathPremarked) && !premarked) Premark();
             AutoClose(Time.deltaTime);
             wound.Apply(body);
@@ -146,6 +150,14 @@ namespace Scalpal.Surgery
             delivery.Initialize(session.coach,session.exercise,session.voice);
             bleeding = GetComponent<OpenBodyBleeding>() ?? gameObject.AddComponent<OpenBodyBleeding>();
             bleeding.Initialize(interaction,session.exercise,woundFrame);
+            // Incisions off the field and visible blood flow follow the same attempt; a retry clears both.
+            if (!blood)
+            {
+                var view = new GameObject("SurgeryBlood"); view.transform.SetParent(transform,false);
+                blood = view.AddComponent<SurgeryBlood>(); incisions = view.AddComponent<PatientIncisions>();
+            }
+            incisions.Initialize(interaction,session.patientFrame,woundFrame,PatientSkinCollider(),VirtualBody);
+            blood.Initialize(interaction,incisions,session.exercise,session.patientFrame,woundFrame,VirtualBody,GetComponent<NativePatientMonitor>());
             Status = rightAsis && umbilicus ? "Registered landmarks bound" : "Authored landmark proxies; ASIS/umbilicus calibration pending";
             if(!anatomyBound)Status+="; one or more surgical base references missing";
             if(!mobile)Status+="; organ mobilization unavailable: "+mobility;
@@ -233,6 +245,16 @@ namespace Scalpal.Surgery
             }
         }
         void Marked(IReadOnlyList<Vector3> points) => wound.SetMarker(points);
+        // AR has no virtual body: the real volunteer gets no incisions or blood drawn on air.
+        bool VirtualBody() => !session.presentation || !session.presentation.passthrough;
+        // The outward-wound collision copy of the rendered mannequin (EnvironmentPreviewBuilder.PatientCollisionName).
+        Collider PatientSkinCollider()
+        {
+            var mannequin = session.presentation ? session.presentation.virtualMannequin : null;
+            if (!mannequin) return null;
+            foreach (var hull in mannequin.GetComponentsInChildren<MeshCollider>(true)) if (hull.name == "PatientCollision") return hull;
+            return null;
+        }
         // State tracker facts for Jarvis (never scored): tip contact and region injuries come from the interaction.
         void Touched(InstrumentBehaviour tool, string tissueId) { if (tool && session.coach) session.coach.Contact(tool.instrumentId, tissueId); }
         void Injured(string region, InstrumentBehaviour tool, bool controlled) { if (tool && session.coach) session.coach.Injury(region, tool.instrumentId, controlled); }
