@@ -2,8 +2,10 @@
 
 import { motion } from "motion/react";
 import { BrandMark } from "./BrandMark";
-import { useEffect, useState } from "react";
-import { ASPECT, SCENE } from "./AsciiAdam";
+import { useState } from "react";
+import { useLeave } from "./useLeave";
+import { useSparkHole } from "./useSparkHole";
+import { DIM_EXPLORE, DIM_LANDING, EXIT, SHIFT_Y } from "@/lib/scene";
 import { AdamLayer } from "./AdamLayer";
 import { BlurWords } from "./BlurWords";
 import { FadeIn } from "./FadeIn";
@@ -12,7 +14,6 @@ import { TitleMorph } from "./TitleMorph";
 import { MonitorHud } from "./MonitorHud";
 
 const TITLE = "scalpal.";
-const SHIFT_Y = 0.22; // hands scene offset down, as a fraction of screen height
 const LEDE = "Practice surgery in mixed reality with a voice coach, and turn every rep into motion a robot hand can replay.";
 
 // Loader: only the hands are on screen until the fingertips touch. Then the Scalpal mark dithers
@@ -30,22 +31,8 @@ export function Landing() {
 
   const launch = () => setLaunched(true);
 
-  // Screen position of the spark (same cover-fit + shift as the shader), so the dim can leave
-  // a soft hole and the spark stays bright.
-  const [spark, setSpark] = useState<[number, number] | null>(null);
-  useEffect(() => {
-    const place = () => {
-      const w = window.innerWidth, h = window.innerHeight;
-      const unit = Math.max(w / ASPECT, h);
-      setSpark([w / 2 + (SCENE.spark[0] - ASPECT / 2) * unit, h * (0.5 + SHIFT_Y) + (SCENE.spark[1] - 0.5) * unit]);
-    };
-    place();
-    window.addEventListener("resize", place);
-    return () => window.removeEventListener("resize", place);
-  }, []);
-  const sparkHole = spark
-    ? `radial-gradient(circle 90px at ${spark[0]}px ${spark[1]}px, transparent 0%, transparent 35%, black 100%)`
-    : undefined;
+  const sparkHole = useSparkHole();
+  const { leaving, go } = useLeave("/explore");
 
   return (
     <main className="relative h-dvh overflow-hidden">
@@ -57,11 +44,12 @@ export function Landing() {
         aria-hidden
         className="pointer-events-none absolute inset-0 z-[1] bg-black"
         style={{ maskImage: sparkHole, WebkitMaskImage: sparkHole }}
-        initial={skip ? false : { opacity: 0 }}
-        animate={{ opacity: launched ? 0.55 : 0 }}
-        transition={{ duration: 0.9, ease: [0.44, 0, 0.56, 1] }}
+        // coming back from /explore starts at that page's dim and eases up to the landing's
+        initial={{ opacity: skip ? DIM_EXPLORE : 0 }}
+        animate={{ opacity: leaving ? DIM_EXPLORE : launched ? DIM_LANDING : 0 }}
+        transition={leaving ? EXIT : { duration: 0.9, ease: [0.44, 0, 0.56, 1] }}
       />
-      <MonitorHud show={titled} instant={skip} />
+      <MonitorHud show={titled && !leaving} instant={skip} />
       {launched && (
         <>
           <motion.nav
@@ -72,7 +60,11 @@ export function Landing() {
           >
             <BrandMark />
           </motion.nav>
-          <section className="relative z-10 flex flex-col items-center px-[30px] pt-[148px] text-center min-[810px]:pt-[98px]">
+          <motion.section
+            className="relative z-10 flex flex-col items-center px-[30px] pt-[148px] text-center min-[810px]:pt-[98px]"
+            animate={leaving ? { opacity: 0, filter: "blur(6px)", y: -10 } : { opacity: 1, filter: "blur(0px)", y: 0 }}
+            transition={EXIT}
+          >
             <TitleMorph
               text={TITLE}
               instant={skip}
@@ -85,11 +77,11 @@ export function Landing() {
             <div className="mt-[26px] min-h-[50px] min-[810px]:mt-9">
               {titled && (
                 <FadeIn delay={0.4} instant={skip}>
-                  <RollButton href="/explore" label="Scrub in" hoverStyle="invert" />
+                  <RollButton href="/explore" label="Scrub in" hoverStyle="invert" onClick={go("/explore")} />
                 </FadeIn>
               )}
             </div>
-          </section>
+          </motion.section>
         </>
       )}
     </main>

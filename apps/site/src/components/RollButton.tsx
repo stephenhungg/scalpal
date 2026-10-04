@@ -50,7 +50,7 @@ export function RollButton({ label, hoverLabel = label, variant = "primary", hre
     );
   }
   return (
-    <MotionLink href={href} className={`${base} ${look} ${className}`} initial="rest" animate="rest" whileHover="hover">
+    <MotionLink href={href} onClick={rest.onClick} className={`${base} ${look} ${className}`} initial="rest" animate="rest" whileHover="hover">
       {inner}
     </MotionLink>
   );
