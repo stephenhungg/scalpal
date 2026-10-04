@@ -188,15 +188,30 @@ namespace Scalpal.EncounterOffice.Editor
             yield return Wait(() => surgery.CoachPrepared && !surgery.Busy && FlowPhase == "timeout",
                 "actual Time-Out creates coach before practice", 30);
             Check(!surgery.Practicing && !surgery.exercise.CanScore && !ticket.AllConfirmed, "practice remains gated before six Time-Out confirmations");
-            string[] confirmations = { "Confirm patient", "Confirm procedure", "Confirm site", "Acknowledge found and missed risks",
-                "Review antibiotic prophylaxis (simulation)", "Review imaging (simulation)" };
-            foreach (var label in confirmations) yield return SelectCard("TIME-OUT", label);
-            Check(ticket.AllConfirmed && !ticket.practiceStarted, "six actual card callbacks complete review without starting scoring");
+            foreach (var label in new[] { "Confirm patient", "Confirm procedure", "Confirm site" }) yield return SelectCard("TIME-OUT", label);
+            // Each office risk is an individual decision; plan for the first and leave the rest unaddressed so the
+            // real preop-check must report them missed (a review that always passes would prove nothing).
+            var risks = HandoffFlow.ReviewRisks(ticket.scorecard);
+            Check(risks.Length > 0, "the scored patient carries at least one typed office risk into Time-Out");
+            string planned = risks.Length > 1 ? risks[0].type : null;
+            var skipped = risks.Where(risk => risk.type != planned).Select(risk => risk.type).ToArray();
+            for (int i = 0; i < risks.Length; i++)
+            {
+                if (risks[i].type == planned) yield return SelectCard("TIME-OUT · Risk " + (i + 1) + " of", "Plan for: " + risks[i].label, 0);
+                else yield return SelectCard("TIME-OUT · Risk " + (i + 1) + " of", "Not addressed", 1);
+            }
+            Check(ticket.risksConfirmed && ticket.confirmedRiskTypes.SequenceEqual(planned == null ? new string[0] : new[] { planned }),
+                "only the risk the learner planned for is recorded as confirmed");
+            foreach (var label in new[] { "Review antibiotic prophylaxis (simulation)", "Review imaging (simulation)" }) yield return SelectCard("TIME-OUT", label);
+            Check(ticket.AllConfirmed && !ticket.practiceStarted, "actual Time-Out card callbacks complete review without starting scoring");
             yield return SelectCard("TIME-OUT · Ready", "Begin practice");
             yield return Wait(() => surgery.Practicing && surgery.exercise.CanScore && surgery.exercise.CoachMatches && surgery.coach.Connected,
                 "actual ConfirmTimeOut POST and coach relay synchronize practice", 30);
             Check(ticket.timeOutConfirmed && ticket.preopResult != null && ticket.preopResult.patientId == jonah.patientId,
                 "actual preop-check response belongs to the reviewed patient");
+            Check(!ticket.preopResult.passed && skipped.All(type => ticket.preopResult.missed.Any(item => item.type == type))
+                && (planned == null || ticket.preopResult.caught.Any(item => item.type == planned)),
+                "actual preop-check scores the skipped office risk as missed and the planned one as caught");
             yield return Wait(() => surgery.voice.Status == "error", "disabled fixture voice transport fails Connect safely before microphone permission");
             Check(!surgery.voice.Connected, "simulated unavailable provider never opens conversation or headset microphone");
             yield return Frames(20); yield return ReadFixture();
@@ -220,7 +235,7 @@ namespace Scalpal.EncounterOffice.Editor
             Check(!surgery.voice.enabled && fixture.providerUnavailableCount == 0 && fixture.providerFetchAttempts == 0
                 && !routes.Any(route => route.Contains("/jarvis/connection")),
                 "fixture-only disabled transport blocks automatic Time-Out voice before mic permission or provider credentials");
-            Debug.Log("SCALPAL_OFFICE_PLAYMODE_OK checks=" + checks + " realOfficeStart=true realORStart=true realSceneTransition=true liveLocalDb=true realEncounterHttp=true realCoachHttp=true sameAttempt=true canonicalHandoff=true wrongPlan=true timeOut=true syntheticCardSelections=true voiceTransportDisabled=true syntheticXR=true headsetValidated=false providerVoiceValidated=false completeDemoFlow=false");
+            Debug.Log("SCALPAL_OFFICE_PLAYMODE_OK checks=" + checks + " realOfficeStart=true realORStart=true realSceneTransition=true liveLocalDb=true realEncounterHttp=true realCoachHttp=true sameAttempt=true canonicalHandoff=true wrongPlan=true timeOut=true timeOutRiskReviewCanFail=true syntheticCardSelections=true voiceTransportDisabled=true syntheticXR=true headsetValidated=false providerVoiceValidated=false completeDemoFlow=false");
         }
         IEnumerator Guard(IEnumerator work)
         {

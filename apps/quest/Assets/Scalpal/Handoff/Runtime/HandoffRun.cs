@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Scalpal.EncounterOffice;
 using Scalpal.Exercises.Data;
 using UnityEngine;
@@ -30,9 +31,13 @@ namespace Scalpal.Handoff
         public bool AllConfirmed => patientConfirmed && procedureConfirmed && siteConfirmed && risksConfirmed && antibioticsReviewed && imagingReviewed;
         public SurgicalCase verifiedCase;
         public PreopCheckResult preopResult;
+        // Risk types the learner individually confirmed at Time-Out; only these are sent to preop-check.
+        public List<string> confirmedRiskTypes = new List<string>();
+        public int riskReviewIndex;
         public void ResetTimeOut()
         {
             timeOutConfirmed = patientConfirmed = procedureConfirmed = siteConfirmed = risksConfirmed = antibioticsReviewed = imagingReviewed = false;
+            confirmedRiskTypes.Clear(); riskReviewIndex = 0;
         }
     }
 
@@ -78,6 +83,8 @@ namespace Scalpal.Handoff
             reason = ""; return true;
         }
         public static void Clear() => Current = null;
+        // A run ends on return to explore or a new office patient; the next volunteer must consent again.
+        public static void EndRun() { Current = null; Preflight.volunteerConsented = false; }
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void Reset() { Current = null; Preflight = new TheatrePreflight(); }
     }
