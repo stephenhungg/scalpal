@@ -16,14 +16,23 @@ namespace Scalpal.Quest
         public Renderer virtualMannequin;
         public Transform anatomyFit, patientFrame;
         public NativeCaseSession session;
-        public bool passthrough;
+        public bool passthrough = true;
         bool previousClick;
         Pose authoredFit, authoredFrame;
         Vector3 authoredScale, authoredFrameScale;
         bool initialized;
         public string CoachMode => passthrough ? "mixed_reality" : "virtual";
+#if UNITY_EDITOR
+        // The native compositor cannot run in Editor. Only the explicitly synthetic
+        // frame-driven harness opts in; this seam is absent from headset builds.
+        public bool SyntheticCompositorReady { get; set; }
+#endif
         public bool Ready => !passthrough || (cameraManager && cameraManager.enabled
-            && cameraManager.subsystem != null && cameraManager.subsystem.running);
+            && (cameraManager.subsystem != null && cameraManager.subsystem.running
+#if UNITY_EDITOR
+                || SyntheticCompositorReady
+#endif
+            ));
 
         void Awake()
         {

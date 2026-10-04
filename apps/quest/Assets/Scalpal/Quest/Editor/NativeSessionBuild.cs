@@ -109,7 +109,7 @@ namespace Scalpal.Quest.Editor
             var exercise = sessionObject.AddComponent<AnatomyExerciseBinding>();
             exercise.anatomy = anatomy;
             exercise.coach = coach;
-            exercise.presentationMode = "virtual";
+            exercise.presentationMode = "mixed_reality";
             exercise.requireCoachSynchronization = true;
             workbench.externalSessionControls = true;
             var session = sessionObject.AddComponent<NativeCaseSession>();
@@ -167,7 +167,7 @@ namespace Scalpal.Quest.Editor
             EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) };
             AssetDatabase.SaveAssets();
             Validate();
-            Debug.Log("SCALPAL_NATIVE_SESSION_PREPARED view=virtual registration=authored_mannequin mrOptIn=true physicalPlaythroughUnverified=true");
+            Debug.Log("SCALPAL_NATIVE_SESSION_PREPARED view=mixed_reality registration=required_live_body_fit physicalPlaythroughUnverified=true");
         }
 
         static void ApplySessionSettings()
@@ -266,7 +266,7 @@ namespace Scalpal.Quest.Editor
                 || !session.realtime || !session.voice || !session.patientFrame || !session.status)
                 throw new InvalidOperationException("Native session has a missing required binding.");
             if (session.anatomy == session.preview || session.exercise.anatomy != session.anatomy || session.exercise.coach != session.coach
-                || session.status != session.workbench.status || session.exercise.presentationMode != "virtual" || !session.exercise.requireCoachSynchronization
+                || session.status != session.workbench.status || session.exercise.presentationMode != "mixed_reality" || !session.exercise.requireCoachSynchronization
                 || !session.workbench.externalSessionControls)
                 throw new InvalidOperationException("Native case/coach/preview bindings are inconsistent.");
             if (roots.SelectMany(root => root.GetComponentsInChildren<AnatomyExerciseBinding>(true)).Count() != 1
@@ -322,17 +322,17 @@ namespace Scalpal.Quest.Editor
         {
             var presentation = session.presentation;
             var settings = OpenXRSettings.GetSettingsForBuildTargetGroup(BuildTargetGroup.Android);
-            if (!presentation || presentation != session.workbench.presentation || presentation.passthrough
+            if (!presentation || presentation != session.workbench.presentation || !presentation.passthrough
                 || presentation.headCamera != session.workbench.headCamera || !presentation.cameraManager
                 || presentation.cameraManager.gameObject != presentation.headCamera.gameObject
-                || presentation.cameraManager.enabled || !presentation.virtualRoom.activeSelf
-                || presentation.headCamera.backgroundColor.a != 1f
-                || session.exercise.presentationMode != "virtual"
+                || !presentation.cameraManager.enabled || presentation.virtualRoom.activeSelf
+                || presentation.headCamera.backgroundColor.a != 0f
+                || session.exercise.presentationMode != "mixed_reality"
                 || !session.GetComponent<ARSession>() || !settings.GetFeature<ARSessionFeature>().enabled
                 || !settings.GetFeature<ARCameraFeature>().enabled
                 || !settings.GetFeature<OpenXRCompositionLayersFeature>().enabled
                 || !settings.GetFeature<MetaXRFeature>().enabled
-                || !presentation.virtualMannequin || !presentation.virtualMannequin.enabled
+                || !presentation.virtualMannequin || presentation.virtualMannequin.enabled
                 || !session.bodyRegistration || session.bodyRegistration.Accepted || session.bodyRegistration.EnabledByOperator
                 || !session.bodyRegistration.cameraAccess || session.bodyRegistration.cameraAccess.enabled
                 || !session.bodyRegistration.surfaceAccess || session.bodyRegistration.surfaceAccess.enabled
@@ -340,7 +340,7 @@ namespace Scalpal.Quest.Editor
                 || session.bodyRegistration.anatomyFit != session.anatomy.transform.parent
                 || session.bodyRegistration.patientFrame != session.patientFrame
                 || session.bodyRegistration.bodyOverview.gameObject.activeSelf)
-                throw new InvalidOperationException("Full-VR default, optional MR bindings or opaque camera are incorrect.");
+                throw new InvalidOperationException("MR default, required body-fit bindings or transparent camera are incorrect.");
         }
 
         static void ValidateOverview(AnatomyController controller)

@@ -51,6 +51,61 @@ namespace Scalpal.Quest.Editor
             var separated = new[] { new Vector2(.25f, .25f), new Vector2(.75f, .25f), new Vector2(.25f, .75f), new Vector2(.75f, .75f) };
             Assert(!inconsistent.TryTorsoPlane(separated, out _, out _), "individually smooth but incompatible torso depth samples rejected");
             Assert(!surface.TryTorsoPlane(null, out _, out _) && !surface.TryTorsoPlane(new Vector2[3], out _, out _), "incomplete torso landmark set rejected");
+
+            // Wider synthetic image-space torso isolates each sample neighborhood. This
+            // tests depth selection, not the anthropometric TryFit or participant accuracy.
+            var broadTorso = new[] { new Vector2(.15f, .02f), new Vector2(.85f, .02f),
+                new Vector2(.15f, .98f), new Vector2(.85f, .98f) };
+            var workingArea = Surface();
+            for (int y = 5; y <= 7; y++) for (int x = 6; x <= 10; x++)
+                workingArea.points[y * BodySurfaceSnapshot.Width + x].y += .25f;
+            Assert(workingArea.TryTorsoPlane(broadTorso, out var clearPlane, out var clearCenter)
+                && Mathf.Abs(clearCenter.y - 1) < .001f && Vector3.Dot(clearPlane.normal, Vector3.up) > .999f,
+                "central foreground hand cannot pull chest/hip flank plane toward the camera");
+            Array.Clear(workingArea.valid, 5 * BodySurfaceSnapshot.Width + 6, 5);
+            Assert(workingArea.TryTorsoPlane(broadTorso, out _, out var clearHole) && Mathf.Abs(clearHole.y - 1) < .001f,
+                "missing depth in central operating area does not require an abdomen-center probe");
+
+            var localHand = Surface();
+            // First upper-left probe: x=.276, y=.1352 -> grid cell (4,1).
+            // Adjacent band is separated, leaving six clean probes and quadrant coverage.
+            for (int y = 1; y <= 2; y++) for (int x = 4; x <= 5; x++)
+                localHand.points[y * BodySurfaceSnapshot.Width + x].y += .2f;
+            Assert(localHand.Sample(new Vector2(.276f, .1352f), out var foreground, out _)
+                && Mathf.Abs(foreground.y - 1.2f) < .001f,
+                "foreground fixture is coherent native depth, rather than a trivially invalid cell");
+            Assert(localHand.TryTorsoPlane(broadTorso, out _, out var consensusCenter)
+                && Mathf.Abs(consensusCenter.y - 1) < .001f,
+                "localized coherent foreground is rejected by distributed torso consensus");
+            var foregroundMajority = Surface();
+            for (int y = 0; y <= 6; y++) for (int x = 0; x < BodySurfaceSnapshot.Width; x++)
+                foregroundMajority.points[y * BodySurfaceSnapshot.Width + x].y += .2f;
+            Assert(!foregroundMajority.TryTorsoPlane(broadTorso, out _, out _),
+                "split chest/hip depth cannot choose a convenient foreground half-plane");
+            var sparse = Surface();
+            for (int y = 6; y < BodySurfaceSnapshot.Height; y++) for (int x = 0; x < BodySurfaceSnapshot.Width; x++)
+                sparse.valid[y * BodySurfaceSnapshot.Width + x] = false;
+            Assert(!sparse.TryTorsoPlane(broadTorso, out _, out _), "missing lower torso cannot be inferred from chest-only depth");
+            var oneSided = Surface();
+            for (int y = 7; y < BodySurfaceSnapshot.Height; y++) for (int x = 8; x < BodySurfaceSnapshot.Width; x++)
+                oneSided.valid[y * BodySurfaceSnapshot.Width + x] = false;
+            Assert(!oneSided.TryTorsoPlane(broadTorso, out _, out _),
+                "six valid probes cannot replace missing lower-right torso coverage");
+            var fiveOnly = Surface();
+            fiveOnly.valid[1 * BodySurfaceSnapshot.Width + 4] = false;
+            fiveOnly.valid[3 * BodySurfaceSnapshot.Width + 11] = false;
+            fiveOnly.valid[10 * BodySurfaceSnapshot.Width + 4] = false;
+            Assert(!fiveOnly.TryTorsoPlane(broadTorso, out _, out _),
+                "five distributed probes below consensus count cannot supply a plane");
+            var rotatedHand = Surface(rotation: Quaternion.Euler(0, 37, 0), translation: new Vector3(2, .1f, -1));
+            for (int y = 5; y <= 7; y++) for (int x = 6; x <= 10; x++)
+                rotatedHand.points[y * BodySurfaceSnapshot.Width + x] += Vector3.up * .25f;
+            Assert(rotatedHand.TryTorsoPlane(broadTorso, out _, out var rotatedCenter)
+                && Mathf.Abs(rotatedCenter.y - 1.1f) < .001f,
+                "distributed probes retain tracking-world coordinates after translated/yawed origin");
+            long warmAllocated = GC.GetAllocatedBytesForCurrentThread();
+            for (int i = 0; i < 128; i++) workingArea.TryTorsoPlane(broadTorso, out _, out _);
+            Assert(GC.GetAllocatedBytesForCurrentThread() == warmAllocated, "warm torso selection allocates no managed sample/index arrays");
             Assert(BodyRegistrationMath.TryFit(points, plane.normal, out var fit), "correct labeled torso fits");
             Assert(Mathf.Abs(fit.scale - 1) < .0001f, "uniform metric scale");
             Assert(Vector3.Distance(fit.position + fit.rotation * new Vector3(0, BodyRegistrationMath.SourceHipHeight, BodyRegistrationMath.SourceFront), Vector3.up) < .001f, "source front hip projects to accepted surface");
@@ -103,20 +158,44 @@ namespace Scalpal.Quest.Editor
                 observe(); Assert(body.Accepted, "third stable image/depth pair automatically calibrates without controller points");
                 Assert(Vector3.Distance(body.patientFrame.position, body.anatomyFit.TransformPoint(BodyRegistrationMath.SourceUmbilicus)) < .001f, "ports derive from fitted source umbilicus");
                 body.Process(reply, "synthetic-1", new Vector2Int(640, 480), Time.realtimeSinceStartup, null);
-                Assert(!body.Accepted && !body.CandidateValid, "missing acquisition-time depth closes scoring gate");
+                Assert(body.Accepted && body.CandidateValid && body.ConsecutiveFailures == 1, "one missing depth observation holds recent accepted fit");
+                var heldRotation = body.patientFrame.rotation;
+                Assert(body.TryAccept() && Quaternion.Angle(body.patientFrame.rotation, heldRotation) < .001f, "reconfirming held fit cannot apply a rejected plane");
+                Assert(Vector3.Distance(body.patientFrame.position, body.anatomyFit.TransformPoint(BodyRegistrationMath.SourceUmbilicus)) < .001f, "held fit does not move the registered ports");
                 observe(); observe(); observe(); Assert(body.Accepted, "fresh valid depth automatically recovers registration");
                 body.Process(reply, "synthetic-1", new Vector2Int(640, 480), Time.realtimeSinceStartup, missing);
-                Assert(!body.Accepted && !body.CandidateValid, "lost depth confidence invalidates accepted fit");
+                Assert(body.Accepted && body.CandidateValid && body.ConsecutiveFailures == 1, "isolated lost depth confidence preserves accepted fit");
+                body.Process(reply, "synthetic-1", new Vector2Int(640, 480), Time.realtimeSinceStartup, missing);
+                Assert(body.Accepted && body.CandidateValid && body.ConsecutiveFailures == 2, "two consecutive misses remain within bounded grace");
+                body.Process(reply, "synthetic-1", new Vector2Int(640, 480), Time.realtimeSinceStartup, missing);
+                Assert(!body.Accepted && !body.CandidateValid && body.ConsecutiveFailures == 3, "third consecutive miss actually closes scoring gate");
                 observe(); observe(); observe(); Assert(body.Accepted, "depth recovery requires three fresh observations");
                 body.Process(reply, "synthetic-1", new Vector2Int(640, 480), Time.realtimeSinceStartup, Surface(Quaternion.identity, Vector3.up * .06f));
                 Assert(!body.Accepted && body.CandidateValid, "participant surface motion invalidates previously accepted fit");
                 observe(); observe(); observe(); Assert(body.Accepted, "stable participant position automatically reacquires");
                 reply.personCount = 2; observe(); Assert(!body.Accepted && !body.CandidateValid, "ambiguous person count closes gate"); reply.personCount = 1;
                 observe(); observe(); observe(); Assert(body.Accepted, "single-person recovery automatically reacquires");
-                reply.landmarks[11].visibility = .2f; observe(); Assert(!body.Accepted, "occlusion closes gate"); reply.landmarks[11].visibility = .9f;
+                reply.landmarks[11].visibility = .2f; observe(); Assert(body.Accepted && body.CandidateValid, "brief shoulder occlusion holds recent measured fit");
+                observe(); observe(); Assert(!body.Accepted && !body.CandidateValid, "sustained shoulder occlusion closes gate"); reply.landmarks[11].visibility = .9f;
                 observe(); observe(); observe(); Assert(body.Accepted, "visible landmarks automatically reacquire");
+                body.ResetFit();
+                Action delayed = () => body.Process(reply, "synthetic-1", new Vector2Int(640, 480), Time.realtimeSinceStartup - .6f, surface);
+                delayed(); delayed(); delayed();
+                Assert(body.Accepted && body.CandidateValid && body.LastObservationLatency >= .6f, "600 ms capture-to-result age can acquire a stable fit");
+                Set(body, "observationTime", Time.realtimeSinceStartup - 1.4f);
+                Assert(body.CandidateValid, "600 ms serialized pipeline retains prior 1.4 s old acquisition during next result");
+                delayed(); Assert(body.Accepted && body.ConsecutiveFailures == 0, "fresh success renews measured acquisition timestamp");
+                Set(body, "observationTime", Time.realtimeSinceStartup - NativeBodyRegistration.MaximumFitAge - .01f);
+                Assert(!body.CandidateValid, "held acquisition expires even without a new HTTP response");
+                body.Process(null, "synthetic-1", new Vector2Int(640, 480), Time.realtimeSinceStartup, null);
+                Assert(!body.Accepted && !body.CandidateValid, "a miss cannot extend an expired accepted fit");
+                observe(); observe(); observe(); Assert(body.Accepted, "expired fit reacquires after three successes");
+                Assert(!NativeBodyRegistration.Fresh(float.NaN, 10, 2) && !NativeBodyRegistration.Fresh(10, float.PositiveInfinity, 2)
+                    && !NativeBodyRegistration.Fresh(11, 10, 2), "nonfinite/future clocks cannot appear fresh");
                 body.Process(reply, "synthetic-1", new Vector2Int(640, 480), Time.realtimeSinceStartup - 2, surface);
                 Assert(!body.Accepted && !body.CandidateValid, "stale image cannot calibrate against cached depth");
+                body.Process(reply, "synthetic-1", new Vector2Int(640, 480), Time.realtimeSinceStartup - NativeBodyRegistration.MaximumReplyAge - .01f, surface);
+                Assert(!body.CandidateValid, "late response rejected at acquisition-age bound, not marked fresh on receipt");
                 body.Process(reply, "synthetic-1", new Vector2Int(640, 480), Time.realtimeSinceStartup + 2, surface);
                 Assert(!body.CandidateValid, "future acquisition timestamp rejected");
                 reply.frameId = "foreign"; observe(); Assert(!body.CandidateValid, "wrong image identity cannot use cached depth"); reply.frameId = "synthetic-1";

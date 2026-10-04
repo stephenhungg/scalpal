@@ -93,7 +93,7 @@ namespace Scalpal.Quest
             SelectedPatientId = handoff.patientId;
             SelectedProcedureId = handoff.procedureId;
             coachBaseUrl = handoff.serviceUrl;
-            if (presentation) { presentation.passthrough = false; presentation.Apply(); }
+            if (presentation) { presentation.passthrough = true; presentation.Apply(); }
         }
 
         void Start()
@@ -590,8 +590,6 @@ namespace Scalpal.Quest
 
         public bool TryChangePresentation(bool passthrough)
         {
-            if ((OfficeHandoff != null || HandoffRun.Current?.sourceOffice != null) && passthrough)
-            { Message = "Practice from the diagnosis office uses full VR."; return false; }
             if (!presentation || busy || (!HasHandoff && Phase != "Selecting" && Phase != "Recap")) return false;
             if (presentation.passthrough == passthrough) return true;
             if (HasHandoff && !HandoffRun.CanChoose(passthrough ? "mixed_reality" : "virtual", HandoffRun.Preflight)) return false;

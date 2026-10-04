@@ -33,7 +33,11 @@ namespace Scalpal.Quest.Editor
         Input source;
         IXRInputSource previous;
         NativeCaseSession session;
-        int checks;
+        int checks, bodyFrame;
+        bool feedBody;
+        float nextBodyFrame;
+        NativePresentation syntheticPresentation;
+        readonly BodySurfaceSnapshot surface = SyntheticSurface();
         string runtimeException,endpoint;
         void Awake()
         {
@@ -41,8 +45,51 @@ namespace Scalpal.Quest.Editor
             Application.logMessageReceived+=Log;
             var config=JsonUtility.FromJson<NativeCaseSession.DevelopmentConfig>(File.ReadAllText(Environment.GetEnvironmentVariable("SCALPAL_PLAYMODE_CONFIG")));
             endpoint=config.coachBaseUrl;
+            syntheticPresentation=UnityEngine.Object.FindFirstObjectByType<NativePresentation>();
+            if(syntheticPresentation)syntheticPresentation.SyntheticCompositorReady=true;
         }
         void Start()=>StartCoroutine(Guard(Exercise()));
+        void Update()
+        {
+            if(feedBody&&session&&Time.realtimeSinceStartup>=nextBodyFrame)ObserveBody();
+        }
+        void ObserveBody()
+        {
+            nextBodyFrame=Time.realtimeSinceStartup+.3f;
+            string id="playmode-synthetic-"+(++bodyFrame);
+            var reply=SyntheticReply(id);
+            // The capture age is deliberate and bounded. Depth rays and image landmarks
+            // refer to the same fixture acquisition; this is not a physical camera test.
+            session.bodyRegistration.Process(reply,id,new Vector2Int(640,480),Time.realtimeSinceStartup-.05f,surface);
+        }
+        static BodySurfaceSnapshot SyntheticSurface()
+        {
+            var eye=new Vector3(0,2,0);
+            var result=new BodySurfaceSnapshot {
+                bottomLeft=new Ray(eye,new Vector3(-1,-1,-1)),
+                bottomRight=new Ray(eye,new Vector3(1,-1,-1)),
+                topLeft=new Ray(eye,new Vector3(-1,-1,1)),lensForward=Vector3.down
+            };
+            for(int y=0;y<BodySurfaceSnapshot.Height;y++)for(int x=0;x<BodySurfaceSnapshot.Width;x++)
+            {
+                int i=y*BodySurfaceSnapshot.Width+x;
+                result.points[i]=new Vector3(2f*x/(BodySurfaceSnapshot.Width-1)-1,1,1-2f*y/(BodySurfaceSnapshot.Height-1));
+                result.normals[i]=Vector3.up;result.valid[i]=true;
+            }
+            return result;
+        }
+        static NativeBodyRegistration.Reply SyntheticReply(string id)
+        {
+            var landmarks=new NativeBodyRegistration.Landmark[33];
+            for(int i=0;i<landmarks.Length;i++)landmarks[i]=new NativeBodyRegistration.Landmark {index=i,x=.5f,y=.5f,visibility=.9f,presence=.9f};
+            int[] ids={11,12,23,24};
+            var points=new[] {new Vector3(.167503f,1,.521565f),new Vector3(-.167503f,1,.521565f),
+                new Vector3(.084307f,1,0),new Vector3(-.084307f,1,0)};
+            for(int i=0;i<ids.Length;i++){landmarks[ids[i]].x=(points[i].x+1)/2;landmarks[ids[i]].y=(1-points[i].z)/2;}
+            return new NativeBodyRegistration.Reply {schema="scalpal.body_pose.v1",frameId=id,imageWidth=640,imageHeight=480,
+                coordinateConvention="normalized_image_top_left",valid=true,personCount=1,landmarks=landmarks,
+                model=new NativeBodyRegistration.Model {sha256="59929e1d1ee95287735ddd833b19cf4ac46d29bc7afddbbf6753c459690d574a"}};
+        }
         void Log(string message,string stack,LogType type)
         {
             if(type==LogType.Exception&&stack.Contains("Scalpal"))runtimeException=message;
@@ -78,16 +125,26 @@ namespace Scalpal.Quest.Editor
             yield return Wait(()=>session.workbench.IsReady&&session.Phase=="Selecting"&&session.realtime.Paired,"real Start loads case and real Update pairs headset");
             yield return Wait(()=>attemptConfirmed&&!session.realtime.AttemptPending,"real reducer confirms this headset's fresh attempt");
             session.realtime.AttemptStarted-=onAttempt;
-            Check(!session.presentation.passthrough&&session.RegistrationReady&&!session.bodyRegistration.Accepted&&!session.bodyRegistration.EnabledByOperator,"VR starts ready without camera permission or body fit");
+            Check(session.presentation.passthrough&&!session.RegistrationReady&&!session.bodyRegistration.Accepted&&!session.bodyRegistration.EnabledByOperator,"MR starts with body registration and scoring gates closed");
             Check(session.GetComponent<NativeProcedureInput>(),"real Start adds missing input using Unity null semantics");
-            Check(session.presentation.virtualRoom.activeInHierarchy&&session.presentation.virtualMannequin.enabled&&!session.presentation.cameraManager.enabled,"VR room/mannequin visible and passthrough disabled");
+            Check(!session.presentation.virtualRoom.activeInHierarchy&&!session.presentation.virtualMannequin.enabled&&session.presentation.cameraManager.enabled,"MR hides authored room/mannequin and enables the real camera manager");
             string attempt=session.realtime.AttemptId;
             yield return Button(reset:true);
             Check(session.realtime.AttemptId==attempt&&session.Phase=="Selecting","A resets tools without requesting a new attempt");
             yield return Button();
             Check(session.Phase=="Confirmed","real B edge reviews synthetic case");
             yield return Button();
-            yield return Wait(()=>session.Practicing&&session.exercise.CanScore,"real B confirmation starts synchronized practice",20);
+            Check(session.Phase=="Confirmed"&&!session.Practicing&&!session.exercise.CanScore,"real B confirmation cannot start practice without an accepted fit");
+            ObserveBody();yield return Frames();
+            Check(session.bodyRegistration.CandidateValid&&!session.bodyRegistration.Accepted&&!session.RegistrationReady,"first synthetic calibrated observation cannot accept a fit");
+            yield return new WaitForSecondsRealtime(.3f);ObserveBody();yield return Frames();
+            Check(session.bodyRegistration.CandidateValid&&!session.bodyRegistration.Accepted&&!session.RegistrationReady,"second synthetic calibrated observation cannot accept a fit");
+            yield return new WaitForSecondsRealtime(.3f);ObserveBody();yield return Frames();
+            Check(session.bodyRegistration.Accepted&&session.RegistrationReady,"third synthetic calibrated observation opens real body registration gate");
+            Check(Vector3.Distance(session.patientFrame.position,session.bodyRegistration.anatomyFit.TransformPoint(BodyRegistrationMath.SourceUmbilicus))<.001f,"port frame follows accepted anatomy world transform");
+            feedBody=true;
+            yield return Button();
+            yield return Wait(()=>session.Practicing&&session.exercise.CanScore,"real B confirmation starts synchronized registered MR practice",20);
             Check(session.exercise.Body==null,"legacy port case is not routed into an empty deserialized open-body model");
             yield return Command("highlightStructure");
             yield return Wait(()=>session.anatomy.HighlightedPartId=="appendix","real subscribed command applies actual highlight");
@@ -119,7 +176,7 @@ namespace Scalpal.Quest.Editor
             yield return Button(retry:true);
             yield return Wait(()=>session.realtime.AttemptId!=attempt&&session.Phase=="Selecting","left menu explicitly creates a new attempt",15);
             Check(session.anatomy.HighlightedPartId=="","new attempt clears desired highlight");
-            Debug.Log("SCALPAL_NATIVE_PLAYMODE_OK checks="+checks+" realStart=true realUpdate=true realButtons=true realPhysicsTrigger=true liveLocalDb=true isolatedCoachHttp=true headsetValidated=false completeDemoFlow=false");
+            Debug.Log("SCALPAL_NATIVE_PLAYMODE_OK checks="+checks+" realStart=true realUpdate=true realButtons=true realPhysicsTrigger=true liveLocalDb=true isolatedCoachHttp=true syntheticCompositor=true syntheticBodyFrames=true headsetValidated=false completeDemoFlow=false");
         }
         void MoveTip(InstrumentBehaviour tool,Vector3 target)
         {
@@ -167,7 +224,11 @@ namespace Scalpal.Quest.Editor
             while(stack.Count>0)(stack.Pop() as IDisposable)?.Dispose();
             SessionState.SetBool("Scalpal.NativePlayMode.Passed",!failed);EditorApplication.ExitPlaymode();
         }
-        void OnDestroy(){Application.logMessageReceived-=Log;XRInput.Source=previous;}
+        void OnDestroy()
+        {
+            Application.logMessageReceived-=Log;XRInput.Source=previous;
+            if(syntheticPresentation)syntheticPresentation.SyntheticCompositorReady=false;
+        }
     }
 }
 #endif

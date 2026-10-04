@@ -23,7 +23,14 @@ namespace Scalpal.Quest
         public AnatomyController bodyOverview;
         public string endpoint = "http://localhost:8790";
         public bool Accepted { get; private set; }
-        public bool CandidateValid => candidateValid && Time.realtimeSinceStartup - observationTime < 0.75f;
+        // All ages use the image acquisition clock, never HTTP completion time. The
+        // bounded hold accommodates a serialized ~600 ms inference pipeline without
+        // treating a new response as a new camera observation.
+        public const float MaximumReplyAge = 1.25f, MaximumFitAge = 2f;
+        public const int FailureLimit = 3;
+        public bool CandidateValid => candidateValid && Fresh(observationTime, Time.realtimeSinceStartup, MaximumFitAge);
+        public float LastObservationLatency { get; private set; }
+        public int ConsecutiveFailures => failedFrames;
         public string Status { get; private set; } = "Participant agreed? Left stick: enable local body detection";
         public bool EnabledByOperator { get; private set; }
         public int PersonCount { get; private set; }
@@ -37,10 +44,10 @@ namespace Scalpal.Quest
             return EnabledByOperator;
         }
         bool previousClick, candidateValid, inFlight, awaitingPermissions;
-        int epoch, stableFrames;
+        int epoch, stableFrames, failedFrames;
         Plane plane;
         BodyRegistrationMath.Fit candidate, accepted;
-        float observationTime, nextFrame, nextDepthDiagnostic;
+        float observationTime, nextFrame, nextDepthDiagnostic, nextLatencyDiagnostic;
         Texture2D readback;
         UnityWebRequest activeRequest;
         DateTime lastCameraTimestamp;
@@ -228,7 +235,7 @@ namespace Scalpal.Quest
                     catch (Exception)
                     {
                         failed = true;
-                        if (generation == epoch) Invalidate("Camera observation failed; automatically retrying");
+                        if (generation == epoch) Miss("Camera observation failed; automatically retrying");
                     }
                     if (failed || !next) yield break;
                     yield return current;
@@ -272,13 +279,13 @@ namespace Scalpal.Quest
             Ray bottomRight = cameraAccess.ViewportPointToRay(Vector2.right, world);
             Ray topLeft = cameraAccess.ViewportPointToRay(Vector2.up, world);
             var surface = CaptureSurface(bottomLeft, bottomRight, topLeft, world.rotation * Vector3.forward, (float)Math.Max(0, cameraAge));
-            if (surface == null) { Invalidate("Waiting for live spatial depth/permission; automatic fit paused"); yield break; }
+            if (surface == null) { Miss("Waiting for live spatial depth/permission; automatic fit paused"); yield break; }
             // Meta explicitly warns that blocking Blit/GetTexture readback can return the
             // preceding image. Queue asynchronous GPU readback with this frame's metadata.
             if (!SystemInfo.supportsAsyncGPUReadback) { Invalidate("Calibrated camera readback unsupported"); yield break; }
             var pixels = AsyncGPUReadback.Request(texture, 0, TextureFormat.RGBA32);
             while (!pixels.done) yield return null;
-            if (generation != epoch || pixels.hasError) { if (generation == epoch) Invalidate("Camera readback failed"); yield break; }
+            if (generation != epoch || pixels.hasError) { if (generation == epoch) Miss("Camera readback failed"); yield break; }
             EnsureReadback(texture);
             // Encoding consumes CPU pixel data; no redundant GPU upload via Apply.
             readback.LoadRawTextureData(pixels.GetData<byte>());
@@ -311,6 +318,13 @@ namespace Scalpal.Quest
 
         public void Process(Reply reply, string id, Vector2Int resolution, float captured, BodySurfaceSnapshot surface)
         {
+            float now = Time.realtimeSinceStartup;
+            LastObservationLatency = now - captured;
+            if (now >= nextLatencyDiagnostic)
+            {
+                nextLatencyDiagnostic = now + 5;
+                Debug.Log($"SCALPAL_NATIVE_BODY_LATENCY captureToResultMs={LastObservationLatency * 1000:F1} replyLimitMs={MaximumReplyAge * 1000:F0} fitLimitMs={MaximumFitAge * 1000:F0}");
+            }
             PersonCount = reply?.personCount ?? 0;
             SurfaceMeasured = false;
             int[] displayIds = { 11, 12, 23, 24 };
@@ -319,11 +333,17 @@ namespace Scalpal.Quest
                 var point = reply?.landmarks == null ? null : Array.Find(reply.landmarks, p => p != null && p.index == displayIds[i]);
                 VisibleLandmarks[i] = reply != null && reply.valid && reply.personCount == 1 && point != null && point.visibility >= .65f && point.presence >= .65f;
             }
-            if (reply == null || reply.schema != "scalpal.body_pose.v1" || reply.frameId != id || !reply.valid || reply.personCount != 1
+            if (!Fresh(captured, now, MaximumReplyAge))
+            { Invalidate("Camera observation timestamp expired or incompatible; scoring paused"); return; }
+            if (reply == null) { Miss("No single-person pose result; automatically retrying"); return; }
+            if (reply.schema != "scalpal.body_pose.v1" || reply.frameId != id || reply.personCount < 0 || reply.personCount > 1
                 || reply.coordinateConvention != "normalized_image_top_left" || reply.imageWidth != resolution.x || reply.imageHeight != resolution.y
-                || reply.landmarks == null || reply.landmarks.Length != 33 || Time.realtimeSinceStartup - captured > 0.75f || captured > Time.realtimeSinceStartup
                 || reply.model == null || reply.model.sha256 != "59929e1d1ee95287735ddd833b19cf4ac46d29bc7afddbbf6753c459690d574a")
             { Invalidate("No fresh single-person pose; scoring paused"); return; }
+            if (!reply.valid || reply.personCount == 0)
+            { Miss("No single-person pose result; automatically retrying"); return; }
+            if (reply.landmarks == null || reply.landmarks.Length != 33 || (candidateValid && captured < observationTime))
+            { Invalidate("Malformed or out-of-order body result; scoring paused"); return; }
             var indices = new bool[33];
             foreach (var point in reply.landmarks)
             {
@@ -341,20 +361,21 @@ namespace Scalpal.Quest
                 if (item == null || !BodyRegistrationMath.Finite(item.x) || !BodyRegistrationMath.Finite(item.y)
                     || !BodyRegistrationMath.Finite(item.visibility) || !BodyRegistrationMath.Finite(item.presence)
                     || item.x < 0 || item.x > 1 || item.y < 0 || item.y > 1 || item.visibility < 0.65f || item.presence < 0.65f)
-                { Invalidate("Shoulders/hips occluded or uncertain; scoring paused"); return; }
+                { Miss("Shoulders/hips occluded or uncertain; automatically retrying"); return; }
                 imagePoints[i] = new Vector2(item.x, item.y);
             }
-            if (surface == null || !surface.TryTorsoPlane(imagePoints, out plane, out var center))
-            { Invalidate("Torso depth missing or discontinuous; automatic fit paused"); return; }
+            if (surface == null || !surface.TryTorsoPlane(imagePoints, out var observedPlane, out var center))
+            { Miss("Torso depth missing or discontinuous; automatically retrying"); return; }
             for (int i = 0; i < 4; i++)
                 if (!BodyRegistrationMath.ImageRay(surface.bottomLeft, surface.bottomRight, surface.topLeft, surface.lensForward, imagePoints[i], out var ray)
-                    || !BodyRegistrationMath.Intersect(ray, plane, center, out points[i]))
+                    || !BodyRegistrationMath.Intersect(ray, observedPlane, center, out points[i]))
                 { Invalidate("Body rays do not meet the measured torso surface"); return; }
             SurfaceMeasured = true;
-            if (!BodyRegistrationMath.TryFit(points, plane.normal, out var proposed)) { Invalidate("Body fit proportions/orientation uncertain"); return; }
+            if (!BodyRegistrationMath.TryFit(points, observedPlane.normal, out var proposed)) { Invalidate("Body fit proportions/orientation uncertain"); return; }
             if (Accepted && !BodyRegistrationMath.Near(proposed, accepted)) Invalidate("Participant moved; automatically reacquiring fit");
             stableFrames = candidateValid && BodyRegistrationMath.Near(candidate, proposed) ? stableFrames + 1 : 1;
-            candidate = proposed; candidateValid = true; observationTime = captured;
+            failedFrames = 0;
+            candidate = proposed; plane = observedPlane; candidateValid = true; observationTime = captured;
             for (int i = 0; i < 4; i++) if (markers[i]) markers[i].transform.position = points[i];
             if (!Accepted && stableFrames >= 3) TryAccept();
             Status = Accepted ? "Automatically aligned generic anatomy; tracking live" : "Automatically acquiring a stable body fit";
@@ -363,6 +384,7 @@ namespace Scalpal.Quest
         public bool TryAccept()
         {
             if (!CandidateValid || stableFrames < 3 || !workbench.IsReady) return false;
+            if (Accepted) return true; // A held fit cannot be reapplied with a failed depth observation.
             accepted = candidate; Accepted = true; Apply(accepted, anatomyFit);
             patientFrame.SetPositionAndRotation(anatomyFit.TransformPoint(BodyRegistrationMath.SourceUmbilicus),
                 Quaternion.LookRotation(accepted.rotation * Vector3.up, plane.normal));
@@ -373,8 +395,19 @@ namespace Scalpal.Quest
         static void Apply(BodyRegistrationMath.Fit fit, Transform root)
         { root.SetPositionAndRotation(fit.position, fit.rotation); root.localScale = Vector3.one * fit.scale; }
         void Hide() { foreach (var marker in markers) if (marker) marker.SetActive(false); if (bodyOverview) bodyOverview.gameObject.SetActive(false); }
+        public static bool Fresh(float captured, float now, float maximumAge)
+            => BodyRegistrationMath.Finite(captured) && BodyRegistrationMath.Finite(now)
+                && captured <= now && now - captured < maximumAge;
+        void Miss(string reason)
+        {
+            failedFrames++;
+            // Only a previously accepted, still recent fit can bridge intermittent
+            // occlusion. New calibration always needs three uninterrupted successes.
+            if (!Accepted || !CandidateValid || failedFrames >= FailureLimit) { Invalidate(reason); return; }
+            Status = "Holding last measured fit (" + failedFrames + "/" + FailureLimit + "); " + reason;
+        }
         void Invalidate(string reason) { Accepted = candidateValid = false; stableFrames = 0; Status = reason; Hide(); }
-        public void ResetFit() { epoch++; Accepted = candidateValid = false; stableFrames = 0; Hide(); }
+        public void ResetFit() { epoch++; Accepted = candidateValid = false; stableFrames = failedFrames = 0; Hide(); }
         public void StopTracking()
         {
             if (EnabledByOperator || awaitingPermissions) ResetFit();

@@ -37,8 +37,8 @@ namespace Scalpal.Quest.Editor
                     root.SetActive(false);
                 }
                 Assert(session && session.exercise && session.anatomy && session.coach, "actual native scene contains required bindings");
-                Assert(session.exercise.requireCoachSynchronization && session.exercise.presentationMode == "virtual",
-                    "authored native flow defaults to exact full-VR coach pairing");
+                Assert(session.exercise.requireCoachSynchronization && session.exercise.presentationMode == "mixed_reality",
+                    "authored native OR defaults to exact mixed-reality coach pairing");
                 var asset = AssetDatabase.LoadAssetAtPath<TextAsset>("Assets/Scalpal/Exercises/Resources/scalpal_bundle.json");
                 var bundle = JsonUtility.FromJson<ScalpalBundle>(asset.text);
                 var candidate = bundle.cases.Single(item => item.patientId == NativeCaseSession.PatientId && item.procedureId == NativeCaseSession.ProcedureId);
