@@ -36,7 +36,10 @@ The integration tests need a local `spacetime start`. They publish the module to
 
 ```sh
 npm test
+npm run test:unit   # no SpacetimeDB needed
 ```
+
+The integration harness publishes with `--delete-data=always`, so it refuses any database not named `scalpal-test-*` and any server that is not local (the `local` CLI server with a loopback `TEST_SPACETIMEDB_URI`). Set `TEST_SPACETIME_ALLOW_REMOTE=1` to target a remote server on purpose; the name rule still applies.
 
 They cover:
 

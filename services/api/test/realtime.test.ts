@@ -5,10 +5,11 @@
 
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { after, before, describe, test } from 'node:test';
+import { before, describe, test } from 'node:test';
 import {
   connect,
   eventually,
+  exitAfterTeardown,
   publishFresh,
   sessionWithRoles,
   startGateway,
@@ -27,11 +28,8 @@ before(async () => {
   gateway = await startGateway();
 });
 
-after(async () => {
-  await gateway?.stop();
-  // Let sockets close so node:test can exit.
-  setTimeout(() => process.exit(0), 200).unref();
-});
+// Stop the gateway, then force-exit (open sockets) keeping the real exit code.
+exitAfterTeardown(() => gateway?.stop());
 
 type Roles = Awaited<ReturnType<typeof sessionWithRoles>>;
 
