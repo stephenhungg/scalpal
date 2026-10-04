@@ -88,6 +88,7 @@ namespace Scalpal.Quest.Editor
             Check(session.Phase=="Confirmed","real B edge reviews synthetic case");
             yield return Button();
             yield return Wait(()=>session.Practicing&&session.exercise.CanScore,"real B confirmation starts synchronized practice",20);
+            Check(session.exercise.Body==null,"legacy port case is not routed into an empty deserialized open-body model");
             yield return Command("highlightStructure");
             yield return Wait(()=>session.anatomy.HighlightedPartId=="appendix","real subscribed command applies actual highlight");
             yield return Command("pausePractice");

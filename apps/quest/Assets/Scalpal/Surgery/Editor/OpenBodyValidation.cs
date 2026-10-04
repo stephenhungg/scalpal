@@ -113,7 +113,7 @@ namespace Scalpal.Surgery.Editor
             runner.Handle(CaseEvent.Surgery(suction));
             Require(runner.Body.Get("", "poolMl") == 0 && runner.Body.Get("", "bloodLostMl") == 4, "suction clears pool without erasing blood-loss history");
             var dummy = new Procedure { id = "dummy", firstStep = procedure.firstStep, steps = procedure.steps,
-                openBody = new OpenBodyCase { tissues = procedure.openBody.tissues, milestones = procedure.openBody.milestones,
+                openBody = new OpenBodyCase { version = procedure.openBody.version, tissues = procedure.openBody.tissues, milestones = procedure.openBody.milestones,
                     guardrails = Array.Empty<BodyGuardrail>(), decisions = Array.Empty<BodyDecision>() } };
             var second = new CaseRunner(dummy);
             Expose(second, procedure);

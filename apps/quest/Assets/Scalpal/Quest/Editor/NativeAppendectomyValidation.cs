@@ -53,6 +53,7 @@ namespace Scalpal.Quest.Editor
                 Assert(candidate.brief != null && candidate.brief.synthetic, "explicit synthetic brief acknowledgement");
                 Assert(candidate.procedure.steps.Length == 10, "ten authored appendectomy steps");
                 Assert(exercise.SelectCase(bundle, CaseId, true, out var reason), "case binds actual anatomy: " + reason);
+                Assert(exercise.Body == null, "deserialized legacy case retains port/touch progression rather than empty body model");
                 anatomy.SetRegistrationValid(true);
                 SetReady(workbench, true);
                 Physics.SyncTransforms();
