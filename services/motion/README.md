@@ -104,6 +104,38 @@ Per frame: `observation.state` float32[26] = measured wrist x, y, z, yaw + 22 fi
 
 **What is human data here and what is not.** The committed learning result (`learning-results/`, 96.7% policy vs 20% replay) used finger shapes extracted from one public MediaPipe sample clip; `learning-results/human_profiles.json` is that frozen extraction and is the only camera-derived file on main. Teleop uses its open and closed shapes as the two ends of the finger blend. The MediaPipe hand-camera stream (`services/hands`, `live`, `import-episode`) stayed on the branch and is not part of the demo.
 
+## Robot Learns `mark_incision` From the Headset (sim)
+
+The headset's own tracking is the egocentric record: both controllers' 6-DoF pose, grip, trigger, held instrument and the head pose, relative to `PatientRoot`, posted to the coach for one step. `robot-serve` retargets that to a simulated arm + hand, behavior-clones a policy, and grades the robot's rollouts with the same `mark_incision` predicates that grade the learner.
+
+```sh
+git -C models/menagerie sparse-checkout set shadow_hand franka_emika_panda   # once (see FETCH_HINT in mark/scene.py)
+uv run scalpal-motion robot-serve --coach http://127.0.0.1:8787   # baseline in ~15 s, then one result per new demo
+uv run scalpal-motion robot-send-demo --coach http://127.0.0.1:8787   # stand-in headset: a SYNTHETIC stroke via the demo route
+uv run scalpal-motion robot-curve                                  # -> learning-results/robot_mark_curve.json (~2 min)
+```
+
+- **Embodiment** (`mark/scene.py`): Menagerie Franka Panda (`panda_nohand.xml`) with the Menagerie Shadow hand attached at the flange, holding a skin marker in the fist (glove mapping: an instrument in hand closes every finger on the grasp shape). Skin patch `y = -0.89 x²` in the patient frame (+X patient left, +Y anterior, +Z cranial, umbilicus at the origin; right ASIS at (-0.13, -0.015, -0.14) as in `OpenSurgerySession.AuthoredRightAsis`). Kinematic: 5-DoF damped-least-squares IK puts the marker tip on the commanded point with the marker along the inward skin normal; no contact dynamics. The marker draws while the trigger is closed and the tip is within 2 mm of the skin. The patient frame is mapped into the right-handed sim with a proper rotation, so the scene is a mirror image of Unity's left-handed one; every graded quantity (distances, lengths, angles) is mirror-invariant.
+- **Grader** (`mark/grader.py`): a port of `OpenSurgeryStroke` + `FlushStroke("mark")` (error = midpoint to McBurney's point in the wound plane, length along the reference axis, folded angle) and the catalog predicates (error <= 20 mm, 50 to 80 mm, <= 25 deg). `services/preop/test/fixtures/robot-mark-strokes.json` is shared: pytest checks the port's numbers and verdicts, vitest feeds the same numbers through `BodyState` and the catalog milestone.
+- **Demos** (`mark/demos.py`): headset frames -> marker-tip path. The capture has no marker-tip offset, so one constant vertical offset puts the trigger-held samples on the skin; the trigger-held run is the stroke. Landmarks are the authored ones (the frames carry none). Synthetic demos are scripted human-like strokes (aim offset ~7 mm, angle ~9 deg, length 46 to 80 mm, tremor); 85% pass the grader and only passing demos (synthetic or headset) are trained on. `robot-send-demo` frames are stamped `stand-in` and stay labelled synthetic.
+- **Policy** (`mark/learn.py`): the transfer task's chunked MLP and L1 BC (`learning/policy.py`, now sized from the data), 14-dim state (tip, landmarks, drawn extent, on-skin, last step), 10 x (tip step, trigger) chunks, DART-style noisy generation around each demo (400 episodes). Policies are cached per exact dataset.
+- **Evaluation**: K = 30 closed-loop rollouts on the full arm + hand sim at held-out landmarks (right ASIS +/-3 cm), patient poses (+/-5 cm, +/-15 deg) and starts.
+
+Measured (M-series Mac, CPU, October 4, 2026; synthetic demos only, 0 headset demos):
+
+| Demos (synthetic) | Success, 60 rollouts (95% CI) | Median path error |
+| --- | --- | --- |
+| 1 | 38.3% (27.1 to 51.0) | 18.8 mm |
+| 2 | 71.7% (59.2 to 81.5) | 9.8 mm |
+| 3 | 71.7% (59.2 to 81.5) | 11.4 mm |
+| 5 | 88.3% (77.8 to 94.2) | 6.2 mm |
+| 10 | 95.0% (86.3 to 98.3) | 5.0 mm |
+| 20 | 100% (94.0 to 100) | 3.7 mm |
+
+Path error = median in-plane distance of the drawn line from the accepted 6 cm McBurney line (not a grader fact). The worker's default dataset (10 synthetic) scored 29/30 (96.7%) with a 4.1 mm median path error; a cycle takes ~15 to 18 s with retraining (train ~9 s, 30 rollouts <1 s, render ~5 s) and ~7 s when the dataset is unchanged. Each replay is H.264 High / yuv420p / faststart, 1280x720, 30 fps, at most 15 s.
+
+**Say:** "In simulation, a policy behavior-cloned from marker strokes draws the McBurney incision line with a simulated Panda arm and Shadow hand, and passes the same milestone predicates that grade the learner in 95% of held-out patients at 10 demos." **Don't say:** that it learned from people (no headset demo has been recorded yet; every number above is synthetic), that a robot marked a patient, or anything about autonomous surgery. Not verified: a real Quest posting `robot-demo`, Unity's playback of the MP4, and the marker-tip offset of real captures.
+
 ## Nathan's Gateway (integration path)
 
 Nathan's gateway (`nathan/companion-realtime`, `packages/contracts/worker-api.md`) is pull-based. This worker implements it:

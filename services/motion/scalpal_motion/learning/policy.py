@@ -49,31 +49,36 @@ class Policy:
         return y * self.act_sd + self.act_mu
 
     def state_dict(self) -> dict:
-        return {"model": self.model.state_dict(), "obs_mu": self.obs_mu, "obs_sd": self.obs_sd, "act_mu": self.act_mu,
-                "act_sd": self.act_sd}
+        m = self.model
+        dims = {"obs_dim": m.net[0].in_features, "act_dim": m.act_dim, "chunk": m.chunk, "hidden": m.net[0].out_features,
+                "depth": sum(isinstance(x, nn.Linear) for x in m.net) - 1}
+        return {"model": m.state_dict(), "obs_mu": self.obs_mu, "obs_sd": self.obs_sd, "act_mu": self.act_mu,
+                "act_sd": self.act_sd, "dims": dims}
 
     @classmethod
     def from_state(cls, st: dict) -> Policy:
-        m = ChunkMLP()
+        m = ChunkMLP(**st.get("dims", {}))  # older checkpoints: the transfer task's default dims
         m.load_state_dict(st["model"])
         m.eval()
         return cls(m, st["obs_mu"], st["obs_sd"], st["act_mu"], st["act_sd"])
 
 
 def train(data: dict, seed: int = 0, steps: int = 6000, batch: int = 512, lr: float = 1e-3, obs_noise: float = 0.005,
-          threads: int = 2, log_every: int = 0) -> tuple[Policy, dict]:
-    """L1 behavior cloning on normalized observations and action chunks (AdamW, cosine decay)."""
+          threads: int = 2, log_every: int = 0, hidden: int = 512) -> tuple[Policy, dict]:
+    """L1 behavior cloning on normalized observations and action chunks (AdamW, cosine decay).
+
+    Network dims follow the data (obs [n, d], act [n, chunk, a]), so other tasks reuse it."""
     torch.manual_seed(seed)
     np.random.seed(seed)
     torch.set_num_threads(threads)
     obs = data["obs"].astype(np.float32)
     act = data["act"].astype(np.float32)
     obs_mu, obs_sd = obs.mean(0), obs.std(0) + 1e-3
-    flat = act.reshape(-1, ACT_DIM)
+    flat = act.reshape(-1, act.shape[-1])
     act_mu, act_sd = flat.mean(0), flat.std(0) + 1e-3
     X = torch.from_numpy((obs - obs_mu) / obs_sd)
     Y = torch.from_numpy((act - act_mu) / act_sd)
-    model = ChunkMLP()
+    model = ChunkMLP(obs_dim=obs.shape[1], act_dim=act.shape[-1], chunk=act.shape[1], hidden=hidden)
     opt = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, steps)
     g = torch.Generator().manual_seed(seed)

@@ -148,6 +148,33 @@ def cmd_export_lerobot(args: argparse.Namespace) -> None:
     print(json.dumps(export_lerobot(Path(args.attempts), Path(args.out), success_only=args.success_only, fmt=args.format)))
 
 
+def cmd_robot_serve(args) -> None:
+    from .mark.worker import serve
+
+    serve(args.coach, interval=args.interval, once=args.once, n_synthetic=args.synthetic, rollouts=args.rollouts, steps=args.steps)
+
+
+def cmd_robot_curve(args) -> None:
+    from .mark.learn import learning_curve
+    from .mark.worker import CURVE_FILE
+
+    curve = learning_curve([int(x) for x in args.n.split(",")], seeds=args.seeds, k=args.rollouts, steps=args.steps)
+    CURVE_FILE.write_text(json.dumps(curve, indent=1))
+    print(f"wrote {CURVE_FILE}")
+
+
+def cmd_robot_send_demo(args) -> None:
+    from .mark.demos import synthetic_demo, to_capture_frames
+    from .mark.grader import Landmarks
+    from .mark.worker import Coach
+
+    coach = Coach(args.coach)
+    sid = args.session or coach.get("/coach/current")["sessionId"]
+    frames = to_capture_frames(synthetic_demo(np.random.default_rng(args.seed), Landmarks.authored()))
+    res = coach.post(f"/coach/sessions/{sid}/robot-demo", {"stepId": "mark_incision", "frames": frames})
+    print(json.dumps({"sessionId": sid, "frames": len(frames), "synthetic": True, **res}))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="scalpal-motion", description=__doc__)
     sub = parser.add_subparsers(required=True)
@@ -238,6 +265,28 @@ def main() -> None:
     p.add_argument("--success-only", action="store_true", help="keep only attempts that placed the handle")
     p.add_argument("--format", choices=["parquet", "jsonl"], default=None, help="default: parquet when pyarrow is installed, else jsonl")
     p.set_defaults(func=cmd_export_lerobot)
+
+    p = sub.add_parser("robot-serve", help="coach demos -> arm + hand sim policy for mark_incision -> graded replay -> coach result")
+    p.add_argument("--coach", default="http://127.0.0.1:8787")
+    p.add_argument("--interval", type=float, default=2.0, help="seconds between polls for new demos")
+    p.add_argument("--rollouts", type=int, default=30, help="held-out evaluation rollouts per cycle")
+    p.add_argument("--synthetic", type=int, default=10, help="synthetic demos always in the dataset")
+    p.add_argument("--steps", type=int, default=3000, help="gradient steps per (cached) policy")
+    p.add_argument("--once", action="store_true", help="post the baseline, process pending demos once, exit")
+    p.set_defaults(func=cmd_robot_serve)
+
+    p = sub.add_parser("robot-curve", help="mark_incision success vs number of (synthetic) demos -> learning-results/robot_mark_curve.json")
+    p.add_argument("--n", default="1,2,3,5,10,20")
+    p.add_argument("--seeds", type=int, default=2)
+    p.add_argument("--rollouts", type=int, default=30)
+    p.add_argument("--steps", type=int, default=3000)
+    p.set_defaults(func=cmd_robot_curve)
+
+    p = sub.add_parser("robot-send-demo", help="stand-in headset: POST a SYNTHETIC marking stroke as ControllerMotionCapture frames")
+    p.add_argument("--coach", default="http://127.0.0.1:8787")
+    p.add_argument("--session", default=None, help="coach session (default: newest via GET /coach/current)")
+    p.add_argument("--seed", type=int, default=7)
+    p.set_defaults(func=cmd_robot_send_demo)
 
     args = parser.parse_args()
     if getattr(args, "video", None) and args.func is cmd_run and args.out is None:
