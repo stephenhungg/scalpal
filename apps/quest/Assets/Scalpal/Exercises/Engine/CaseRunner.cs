@@ -66,7 +66,20 @@ namespace Scalpal.Exercises.Engine
         public CaseRunner(Procedure procedure)
         {
             Procedure = procedure ?? throw new ArgumentNullException(nameof(procedure));
-            Body = procedure.openBody == null ? null : new BodyState(procedure.openBody.tissues);
+            // JsonUtility constructs empty missing nested objects. Presence alone cannot
+            // switch a legacy port/touch case into the body-predicate engine.
+            bool bodyCase = (procedure.steps ?? Array.Empty<ProcedureStep>()).Any(s => s?.check?.type == "body_predicate");
+            if (bodyCase)
+            {
+                var plan = procedure.openBody;
+                if (plan == null || plan.version != 1 || plan.tissues == null || plan.tissues.Length == 0 ||
+                    plan.milestones == null || plan.milestones.Length == 0 ||
+                    procedure.steps.Any(s => s?.check?.type != "body_predicate"))
+                    throw new ArgumentException("Body-predicate case requires a complete version 1 body plan", nameof(procedure));
+                Body = new BodyState(plan.tissues);
+            }
+            else if (procedure.openBody != null && procedure.openBody.version != 0)
+                throw new ArgumentException("Body plan requires authored body-predicate checks", nameof(procedure));
             foreach (var step in procedure.steps ?? Array.Empty<ProcedureStep>()) steps[step.id] = step;
             Current = Lookup(procedure.firstStep);
         }

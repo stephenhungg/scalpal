@@ -392,6 +392,8 @@ namespace Scalpal.Quest.Editor
         public static void Verify()
         {
             Validate();
+            NativeCaseModelValidation.Run();
+            Scalpal.Surgery.Editor.OpenBodyValidation.Run();
             NativeBodyAtlasValidation.Run();
             NativeBodyRegistrationValidation.Run();
             Scalpal.Instruments.Editor.InstrumentRuntimeValidation.Run();
