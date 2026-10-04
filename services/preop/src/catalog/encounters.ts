@@ -98,6 +98,10 @@ export interface Encounter {
     patientName: string; // who is sick
     age: number; // the sick patient's age
     sex: "female" | "male"; // the sick patient's sex, not the speaker's: a mother can speak for her son
+    // A parent speaker's own age and sex, so the office can seat them beside the child. A patient speaker
+    // is the patient, so these are omitted and the patient's age and sex are used.
+    speakerAge?: number;
+    speakerSex?: "female" | "male";
     // Only for a chart the patient chose not to share demographics with. The guard then requires that the
     // chart really has no name, age, or sex, and the learner must confirm identity in person.
     chartDemographics?: "not_shared";
@@ -239,6 +243,8 @@ export const ENCOUNTERS: Encounter[] = [
       patientName: "Theo Abernathy",
       age: 9,
       sex: "male",
+      speakerAge: 41,
+      speakerSex: "female",
       voiceKey: "parent_female",
       demeanor: "Theo's mom. Worried but organized, knows his medical history well. Speaks for Theo and sometimes relays what he says ('he says it hurts more when he walks').",
       character:

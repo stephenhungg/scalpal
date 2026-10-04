@@ -19,6 +19,7 @@ namespace Scalpal.EncounterOffice
         bool feedbackVisible = true;
         string lastResponse, lastPatientId = "";
         EncounterScore lastScore;
+        EncounterOfficeButton voiceToggle;
         readonly string[] diagnoses = { "Acute cholecystitis", "Symptomatic cholelithiasis", "Sigmoid diverticulitis", "Acute appendicitis", "Perforated appendicitis", "Gastroenteritis", "Ectopic pregnancy", "Ovarian torsion", "Urinary tract infection", "Diverticulitis", "Small bowel obstruction", "Mesenteric ischemia", "Ureteric stone", "Perforated peptic ulcer", "Crohn's disease" };
         readonly string[] plans = { "Laparoscopic cholecystectomy", "Laparoscopic sigmoid colectomy", "Laparoscopic appendectomy", "Appendectomy and washout", "Fluids and antibiotics before surgery", "Observation and reassessment", "Further diagnostic evaluation", "Nonoperative treatment" };
         readonly string[] timing = { "Emergency / immediately", "Urgent / within hours", "Elective / outpatient" };
@@ -40,7 +41,7 @@ namespace Scalpal.EncounterOffice
                 case "chart_toggle": feedbackVisible = !feedbackVisible; chartOffset = 0; break;
                 case "chart_next": chartOffset += 10; break;
                 case "chart_previous": chartOffset = Mathf.Max(0, chartOffset - 10); break;
-                case "voice": session.StartVoice(); break;
+                case "voice": session.ToggleVoice(); break;
                 case "stop": session.StopVoice(); break;
                 case "mic_mode": session.ToggleOpenMicrophone(); break;
                 case "refresh": session.RefreshState(); break;
@@ -101,11 +102,13 @@ namespace Scalpal.EncounterOffice
             if (status) status.text = Wrap((session.Busy ? "Working… " : "") + session.Status, 42);
             if (surgery) surgery.gameObject.SetActive(session.SurgeryReady);
             if (microphoneMode && microphoneMode.label) microphoneMode.label.text = session.OpenMicrophone ? "Hold grip" : "Open mic";
+            if (!voiceToggle) foreach (var button in GetComponentsInChildren<EncounterOfficeButton>(true)) if (button.command == "voice") voiceToggle = button;
+            if (voiceToggle && voiceToggle.label) voiceToggle.label.text = session.VoiceEnabled && session.VoiceLive ? "Voice off" : "Voice on";
             if (lastResponse != session.LastResponse) { lastResponse = session.LastResponse; responseOffset = 0; }
             if (lastScore != session.Score) { lastScore = session.Score; chartOffset = 0; feedbackVisible = true; }
             var responseLines = Wrap(session.LastResponse, 42).Split('\n');
             if (responseOffset >= responseLines.Length) responseOffset = 0;
-            if (response) response.text = "Patient / Jarvis · " + (responseOffset + 1) + "\n" + string.Join("\n", responseLines, responseOffset, Math.Min(6, responseLines.Length - responseOffset));
+            if (response) response.text = ResponseHeader(session.LastSpeaker, responseOffset) + "\n" + string.Join("\n", responseLines, responseOffset, Math.Min(6, responseLines.Length - responseOffset));
             var chartContent = session.Score != null && feedbackVisible ? "Attending feedback · " + session.Score.total + "/" + session.Score.max + " " + session.Score.grade + "\n" + string.Join("\n", session.Score.feedback ?? new string[0]) : EncounterContract.Chart(session.State);
             var lines = Wrap(chartContent, 42).Split('\n');
             if (chartOffset >= lines.Length) chartOffset = Mathf.Max(0, lines.Length - 10);
@@ -132,6 +135,9 @@ namespace Scalpal.EncounterOffice
                 if (button.label) { button.label.text = Page == "patients" ? (entry?.displayLabel ?? entry?.title ?? "Connect patient") + (button.enabledAction ? "" : " · unavailable") : EncounterContract.Label(items[index]);button.label.GetComponent<EncounterOfficeText>()?.Fit(); }
             }
         }
+        // Each line is labelled with whoever actually said it; the patient and Jarvis are never one blended voice.
+        public static string ResponseHeader(string speaker, int offset) =>
+            (string.IsNullOrWhiteSpace(speaker) ? "Waiting for the patient" : speaker) + " · " + (offset + 1);
         public static string Wrap(string text, int width)
         {
             var output = new System.Text.StringBuilder();

@@ -30,6 +30,12 @@ namespace Scalpal.EncounterOffice
         bool focused = true, paused;
         public bool SurgeryReady => State?.phase == "scored" && Score != null && Score.procedureId == AuthoredProcedureId;
         public string LastResponse { get; private set; } = "";
+        // Who said LastResponse: the patient or parent by name, "Jarvis · Attending", or the learner. Never a blend.
+        public string LastSpeaker { get; private set; } = "";
+        // The patient voice connects as soon as an encounter starts and Jarvis connects at the presentation,
+        // unless the learner turned voice off. Grip-to-talk only gates the microphone, not the connection.
+        public bool VoiceEnabled { get; private set; } = true;
+        public bool VoiceLive => voice && (voice.Connected || voice.Status == "connecting");
         public string Role { get; private set; } = "patient";
         public bool Busy => working || pending.Count > 0 || waitingForAttempt;
         public bool TalkHeld { get; private set; }
@@ -102,7 +108,7 @@ namespace Scalpal.EncounterOffice
         {
             if (realtime) { realtime.AttemptStarted -= OfficeAttemptStarted; realtime.AttemptFailed -= OfficeAttemptFailed; }
             if (voice) { voice.ClientToolRequested -= VoiceTool; voice.Transcript -= Transcript; voice.StatusChanged -= VoiceStatus; voice.ModeChanged -= VoiceMode; }
-            Invalidate(); State = null; Score = null; encounterId = ""; Role = "patient"; LastResponse = ""; Status = "Choose a synthetic patient to begin.";
+            Invalidate(); State = null; Score = null; encounterId = ""; Role = "patient"; LastResponse = ""; LastSpeaker = ""; Status = "Choose a synthetic patient to begin.";
         }
         void Invalidate()
         {
@@ -127,7 +133,7 @@ namespace Scalpal.EncounterOffice
             if (!EncounterContract.ValidPatientId(id)) { SetStatus("Choose a canonical patient subject."); return; }
             Invalidate(); EncounterOfficeRoute.ClearSurgery(); patientId = id; encounterId = ""; AuthoredProcedureId = "";
             sharedSessionId = sharedAttemptId = "";
-            State = null; Score = null; Role = "patient"; Draft = new EncounterAssessment(); LastResponse = ""; Suspended = false;
+            State = null; Score = null; Role = "patient"; Draft = new EncounterAssessment(); LastResponse = ""; LastSpeaker = ""; Suspended = false;
             if (patient) patient.Select(null);
             SetStatus("Loading synthetic encounter…");
             Enqueue("GET", "/patients/" + Uri.EscapeDataString(id) + "/case", null, false, authored =>
@@ -171,10 +177,13 @@ namespace Scalpal.EncounterOffice
                         || reply.speaker != "patient" && reply.speaker != "parent" || reply.speaker != reply.state.speaker)
                     { SetStatus("Encounter identity mismatch. Choose a patient again."); return; }
                     encounterId = reply.encounterId; State = reply.state; prompt = reply.patientPrompt; greeting = reply.patientFirstMessage; voiceId = reply.voiceId;
-                    if (patient) { patient.Select(State); patient.SetState("listening"); }
-                    LastResponse = (State.speakerName ?? State.patientName) + ": " + greeting;
+                    if (patient) { patient.Select(State); patient.SetState("listening"); if (voice) patient.BindVoice(voice, true); }
+                    Say(EncounterContract.SpeakerLabel(State, "patient"), greeting);
                     SetStatus("Interview ready. Hold grip to talk, or select questions.");
-                    PlayAuthoredSpeech("greeting", "", greeting);
+                    // The patient greets the learner out loud as the encounter starts. A failed connection plays the
+                    // bundled greeting from VoiceStatus; with voice off the bundled greeting plays directly.
+                    if (VoiceEnabled) ConnectVoice();
+                    else PlayAuthoredSpeech("greeting", "", greeting);
                 });
         }
         // Snapshot the scored encounter's original shared attempt before changing scenes.
@@ -228,14 +237,16 @@ namespace Scalpal.EncounterOffice
             if (reply.state?.phase != "attending" || string.IsNullOrEmpty(reply.attendingPrompt) || string.IsNullOrEmpty(reply.attendingFirstMessage))
             { SetStatus("Attending conversation context is incomplete. Refresh state."); return; }
             Role = "attending"; prompt = reply.attendingPrompt; greeting = reply.attendingFirstMessage; voiceId = "";
-            LastResponse = "Jarvis: " + greeting; if (patient) patient.SetState("resting"); SetStatus("Present your diagnosis, differential, plan and timing to Jarvis.");
+            Say(EncounterContract.SpeakerLabel(State, "attending"), greeting); if (patient) patient.SetState("resting"); SetStatus("Present your diagnosis, differential, plan and timing to Jarvis.");
+            if (patient && voice) patient.BindVoice(voice, false);
+            if (VoiceEnabled) ConnectVoice(); // the patient agent is disconnected; Jarvis joins as attending to hear the presentation
         }
         void AdoptScore(EncounterReply reply, string status)
         {
             if (reply.scorecard == null || string.IsNullOrEmpty(reply.scorecard.grade) || reply.scorecard.max != 100 || reply.scorecard.total < 0 || reply.scorecard.total > 100)
             { SetStatus("Assessment score reply is incomplete. Refresh state."); return; }
             if (reply.scorecard.patientId != patientId || reply.scorecard.procedureId != AuthoredProcedureId) { SetStatus("Reviewed procedure does not match this patient. Refresh state."); return; }
-            Score = reply.scorecard; LastResponse = "Jarvis: " + Score.spoken; SetStatus(status + " Review the feedback, then enter the OR for " + Score.procedureTitle + ".");
+            Score = reply.scorecard; Say(EncounterContract.SpeakerLabel(State, "attending"), Score.spoken); SetStatus(status + " Review the feedback, then enter the OR for " + Score.procedureTitle + ".");
         }
         public void SubmitAssessment()
         {
@@ -245,7 +256,13 @@ namespace Scalpal.EncounterOffice
         public void RequestSummary() => Tool("get_encounter_summary", "{}");
         public void StartVoice()
         {
-            if (!focused || paused || !voice || State == null || Busy || State.phase == "scored") return;
+            if (Busy) return;
+            ConnectVoice();
+        }
+        // Also used from within a completing request (encounter start, attending hand-off), where Busy is still true.
+        void ConnectVoice()
+        {
+            if (!focused || paused || !voice || State == null || State.phase == "scored") return;
             Suspended = false;
             if ((Role == "patient" && State.phase != "interview") || (Role == "attending" && State.phase != "attending"))
             { SetStatus("Refresh the encounter to load the correct conversation role before starting voice."); return; }
@@ -254,6 +271,8 @@ namespace Scalpal.EncounterOffice
                 voice.MicrophoneMuted = !OpenMicrophone && !TalkHeld;
                 voice.ConfigureEndpoint(baseUrl);
                 voice.ConfigureEncounterConversation(prompt, greeting, voiceId, Role);
+                // The patient speaks from the seated speaker's mouth in 3D; Jarvis is not in the room.
+                if (patient) patient.BindVoice(voice, Role == "patient");
                 voice.ConnectEncounter(encounterId, patientId);
             }
             catch (ArgumentException) { SetStatus("Set a valid HTTP(S) encounter service URL."); }
@@ -269,7 +288,7 @@ namespace Scalpal.EncounterOffice
                 if (held)
                 {
                     voice.InterruptPlayback();
-                    if (!voice.Connected && voice.Status != "connecting") StartVoice();
+                    if (!voice.Connected && voice.Status != "connecting") { VoiceEnabled = true; StartVoice(); }
                 }
             }
             if (held) SetStatus("Listening while you hold grip. Release to hear the reply.");
@@ -282,18 +301,30 @@ namespace Scalpal.EncounterOffice
             if (voice) voice.MicrophoneMuted = !OpenMicrophone && !TalkHeld;
             SetStatus(OpenMicrophone ? "Open mic enabled. Use Stop to disconnect." : "Hold grip to talk.");
         }
-        public void StopVoice() { TalkHeld = false; if (voice) { voice.MicrophoneMuted = true; voice.Disconnect(); } if (patient) patient.SetState(Role == "patient" ? "listening" : "resting"); SetStatus("Voice stopped. Visual controls remain available."); }
+        public void StopVoice() { VoiceEnabled = false; TalkHeld = false; if (voice) { voice.MicrophoneMuted = true; voice.Disconnect(); } if (patient) patient.SetState(Role == "patient" ? "listening" : "resting"); SetStatus("Voice off. Visual controls remain available; select Voice on or hold grip to talk."); }
+        // Explicit Voice on/off toggle. Off disconnects and stops auto-connect for later roles; on (or a retry after a
+        // failure or focus loss) connects the current role.
+        public void ToggleVoice()
+        {
+            if (VoiceEnabled && VoiceLive) { StopVoice(); return; }
+            VoiceEnabled = true;
+            StartVoice();
+            Notify();
+        }
         void VoiceStatus(string value)
         {
             if (value == "error")
             {
                 TalkHeld = false;
                 if (voice) voice.MicrophoneMuted = true;
-                SetStatus("Live voice unavailable. Authored offline speech and visual questions work.");
+                string reason = voice && !string.IsNullOrEmpty(voice.LastError) ? voice.LastError : "unknown error";
                 if (Role == "patient" && !Suspended) PlayAuthoredSpeech("greeting", "", greeting);
+                // After the offline greeting, whose own "offline" status must not hide why live voice failed.
+                SetStatus((Role == "patient" ? "Patient" : "Jarvis") + " voice unavailable: " + reason + " Hold grip or select Voice to retry; visual questions still work.");
             }
             else if (value == "offline") SetStatus("Offline patient voice. Select questions to hear authored answers.");
             else if (value == "connected") SetStatus(OpenMicrophone ? "Open mic enabled." : "Voice ready. Hold grip to talk; release for the reply.");
+            else if (value == "connecting") SetStatus((Role == "patient" ? "Connecting " + EncounterContract.SpeakerLabel(State, "patient") + " voice…" : "Connecting Jarvis · Attending voice…"));
             else { SetStatus((Role == "patient" ? "Patient voice: " : "Jarvis voice: ") + value); }
         }
         void VoiceMode(string mode) { if (patient && Role == "patient") patient.SetState(mode == "speaking" ? "speaking" : "listening"); Notify(); }
@@ -301,7 +332,7 @@ namespace Scalpal.EncounterOffice
         {
             if (string.IsNullOrWhiteSpace(text) || State == null) return;
             string speaker = source == "user" ? "learner" : Role == "patient" ? "patient" : "coach";
-            LastResponse = (speaker == "coach" ? "Jarvis" : speaker) + ": " + text;
+            Say(source == "user" ? EncounterContract.LearnerLabel : EncounterContract.SpeakerLabel(State, Role), text);
             Enqueue("POST", "/encounters/" + Uri.EscapeDataString(encounterId) + "/transcript", JsonUtility.ToJson(new TranscriptRequest { speaker = speaker, text = text }), false, null);
             Notify();
         }
@@ -323,7 +354,7 @@ namespace Scalpal.EncounterOffice
             if (request == null && Busy) return;
             Enqueue("POST", "/encounters/" + Uri.EscapeDataString(encounterId) + "/tools/" + Uri.EscapeDataString(name), string.IsNullOrEmpty(body) ? "{}" : body, true, reply =>
             {
-                LastResponse = (Role == "patient" ? "Authored patient response / reaction:\n" : "Jarvis:\n") + (reply.display ?? reply.result);
+                Say(EncounterContract.SpeakerLabel(State, Role), reply.display ?? reply.result);
                 SetStatus("Recorded by the encounter service.");
                 if (request == null && name == "answer")
                 {
@@ -403,6 +434,7 @@ namespace Scalpal.EncounterOffice
             if (patient) patient.SetState("resting");
             SetStatus("Voice paused. Hold grip or select Voice to resume this encounter.");
         }
+        void Say(string speaker, string text) { LastSpeaker = speaker; LastResponse = text ?? ""; }
         void SetStatus(string text) { Status = text; Notify(); }
         void Notify() => Changed?.Invoke();
     }

@@ -411,6 +411,11 @@ export class EncounterSession {
       patientName: this.encounter.persona.patientName,
       speakerName: this.encounter.persona.name,
       speaker: this.encounter.persona.speaker,
+      // Who sits in the office: the patient, and for a parent speaker the adult beside them.
+      patientAge: this.encounter.persona.age,
+      patientSex: this.encounter.persona.sex,
+      speakerAge: this.encounter.persona.speaker === "parent" ? (this.encounter.persona.speakerAge ?? 0) : this.encounter.persona.age,
+      speakerSex: this.encounter.persona.speaker === "parent" ? (this.encounter.persona.speakerSex ?? "") : this.encounter.persona.sex,
       elapsedSeconds: Math.round((this.clock().getTime() - this.startedAt) / 1000),
       historyAsked: [...this.history.keys()].map((id) => ({ id, label: labelOf(id) })),
       exams: [...this.exams.keys()].map((id) => ({ id, label: labelOf(id), finding: this.encounter.exam[id]?.finding ?? "Finding not available for this case." })),
