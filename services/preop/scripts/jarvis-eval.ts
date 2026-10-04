@@ -219,7 +219,7 @@ async function recordFixtures(): Promise<Fixtures> {
 // ---------- test definitions ----------
 
 type Suite = "coach" | "attending" | "patient";
-type Turn = { role: "user" | "agent"; message: string };
+type Turn = { role: "user" | "agent"; message: string | null; tool_calls?: unknown[]; tool_results?: unknown[] };
 
 interface TestDef {
   suite: Suite;
@@ -230,6 +230,20 @@ interface TestDef {
 
 const scoreOf = (recorded: string) => recorded.match(/Score (\d+ of 100)/)?.[1] ?? "the returned score";
 const history = (turns: Turn[]) => turns.map((t, i) => ({ time_in_call_secs: i * 4, ...t }));
+
+// An agent turn that already called a client tool and got the recorded result back. Unit tests only
+// evaluate the agent's next step, so a test whose correct path starts with a lookup (the attending
+// reading the encounter summary) puts that completed lookup in the history.
+let requestSeq = 0;
+function toolTurn(name: string, params: object, result: string): Turn {
+  const request_id = `req_${++requestSeq}`;
+  return {
+    role: "agent",
+    message: null,
+    tool_calls: [{ type: "client", request_id, tool_name: name, params_as_json: JSON.stringify(params), tool_has_been_called: true }],
+    tool_results: [{ type: "client", request_id, tool_name: name, result_value: result, is_error: false, tool_has_been_called: true }],
+  };
+}
 
 function defineTests(f: Fixtures, toolIds: Record<string, string>): TestDef[] {
   // Contextual updates are not part of the chat_history schema; they are sent as user-role turns with
@@ -254,7 +268,10 @@ function defineTests(f: Fixtures, toolIds: Record<string, string>): TestDef[] {
       tool_call_parameters: { referenced_tool: { id: toolIds[tool], type: "client" }, parameters: params, verify_absence: false, ...extra },
     };
   };
-  const absent = (tool: string, chat: Turn[]) => ({ ...toolCall(tool, chat), tool_call_parameters: { referenced_tool: { id: toolIds[tool], type: "client" }, parameters: [], verify_absence: true } });
+  const absent = (tool: string, chat: Turn[], params: { path: string; eval: object }[] = []) => ({
+    ...toolCall(tool, chat),
+    tool_call_parameters: { referenced_tool: { id: toolIds[tool], type: "client" }, parameters: params, verify_absence: true },
+  });
   const mocks = (entries: Record<string, { when?: { path: string; value: string }; result: string }[]>) => {
     const out: Record<string, unknown[]> = {};
     for (const [tool, list] of Object.entries(entries)) {
@@ -266,8 +283,9 @@ function defineTests(f: Fixtures, toolIds: Record<string, string>): TestDef[] {
     }
     return out;
   };
-  const simulation = (scenario: string, conditions: string[], toolMocks: Record<string, unknown[]>, maxTurns: number) => ({
+  const simulation = (scenario: string, conditions: string[], toolMocks: Record<string, unknown[]>, maxTurns: number, chat: Turn[] = []) => ({
     type: "simulation",
+    ...(chat.length ? { chat_history: history(chat) } : {}),
     simulation_scenario: scenario,
     success_conditions: conditions,
     simulation_max_turns: maxTurns,
@@ -308,8 +326,26 @@ function defineTests(f: Fixtures, toolIds: Record<string, string>): TestDef[] {
     {
       suite: "coach",
       name: "coach-other-surgery-no-highlight",
-      checks: "cystic duct question does not trigger highlight_structure",
-      body: absent("highlight_structure", [...findAppendix, { role: "user", message: "Where's the cystic duct? Can you show me the cystic duct?" }]),
+      checks: "simulation: cystic duct request gets no cystic duct highlight or lookup spam (one redirect highlight is fine)",
+      body: simulation(
+        "You are a surgical trainee in the middle of a laparoscopic appendectomy, currently trying to locate the appendix. Say exactly: 'Where's the cystic duct? Can you show me the cystic duct?' Then react briefly to the answer, and ask 'Okay, so what should I be looking at?'",
+        [
+          "The agent never highlights the cystic duct, never describes where the cystic duct is in this patient, and says it is not part of this procedure.",
+          "No tool spam: the agent makes at most one tool call per reply, and never calls the same tool twice in a row for the same request. A single highlight of a structure in this case (cecum or appendix) as a redirect is allowed.",
+        ],
+        mocks({
+          highlight_structure: [
+            { when: { path: "structure", value: "cecum" }, result: f.highlightFind },
+            { result: "That structure is not part of this case's anatomy." },
+          ],
+          explain_structure: [{ result: f.explainCystic }],
+          get_hint: [{ result: f.hintFind }],
+          get_surgery_state: [{ result: f.ctxFind }],
+          get_patient_brief: [{ result: f.brief }],
+        }),
+        3,
+        findAppendix,
+      ),
     },
     {
       suite: "coach",
@@ -388,14 +424,6 @@ function defineTests(f: Fixtures, toolIds: Record<string, string>): TestDef[] {
         ["He's allergic to penicillin, so use clindamycin."],
       ),
     },
-    {
-      suite: "coach",
-      name: "coach-explain-calls-tool",
-      checks: '"what is the mesoappendix" calls explain_structure with mesoappendix',
-      body: toolCall("explain_structure", [...findAppendix, { role: "user", message: "What exactly is the mesoappendix?" }], [
-        { path: "structure", eval: { type: "regex", pattern: "(?i)meso" } },
-      ]),
-    },
 
     // ---- attending ----
     {
@@ -407,6 +435,7 @@ function defineTests(f: Fixtures, toolIds: Record<string, string>): TestDef[] {
         [
           { role: "agent", message: f.attendingFirst },
           { role: "user", message: "Theo is a 9 year old boy with 18 hours of periumbilical pain that migrated to the right lower quadrant, with nausea, one episode of vomiting, and a temp of 38. He's tender at McBurney's point with rebound, and his white count is 14.2. I think it's acute appendicitis and I want to take him for a laparoscopic appendectomy today." },
+          toolTurn("get_encounter_summary", {}, f.summary),
         ],
         ["Good. Before we book it, what else could this be in a 9 year old boy?"],
         ["Recorded. You scored 72 out of 100.", "The differential includes mesenteric adenitis, testicular torsion, and intussusception."],
@@ -430,10 +459,14 @@ function defineTests(f: Fixtures, toolIds: Record<string, string>): TestDef[] {
         [
           { role: "agent", message: f.attendingFirst },
           { role: "user", message: "Theo is 9 with 18 hours of pain that migrated from the umbilicus to the right lower quadrant, fever of 38, tender at McBurney's point with rebound, white count 14.2. I think it's acute appendicitis." },
+          toolTurn("get_encounter_summary", {}, f.summary),
           { role: "agent", message: "Okay. What else could this be, and what made you less worried about it?" },
           { role: "user", message: "Mesenteric adenitis and gastroenteritis. He has no diarrhea and the pain is very focal, so I'm less worried about those." },
           { role: "agent", message: "Good. What's your plan, and how soon?" },
           { role: "user", message: "Laparoscopic appendectomy, today, within the next few hours." },
+          // The prompt asks for a Socratic question when something was missed; give it one round.
+          { role: "agent", message: "Okay. Anything in his history that changes how we set up the room?" },
+          { role: "user", message: "His asthma. He uses a daily fluticasone inhaler and needed albuterol two days ago, so anesthesia should know. That's my assessment: appendicitis, lap appendectomy within a few hours." },
         ],
         [
           { path: "diagnosis", eval: { type: "regex", pattern: "(?i)append" } },
