@@ -219,8 +219,14 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
   app.get("/realtime", (c) => c.json({ ...(options.bridge ? options.bridge.status() : { configured: false, connected: false, identity: "", sessionId: "", lastError: "" }), actions: [] }));
   app.post("/realtime/join", async (c) => {
     if (!options.bridge) return bad(c, 503, "realtime_unconfigured", "Set SPACETIMEDB_URI (and SPACETIMEDB_DB) for the coach service.", []);
-    const { code } = await body(c);
-    if (typeof code !== "string" || !/^[A-Za-z0-9]{4,12}$/.test(code.trim())) return bad(c, 400, "invalid_code", "Send the session's coach invite code.", []);
+    const { code, sessionId: existing } = await body(c);
+    // Rebind to a session this coach identity already joined (after a restart).
+    if (typeof existing === "string" && existing) {
+      return options.bridge.bind(existing)
+        ? c.json({ ...options.bridge.status(), actions: [] })
+        : bad(c, 409, "not_a_member", "This coach identity has not joined that session; send its coach invite code.", []);
+    }
+    if (typeof code !== "string" || !/^[A-Za-z0-9]{4,12}$/.test(code.trim())) return bad(c, 400, "invalid_code", "Send the session's coach invite code, or the sessionId it already joined.", []);
     try {
       const sessionId = await options.bridge.join(code);
       return c.json({ ...options.bridge.status(), sessionId, actions: [] });
