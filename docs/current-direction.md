@@ -13,7 +13,7 @@ The user replaced the selection and presentation flow on October 3, 2026. This s
 5. **Surgery simulation.** Full-VR operating room with a virtual patient, the shared tool/anatomy/exercise core and Jarvis coaching. The real-person MR body fit is no longer on the main path.
 6. **Robot replay (required ending).** Raw passthrough video recorded during the surgery segment is processed into hand motion and replayed on the simulated robot hand. Every run ends with this step.
 
-Every FinchNode demo patient needs an authored diagnosis encounter. Surgical simulations must exist for each procedure a diagnosis can lead to. See the [demo flow](demo-flow.md) for acceptance details and the [integration map](system-integration.md#explore--office--or-route) for the current gaps.
+Every FinchNode demo patient needs an authored diagnosis encounter. Surgical simulations must exist for each procedure a diagnosis can lead to. See the [demo flow](demo-flow.md) for acceptance details, [experience UX](experience-ux.md) for the recommended interaction design, and the [integration map](system-integration.md#explore--office--or-route) for the current gaps.
 
 ## Abdominal Tissue Direction
 

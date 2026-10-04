@@ -1,6 +1,6 @@
 # End-to-End Demo Flow
 
-Updated October 3, 2026 for the user's explore → office → operating room flow. This is the target user journey, not a completed application. The [system integration map](system-integration.md) records actual components, routes and missing adapters. There are no wallets, payouts or onchain stages. The previous conversational-selection, rotating-preview and real-person MR journey is superseded; see [current direction](current-direction.md#latest-experience-flow).
+Updated October 3, 2026 for the user's explore → office → operating room flow. Stage-by-stage UX recommendations: [experience UX](experience-ux.md). This is the target user journey, not a completed application. The [system integration map](system-integration.md) records actual components, routes and missing adapters. There are no wallets, payouts or onchain stages. The previous conversational-selection, rotating-preview and real-person MR journey is superseded; see [current direction](current-direction.md#latest-experience-flow).
 
 ```
 Launch ─Enter─▶ Explore patients ─choose─▶ Diagnosis office ─assessment─▶ Operating room ─▶ Robot replay ─▶ Recap
@@ -34,7 +34,7 @@ Selecting an examination is an authored simulated action, not a measurement of r
 
 The learner presents to the attending (Jarvis). The learner states the diagnosis, differential, procedure and urgency (`record_assessment`). The deterministic attending scorecard (`/encounters/:id/score`) shows what was gathered, missed and decided.
 
-Proposed (open decision): the authored case plan, not the learner's free choice, determines the surgery that runs next. If the learner chose the wrong procedure, the scorecard says so and the OR loads the procedure the patient actually needs. Role changes (patient → attending → surgery coach) disconnect the previous conversation and invalidate pending responses.
+Recommended handoff: see [experience UX](experience-ux.md#4-diagnosis--surgery-handoff) (commit, one challenge, consequence card, then the correct surgery). Earlier proposal, still open until confirmed: the authored case plan, not the learner's free choice, determines the surgery that runs next. If the learner chose the wrong procedure, the scorecard says so and the OR loads the procedure the patient actually needs. Role changes (patient → attending → surgery coach) disconnect the previous conversation and invalidate pending responses.
 
 ## 5. Operating Room
 
