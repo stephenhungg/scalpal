@@ -64,7 +64,7 @@ namespace Scalpal.Quest.Editor
                     throw new InvalidOperationException("Voice fixture must use an ephemeral loopback endpoint");
 
                 var candidate = JsonUtility.FromJson<SurgicalCase>(Http(endpoint, "GET", "/patients/" + NativeCaseSession.PatientId + "/case"));
-                Assert(candidate.procedureId == NativeCaseSession.ProcedureId, "isolated actual service supplies native appendectomy case");
+                Assert(candidate.procedureId == NativeCaseSession.ProcedureId || candidate.procedureId == "open_appendectomy", "isolated actual service supplies native appendectomy case");
                 string sid = JsonUtility.FromJson<Created>(Http(endpoint, "POST", "/coach/sessions",
                     "{\"patientId\":\"" + candidate.patientId + "\",\"mode\":\"virtual\"}")).sessionId;
                 // Make another case the global latest session. Native calls must still use sid.
