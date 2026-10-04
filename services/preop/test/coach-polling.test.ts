@@ -95,7 +95,7 @@ describe("open-body coaching authority", () => {
     const action = bodyAction("cut", "cecum", { lengthMm: 5 });
     const out = session.receive({ type: "surgery", evidence: action }, { eventId: "blocked" });
     expect(out.accepted).toBe(true); // the attempted action is recorded, with a physical obstruction
-    expect(session.snapshot().lastEvent).toContain("not_exposed");
+    expect(session.snapshot().lastEvent).toMatch(/not exposed yet/);
     expect(session.snapshot().mistakeCount).toBe(0);
     const invalid = { type: "surgery" as const, evidence: bodyAction("cut", "missing") };
     expect(session.receive(invalid, { eventId: "bad" }).reason).toContain("invalid:");

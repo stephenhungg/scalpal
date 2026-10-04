@@ -1,6 +1,7 @@
 import { STEP_COACHING, STRUCTURE_FACTS } from "./catalog/coach-knowledge.js";
 import { INSTRUMENTS_BY_ID } from "./catalog/instruments.js";
 import { StepEngine, perfectEvents, type EngineEvent } from "./engine.js";
+import type { BodyAction } from "./open-body.js";
 import type { ProcedureStep, Severity, StepAction, SurgicalCase } from "./types.js";
 
 // Live coaching state for one surgery attempt. Wraps the reference StepEngine (same semantics as
@@ -11,6 +12,9 @@ import type { ProcedureStep, Severity, StepAction, SurgicalCase } from "./types.
 export type CoachEvent =
   | EngineEvent
   | { type: "focus"; structureId: string } // learner gaze or instrument hover, from Unity
+  // State tracker facts that do not score: a tool picked up or put down, and a tool tip touching tissue.
+  | { type: "instrument"; instrumentId: string; hand: "left" | "right"; held: boolean }
+  | { type: "contact"; instrumentId: string; structureId: string }
   | { type: "tracking"; valid: boolean } // registration validity; invalid pauses scoring
   // Simulated vessel injury from the headset's tissue model; totalMl is cumulative for the attempt.
   | { type: "bleeding"; structureId: string; active: boolean; rateMlPerMin: number; totalMl: number };
@@ -132,6 +136,8 @@ export interface CoachSnapshot {
   focusStructure: StructureRef;
   trackingValid: boolean;
   lastEvent: string;
+  timeline: { atSeconds: number; text: string }[]; // oldest first, session clock
+  held: { hand: "left" | "right"; instrumentId: string; name: string }[];
   recentMistakes: CoachMistakeView[];
   completedSteps: StepCheckpoint[];
   bloodLossMl: number;
@@ -201,6 +207,9 @@ export class CoachSession {
   private focus = "";
   private trackingValid = true;
   private lastEvent = "Session started.";
+  // Rolling plain-language log of what physically happened, so Jarvis knows the recent sequence.
+  private timeline: { atMs: number; text: string }[] = [];
+  private held = new Map<"left" | "right", string>(); // hand -> instrument id
   private warnedFocus = new Set<string>();
   private mistakes: CoachMistakeView[] = [];
   private completed: StepCheckpoint[] = [];
@@ -222,6 +231,12 @@ export class CoachSession {
   ) {
     this.engine = new StepEngine(kase.procedure);
     this.startedAt = this.stepStartedAt = this.lastProgressAt = this.ms();
+  }
+
+  private note(text: string) {
+    this.lastEvent = text;
+    this.timeline.push({ atMs: this.ms(), text });
+    if (this.timeline.length > TIMELINE_MAX) this.timeline.shift();
   }
 
   private ms() {
@@ -312,12 +327,12 @@ export class CoachSession {
     if (e.active) {
       this.bleeds.set(e.structureId, Math.max(0, e.rateMlPerMin));
       if (!known) {
-        this.lastEvent = `Bleeding started from the ${this.name(e.structureId).toLowerCase()}.`;
+        this.note(`Bleeding started from the ${this.name(e.structureId).toLowerCase()}.`);
         alerts.push(this.alert("bleeding", "urgent", bleedingLine(this.name(e.structureId)), [e.structureId], this.engine.current?.id ?? "", `bleeding.${e.structureId}`));
       }
     } else if (known) {
       this.bleeds.delete(e.structureId);
-      this.lastEvent = `Bleeding from the ${this.name(e.structureId).toLowerCase()} controlled. Total blood loss ${Math.round(this.bloodLossMl)} ml.`;
+      this.note(`Bleeding from the ${this.name(e.structureId).toLowerCase()} controlled. Total blood loss ${Math.round(this.bloodLossMl)} ml.`);
       alerts.push(this.alert("bleeding_controlled", "low", `Bleeding controlled. Total loss about ${Math.round(this.bloodLossMl)} milliliters.`, [e.structureId]));
     }
     this.changed(alerts);
@@ -382,7 +397,7 @@ export class CoachSession {
       this.resetStep();
       this.resyncCount += 1;
       this.desynced = current !== target;
-      this.lastEvent = `Resynced to the headset at ${steps[target]?.title.toLowerCase() ?? headsetStepId}.`;
+      this.note(`Resynced to the headset at ${steps[target]?.title.toLowerCase() ?? headsetStepId}.`);
       return;
     }
     this.desynced = true;
@@ -393,6 +408,8 @@ export class CoachSession {
     if (event.type === "bleeding") return this.kase.procedure.openBody
       ? { accepted: false, reason: "body_state_authoritative", alerts: [] } : this.handleBleeding(event);
     if (event.type === "focus") return this.handleFocus(event.structureId);
+    if (event.type === "instrument") return this.handleInstrument(event);
+    if (event.type === "contact") return this.handleContact(event.instrumentId, event.structureId);
 
     if (this.engine.body) return this.handleBodyEvent(event);
     const step = this.engine.current;
@@ -410,7 +427,7 @@ export class CoachSession {
       const m = result.mistake;
       this.mistakes.push({ stepId: step.id, mistakeId: m.id, severity: m.severity, structure: m.structure, feedback: m.feedback, at: this.clock().toISOString() });
       this.offTarget += 1;
-      this.lastEvent = `Mistake on ${this.name(m.structure)}: ${m.feedback}`;
+      this.note(`Mistake on ${this.name(m.structure)}: ${m.feedback}`);
       const urgent = m.severity === "high";
       const say = urgent ? reflexLine(m.feedback) : m.feedback;
       alerts.push(this.alert("mistake", urgent ? "urgent" : "normal", say, [m.structure, ...step.targets.slice(0, 1)], step.id, `mistake.${m.id}`));
@@ -418,7 +435,7 @@ export class CoachSession {
       const seconds = Math.round((this.ms() - this.stepStartedAt) / 1000);
       this.completed.push(this.checkpoint(step, seconds));
       this.resetStep();
-      this.lastEvent = `Completed step: ${step.title}.`;
+      this.note(`Completed step: ${step.title}.`);
       const next = this.engine.current;
       if (next) {
         const line = this.kase.procedure.id === "open_appendectomy" ? STEP_COACHING.open_appendectomy?.[next.id]?.why ?? next.instruction : `${step.title} done. ${nextStepLine(next.title)}`;
@@ -432,16 +449,16 @@ export class CoachSession {
       const progressed = after.done.length > before.done.length || after.applied > before.applied;
       if (progressed) {
         this.lastProgressAt = this.ms();
-        this.lastEvent = `Progress on ${step.title.toLowerCase()}: ${this.progressText(step)}.`;
+        this.note(`Progress on ${step.title.toLowerCase()}: ${this.progressText(step)}.`);
       } else {
         this.offTarget += 1;
         const wrongTool = event.type === "touch" && step.targets.includes(event.structureId) && event.instrumentId !== step.instrumentId;
         if (wrongTool) {
           const need = this.instrumentName(step.instrumentId);
-          this.lastEvent = `Right structure (${this.name(event.structureId)}) but wrong instrument (${this.instrumentName(event.instrumentId)}); this step needs the ${need}.`;
+          this.note(`Right structure (${this.name(event.structureId)}) but wrong instrument (${this.instrumentName(event.instrumentId)}); this step needs the ${need}.`);
           alerts.push(this.alert("wrong_instrument", "normal", `Right spot, wrong tool. This step needs the ${need}.`, [event.structureId]));
         } else {
-          this.lastEvent = describeOffTarget(event, (id) => this.name(id), (id) => this.instrumentName(id), (id) => this.portLabel(id));
+          this.note(describeOffTarget(event, (id) => this.name(id), (id) => this.instrumentName(id), (id) => this.portLabel(id)));
         }
       }
     }
@@ -467,7 +484,7 @@ export class CoachSession {
     this.inputCount++;
     const record = body.log.at(-1)!;
     const alerts: CoachAlert[] = [];
-    this.lastEvent = `${event.evidence.verb} on ${this.name(event.evidence.tissueId)}: ${record.outcomes.join(", ") || "applied"}.`;
+    this.note(describeBodyAction(event.evidence, record.outcomes, (id) => this.name(id), (id) => this.instrumentName(id)));
     for (const m of this.engine.mistakes.slice(mistakeCount)) {
       this.mistakes.push({ stepId: previous?.id ?? "", mistakeId: m.id, severity: m.severity, structure: m.structure, feedback: m.feedback, at: this.clock().toISOString() });
       const urgent = m.severity === "high";
@@ -483,7 +500,10 @@ export class CoachSession {
       alerts.push(this.alert("bleeding_controlled", "low", "Bleeding controlled. Check the field.", [id], ""));
     this.bleeds = nowBleeding;
     const newly = this.kase.procedure.steps.filter(s => this.engine.completedMilestones.has(s.id) && !achieved.has(s.id));
-    for (const milestone of newly) this.completed.push(this.checkpoint(milestone, Math.round((this.ms() - this.stepStartedAt) / 1000)));
+    for (const milestone of newly) {
+      this.completed.push(this.checkpoint(milestone, Math.round((this.ms() - this.stepStartedAt) / 1000)));
+      this.note(`Milestone reached: ${milestone.title.toLowerCase()}.`);
+    }
     if (newly.length) {
       this.resetStep();
       const next = this.engine.current;
@@ -508,14 +528,44 @@ export class CoachSession {
     if (valid) {
       // The pause should not count as being stuck.
       this.lastProgressAt = this.ms();
-      this.lastEvent = "Tracking restored; scoring resumed.";
+      this.note("Tracking restored; scoring resumed.");
       alerts.push(this.alert("tracking_restored", "low", "Tracking is back. Pick up where you left off."));
     } else {
-      this.lastEvent = "Tracking lost; anatomy hidden and scoring paused.";
+      this.note("Tracking lost; anatomy hidden and scoring paused.");
       alerts.push(this.alert("tracking_lost", "urgent", trackingLostLine(this.mode), [], this.engine.current?.id ?? "", "tracking_lost"));
     }
     this.changed(alerts);
     return { accepted: true, reason: "", alerts };
+  }
+
+  private handleInstrument(e: { instrumentId: string; hand: "left" | "right"; held: boolean }): EventOutcome {
+    const name = this.instrumentName(e.instrumentId).toLowerCase();
+    if (e.held) {
+      this.held.set(e.hand, e.instrumentId);
+      this.note(`Picked up the ${name} (${e.hand} hand).`);
+    } else {
+      if (this.held.get(e.hand) === e.instrumentId) this.held.delete(e.hand);
+      this.note(`Put down the ${name}.`);
+    }
+    this.changed([]);
+    return { accepted: true, reason: "", alerts: [] };
+  }
+
+  // A tool tip touching tissue. It never scores; it tells Jarvis where the tool is, and warns once per
+  // critical structure in open surgery before anything is cut.
+  private handleContact(instrumentId: string, structureId: string): EventOutcome {
+    this.note(`${this.instrumentName(instrumentId)} touched the ${this.name(structureId).toLowerCase()}.`);
+    const critical = this.kase.procedure.openBody?.tissues.some((t) => t.id === structureId && t.critical);
+    if (critical && !this.warnedFocus.has(structureId)) {
+      this.warnedFocus.add(structureId);
+      this.focus = structureId;
+      const alerts = [this.alert("danger_focus", "normal", `Careful, that's the ${this.name(structureId).toLowerCase()}. ${STRUCTURE_FACTS[structureId]?.why ?? ""}`.trim(), [structureId])];
+      this.changed(alerts);
+      return { accepted: true, reason: "", alerts };
+    }
+    if (structureId !== this.focus) return this.handleFocus(structureId);
+    this.changed([]);
+    return { accepted: true, reason: "", alerts: [] };
   }
 
   private handleFocus(structureId: string): EventOutcome {
@@ -571,7 +621,7 @@ export class CoachSession {
     this.hintsUsed += 1;
     this.stepHints += 1;
     const hint = this.hintAt(step, this.tier);
-    this.lastEvent = `Learner asked for a hint (tier ${this.tier}).`;
+    this.note(`Learner asked for a hint (tier ${this.tier}).`);
     this.changed([this.alert("stuck", "normal", hint.say, hint.highlight, step.id, this.kase.procedure.id === "open_appendectomy" ? `hint.${step.id}.${this.tier}` : "")]);
     return { tier: this.tier, ...hint };
   }
@@ -764,6 +814,8 @@ export class CoachSession {
       focusStructure: this.ref(this.focus),
       trackingValid: this.trackingValid,
       lastEvent: this.lastEvent,
+      timeline: this.timeline.map((t) => ({ atSeconds: Math.round((t.atMs - this.startedAt) / 1000), text: t.text })),
+      held: [...this.held].map(([hand, instrumentId]) => ({ hand, instrumentId, name: this.instrumentName(instrumentId) })),
       recentMistakes: this.mistakes.slice(-5),
       completedSteps: [...this.completed],
       bloodLossMl: Math.round(this.bloodLossMl),
@@ -902,7 +954,7 @@ function describeOffTarget(event: EngineEvent, name: (id: string) => string, too
 // context to the agent only when this key differs from the last one they sent.
 export function contextKey(s: CoachSnapshot): string {
   const parts = [
-    s.status, s.step.id, s.step.progressText, s.completedCount, s.mistakeCount, s.focusStructure.id, s.stuckLevel,
+    s.status, s.step.id, s.step.progressText, s.timeline.length && s.timeline[s.timeline.length - 1], s.held, s.completedCount, s.mistakeCount, s.focusStructure.id, s.stuckLevel,
     s.bodyFacts, s.achievedMilestones, s.orderDeviations, s.trackingValid, s.hintTier, s.desynced, s.bloodLossMl, s.activeBleeds.map((b) => b.structure.id).join(","), s.scene.summary, s.commands.map((c) => `${c.commandId}:${c.status}`).join(","),
   ];
   let h = 2166136261;
@@ -911,6 +963,45 @@ export function contextKey(s: CoachSnapshot): string {
 }
 
 // Compact text for the voice agent's contextual updates. Short lines, facts only.
+const TIMELINE_MAX = 20;
+const TIMELINE_IN_CONTEXT = 8;
+const clockText = (sec: number) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
+
+const OUTCOME_WORDS: Record<string, string> = {
+  not_exposed: "blocked: that layer is not exposed yet",
+  not_cuttable: "that tissue cannot be cut",
+  no_cut: "no real cut made",
+  across_fibers: "cut across the fibers",
+  muscle_cut: "used the blade on muscle",
+  untented_cut: "cut without tenting",
+  cut_unsecured: "started bleeding",
+  hollow_leak: "it is leaking",
+  critical_injury: "injured a critical structure",
+  rough_handling: "rough handling",
+  missing_instance: "clamp not registered",
+};
+
+// Plain words for one measured body action, e.g. "Scalpel: cut the skin, 52 mm (cut across the fibers)."
+export function describeBodyAction(a: BodyAction, outcomes: string[], name: (id: string) => string, instrument: (id: string) => string): string {
+  const t = name(a.tissueId).toLowerCase();
+  const did: Record<string, string> = {
+    cut: `cut the ${t}${a.lengthMm >= 1 ? `, ${Math.round(a.lengthMm)} mm` : ""}`,
+    mark: `marked the incision line${a.lengthMm >= 1 ? `, ${Math.round(a.lengthMm)} mm` : ""}`,
+    clamp: `clamped the ${t}`,
+    tie: `tied the ${t}`,
+    seal: `sealed the ${t}`,
+    grasp: `grasped the ${t}`,
+    retract: `retracted the ${t}`,
+    suction: "suctioned the field",
+    inspect: `inspected the ${t}`,
+    decide: `answered "${a.choice.replaceAll("_", " ")}"`,
+    close: "closed the wound",
+    place: `placed a tie on the ${t}`,
+  };
+  const extra = outcomes.map((o) => OUTCOME_WORDS[o] ?? o.replaceAll("_", " "));
+  return `${instrument(a.instrumentId)}: ${did[a.verb] ?? `${a.verb} on the ${t}`}${extra.length ? ` (${extra.join("; ")})` : ""}.`;
+}
+
 export function renderContext(s: CoachSnapshot): string {
   if (s.status === "completed") {
     return [
@@ -947,6 +1038,9 @@ export function renderContext(s: CoachSnapshot): string {
   if (st.patientNotes.length) lines.push(`Patient-specific: ${st.patientNotes.join(" ")}`);
   if (s.scene.summary) lines.push(`In view (${s.scene.source || "camera"}): ${s.scene.summary}`);
   if (s.focusStructure.id) lines.push(`Learner is looking at: ${s.focusStructure.name}.`);
+  if (s.held.length) lines.push(`In hand: ${s.held.map((h) => `${h.hand} ${h.name}`).join("; ")}.`);
+  const trail = s.timeline.slice(-TIMELINE_IN_CONTEXT);
+  if (trail.length > 1) lines.push(`Recent, oldest first (session clock, now ${clockText(s.elapsedSeconds)}): ${trail.map((t) => `${clockText(t.atSeconds)} ${t.text}`).join(" ")}`);
   lines.push(`Last event: ${s.lastEvent}`);
   lines.push(`Time on step ${s.secondsOnStep}s, ${s.secondsSinceProgress}s since progress, ${s.offTargetAttempts} off-target attempts. Coaching level: ${s.stuckLabel} (hint tier ${s.hintTier}).`);
   const recent = s.recentMistakes.filter((m) => m.stepId === st.id);

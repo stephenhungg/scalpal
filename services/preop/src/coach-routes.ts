@@ -580,6 +580,12 @@ function parseEvent(e: unknown): CoachEvent | string {
     }
     case "focus":
       return str("structureId") === "" ? { type: "focus", structureId: "" } : id("structureId") || { type: "focus", structureId: str("structureId") };
+    case "instrument":
+      if (ev.hand !== "left" && ev.hand !== "right") return 'instrument needs hand "left" or "right"';
+      if (typeof ev.held !== "boolean") return "instrument needs a boolean held";
+      return id("instrumentId") || { type: "instrument", instrumentId: str("instrumentId"), hand: ev.hand, held: ev.held };
+    case "contact":
+      return id("instrumentId") || id("structureId") || { type: "contact", instrumentId: str("instrumentId"), structureId: str("structureId") };
     case "tracking":
       return typeof ev.valid === "boolean" ? { type: "tracking", valid: ev.valid } : "tracking needs a boolean valid";
     case "bleeding": {
@@ -590,7 +596,7 @@ function parseEvent(e: unknown): CoachEvent | string {
       return id("structureId") || { type: "bleeding", structureId: str("structureId"), active: ev.active, rateMlPerMin: rate, totalMl: total };
     }
     default:
-      return "type must be place_port, touch, identify, confirm, surgery, focus, tracking, or bleeding";
+      return "type must be place_port, touch, identify, confirm, surgery, instrument, contact, focus, tracking, or bleeding";
   }
 }
 
