@@ -1,5 +1,6 @@
 using System;
 using System.Globalization;
+using Scalpal.Anatomy.Tissue;
 using Scalpal.Brand;
 using Scalpal.Exercises.Coach;
 using Scalpal.Instruments;
@@ -20,6 +21,21 @@ namespace Scalpal.Quest
         public bool Flatline {get;private set;}
         public bool HasFreshSample {get;private set;}
         public Transform ViewRoot=>view?view.transform:null;
+        public string HeartRateValue {get;private set;}="HR --";
+        public string PressureValue {get;private set;}="BP --/--";
+        public string OxygenValue {get;private set;}="SpO2 --";
+        public string RespirationValue {get;private set;}="RR --";
+        public string StateValue {get;private set;}="No signal";
+        public string SourceValue {get;private set;}="Simulated, not real vitals";
+        // Why the screen shows no signal; kept for diagnostics, never drawn in the learner's view.
+        public string StatusReason {get;private set;}="";
+        public LineRenderer Trace=>trace;
+        public string Outcome=>HasFreshSample&&condition!=null?condition.outcome.result:"";
+        // A terminal outcome stays on screen after practice stops or the coach stops polling.
+        public bool Holding=>HasFreshSample&&condition!=null&&condition.outcome.result!="in_progress";
+        bool Frozen=>HasFreshSample&&frozen;
+        public const int TracePoints=320;
+        public const float TraceSeconds=4,TraceBaseline=.08f,TraceAmplitude=.055f;
         CoachSnapshotState observed;
         CoachPatientCondition condition;
         string scopeSid="",scopePatient="",scopeProcedure="",scopeCase="",scopeMode="";
@@ -27,8 +43,13 @@ namespace Scalpal.Quest
         int version=-1;
         double receivedAt=double.NegativeInfinity;
         GameObject view;
-        TextMeshPro body;
-        LineRenderer flatline;
+        TextMeshPro heartRate,pressure,oxygen,respiration,state,source;
+        LineRenderer trace;
+        Vector3[] tracePositions;
+        Renderer pole,standBase;
+        Material housingMaterial,screenMaterial;
+        double frozenAt;
+        bool frozen;
         bool focused=true;
 
         void Awake(){if(!session)session=GetComponent<NativeCaseSession>();}
@@ -51,10 +72,15 @@ namespace Scalpal.Quest
                 coach?coach.SessionProcedureId:"",coach?coach.SessionCaseId:"",session.PresentationMode,ready,Time.realtimeSinceStartupAsDouble);
             if(viewer&&view)
             {
+                // The monitor stands at the head of the table with the patient; it shows while the patient is
+                // in the room, and keeps a terminal outcome (death, early end) on screen after practice stops.
+                var frame=session.patientFrame;
+                bool present=!frame||frame.gameObject.activeInHierarchy;
+                if(frame&&present)Place(frame,session.workbench.trackingOrigin?session.workbench.trackingOrigin.position.y:0);
                 if(Time.realtimeSinceStartupAsDouble>=nextLayout)
                 {nextLayout=Time.realtimeSinceStartupAsDouble+.5;ScalpalBrandLayout.SizeForViewer(view.transform,viewer.transform.position);}
-                if(Vector3.Distance(view.transform.position,viewer.transform.position)<.2f)view.SetActive(false);
-                else view.SetActive(true);
+                view.SetActive((present||Holding)&&Vector3.Distance(view.transform.position,viewer.transform.position)>=.2f);
+                if(view.activeSelf)DrawTrace(Time.realtimeSinceStartupAsDouble);
             }
         }
         // Receipt time is local monotonic time: the coach snapshot has no generatedAt.
@@ -67,7 +93,7 @@ namespace Scalpal.Quest
             if(double.IsNaN(now)||double.IsInfinity(now)||string.IsNullOrEmpty(sid)||string.IsNullOrEmpty(patient)||string.IsNullOrEmpty(procedure)||string.IsNullOrEmpty(caseId)||
                 (mode!="virtual"&&mode!="mixed_reality"))
             {observed=snapshot;Invalidate("No matched coach session");return;}
-            if(!ready){observed=snapshot;Invalidate("Paused: tracking, body fit or coach unavailable");return;}
+            if(!ready){observed=snapshot;if(Holding)return;Invalidate("Paused: tracking, body fit or coach unavailable");return;}
             bool newSample=!ReferenceEquals(snapshot,observed);
             if(newSample)
             {
@@ -80,26 +106,51 @@ namespace Scalpal.Quest
                 condition=snapshot.condition;version=snapshot.version;receivedAt=now;
             }
             if(condition==null||now<receivedAt||now-receivedAt>FreshSeconds)
-            {Invalidate("Awaiting a fresh coach sample");return;}
+            {if(Holding)return;Invalidate("Awaiting a fresh coach sample");return;}
             if(HasFreshSample&&!newSample)return;
             HasFreshSample=true;Flatline=condition.outcome.result=="died";
+            if(condition.outcome.result!="ended")frozen=false;
+            else if(!frozen){frozen=true;frozenAt=now;}
             var v=condition.vitals;
-            string source=Short(condition.baselineSource,26);
-            DisplayText="HR "+Number(v.hr)+" bpm | BP "+Number(v.sys)+"/"+Number(v.dia)+" mmHg\n"
-                +"RR "+Number(v.rr)+"/min | SpO2 "+(v.spo2<0?"unavailable":Number(v.spo2)+"%")+"\n"
-                +"Loss "+v.bloodLossPct.ToString("0.0",CultureInfo.InvariantCulture)+"% | Class "+v.hemorrhageClass+"\n"
-                +"Raw loss "+Number(condition.rawBloodLossMl)+" ml | demo x"+Number(v.scale)+"\n"
-                +"Baseline: "+source+" | simulated delta\n"
-                +"Outcome: "+condition.outcome.result.Replace('_',' ')+(Flatline?" (simulated)":"")+"\n"
-                +(Flatline?"Cause: "+Short(condition.outcome.cause,58)+"\n":"")+"Not real volunteer vitals";
+            HeartRateValue=Flatline?"HR 0":"HR "+Number(v.hr);
+            PressureValue="BP "+Number(v.sys)+"/"+Number(v.dia);
+            OxygenValue="SpO2 "+(v.spo2<=0?"--":Number(v.spo2)+"%");
+            RespirationValue="RR "+Number(v.rr);
+            StateValue=State(condition);
+            SourceValue="Simulated from "+Short(condition.baselineSource,10)+" baseline";
+            StatusReason="";
+            DisplayText=HeartRateValue+" bpm | "+PressureValue+" mmHg | "+OxygenValue+" | "+RespirationValue+"/min | "+StateValue+" | "+SourceValue;
             ApplyText();
         }
-        static string Number(float value)=>value.ToString("0.#",CultureInfo.InvariantCulture);
+        // One plain word or two for the learner; the class and causes stay with Jarvis and the dashboard.
+        static string State(CoachPatientCondition c)
+        {
+            switch(c.outcome.result)
+            {
+                case "died":return "Asystole";
+                case "ended":return "Case ended";
+                case "completed":return "Complete";
+            }
+            return c.vitals.hemorrhageClass<=1?"Stable":"Bleeding "+Mathf.RoundToInt(c.vitals.bloodLossPct).ToString(CultureInfo.InvariantCulture)+"%";
+        }
+        static string Number(float value)=>value.ToString("0",CultureInfo.InvariantCulture);
         static string Short(string value,int maximum)=>value.Length<=maximum?value:value.Substring(0,maximum-3)+"...";
         void Unavailable(string reason)
-        {HasFreshSample=false;Flatline=false;DisplayText=reason+"\nHR -- | BP -- | RR --\nSpO2 unavailable\nSimulated patient display\nNot real volunteer vitals";ApplyText();}
+        {
+            HasFreshSample=false;Flatline=false;frozen=false;StatusReason=reason;
+            HeartRateValue="HR --";PressureValue="BP --/--";OxygenValue="SpO2 --";RespirationValue="RR --";StateValue="No signal";
+            SourceValue="Simulated, not real vitals";
+            DisplayText=reason+" | "+HeartRateValue+" | "+PressureValue+" | "+OxygenValue+" | "+RespirationValue+" | "+StateValue+" | "+SourceValue;
+            ApplyText();
+        }
         void ApplyText()
-        {if(body&&body.text!=DisplayText){body.text=DisplayText;body.GetComponent<ScalpalTextFit>().Fit();}if(flatline)flatline.enabled=Flatline;}
+        {
+            Set(heartRate,HeartRateValue);Set(pressure,PressureValue);Set(oxygen,OxygenValue);Set(respiration,RespirationValue);
+            Set(state,StateValue);Set(source,SourceValue);
+            if(trace)trace.enabled=HasFreshSample;
+        }
+        static void Set(TextMeshPro text,string value)
+        {if(text&&text.text!=value){text.text=value;text.GetComponent<ScalpalTextFit>().Fit();}}
         public static bool ValidCondition(CoachPatientCondition c)
         {
             var v=c?.vitals;var o=c?.outcome;
@@ -124,20 +175,84 @@ namespace Scalpal.Quest
         {
             if(view||!viewer)return;
             view=new GameObject("SimulatedPatientMonitor");view.transform.SetParent(transform,false);
-            view.transform.position=viewer.position+viewer.rotation*new Vector3(.95f,.03f,1.55f);
-            view.transform.rotation=Quaternion.LookRotation(view.transform.position-viewer.position,Vector3.up);
-            var plate=GameObject.CreatePrimitive(PrimitiveType.Cube);plate.name="MonitorGlass";plate.transform.SetParent(view.transform,false);
-            plate.transform.localScale=new Vector3(1.78f,.77f,.014f);
-            var collider=plate.GetComponent<Collider>();if(collider)DestroyImmediate(collider);
-            plate.GetComponent<Renderer>().sharedMaterial=ScalpalBrand.Active.glass;
-            var brand=ScalpalBrand.Active;float distance=Vector3.Distance(view.transform.position,viewer.position);
-            brand.Text(view.transform,"MonitorTitle","SIMULATED PATIENT",ScalpalTextRole.Label,new Vector3(-.83f,.34f,-.015f),ScalpalBrandLayout.Em(brand,ScalpalTextRole.Label,distance),1.66f,.08f);
-            body=brand.Text(view.transform,"MonitorValues",DisplayText,ScalpalTextRole.Body,new Vector3(-.83f,.245f,-.015f),ScalpalBrandLayout.Em(brand,ScalpalTextRole.Body,distance),1.66f,.60f);
-            var line=new GameObject("ServerOutcomeFlatline");line.transform.SetParent(view.transform,false);flatline=line.AddComponent<LineRenderer>();
-            flatline.useWorldSpace=false;flatline.positionCount=2;flatline.SetPosition(0,new Vector3(-.8f,-.345f,-.018f));flatline.SetPosition(1,new Vector3(.8f,-.345f,-.018f));
-            flatline.startWidth=flatline.endWidth=.003f;flatline.sharedMaterial=brand.ray;flatline.startColor=flatline.endColor=ScalpalBrand.Ink70;flatline.enabled=false;
-            ApplyText();
+            // Until a patient frame places it, stand in front of the viewer (Editor fixtures, no patient).
+            view.transform.position=viewer.position+viewer.rotation*new Vector3(.95f,-.1f,1.55f);
+            var facing=view.transform.position-viewer.position;facing.y=0;
+            view.transform.rotation=Quaternion.LookRotation(facing.sqrMagnitude>1e-6f?facing:Vector3.forward,Vector3.up);
+            // +Z points away from the learner; the screen faces -Z.
+            housingMaterial=TissueRuntimeMaterial.Create("MonitorHousing",new Color(.11f,.115f,.12f));
+            screenMaterial=TissueRuntimeMaterial.Create("MonitorScreen",new Color(.006f,.008f,.008f));
+            screenMaterial.SetFloat("_Glossiness",.6f);
+            Part(PrimitiveType.Cube,"MonitorHousing",new Vector3(0,0,.035f),new Vector3(.80f,.54f,.06f),housingMaterial);
+            Part(PrimitiveType.Cube,"MonitorScreen",new Vector3(0,0,.003f),new Vector3(.73f,.47f,.004f),screenMaterial);
+            Part(PrimitiveType.Cube,"MonitorMount",new Vector3(0,-.24f,.085f),new Vector3(.12f,.10f,.05f),housingMaterial);
+            pole=Part(PrimitiveType.Cylinder,"MonitorStandPole",new Vector3(0,-.9f,.085f),new Vector3(.045f,.6f,.045f),housingMaterial);
+            standBase=Part(PrimitiveType.Cylinder,"MonitorStandBase",new Vector3(0,-1.5f,.085f),new Vector3(.46f,.012f,.46f),housingMaterial);
+            var brand=ScalpalBrand.Active;const float z=-.004f,left=-.33f,middle=.02f,right=.33f;
+            brand.Text(view.transform,"MonitorTitle","Simulated",ScalpalTextRole.Body,new Vector3(left,.205f,z),.03f,.30f,.05f);
+            state=brand.Text(view.transform,"MonitorState",StateValue,ScalpalTextRole.Label,new Vector3(right,.205f,z),.03f,.36f,.07f,TextAnchor.UpperRight);
+            heartRate=brand.Text(view.transform,"MonitorHeartRate",HeartRateValue,ScalpalTextRole.Label,new Vector3(left,.025f,z),.05f,.33f,.08f);
+            heartRate.color=ScalpalBrand.SurgicalGreen;
+            oxygen=brand.Text(view.transform,"MonitorOxygen",OxygenValue,ScalpalTextRole.Label,new Vector3(middle,.025f,z),.05f,.31f,.08f);
+            pressure=brand.Text(view.transform,"MonitorPressure",PressureValue,ScalpalTextRole.Label,new Vector3(left,-.075f,z),.05f,.33f,.08f);
+            respiration=brand.Text(view.transform,"MonitorRespiration",RespirationValue,ScalpalTextRole.Label,new Vector3(middle,-.075f,z),.05f,.31f,.08f);
+            source=brand.Text(view.transform,"MonitorSource",SourceValue,ScalpalTextRole.Body,new Vector3(left,-.165f,z),.026f,.66f,.05f);
+            var line=new GameObject("EcgTrace");line.transform.SetParent(view.transform,false);trace=line.AddComponent<LineRenderer>();
+            trace.useWorldSpace=false;trace.positionCount=TracePoints;trace.startWidth=trace.endWidth=.004f;trace.sharedMaterial=brand.ray;
+            trace.startColor=trace.endColor=ScalpalBrand.SurgicalGreen;trace.shadowCastingMode=UnityEngine.Rendering.ShadowCastingMode.Off;trace.receiveShadows=false;
+            tracePositions=new Vector3[TracePoints];
+            ApplyText();DrawTrace(0);
             ScalpalBrandLayout.SizeForViewer(view.transform,viewer.position);
+        }
+        Renderer Part(PrimitiveType shape,string name,Vector3 position,Vector3 scale,Material material)
+        {
+            var part=GameObject.CreatePrimitive(shape);part.name=name;part.transform.SetParent(view.transform,false);
+            part.transform.localPosition=position;part.transform.localScale=scale;
+            var collider=part.GetComponent<Collider>();if(collider)DestroyImmediate(collider); // furniture only, never a contact target
+            var renderer=part.GetComponent<Renderer>();renderer.sharedMaterial=material;
+            renderer.shadowCastingMode=UnityEngine.Rendering.ShadowCastingMode.Off;
+            return renderer;
+        }
+        // Patient frame: +X patient left, +Y anterior, +Z cranial. The learner stands at the patient's right side,
+        // so the monitor stands at the head of the table on the patient's left, its screen turned to the learner.
+        public void Place(Transform patientFrame,float floorY)
+        {
+            if(!view||!patientFrame)return;
+            var screen=patientFrame.TransformPoint(new Vector3(.62f,0,.80f));screen.y=patientFrame.position.y+.45f;
+            var facing=screen-patientFrame.TransformPoint(new Vector3(-.65f,0,0));facing.y=0;
+            if(facing.sqrMagnitude<1e-6f)return;
+            view.transform.SetPositionAndRotation(screen,Quaternion.LookRotation(facing,Vector3.up));
+            // The stand reaches the floor from wherever the screen is (AR rooms differ in table height).
+            float drop=Mathf.Max(.3f,screen.y-floorY);
+            pole.transform.localPosition=new Vector3(0,-.27f-(drop-.27f)*.5f,.085f);pole.transform.localScale=new Vector3(.045f,(drop-.27f)*.5f,.045f);
+            standBase.transform.localPosition=new Vector3(0,-drop+.012f,.085f);
+        }
+        // ECG lead II shape on the server's heart rate: newest sample at the right, four seconds across.
+        // Asystole draws a flat line; an ended case freezes the last trace; no signal hides it.
+        public void DrawTrace(double now)
+        {
+            if(!trace)return;
+            double t=Frozen?frozenAt:now;
+            float hr=HasFreshSample&&condition!=null&&!Flatline?condition.vitals.hr:0;
+            for(int i=0;i<TracePoints;i++)
+            {
+                double sample=t-TraceSeconds*(TracePoints-1-i)/(TracePoints-1);
+                tracePositions[i]=new Vector3(-.33f+.66f*i/(TracePoints-1),TraceBaseline+TraceAmplitude*Ecg(sample,hr),-.004f);
+            }
+            trace.SetPositions(tracePositions);
+        }
+        public static float Ecg(double time,float heartRate)
+        {
+            if(!(heartRate>0)||float.IsInfinity(heartRate))return 0;
+            double beat=60.0/heartRate,since=time-Math.Floor(time/beat)*beat;
+            float squeeze=(float)Math.Min(1,beat/.6),s=(float)since/squeeze;
+            return Wave(s,.08f,.025f,.12f)+Wave(s,.17f,.008f,-.12f)+Wave(s,.20f,.011f,1f)+Wave(s,.23f,.01f,-.25f)+Wave(s,.40f,.045f,.28f);
+        }
+        static float Wave(float at,float center,float width,float height){float d=(at-center)/width;return height*Mathf.Exp(-d*d);}
+        void OnDestroy()
+        {
+            if(housingMaterial){if(Application.isPlaying)Destroy(housingMaterial);else DestroyImmediate(housingMaterial);}
+            if(screenMaterial){if(Application.isPlaying)Destroy(screenMaterial);else DestroyImmediate(screenMaterial);}
         }
     }
 }
