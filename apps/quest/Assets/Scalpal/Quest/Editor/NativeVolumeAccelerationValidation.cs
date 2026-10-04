@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using Scalpal.Anatomy.Tissue;
 using UnityEditor;
 using UnityEngine;
@@ -19,6 +20,7 @@ namespace Scalpal.Quest.Editor
         public static void Run()
         {
             checks=0;
+            ValidateGeometryCache();
             Require(Unity.Burst.BurstCompiler.IsEnabled,"Burst compilation must be enabled for the accelerated comparison");
             var reference=TissueVolumeFactory.OpenAbdominalWall();reference.UseBurstJacobianSolver=false;
             var accelerated=TissueVolumeFactory.OpenAbdominalWall();
@@ -83,6 +85,115 @@ namespace Scalpal.Quest.Editor
                 Require(!bVolume.LastStepUsedBurst,"ungrasped Maxwell case requires no noninversion acceleration");Compare(m,bVolume,"Maxwell step "+i);}
             Debug.Log($"SCALPAL_VOLUME_ACCELERATION_VALIDATION_OK checks={checks} managedStepP95Ms={P95(managedTimes):F3} burstStepP95Ms={P95(burstTimes):F3} "
                 +"sameInputs=true positionsToleranceMeters=0.00005 couponForceAbsoluteToleranceNewton=0.001 openWallForceEquivalence=true forceRelativeTolerance=0.005 editor=true headset=false");
+        }
+        [MenuItem("Scalpal/Quest/Validate Accepted Geometry Cache")]
+        public static void RunGeometryCache()
+        {
+            checks=0;ValidateGeometryCache();
+            Debug.Log("SCALPAL_GEOMETRY_CACHE_VALIDATION_OK checks="+checks+" exactFloatBits=true sameProductionEquations=true editor=true headset=false");
+        }
+        static readonly PropertyInfo CacheSwitch=typeof(TissueVolume).GetProperty("UseValidatedGeometryCache",BindingFlags.Instance|BindingFlags.NonPublic);
+        static readonly FieldInfo CacheValid=typeof(TissueVolume).GetField("validatedGeometry",BindingFlags.Instance|BindingFlags.NonPublic);
+        static readonly FieldInfo Histories=typeof(TissueVolume).GetField("histories",BindingFlags.Instance|BindingFlags.NonPublic);
+        static readonly FieldInfo PreviousStrain=typeof(MaxwellHistory).GetField("previous",BindingFlags.Instance|BindingFlags.NonPublic);
+        static readonly FieldInfo ViscousStrain=typeof(MaxwellHistory).GetField("viscous",BindingFlags.Instance|BindingFlags.NonPublic);
+        static void DisableCache(TissueVolume volume)
+        {Require(CacheSwitch!=null&&CacheValid!=null,"internal production cache comparison seam exists");CacheSwitch.SetValue(volume,false);}
+        static void ValidateGeometryCache()
+        {
+            foreach(bool memory in new[]{false,true})
+            {
+                var material=new VolumeMaterial{id="synthetic_geometry_cache",youngPascals=12000,poissonRatio=.3f,densityKgPerCubicMeter=1000,
+                    relaxationFractions=memory?new[]{.4f,.2f}:null,relaxationSeconds=memory?new[]{.1f,.5f}:null,measurementSource="synthetic cache regression"};
+                var uncached=TissueVolumeFactory.Box(new Bounds(Vector3.zero,new Vector3(.04f,.04f,.01f)),2,2,1,material);
+                var cached=TissueVolumeFactory.Box(new Bounds(Vector3.zero,new Vector3(.04f,.04f,.01f)),2,2,1,material);
+                DisableCache(uncached);Require((bool)CacheSwitch.GetValue(cached),"cache is enabled by default");
+                bool nonzeroForce=false;
+                for(int step=0;step<18;step++)
+                {
+                    float top=step==12?-.03f:.005f+Mathf.Min(step,8)*.00025f;
+                    foreach(var volume in new[]{uncached,cached})
+                    {
+                        for(int node=0;node<volume.Original.Length;node++)
+                        {
+                            var rest=volume.Original[node];
+                            if(rest.z>0&&(Mathf.Abs(rest.x)>.019f||Mathf.Abs(rest.y)>.019f))
+                                Require(volume.SetBoundaryTarget(node,new Vector3(rest.x,rest.y,top)),"actual prescribed loading target");
+                        }
+                    }
+                    if(step==10)
+                    {
+                        var a=new Vector3(-.03f,0,-.03f);var b=new Vector3(.03f,0,-.03f);var c=new Vector3(.03f,0,.03f);
+                        int r=uncached.FractureMaterialSweep(material.id,a,b,c,.001f),f=cached.FractureMaterialSweep(material.id,a,b,c,.001f);
+                        Require(r>0&&r==f,"both cache paths publish the same actual coupon cut");
+                        CompareExact(uncached,cached,"post-cut committed force refresh");
+                    }
+                    float dt=step%2==0?1f/90:1f/120;
+                    uncached.Step(dt,Vector3.zero,Vector3.zero);cached.Step(dt,Vector3.zero,Vector3.zero);
+                    if(step==12)Require(!cached.LastStepAccepted&&!uncached.LastStepAccepted,"inverted prescribed boundary produces an actual rejected trial");
+                    else Require(cached.LastStepAccepted,"positive prescribed loading/recovery accepts an actual trial");
+                    CompareExact(uncached,cached,(memory?"Maxwell":"elastic")+" geometry cache step "+step);
+                    var forces=new Vector3[cached.NodeCount];cached.MeasureNodalForces(forces);
+                    foreach(var force in forces)nonzeroForce|=force.sqrMagnitude>1e-10f;
+                }
+                Require(nonzeroForce,"loaded cache comparison measures nonzero physical internal forces");
+                uncached.Reset();cached.Reset();CompareExact(uncached,cached,"cache coupon reset");
+                for(int i=0;i<4;i++)
+                {uncached.Step(1f/90,Vector3.zero,new Vector3(0,0,-.05f));cached.Step(1f/90,Vector3.zero,new Vector3(0,0,-.05f));CompareExact(uncached,cached,"cache after reset "+i);}
+            }
+            // Real open-wall topology exercises the cache after joint split/separation,
+            // while a held membrane survives an unrelated actual skin cut.
+            var wallReference=TissueVolumeFactory.OpenAbdominalWall();var wallCached=TissueVolumeFactory.OpenAbdominalWall();DisableCache(wallReference);
+            foreach(var wall in new[]{wallReference,wallCached})
+            {
+                Require(wall.SplitMaterialSweep("muscle","peritoneum",new Vector3(-.04f,0,.018f),new Vector3(.04f,0,.018f),new Vector3(.04f,0,.028f),.0025f,.035f)>0,
+                    "cache wall fixture publishes joint split/interface separation");
+                Require(wall.BeginMaterialHandle(1,"peritoneum",new Vector3(0,.003f,.027f),.0005f,.012f),"cache wall fixture grips anterior membrane");
+                Require(wall.SetMaterialHandleTarget(1,new Vector3(0,.003f,.022f)),"cache wall fixture requests actual lift");
+            }
+            CompareExact(wallReference,wallCached,"cache split/interface publication");
+            for(int step=0;step<18;step++)
+            {
+                if(step==8)
+                {
+                    var a=new Vector3(-.04f,0,-.001f);var b=new Vector3(.04f,0,-.001f);var c=new Vector3(.04f,0,.004f);
+                    int r=wallReference.FractureMaterialSweep("skin",a,b,c,.0025f),f=wallCached.FractureMaterialSweep("skin",a,b,c,.0025f);
+                    Require(r>0&&r==f,"cache wall fixture cuts skin without releasing held membrane");
+                    CompareExact(wallReference,wallCached,"wall cut committed force refresh");
+                }
+                wallReference.Step(1f/90,Vector3.zero,Vector3.zero);wallCached.Step(1f/90,Vector3.zero,Vector3.zero);
+                CompareExact(wallReference,wallCached,"cache held membrane step "+step);
+            }
+            wallReference.Reset();wallCached.Reset();CompareExact(wallReference,wallCached,"cache open-wall reset");
+            Debug.Log("SCALPAL_GEOMETRY_CACHE_EQUIVALENCE checks="+checks+" exactFloatBits=true loadCutSeparateRejectReset=true committedHistoryCompared=true headset=false");
+        }
+        static bool Exact(float a,float b)=>BitConverter.SingleToInt32Bits(a)==BitConverter.SingleToInt32Bits(b);
+        static bool Exact(Vector3 a,Vector3 b)=>Exact(a.x,b.x)&&Exact(a.y,b.y)&&Exact(a.z,b.z);
+        static bool Exact(TissueTensor a,TissueTensor b)=>Exact(a.x,b.x)&&Exact(a.y,b.y)&&Exact(a.z,b.z);
+        static void CompareExact(TissueVolume r,TissueVolume c,string label)
+        {
+            Require(r.NodeCount==c.NodeCount&&r.CutFaceCount==c.CutFaceCount&&r.SeparatedFaceCount==c.SeparatedFaceCount&&r.TopologyRevision==c.TopologyRevision,label+" exact topology counts");
+            Require(r.LastStepAccepted==c.LastStepAccepted&&r.AcceptedStepSequence==c.AcceptedStepSequence&&r.LastStepRetries==c.LastStepRetries&&
+                r.LastStepBacktracks==c.LastStepBacktracks&&r.LastRejectedCell==c.LastRejectedCell&&Exact(r.LastRejectedJacobian,c.LastRejectedJacobian)&&
+                r.MaterialHandleCount==c.MaterialHandleCount&&r.HasAcceptedStep==c.HasAcceptedStep,label+" exact acceptance/history counters");
+            Require(!(bool)CacheValid.GetValue(c)&&!(bool)CacheValid.GetValue(r),label+" no evaluated geometry survives its trial");
+            var rf=new Vector3[r.NodeCount];var cf=new Vector3[c.NodeCount];r.MeasureNodalForces(rf);c.MeasureNodalForces(cf);
+            for(int node=0;node<r.NodeCount;node++)
+            {
+                Require(Exact(r.Positions[node],c.Positions[node]),label+" exact accepted position "+node);
+                Require(Exact(rf[node],cf[node]),label+" exact nodal force "+node);
+                Require(Exact(r.NodeMass(node),c.NodeMass(node)),label+" exact active mass "+node);
+            }
+            for(int face=0;face<r.Faces.Length;face++)Require(r.Faces[face].cut==c.Faces[face].cut&&r.Faces[face].separated==c.Faces[face].separated,label+" exact face state");
+            var rh=(MaxwellHistory[])Histories.GetValue(r);var ch=(MaxwellHistory[])Histories.GetValue(c);
+            for(int cell=0;cell<r.Cells.Length;cell++)
+            {
+                for(int corner=0;corner<4;corner++)Require(r.NodeFor(cell,corner)==c.NodeFor(cell,corner),label+" exact corner binding");
+                Require(rh[cell].HasHistory==ch[cell].HasHistory&&Exact((TissueTensor)PreviousStrain.GetValue(rh[cell]),(TissueTensor)PreviousStrain.GetValue(ch[cell])),label+" exact committed previous strain");
+                var rv=(TissueTensor[])ViscousStrain.GetValue(rh[cell]);var cv=(TissueTensor[])ViscousStrain.GetValue(ch[cell]);
+                Require(rv.Length==cv.Length,label+" same material branch count");
+                for(int branch=0;branch<rv.Length;branch++)Require(Exact(rv[branch],cv[branch]),label+" exact committed viscous memory");
+            }
         }
         static double Step(TissueVolume volume)
         {long at=System.Diagnostics.Stopwatch.GetTimestamp();volume.Step(1f/90,Vector3.zero,Vector3.zero);

@@ -24,7 +24,10 @@ namespace Scalpal.Anatomy.Tissue
         public readonly Face[] Faces;
         readonly bool[] originalPins;
         readonly Vector3[] boundaryTargets;
-        readonly TissueTensor[] restInverse;
+        readonly TissueTensor[] restInverse, validatedDeformations, validatedStrains;
+        // Internal comparison seam: both paths use the same production equations.
+        internal bool UseValidatedGeometryCache { get; set; } = true;
+        bool validatedGeometry;
         readonly float[] restVolumes, lambdas;
         readonly MaxwellHistory[] histories;
         readonly int[,] binding;
@@ -94,7 +97,7 @@ namespace Scalpal.Anatomy.Tissue
             CutFaceBudget=cutFaceBudget;
             foreach(var material in materials) if(!material.HasValidUnits) throw new ArgumentException("Invalid SI material parameters");
             Original=(Vector3[])nodes.Clone(); Cells=(Cell[])cells.Clone(); Materials=(VolumeMaterial[])materials.Clone(); originalPins=(bool[])pins.Clone(); boundaryTargets=(Vector3[])nodes.Clone();
-            restInverse=new TissueTensor[cells.Length]; restVolumes=new float[cells.Length]; lambdas=new float[cells.Length]; binding=new int[cells.Length,4];
+            restInverse=new TissueTensor[cells.Length];validatedDeformations=new TissueTensor[cells.Length];validatedStrains=new TissueTensor[cells.Length]; restVolumes=new float[cells.Length]; lambdas=new float[cells.Length]; binding=new int[cells.Length,4];
             histories=new MaxwellHistory[cells.Length];
             for(int i=0;i<cells.Length;i++)
             {
@@ -481,6 +484,7 @@ namespace Scalpal.Anatomy.Tissue
         }
         bool RebuildNodes(bool initial)
         {
+            validatedGeometry=false;
             // Union cell corners around each original node through UNBROKEN incident faces.
             // A fracture splits only the connected material fans; crack tips can remain attached.
             int count=Cells.Length*4; var parent=new int[count];for(int i=0;i<count;i++)parent[i]=i;
@@ -553,6 +557,7 @@ namespace Scalpal.Anatomy.Tissue
         }
         bool TryStep(float dt,Vector3 target,Vector3 acceleration,float predictionScale)
         {
+            validatedGeometry=false;
             bool stabilize=Handle>=0||materialHandles.Count>0;
             for(int node=0;node<NodeCount&&stabilize;node++)if(pinned[node]&&(boundaryTargets[originalNodeFor[node]]-previous[node]).sqrMagnitude>1e-16f)stabilize=false;
             Array.Clear(lambdas,0,lambdas.Length);Array.Clear(attachmentLambdas,0,attachmentLambdas.Length);
@@ -615,20 +620,34 @@ namespace Scalpal.Anatomy.Tissue
                 }
                 if(!valid)return false;
             }
-            if(!ComputeNodalForces(trialForces,true))return false;
-            for(int i=0;i<NodeCount;i++){velocities[i]=Vector3.ClampMagnitude((positions[i]-previous[i])/dt,.5f);Dirty|=(positions[i]-previous[i]).sqrMagnitude>1e-12f;}
-            for(int cell=0;cell<Cells.Length;cell++){var f=Deformation(cell);histories[cell].Commit((f.Transpose().Multiply(f)-TissueTensor.Identity)*.5f);}
-            Array.Copy(trialForces,acceptedForces,NodeCount);HasAcceptedStep=true;return true;
+            // No position changes follow successful validation. Reuse those exact
+            // evaluated tensors for force/history work, only within this accepted trial.
+            // A failed force check, commit exception or return invalidates the cache.
+            try
+            {
+                if(!ComputeNodalForces(trialForces,true))return false;
+                for(int i=0;i<NodeCount;i++){velocities[i]=Vector3.ClampMagnitude((positions[i]-previous[i])/dt,.5f);Dirty|=(positions[i]-previous[i]).sqrMagnitude>1e-12f;}
+                for(int cell=0;cell<Cells.Length;cell++)
+                {
+                    if(validatedGeometry)histories[cell].Commit(validatedStrains[cell]);
+                    else {var f=Deformation(cell);histories[cell].Commit((f.Transpose().Multiply(f)-TissueTensor.Identity)*.5f);}
+                }
+                Array.Copy(trialForces,acceptedForces,NodeCount);HasAcceptedStep=true;return true;
+            }
+            finally {validatedGeometry=false;}
         }
         bool ValidGeometry()
         {
+            validatedGeometry=false;
             for(int cell=0;cell<Cells.Length;cell++)
             {
                 var f=Deformation(cell);var strain=(f.Transpose().Multiply(f)-TissueTensor.Identity)*.5f;
                 if(float.IsNaN(f.Determinant)||float.IsInfinity(f.Determinant)||f.Determinant<=.02f||!TissueCage.Finite(f.x)||!TissueCage.Finite(f.y)||!TissueCage.Finite(f.z)||
                     !TissueCage.Finite(strain.x)||!TissueCage.Finite(strain.y)||!TissueCage.Finite(strain.z))
                 {LastRejectedJacobian=f.Determinant;LastRejectedCell=cell;return false;}
+                if(UseValidatedGeometryCache){validatedDeformations[cell]=f;validatedStrains[cell]=strain;}
             }
+            validatedGeometry=UseValidatedGeometryCache;
             return true;
         }
         bool ComputeNodalForces(Vector3[] forces,bool trial)
@@ -636,7 +655,9 @@ namespace Scalpal.Anatomy.Tissue
             Array.Clear(forces,0,forces.Length);
             for(int cell=0;cell<Cells.Length;cell++)
             {
-                var f=Deformation(cell);var strain=(f.Transpose().Multiply(f)-TissueTensor.Identity)*.5f;
+                bool cached=trial&&validatedGeometry;
+                var f=cached?validatedDeformations[cell]:Deformation(cell);
+                var strain=cached?validatedStrains[cell]:(f.Transpose().Multiply(f)-TissueTensor.Identity)*.5f;
                 var material=Materials[Cells[cell].material];
                 var stress=trial?histories[cell].Stress(strain,material):histories[cell].CommittedStress(material);
                 var gradient=f.Multiply(stress).Multiply(restInverse[cell].Transpose())*restVolumes[cell];
