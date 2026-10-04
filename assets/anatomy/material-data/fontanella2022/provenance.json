@@ -1,0 +1,29 @@
+{
+  "title": "Mechanical Behavior of Subcutaneous and Visceral Abdominal Adipose Tissue in Patients with Obesity",
+  "authors": [
+    "Chiara Giulia Fontanella",
+    "Ilaria Toniolo",
+    "Mirto Foletto",
+    "Luca Prevedello",
+    "Emanuele Luigi Carniel"
+  ],
+  "journal": "Processes",
+  "year": 2022,
+  "volume": 10,
+  "issue": 9,
+  "article": 1798,
+  "doi": "10.3390/pr10091798",
+  "publisher_url": "https://www.mdpi.com/2227-9717/10/9/1798",
+  "retrieved_from": "https://www.research.unipd.it/retrieve/4f7b6a4d-b1ac-4e3b-8c1d-3fd78606a8f3/Mechanical%20Behavior%20of%20Subcutaneous%20and%20Visceral%20Abdominal%20Adipose%20Tissue%20in%20Patients%20with%20Obesity%20_%20Enhanced%20Reader.pdf",
+  "retrieved_UTC": "2026-10-04",
+  "download_bytes": 7971525,
+  "download_sha256": "7619ba6dec87c28f31785ee9a2bde0063b2d7c3910b4f6ed5a323a029fd0c22c",
+  "original_pdf_committed": false,
+  "verification": "Author-hosted image-only article PDF pages 1-11 rendered with pdftoppm and visually inspected; Table 3 p8 manually transcribed. Empty pdftotext output did not verify content.",
+  "article_license": "CC BY 4.0, copyright authors 2022, stated p1",
+  "license_url": "https://creativecommons.org/licenses/by/4.0/",
+  "raw_data_status": "Available on request from corresponding author (p11). No open numeric files or their reuse license verified; no contact made.",
+  "FE_model_files_status": "No public Abaqus input deck or author code verified",
+  "publisher_retrieval_status": "web returned 429; curl returned 403",
+  "changes_from_original": "Numeric Table 3 transcription; SI unit conversions; analytic equation evaluations; original interpretation and limitation notes. No figure digitization or claim of raw data."
+}
