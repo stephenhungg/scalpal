@@ -29,6 +29,7 @@ namespace Scalpal.Surgery
         SurgeryFeedback feedback;
         OpenBodyBleeding bleeding;
         SurgeryTriggerHint triggerHint;
+        GameObject toolTable;
         OpenSurgeryPanel panel;
         BodyState body;
         GameObject kit, riskAnatomy;
@@ -63,6 +64,8 @@ namespace Scalpal.Surgery
             if (session.exercise.Body != body) ConfigureAttempt();
             if (body == null || !interaction) return;
             ReportHands();
+            // The separate tool table holds nothing in the open case; hide it in VR (AR keeps it as the tool surface).
+            if (toolTable && session.presentation) toolTable.SetActive(session.presentation.passthrough);
             bool valid = Ready;
             wound.SetRegistrationValid(valid);
             if (!valid) { interaction.Simulate(0); bleeding.Simulate(0); return; }
@@ -89,6 +92,8 @@ namespace Scalpal.Surgery
                 kit.transform.position = reference.position + new Vector3(0,.02f,.32f);
                 session.workbench.RegisterAdditionalTools(kit.GetComponentsInChildren<InstrumentBehaviour>(true));
             }
+            ApplyOpenToolSet();
+            if (!toolTable) foreach (var root in gameObject.scene.GetRootGameObjects()) if (root.name == "Workbench" && root.GetComponent<Collider>()) toolTable = root;
             if(!riskAnatomy)
             {
                 var risks=Resources.Load<GameObject>("OpenSurgeryRisks");
@@ -150,6 +155,43 @@ namespace Scalpal.Surgery
                 foreach(var group in interaction.Mobility) if(group.Contains(session.anatomy.TryGetPart("appendix",out var part)?part.transform:null)) tether=Mathf.Max(tether,group.Definition.maxTravelMm);
                 Status+=$"; delivery needs {needed:F1} mm, cage bound {maximum:F1} mm, mobilization tether {tether:F1} mm";Debug.Log("SCALPAL_OPEN_DELIVERY_BOUND "+Status);
             }
+        }
+        // The open expected path (docs/surgery-procedure.md), in step order. Two rows on the theatre's instrument
+        // stand: the first six nearest the learner with their grips toward them, the rest facing back.
+        public static readonly string[] OpenToolSet = {
+            "skin_marker", "scalpel", "toothed_forceps", "retractor", "retractor", "babcock",
+            "hemostat", "hemostat", "right_angle_clamp", "metzenbaum_scissors", "suture_tie", "suction_irrigator" };
+        public const string InstrumentStandPath = "RoomCollision/InstrumentStand";
+        // Only the expected-path set stays active (unpickable, unlabelled and absent from coach events otherwise);
+        // it is laid out tightly on the instrument stand beside the table. The separate tool table is hidden in VR.
+        void ApplyOpenToolSet()
+        {
+            var kept = new InstrumentBehaviour[OpenToolSet.Length];
+            foreach (var tool in session.workbench.tools ?? Array.Empty<InstrumentBehaviour>())
+            {
+                if (!tool) continue;
+                int slot = -1;
+                for (int i = 0; i < OpenToolSet.Length; i++) if (OpenToolSet[i] == tool.instrumentId && !kept[i]) { slot = i; break; }
+                if (slot >= 0) kept[slot] = tool;
+                tool.gameObject.SetActive(slot >= 0);
+            }
+            foreach (var target in session.workbench.targets ?? Array.Empty<TrainingTarget>()) if (target) target.gameObject.SetActive(false);
+            var stand = session.presentation && session.presentation.virtualRoom
+                ? session.presentation.virtualRoom.transform.Find(InstrumentStandPath)?.GetComponent<BoxCollider>() : null;
+            if (!stand) { Status = "Instrument stand missing; open tools left in place"; return; }
+            Vector3 top = stand.center + Vector3.up * stand.size.y * .5f;
+            const float pitch = .055f, grip = .045f; // handle collider width and half height
+            for (int i = 0; i < kept.Length; i++)
+            {
+                if (!kept[i]) continue;
+                bool near = i < 6; int column = near ? i : i - 6;
+                // Nearest the learner (stand -Z, +X side) first; the far row is offset half a pitch so long shafts pass between grips.
+                float x = (near ? .125f : .1525f) - column * pitch, z = (near ? -1 : 1) * (stand.size.z * .5f - .03f);
+                Vector3 position = stand.transform.TransformPoint(top + new Vector3(x, 0, z)) + stand.transform.up * grip;
+                Quaternion rotation = stand.transform.rotation * (near ? Quaternion.identity : Quaternion.Euler(0, 180, 0));
+                session.workbench.SetRestPose(kept[i], position, rotation);
+            }
+            Physics.SyncTransforms();
         }
         void Marked(IReadOnlyList<Vector3> points) => wound.SetMarker(points);
         // State tracker facts for Jarvis (never scored): tip contact and region injuries come from the interaction.

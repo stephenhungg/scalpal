@@ -215,6 +215,20 @@ namespace Scalpal.Quest
             tools = all.ToArray(); toolPositions = positions.ToArray(); toolRotations = rotations.ToArray(); toolParents = parents.ToArray();
         }
 
+        // A case layout moves a registered tool to a new resting place; equipment reset (A) returns it there.
+        public void SetRestPose(InstrumentBehaviour tool, Vector3 position, Quaternion rotation)
+        {
+            int index = Array.IndexOf(tools ?? Array.Empty<InstrumentBehaviour>(), tool);
+            if (index < 0 || toolPositions == null || index >= toolPositions.Length) return;
+            tool.transform.SetPositionAndRotation(position, rotation);
+            toolPositions[index] = position; toolRotations[index] = rotation;
+            tool.RecaptureRestPose();
+            var body = tool.GetComponent<Rigidbody>();
+            if (!body) return;
+            body.position = position; body.rotation = rotation;
+            if (!body.isKinematic) { body.linearVelocity = Vector3.zero; body.angularVelocity = Vector3.zero; }
+        }
+
         public void ResetWorkbench()
         {
             ResetTools();

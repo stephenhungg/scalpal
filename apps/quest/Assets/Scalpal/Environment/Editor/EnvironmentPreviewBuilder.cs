@@ -59,7 +59,7 @@ namespace Scalpal.Environments.Editor
             finally { if (previous.Length > 0) EditorSceneManager.RestoreSceneManagerSetup(previous); }
         }
 
-        public const string RoomCollisionName = "RoomCollision", PatientCollisionName = "PatientCollision";
+        public const string RoomCollisionName = "RoomCollision", PatientCollisionName = "PatientCollision", InstrumentStandName = "InstrumentStand";
         // Static physical stand-ins for the combined room/patient art, so a dropped tool rests on the operating
         // table, the instrument stands, the floor and the body instead of falling through them. Ignore Raycast keeps them out of the scene identity
         // pointer, which labels anatomy and instruments only; rigidbodies still collide with that layer.
@@ -74,13 +74,13 @@ namespace Scalpal.Environments.Editor
             Box(table, new Vector3(0, .999f, -.75f), new Vector3(.5f, .1f, .4f), new Vector3(8.3f, 0, 0));
             Box(table, new Vector3(0, .782f, 0), new Vector3(.34f, .304f, .4f), Vector3.zero);
             // The round instrument stand (top 1.02 m), the angled instrument tray (top 1.05 m) and the floor (top 0.06 m).
-            Box(table, new Vector3(-.55f, .97f, .4f), new Vector3(.3f, .1f, .4f), Vector3.zero);
+            Box(table, new Vector3(-.575f, .97f, .4f), new Vector3(.34f, .1f, .46f), Vector3.zero, InstrumentStandName);
             Box(table, new Vector3(-1.065f, 1f, .945f), new Vector3(.55f, .1f, .34f), new Vector3(0, 36f, 0));
             Box(table, new Vector3(0, .01f, 0), new Vector3(8f, .1f, 8f), Vector3.zero);
         }
-        static void Box(GameObject table, Vector3 center, Vector3 size, Vector3 euler)
+        static void Box(GameObject table, Vector3 center, Vector3 size, Vector3 euler, string name = "Box")
         {
-            var piece = new GameObject("Box") { layer = table.layer }; piece.transform.SetParent(table.transform, false);
+            var piece = new GameObject(name) { layer = table.layer }; piece.transform.SetParent(table.transform, false);
             piece.transform.SetLocalPositionAndRotation(center, Quaternion.Euler(euler));
             piece.AddComponent<BoxCollider>().size = size;
         }

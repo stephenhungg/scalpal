@@ -47,7 +47,7 @@ namespace Scalpal.Quest.Editor
                 string drops = DroppedToolsRest(session);
 
                 var adapter = OpenSurgeryBuild.ConfigureSceneAttempt(out session, out tissue);
-                string kit = KitRestsOnInstrumentTable(session);
+                string kit = OpenToolsOnStand(session, adapter);
                 string contact = TouchingTheVisibleSkinActs(session, adapter);
                 Debug.Log($"SCALPAL_OR_PHYSICS_VALIDATION_OK checks={checks} {drops} {kit} {contact} editorScriptedPhysics=true headsetValidated=false");
             }
@@ -211,26 +211,47 @@ namespace Scalpal.Quest.Editor
         static Collider InstrumentTable() => UnityEngine.SceneManagement.SceneManager.GetActiveScene().GetRootGameObjects()
             .Single(root => root.name == "Workbench").GetComponent<Collider>();
 
-        // Every authored tool starts on the instrument table; no tool, including the open-case kit, may fall through
-        // anything. The kit is still laid out past the table end (OpenSurgerySession's +0.32 m offset), so its tools
-        // settle on the floor; moving it perturbs the actual-scene wall coupling fixture, so that is reported here.
-        static string KitRestsOnInstrumentTable(NativeCaseSession session)
+        // Open-body mode keeps only the expected-path set (docs/surgery-procedure.md) active, laid out on the theatre's
+        // instrument stand within reach of a learner at the patient's right side; everything else cannot be grabbed.
+        static string OpenToolsOnStand(NativeCaseSession session, OpenSurgerySession adapter)
         {
-            var tray = InstrumentTable();
-            Assert(tray && !tray.isTrigger, "instrument table is solid");
-            float top = tray.bounds.max.y;
+            var view = session.presentation;
+            view.passthrough = false; view.Apply();
+            typeof(OpenSurgerySession).GetMethod("Update", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).Invoke(adapter, null);
+            Assert(!InstrumentTable().gameObject.activeInHierarchy, "the separate tool table is hidden in the VR open case");
+            var stand = view.virtualRoom.transform.Find(OpenSurgerySession.InstrumentStandPath)?.GetComponent<BoxCollider>();
+            Assert(stand && stand.enabled && stand.gameObject.activeInHierarchy && !stand.isTrigger, "the theatre instrument stand is solid in VR");
+            var active = session.workbench.tools.Where(tool => tool && tool.gameObject.activeInHierarchy).ToArray();
+            Assert(active.Select(tool => tool.instrumentId).OrderBy(id => id).SequenceEqual(OpenSurgerySession.OpenToolSet.OrderBy(id => id)),
+                "only the open expected-path tools are active: " + string.Join(",", active.Select(tool => tool.instrumentId)));
+            Assert(active.Any(tool => BodyState.ToolVerbs[tool.instrumentId][0] == "clamp"), "a clamp remains for region-injury control");
+            var hand = session.workbench.inputs[0].GetComponent<InstrumentInteractor>();
+            foreach (var hidden in session.workbench.tools.Where(tool => tool && !tool.gameObject.activeInHierarchy))
+            {
+                hand.SetTrackedPose(hidden.gripAnchor.position, Quaternion.identity, true, 500);
+                Physics.SyncTransforms();
+                Assert(!hand.TryPickupNearest() || (hand.HeldInstrument && hand.HeldInstrument.gameObject.activeInHierarchy), "a hidden " + hidden.instrumentId + " cannot be picked up");
+                hand.Release();
+            }
+            // A learner standing at the patient's right side, level with the incision.
+            Vector3 wound = adapter.Wound.transform.position;
+            Vector3 learner = session.patientFrame.TransformPoint(session.patientFrame.InverseTransformPoint(wound) + new Vector3(-.35f, 0, 0));
+            float top = stand.bounds.max.y, farthest = 0;
             Physics.SyncTransforms();
             for (int step = 0; step < 150; step++) Physics.Simulate(Dt);
-            int onTable = 0, onFloor = 0;
-            foreach (var tool in session.workbench.tools)
+            var standBox = stand.bounds;
+            foreach (var tool in active)
             {
-                float lowest = tool.GetComponentsInChildren<Collider>().Where(c => !c.isTrigger).Min(c => c.bounds.min.y);
-                bool table = lowest >= top - .012f && lowest <= top + .06f, floor = lowest >= -.012f && lowest <= .12f; // room floor (VR, top 0.06 m) or the catch floor (top 0)
-                Assert(table || (floor && tool.transform.root.name == "OpenSurgeryCaseTools"),
-                    $"{tool.name} rests on the instrument table, or (open-case kit only) on the visible floor (lowest={lowest:F3}, top={top:F3})");
-                if (table) onTable++; else onFloor++;
+                var parts = tool.GetComponentsInChildren<Collider>().Where(c => !c.isTrigger).ToArray();
+                float lowest = parts.Min(c => c.bounds.min.y);
+                Vector3 grip = tool.gripAnchor.position;
+                Assert(lowest >= top - .012f && lowest <= top + .03f && grip.x >= standBox.min.x && grip.x <= standBox.max.x && grip.z >= standBox.min.z && grip.z <= standBox.max.z,
+                    $"{tool.name} rests on the instrument stand (lowest={lowest:F3}, top={top:F3}, grip={grip:F3})");
+                float reach = new Vector2(grip.x - learner.x, grip.z - learner.z).magnitude;
+                farthest = Mathf.Max(farthest, reach);
+                Assert(reach <= .6f, $"{tool.name} is within 0.6 m of the learner at the patient's right side ({reach:F2} m)");
             }
-            return $"toolsOnInstrumentTable={onTable} kitToolsOnFloor={onFloor}";
+            return $"openToolsOnStand={active.Length} farthestReachM={farthest:F2}";
         }
 
         // The learner touches the patient they see. In the expected first state (nothing marked or opened) a held
