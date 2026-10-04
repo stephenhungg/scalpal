@@ -990,3 +990,8 @@ textarea {
 .simlog li.simlog-vitals .mono {
   color: var(--info);
 }
+.vitals-preview {
+  display: block;
+  width: 100%;
+  border: 1px solid var(--line);
+}

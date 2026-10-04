@@ -12,7 +12,10 @@ const REASONS = Object.fromEntries(Object.entries(ValidationCode).map(([k, v]) =
 const latest = (list) => (Array.isArray(list) && list.length ? list[list.length - 1] : null);
 const num = (v) => (v == null ? null : typeof v === "number" ? v : Number(v));
 
-export function startPresage({ apiKey, cameraId, onUpdate, log = console }) {
+// SDK errors that end the session instead of recovering on their own.
+const FATAL = new Set([2 /* auth failed */, 4 /* credit exhausted */]);
+
+export function startPresage({ apiKey, cameraId, onUpdate, onFatal = () => {}, log = console }) {
   const state = {
     pulse: { bpm: null, confidence: null, stable: false, t: null },
     breathing: { bpm: null, confidence: null, stable: false, t: null },
@@ -30,7 +33,7 @@ export function startPresage({ apiKey, cameraId, onUpdate, log = console }) {
   const sdk = new SmartSpectraSDK({ apiKey, requestedMetrics: [...breathingMetrics, ...cardioMetrics] });
 
   sdk.on("validationStatus", (code, _ts, hint) => {
-    state.status = { ok: code === ValidationCode.kOk, code, reason: code === ValidationCode.kOk ? "Measuring" : hint || REASONS[code] || "Adjusting" };
+    state.status = { ok: code === ValidationCode.kOk, code, noFace: code === ValidationCode.kNoFaceFound, reason: code === ValidationCode.kOk ? "Measuring" : hint || REASONS[code] || "Adjusting" };
     onUpdate(state);
   });
 
@@ -49,10 +52,24 @@ export function startPresage({ apiKey, cameraId, onUpdate, log = console }) {
     log.error(`[presage] error ${code}: ${message}${retryable ? " (retryable)" : ""}`);
     state.status = { ok: false, code, reason: `Error: ${message}` };
     onUpdate(state);
+    if (!retryable || FATAL.has(code)) onFatal(message);
   });
 
   sdk.useCamera(cameraId ? CameraSelection.byId(cameraId) : CameraSelection.default);
-  sdk.start();
+  const stop = () => {
+    try {
+      sdk.stop?.();
+    } catch {
+      // already stopped or never started
+    }
+  };
+  try {
+    sdk.start();
+  } catch (err) {
+    // e.g. the camera can't be opened (no permission, phone not connected): fail cleanly
+    stop();
+    throw new Error(err?.message || String(err));
+  }
   log.log(`[presage] started on ${cameraId ? `camera ${cameraId}` : "the default camera"}`);
-  return { stop: () => sdk.stop?.() };
+  return { stop };
 }

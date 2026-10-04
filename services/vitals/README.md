@@ -7,6 +7,8 @@ Owner: Silas. Implements the service in [docs/presage](../../docs/presage/README
 The Presage key has a fixed budget of live measurement minutes. The guard works like this:
 - **Demo by default.** The service runs in labelled demo mode (`"mode": "demo"`, `"DEMO · synthetic vitals"`) unless you explicitly start it with `npm run live`.
 - **Live sessions stop themselves** after `PRESAGE_LIVE_MINUTES` (default 5).
+- **No face, no spend.** A live session with no face in view for `PRESAGE_NO_FACE_SECONDS` (default 15) ends itself.
+- **Failures are clean.** If the camera can't be opened (no permission, phone not connected), the session ends with the reason and the server keeps running.
 - **Usage is logged.** Live minutes go to `.presage-usage.json` (gitignored). Live mode is refused once the total reaches `PRESAGE_BUDGET_MINUTES` (default 50).
 
 Build and integrate against demo mode. Spend live minutes on the real setup and the judge demo.
@@ -16,6 +18,7 @@ cd services/vitals
 npm install
 npm run cameras        # lists cameras + PRESAGE_CAMERA_ID (pick the iPhone)
 npm start              # demo mode on :8791, no quota
+npm run preview        # one frame from the camera to check framing (no quota)
 npm run live           # real Presage measurement (uses quota, auto-stops)
 npm test               # physiology model tests
 ```
@@ -34,7 +37,10 @@ npm test               # physiology model tests
 | `POST /baseline/capture` | At Time-Out: freezes the baseline from the last ~12 s of confident readings (median). Falls back to an authored baseline, labelled as such |
 | `GET /baseline` | Current baseline and its `source`: `measured`, `demo` or `authored` |
 | `GET /monitor?bloodLostMl=&bleedMlPerMin=&weightKg=&critical=1` | OR monitor values: measured baseline plus a simulated hemorrhage delta (ATLS classes), with a label like `HR 117 · simulated from baseline 72 (measured)` |
+| `GET /preview.jpg` | One frame from the configured camera, for checking framing before going live (ffmpeg, no quota). `409` while a live session holds the camera |
 | `GET /health` | Mode and status |
+
+Readings that dip below Presage's stable threshold keep showing for `PRESAGE_HOLD_SECONDS` (default 10), marked with `heldMs`, before falling back to `measuring`. The baseline only uses truly stable readings.
 
 The physiology model (`src/physiology.mjs`) is a pure function of body state, so Unity and the coach can mirror it exactly. It's authored teaching content, not a validated clinical simulation. Real vitals never respond to the virtual surgery; only the monitor numbers carry the simulated delta.
 

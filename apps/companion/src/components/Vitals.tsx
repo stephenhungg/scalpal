@@ -7,7 +7,8 @@ import { Panel, Pill, useAction } from './ui';
 
 // trace points are [timestamp us, value]
 type TracePoint = [number, number] | number;
-type Reading = { bpm: number; confidence: number } | null;
+// heldMs: the last stable value, kept briefly after the reading dipped below Presage's threshold
+type Reading = { bpm: number; confidence: number; heldMs?: number } | null;
 type Snapshot = {
   mode: 'demo' | 'live';
   label: string;
@@ -16,6 +17,7 @@ type Snapshot = {
   breathing: Reading;
   traces: { pulse: TracePoint[]; breathing: TracePoint[] };
   updatedAt: number | null;
+  cameraBusy?: boolean; // a live session holds the camera
 };
 type Baseline = { hr: number; rr: number; source: 'measured' | 'demo' | 'authored'; note?: string };
 
@@ -52,15 +54,48 @@ function Trace({ points, color }: { points: TracePoint[]; color: string }) {
   );
 }
 
+// One frame from the configured camera (ffmpeg on the vitals machine, no Presage quota), for
+// checking the framing before going live.
+function CameraCheck() {
+  const [src, setSrc] = useState<string | null>(null);
+  const check = useAction();
+  return (
+    <div className="stack">
+      <div className="row">
+        <span className="muted small">Check the face and upper chest are in frame before going live. Uses no quota.</span>
+        <div className="spacer" />
+        <button
+          className="btn sm"
+          disabled={check.busy}
+          onClick={() =>
+            check.run(async () => {
+              const r = await fetch(`${VITALS_URL}/preview.jpg`);
+              if (!r.ok) throw new Error((await r.json().catch(() => null))?.error ?? `HTTP ${r.status}`);
+              if (src) URL.revokeObjectURL(src);
+              setSrc(URL.createObjectURL(await r.blob()));
+            })
+          }
+        >
+          {check.busy ? 'Checking…' : 'Check camera'}
+        </button>
+      </div>
+      {check.error && <div className="notice warn">{check.error}</div>}
+      {src && <img className="vitals-preview" src={src} alt="Camera framing check" />}
+    </div>
+  );
+}
+
 function Metric({ name, unit, reading, trace, color }: { name: string; unit: string; reading: Reading; trace: TracePoint[]; color: string }) {
   return (
     <div className="vitals-metric">
       <div className="muted small">{name}</div>
-      <div className="vitals-value" style={{ color: reading ? color : undefined }}>
+      <div className="vitals-value" style={{ color: reading ? color : undefined, opacity: reading?.heldMs != null ? 0.55 : 1 }}>
         {reading ? Math.round(reading.bpm) : '--'}
         <span className="muted small"> {unit}</span>
       </div>
-      <div className="muted small">{reading ? `${Math.round(reading.confidence)}% confidence` : 'measuring'}</div>
+      <div className="muted small">
+        {!reading ? 'measuring' : reading.heldMs != null ? `held · ${Math.round(reading.heldMs / 1000)} s ago` : `${Math.round(reading.confidence)}% confidence`}
+      </div>
       <Trace points={trace} color={color} />
     </div>
   );
@@ -129,6 +164,7 @@ export default function Vitals() {
             </button>
           </div>
           {capture.error && <div className="notice bad">{capture.error}</div>}
+          {!snap.cameraBusy && <CameraCheck />}
           <div className="muted small">{snap.label}</div>
         </div>
       )}

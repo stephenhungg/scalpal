@@ -97,3 +97,49 @@ test("a session never runs past the remaining budget", async () => {
     s.child.kill("SIGTERM");
   }
 });
+
+test("a live session with no face in view ends itself", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "vitals-"));
+  const usage = join(dir, "usage.json");
+  const s = run({ PRESAGE_LIVE: "1", PRESAGE_FAKE_LIVE: "noface", PRESAGE_NO_FACE_SECONDS: "2", PRESAGE_USAGE_FILE: usage }, 18906);
+  try {
+    await ready(18906);
+    await sleep(3500);
+    assert.match((await get(18906, "/vitals")).status.reason, /Live session ended \(no face for 2 s\)/);
+    const used = JSON.parse(readFileSync(usage, "utf8")).usedSeconds;
+    assert.ok(used >= 1.5 && used <= 3.5, `logged ${used}s, stopped at ~2 s`);
+  } finally {
+    s.child.kill("SIGTERM");
+  }
+});
+
+test("a camera that can't be opened fails cleanly without spending quota", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "vitals-"));
+  const usage = join(dir, "usage.json");
+  const s = run({ PRESAGE_LIVE: "1", PRESAGE_FAKE_LIVE: "fail", PRESAGE_USAGE_FILE: usage }, 18907);
+  try {
+    await ready(18907);
+    const v = await get(18907, "/vitals");
+    assert.match(v.status.reason, /could not start: SmartSpectra input is unavailable/);
+    assert.equal(s.child.exitCode, null, "the server keeps running");
+    const used = JSON.parse(readFileSync(usage, "utf8")).usedSeconds;
+    assert.ok(used < 0.5, `logged ${used}s`);
+  } finally {
+    s.child.kill("SIGTERM");
+  }
+});
+
+test("a reading below the stable threshold is held, with its age, then dropped", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "vitals-"));
+  const s = run({ PRESAGE_LIVE: "1", PRESAGE_FAKE_LIVE: "dip", PRESAGE_HOLD_SECONDS: "2", PRESAGE_USAGE_FILE: join(dir, "usage.json") }, 18908);
+  try {
+    await ready(18908);
+    await sleep(1800); // stable until 1 s, held after
+    const held = await get(18908, "/vitals");
+    assert.ok(held.pulse && held.pulse.heldMs > 0, `held: ${JSON.stringify(held.pulse)}`);
+    await sleep(2500);
+    assert.equal((await get(18908, "/vitals")).pulse, null, "dropped after the hold");
+  } finally {
+    s.child.kill("SIGTERM");
+  }
+});
