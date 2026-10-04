@@ -142,13 +142,26 @@ export function createApp(config: Config, rt: Realtime, storage: Storage) {
       for (const job of queued) {
         try {
           await conn.reducers.claimMotionJob({ jobId: job.jobId, expectedRun: job.run, workerId, leaseMs });
-          return await waitFor(() =>
-            [...conn.db.sessionMotionJobs.iter()].find(
-              j => j.jobId === job.jobId && j.run === job.run + 1 && j.status === 'running'
-            )
-          );
         } catch (err) {
           log.warn('claim lost', { jobId: job.jobId, err: String((err as Error).message) });
+          continue;
+        }
+        const run = job.run + 1;
+        try {
+          return await waitFor(() =>
+            [...conn.db.sessionMotionJobs.iter()].find(
+              j => j.jobId === job.jobId && j.run === run && j.status === 'running'
+            )
+          );
+        } catch {
+          // The claim succeeded but the cache never showed it. Claiming another
+          // job would strand this one until its lease expires, so requeue it
+          // now and let the worker poll again.
+          log.error('claimed job not visible in cache; releasing it', { jobId: job.jobId, run, workerId });
+          await conn.reducers
+            .failMotionJob({ jobId: job.jobId, run, error: 'gateway lost track of the claim; requeued', retryable: true })
+            .catch(err => log.error('could not release claim', { jobId: job.jobId, run, err: String(err) }));
+          throw new Unavailable('claimed job not visible yet; retry the claim');
         }
       }
       return null;
