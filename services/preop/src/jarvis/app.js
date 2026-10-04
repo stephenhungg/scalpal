@@ -3,6 +3,7 @@
 // turns; the agent's background context is updated only when something meaningful changes.
 import { Conversation } from "https://esm.sh/@elevenlabs/client@1.26.0";
 import { createArbiter, percentile, semanticKey } from "/jarvis/arbiter.js";
+import { createContextFeed } from "/jarvis/context-feed.js";
 import { cleanTranscript, createEncounterFlow } from "/jarvis/encounter.js";
 
 const $ = (id) => document.getElementById(id);
@@ -61,14 +62,18 @@ function render(snap) {
   for (const b of document.querySelectorAll("#simbuttons button")) b.disabled = snap.status === "completed";
 }
 
-// Background context: only when a meaningful field changed, debounced, newest version wins.
+// Background context: only when a meaningful field changed, debounced, newest version wins. The feed
+// sends the full card on structural changes or about every 10 s, and one-line deltas in between.
+const contextFeed = createContextFeed();
 function syncContext(force = false) {
   clearTimeout(contextTimer);
   contextTimer = setTimeout(() => {
     const key = currentContextKey || semanticKey(snapshot);
     if (!convo || (!force && key === lastSemantic)) return;
     lastSemantic = key;
-    try { convo.sendContextualUpdate(currentContext); } catch (e) { console.warn(e); }
+    const update = contextFeed.next(snapshot, currentContext, { force });
+    if (!update) return;
+    try { convo.sendContextualUpdate(update.text); } catch (e) { console.warn(e); }
   }, force ? 0 : 300);
 }
 
