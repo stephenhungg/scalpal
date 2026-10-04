@@ -51,6 +51,7 @@ namespace Scalpal.Handoff.Editor
                 ("F13 voice gate follows the actual phase transitions", VoiceGateFollowsPhases),
                 ("F13 unified scene order is checked against the product order", SceneOrderIsIndependent),
                 ("F15 OR entry shows no connection error while the case loads or the session joins", EntryShowsNoConnectionErrorWhileLoading),
+                ("F18 the instrument table and tools stay out of view until practice begins", ToolsHiddenUntilPractice),
             };
             try
             {
@@ -243,6 +244,30 @@ namespace Scalpal.Handoff.Editor
                 && Field<string>(request, "body") == "{}", "AR Time-Out posts an empty body to the session's vitals baseline");
             Set(native, "coachSessionId", "");
             Assert(native.TimeOutBaseline() == null, "a captions-only Time-Out without a coach session posts nothing");
+        }
+
+        static void ToolsHiddenUntilPractice()
+        {
+            var flow = Flow(out _); var native = Native(flow.gameObject);
+            native.workbench = native.gameObject.AddComponent<NativeWorkbench>();
+            var tool = GameObject.CreatePrimitive(PrimitiveType.Cube).AddComponent<Scalpal.Instruments.InstrumentBehaviour>();
+            var table = GameObject.CreatePrimitive(PrimitiveType.Cube); table.name = "Workbench";
+            try
+            {
+                native.workbench.tools = new[] { tool };
+                Set(flow, "surgery", native);
+                bool Hidden(GameObject item) => item.GetComponentsInChildren<Renderer>(true).All(renderer => renderer.forceRenderingOff);
+                foreach (var phase in new[] { "register", "briefing", "timeout" })
+                {
+                    Set(flow, "phase", phase); Call(flow, "ShowSurgeryTools", !flow.PreparingTheatre);
+                    Assert(Hidden(tool.gameObject) && Hidden(table), "the instrument table and tools are not drawn during " + phase);
+                }
+                Assert(tool.GetComponent<Collider>().enabled && tool.gameObject.activeSelf, "hiding the tools keeps their colliders and active state");
+                Set(flow, "phase", "practice"); Call(flow, "ShowSurgeryTools", !flow.PreparingTheatre);
+                Assert(!Hidden(tool.gameObject) && tool.GetComponentsInChildren<Renderer>().All(renderer => !renderer.forceRenderingOff) && table.GetComponent<Renderer>().forceRenderingOff == false,
+                    "the tools and table appear when practice begins");
+            }
+            finally { UnityEngine.Object.DestroyImmediate(tool.gameObject); UnityEngine.Object.DestroyImmediate(table); }
         }
 
         static void NewRunResetsState()

@@ -70,6 +70,19 @@ namespace Scalpal.Handoff
             if (surgery) surgery.SetHandoffVoiceAllowed(ExpectedRole(value) == "coach");
             if (ExpectedRole(value) == "none") DisconnectAll();
         }
+        // Fit check, briefing and Time-Out happen before anyone scrubs in: the instrument table and every tool stay out of
+        // view (draw only; colliders and rest poses are untouched) until practice begins.
+        public bool PreparingTheatre => surgery && (phase == "register" || phase == "briefing" || phase == "timeout" || phase == "transition");
+        bool toolsHidden;
+        void ShowSurgeryTools(bool show)
+        {
+            if (!surgery || !surgery.workbench || toolsHidden == !show) return;
+            toolsHidden = !show;
+            var roots = new List<GameObject>();
+            foreach (var tool in surgery.workbench.tools ?? Array.Empty<Scalpal.Instruments.InstrumentBehaviour>()) if (tool) roots.Add(tool.gameObject);
+            foreach (var root in surgery.gameObject.scene.GetRootGameObjects()) if (root.name == "Workbench") roots.Add(root);
+            foreach (var root in roots) foreach (var renderer in root.GetComponentsInChildren<Renderer>(true)) renderer.forceRenderingOff = !show;
+        }
         static void DisconnectAll()
         {
             foreach (var voice in FindObjectsByType<QuestJarvisVoice>(FindObjectsSortMode.None)) voice.Disconnect();
@@ -127,6 +140,7 @@ namespace Scalpal.Handoff
                 shellPaused = false; rendered = "";
                 if (surgery && Ticket != null) ResumeGate();
             }
+            ShowSurgeryTools(!PreparingTheatre);
             if (loading || !focused || ShellTransition.Busy) return;
             var left = UnityEngine.XR.InputDevices.GetDeviceAtXRNode(UnityEngine.XR.XRNode.LeftHand);
             left.TryGetFeatureValue(UnityEngine.XR.CommonUsages.menuButton, out bool menu);
