@@ -6,9 +6,9 @@
 // Silas's real worker follows the same HTTP protocol (see
 // packages/contracts/worker-api.md and services/api/examples/worker_client.py).
 //
-//   GATEWAY_URL=http://localhost:8787 WORKER_TOKEN=... npm run worker:synthetic
+//   GATEWAY_URL=http://localhost:8788 WORKER_TOKEN=... npm run worker:synthetic
 
-const GATEWAY = (process.env.GATEWAY_URL ?? 'http://localhost:8787').replace(/\/$/, '');
+const GATEWAY = (process.env.GATEWAY_URL ?? 'http://localhost:8788').replace(/\/$/, '');
 const TOKEN = process.env.WORKER_TOKEN ?? 'dev-synthetic-worker-token-0001';
 const POLL_MS = Number(process.env.POLL_MS ?? 2000);
 const ONCE = process.argv.includes('--once');

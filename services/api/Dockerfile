@@ -14,5 +14,5 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build /app/dist ./dist
 USER node
-EXPOSE 8787
+EXPOSE 8788
 CMD ["node", "dist/main.js"]

@@ -1,7 +1,8 @@
 import { ANATOMY, ANATOMY_BY_ID } from "./catalog/anatomy.js";
 import { CASE_PLANS, CONSIDERATION_NOTES, STEP_ROLES } from "./catalog/cases.js";
 import { STEP_COACHING, STRUCTURE_FACTS } from "./catalog/coach-knowledge.js";
-import { ENCOUNTERS, EXAM_MANEUVERS, HISTORY_TOPICS, TESTS } from "./catalog/encounters.js";
+import { ENCOUNTER_EXCLUSIONS, ENCOUNTERS, EXAM_MANEUVERS, HISTORY_TOPICS, PATIENT_VOICE_KEYS, TESTS } from "./catalog/encounters.js";
+import { DEFAULT_PATIENT_VOICES } from "./encounter.js";
 import { INSTRUMENTS, INSTRUMENTS_BY_ID } from "./catalog/instruments.js";
 import { PROCEDURES, PROCEDURES_BY_ID } from "./catalog/procedures.js";
 
@@ -118,12 +119,37 @@ export function validateCatalog(): string[] {
   for (const id of Object.keys(STEP_COACHING)) if (!PROCEDURES_BY_ID.has(id)) err(`coaching for unknown procedure "${id}"`);
 
   // Pre-op encounters: each attaches to an authored case plan and its rubric only references real items.
+  unique(ENCOUNTERS.map((e) => e.planSubject), "encounter plan subject");
+  for (const subject of Object.keys(CASE_PLANS)) {
+    if (!ENCOUNTERS.some((e) => e.planSubject === subject) && !ENCOUNTER_EXCLUSIONS[subject]) err(`case plan ${subject} has no encounter and no documented exclusion`);
+  }
+  for (const [subject, reason] of Object.entries(ENCOUNTER_EXCLUSIONS)) {
+    if (ENCOUNTERS.some((e) => e.planSubject === subject)) err(`encounter ${subject} is also listed as excluded`);
+    if (!reason.trim()) err(`exclusion ${subject} needs a reason`);
+  }
   for (const e of ENCOUNTERS) {
     const at = (m: string) => err(`encounter ${e.planSubject}: ${m}`);
+    const p = e.persona;
     if (!CASE_PLANS[e.planSubject]) at("no case plan with that subject");
+    if (!p.name.trim() || !p.patientName.trim()) at("persona needs a speaker name and a patient name");
+    if (p.speaker === "patient" && p.name !== p.patientName) at("a patient persona speaks for themself, so name must equal patientName");
+    if (p.speaker === "parent" && p.name === p.patientName) at("a parent persona needs a name of their own");
+    if (!Number.isInteger(p.age) || p.age < 0 || p.age > 120) at(`persona age ${p.age} is not plausible`);
+    if (p.sex !== "female" && p.sex !== "male") at("persona sex must be the patient's sex (female or male)");
+    if (p.chartDemographics !== undefined && p.chartDemographics !== "not_shared") at("chartDemographics may only be \"not_shared\"");
+    if (p.chartDemographics && p.speaker !== "patient") at("a persona without chart demographics must confirm identity in person, so it must be the patient");
+    if (!(PATIENT_VOICE_KEYS as readonly string[]).includes(p.voiceKey) || !DEFAULT_PATIENT_VOICES[p.voiceKey]) at(`voice "${p.voiceKey}" has no default voice id`);
     if (!e.diagnosis.keywords.length || e.diagnosis.keywords.some((g) => !g.length)) at("diagnosis needs keyword groups");
-    if (!e.procedureKeywords.length) at("needs procedure keywords");
-    if (e.differential.length < 3) at("differential needs at least three items");
+    if (e.diagnosis.partial && (!e.diagnosis.partial.keywords.length || e.diagnosis.partial.keywords.some((g) => !g.length))) at("partial diagnosis needs keyword groups");
+    if (!e.procedureKeywords.length || e.procedureKeywords.some((g) => !g.length)) at("needs procedure keywords");
+    // Learner text is lowercased before matching, so an uppercase keyword can never match.
+    const keywords = [...e.diagnosis.keywords, ...(e.diagnosis.partial?.keywords ?? []), ...e.procedureKeywords].flat().concat(e.differential.flatMap((d) => d.keywords));
+    for (const k of keywords) if (k !== k.toLowerCase() || !k.trim()) at(`keyword "${k}" must be nonempty lowercase`);
+    if (e.differential.length < 5) at("differential needs at least five items");
+    unique(e.differential.map((d) => d.id), `encounter ${e.planSubject} differential`);
+    if (!e.critical.length) at("needs at least one critical rubric item");
+    for (const item of [...e.critical, ...e.expected]) if (!item.why.trim()) at(`rubric item ${item.kind} "${item.id}" needs a why`);
+    for (const t of Object.keys(e.testNotes ?? {})) if (!(TESTS as readonly string[]).includes(t)) at(`test note for unknown test "${t}"`);
     for (const item of [...e.critical, ...e.expected]) {
       const known = item.kind === "history" ? HISTORY_TOPICS : item.kind === "exam" ? EXAM_MANEUVERS : TESTS;
       if (!(known as readonly string[]).includes(item.id)) at(`rubric item ${item.kind} "${item.id}" is unknown`);

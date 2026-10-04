@@ -1,6 +1,6 @@
 import type { Context, Hono } from "hono";
 import { ENCOUNTERS_BY_PLAN, EXAM_MANEUVERS, HISTORY_TOPICS, TESTS, type Encounter } from "./catalog/encounters.js";
-import { DEFAULT_PATIENT_VOICES, EncounterSession } from "./encounter.js";
+import { DEFAULT_PATIENT_VOICES, EncounterSession, demographicsMatch } from "./encounter.js";
 import { attendingFirstMessage, attendingPrompt, patientFirstMessage, patientPrompt } from "./encounter-prompt.js";
 import { NO_REALTIME, type RealtimeSink } from "./realtime-bridge.js";
 import type { Action, SurgicalCase } from "./types.js";
@@ -16,6 +16,19 @@ export interface EncounterRouteOptions {
   realtime?: RealtimeSink;
 }
 
+// What /jarvis/connection needs to bind a voice connection to a live encounter, with the server-built prompt.
+export interface EncounterVoice {
+  role: "patient" | "attending";
+  prompt: string;
+  firstMessage: string;
+  voiceId: string;
+}
+export interface EncounterVoices {
+  // null: no live encounter with that id; "scored": nothing left to talk about.
+  voiceFor(encounterId: string): EncounterVoice | "scored" | null;
+  anyLive(role: EncounterVoice["role"]): boolean;
+}
+
 const ENCOUNTER_ID = /^enc-[a-z0-9]{6,40}$/;
 const MAX = 50;
 
@@ -24,7 +37,7 @@ const encounterActions = (id: string): Action[] => [
   { id: "choose_patient", label: "Choose another patient", method: "GET", route: "/patients" },
 ];
 
-export function registerEncounterRoutes(app: Hono, options: EncounterRouteOptions) {
+export function registerEncounterRoutes(app: Hono, options: EncounterRouteOptions): EncounterVoices & { get(id: string): EncounterSession | null } {
   const sessions = new Map<string, EncounterSession>();
   const voices = { ...DEFAULT_PATIENT_VOICES, ...(options.patientVoices ?? {}) };
   const realtime = options.realtime ?? NO_REALTIME;
@@ -54,9 +67,7 @@ export function registerEncounterRoutes(app: Hono, options: EncounterRouteOption
     }
     // Authored demo symptoms must never be attached to real records or a different patient.
     if (!kase.brief.synthetic) return bad(c, 409, "synthetic_only", "Authored interviews are available only for synthetic demo patients.", kase.actions);
-    const persona = encounter.persona;
-    const expectedSex = persona.voiceKey === "adult_female" ? "female" : "male";
-    if (kase.patient.name !== persona.patientName || kase.patient.age !== persona.age || kase.patient.sex.toLowerCase() !== expectedSex) {
+    if (!demographicsMatch(encounter, kase)) {
       return bad(c, 409, "demographics_mismatch", "The chart demographics do not match this authored demo interview.", kase.actions);
     }
     if (sessions.size >= MAX) sessions.delete(sessions.keys().next().value!);
@@ -134,6 +145,8 @@ export function registerEncounterRoutes(app: Hono, options: EncounterRouteOption
         return bad(c, 400, "invalid_tool_argument", `Send a supported ${interviewTool.key}.`, encounterActions(s.id));
       }
     }
+    // The summary includes exam findings and test results, so the patient agent (interview phase) must never get it.
+    if (name === "get_encounter_summary" && s.phase === "interview") return wrongPhase(c, s, "attending or scored");
     if (name === "record_assessment") {
       if (s.phase !== "attending") return wrongPhase(c, s, "attending");
       if (!["diagnosis", "procedure", "urgency"].every((key) => typeof p[key] === "string") ||
@@ -175,4 +188,19 @@ export function registerEncounterRoutes(app: Hono, options: EncounterRouteOption
     }
     return c.json({ result, display, state: s.state(), actions: encounterActions(s.id) });
   });
+
+  const roleOf = (s: EncounterSession) => (s.phase === "interview" ? "patient" : s.phase === "attending" ? "attending" : null);
+  return {
+    voiceFor(encounterId) {
+      const s = ENCOUNTER_ID.test(encounterId) ? sessions.get(encounterId) : undefined;
+      if (!s) return null;
+      const role = roleOf(s);
+      if (role === "patient") return { role, prompt: patientPrompt(s), firstMessage: patientFirstMessage(s), voiceId: voices[s.encounter.persona.voiceKey] };
+      if (role === "attending") return { role, prompt: attendingPrompt(s), firstMessage: attendingFirstMessage(s), voiceId: "" };
+      return "scored";
+    },
+    anyLive: (role) => [...sessions.values()].some((s) => roleOf(s) === role),
+    // The scored encounter for office-to-operating-room carryover.
+    get: (id: string) => (ENCOUNTER_ID.test(id) ? (sessions.get(id) ?? null) : null),
+  };
 }

@@ -8,17 +8,17 @@ Updated October 3, 2026. "Current direction" means a choice stated or accepted d
 
 | Topic | Current direction | Status / implication |
 | --- | --- | --- |
-| Flow | Launch → Enter → patient explore page → diagnosis office (voice patient + attending) → full-VR surgery → robot replay | Latest user direction, Oct 3; see [current direction](current-direction.md#latest-experience-flow) |
+| Flow | Launch → Enter → patient explore page → full-VR diagnosis office (voice patient + attending) → surgery in AR (real reclining person) or VR (virtual patient) → robot replay | Latest user direction, Oct 3; see [current direction](current-direction.md#latest-experience-flow) |
 | Name | `scalpal` | User-requested repository name; preserve this spelling |
 | Platform | Meta Quest 3S, native Unity client | Native camera/immersive sample baseline demonstrated; application not built |
 | Thesis | Human learning plus useful robot demonstrations, with later robot learning | Preserve both goals rather than forcing an education-versus-robotics choice |
-| Presentation modes | Full VR throughout: explore page, diagnosis office and operating room | Latest user direction (Oct 3) supersedes MR-plus-VR for the main flow; MR registration work stays in the repo but is off the main path |
-| Participant | Virtual patient in the office and the OR, driven by the chosen FinchNode case | No real reclining participant in the current flow |
+| Presentation modes | Full VR for the explore hub and diagnosis office; the operating room offers AR (passthrough) or full VR as a user choice | Latest user direction (Oct 3); one shared core across both OR modes |
+| Participant | Virtual patient in the office; in the OR, a real reclining participant (AR) or a virtual patient (VR) | Anatomy is generic teaching anatomy in both |
 | Selection | Explore page of FinchNode demo patients, then a voice-driven diagnosis encounter decides the surgery | Supersedes conversational exercise selection with Jarvis |
 | Selection visuals | Case cards with synthetic chart context on a large explore page | Supersedes the rotating 3D anatomy preview during selection |
-| Body registration | Not required by the current flow | MediaPipe/MR body-fit work is preserved but off the main path |
+| Body registration | AR mode: MediaPipe body landmarks plus measured surface depth register the anatomy to the real participant | Main path for AR; physical fit on the headset unverified |
 | Tools | Simulated tools and authored exercise rules | No actual operation on the participant |
-| Robotics input | Recorded raw passthrough video of the learner's hands during the VR surgery segment; robot replay is a required ending of every run | Camera recording while rendering full VR is not yet verified for this flow; do not default back to SDK hand-joint recording |
+| Robotics input | Recorded raw passthrough camera video of the learner's hands during the surgery segment, in either OR mode; robot replay is a required ending | Capture while rendering full VR is unverified |
 | First robotics output | Estimated motion retargeted to a simulated robot hand and replayed | No custom neural model needed as initial approach; no policy learned yet |
 | Hand type | An articulated robot hand is the requested concept | Wrist/pinch-to-gripper would be a scope simplification requiring agreement |
 | Robotics processing | Proposed first experiment runs offline on the Mac | Not a commitment to live low-latency teleoperation |

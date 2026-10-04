@@ -58,6 +58,13 @@ const TOOLS = [
   },
 ];
 
+// Jarvis's eyes: the latest point-of-view frame, described by a vision model with the scene's labels.
+TOOLS.push({
+  name: "look_at_scene",
+  description: "Look at the learner's current point of view (camera frame plus labeled objects) and describe what is there and how to approach it. Use for 'what am I looking at', 'where is it', or 'how do I approach this'.",
+  parameters: { type: "object", properties: { question: str("The learner's question, in their words.") }, required: [] },
+} as (typeof TOOLS)[number]);
+
 // Jarvis as attending during the case presentation, after the patient interview.
 const ATTENDING_TOOLS = [
   {

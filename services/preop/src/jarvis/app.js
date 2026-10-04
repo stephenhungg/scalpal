@@ -201,7 +201,7 @@ async function loadReflexClips() {
 // ---- tools --------------------------------------------------------------------------------------
 
 // Tools run on the coach server, shared with the native headset voice client.
-const TOOL_NAMES = ["get_surgery_state", "get_hint", "explain_structure", "highlight_structure", "get_patient_brief", "check_preop"];
+const TOOL_NAMES = ["get_surgery_state", "get_hint", "explain_structure", "highlight_structure", "get_patient_brief", "check_preop", "look_at_scene"];
 const clientTools = Object.fromEntries(
   TOOL_NAMES.map((name) => [
     name,
@@ -214,8 +214,9 @@ const clientTools = Object.fromEntries(
 
 // ---- voice --------------------------------------------------------------------------------------
 
-async function startVoice(created) {
-  const conn = await api("GET", "/jarvis/connection");
+async function startVoice() {
+  // The server binds the connection to this session and supplies the prompt it built for it.
+  const conn = await api("GET", `/jarvis/connection?sessionId=${encodeURIComponent(sid)}`);
   if (!conn.ok) {
     $("voice").textContent = "voice not configured"; $("voice").className = "pill warn";
     log("event", `${conn.json.error?.message ?? "Voice unavailable."} Cautions will use the browser voice.`);
@@ -224,7 +225,7 @@ async function startVoice(created) {
   await navigator.mediaDevices.getUserMedia({ audio: true });
   convo = await Conversation.startSession({
     ...(conn.json.signedUrl ? { signedUrl: conn.json.signedUrl, connectionType: "websocket" } : { agentId: conn.json.agentId }),
-    overrides: { agent: { prompt: { prompt: created.systemPrompt }, firstMessage: created.firstMessage } },
+    overrides: { agent: { prompt: { prompt: conn.json.prompt }, firstMessage: conn.json.firstMessage } },
     clientTools,
     onConnect: () => { mirrorStatus("listening"); $("voice").textContent = "voice live"; $("voice").className = "pill on"; lastSemantic = ""; syncContext(true); },
     onDisconnect: () => { mirrorStatus("offline"); $("voice").textContent = "voice off"; $("voice").className = "pill"; convo = null; },
@@ -261,24 +262,29 @@ async function startVoice(created) {
 const encounter = createEncounterFlow({
   api,
   log,
+  Conversation,
   setActiveConvo: (c) => { encounterConvo = c; },
   onStatus: (text, cls) => { $("voice").textContent = text; $("voice").className = `pill ${cls}`; },
-  onScrubIn: () => startSurgery(),
+  onScrubIn: (encounterId) => startSurgery(encounterId),
 });
 $("to-attending").onclick = () => encounter.presentToAttending();
 $("scrub-in").onclick = () => encounter.scrubIn();
+// Encounter failures stay on screen with Retry; a retried start may find no interview and go to surgery.
+$("flow-retry").onclick = async () => {
+  if ((await encounter.retry()) === "none") await startSurgery();
+};
 
 $("start").onclick = async () => {
   $("start").disabled = true;
   $("stop").disabled = false;
   patientId = $("patient").value;
   $("log").innerHTML = "";
-  if (await encounter.start(patientId)) return;
-  await startSurgery();
+  if ((await encounter.start(patientId)) === "none") await startSurgery();
 };
 
-async function startSurgery() {
-  const created = await api("POST", "/coach/sessions", { patientId, mode: $("presentation").value });
+async function startSurgery(encounterId = "") {
+  // The scored office encounter carries into the operating room prompt.
+  const created = await api("POST", "/coach/sessions", { patientId, mode: $("presentation").value, ...(encounterId ? { encounterId } : {}) });
   if (!created.ok) { log("event", created.json.error?.message ?? "Could not start.", "urgent"); $("start").disabled = false; return; }
   log("event", "Surgery: Jarvis is coaching. Use the simulator or the headset.");
   sid = created.json.sessionId;
@@ -289,7 +295,7 @@ async function startSurgery() {
   openFeed();
   $("stop").disabled = false;
   await loadReflexClips();
-  try { await startVoice(created.json); }
+  try { await startVoice(); }
   catch (e) { log("event", `Voice failed to start: ${e?.message ?? e}. Cautions will use the browser voice.`, "urgent"); }
   if (!convo) log("ai", created.json.firstMessage);
 }

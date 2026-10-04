@@ -2,18 +2,18 @@
 
 ## Latest Experience Flow
 
-The user replaced the selection and presentation flow on October 3, 2026. This section takes precedence over the conversational selection, rotating-preview and two-mode material below and in older documents.
+The user replaced the selection and presentation flow on October 3, 2026, then made the operating room a choice between AR on a real person and full VR (same day, latest). This section takes precedence over the conversational selection, rotating-preview and two-mode material below and in older documents.
 
-**Launch → press Enter → patient explore page → choose a case → diagnosis office → decide the surgery → full-VR operating room → robot replay.**
+**Launch → press Enter → patient explore page → choose a case → diagnosis office → decide the surgery → operating room in AR (real reclining person) or VR (virtual patient) → robot replay.**
 
 1. **Launch.** The Quest app opens on a start screen. Pressing Enter (or the equivalent controller confirm) opens the explore page.
 2. **Explore page.** A large browsable view of synthetic patients built from FinchNode demo data (`services/preop` `GET /patients`, `GET /patients/:id/brief`). Each patient is a case card with chart context. Choosing one opens that patient's encounter.
 3. **Diagnosis office.** A full-VR doctor's office where the learner has a voice back-and-forth with the patient (voice agent grounded in the FinchNode chart plus authored presentation), examines and orders tests, then presents to the attending (Jarvis), who scores the diagnosis.
 4. **Choose the surgery.** The assessment fixes which procedure the patient needs. That decision, not a separate selection conversation, determines the surgical case.
-5. **Surgery simulation.** Full-VR operating room with a virtual patient, the shared tool/anatomy/exercise core and Jarvis coaching. The real-person MR body fit is no longer on the main path.
+5. **Surgery simulation, AR or VR.** The learner chooses the mode at the handoff. **AR:** passthrough; a real participant reclines on a table, MediaPipe detects their body and the generic teaching anatomy is registered onto it (landmarks plus depth); invalid registration hides the anatomy and pauses scoring. **VR:** the virtual operating room with a virtual patient. Both use one shared tool/anatomy/exercise/coach core: tracked virtual tools expose the anatomy and perform the authored steps, with Jarvis coaching. The explore hub and the diagnosis office are full VR.
 6. **Robot replay (required ending).** Raw passthrough video recorded during the surgery segment is processed into hand motion and replayed on the simulated robot hand. Every run ends with this step.
 
-Every FinchNode demo patient needs an authored diagnosis encounter: FinchNode lists 12 scenarios, 10 of them with a patient (`connect-cancelled` and `connect-failed` have none); 8 have an authored case plan and 3 have an authored encounter, so 7 encounters are missing. Surgical simulations must exist for each procedure a diagnosis can lead to. See the [demo flow](demo-flow.md) for acceptance details, [experience UX](experience-ux.md) for the recommended interaction design, and the [integration map](system-integration.md#explore--office--or-route) for the current gaps.
+Every FinchNode demo patient needs an authored diagnosis encounter: FinchNode lists 12 scenarios, 10 of them with a patient (`connect-cancelled` and `connect-failed` have none); 8 have an authored case plan and 3 have an authored encounter, so 7 encounters are missing. Surgical simulations must exist for each procedure a diagnosis can lead to. See the [demo flow](demo-flow.md) for acceptance details, [experience UX](experience-ux.md) for the recommended interaction design, [office to OR handoff](office-to-or-handoff.md) for the AR/VR handoff spec, and the [integration map](system-integration.md#explore--office--or-route) for the current gaps.
 
 ## Diagnosis Office Component
 
@@ -46,7 +46,7 @@ The user explicitly requests MediaPipe detection of a person lying on a table an
 
 ## Two Presentation Modes
 
-**Superseded for the main flow:** surgery now runs in full VR only. The MR real-person route and its registration work remain in the repository but are not required by the current flow.
+**Latest:** the operating room offers both modes as a choice: AR on a real reclining person (MediaPipe body registration is main-path) or full VR with a virtual patient. The explore hub and diagnosis office are full VR.
 
 The user now explicitly wants both **mixed reality with a real reclining participant and virtual organs** and **full VR with a virtual patient and operating room**. Both use one coach, tool system and authored exercise flow. Surface detection, body landmarks and validated anatomy registration are separate jobs; a table/person box does not determine organ placement. See [mode engineering](environment-modes.md) and [environment-source research](research/surgery-environments.md).
 

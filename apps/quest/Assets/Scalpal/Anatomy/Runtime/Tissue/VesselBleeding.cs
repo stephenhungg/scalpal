@@ -21,6 +21,7 @@ namespace Scalpal.Anatomy.Tissue
         public double DensityKgPerCubicMeter { get; }
         public double DischargeCoefficient { get; }
         public double MaximumInjuryAreaSquareMeters { get; }
+        // Bounded diagnostic clock; reaching the cap does not disable a valid finite-source model.
         public double MaximumSimulationSeconds { get; }
         public double InjuryAreaSquareMeters { get; private set; }
         public double ElapsedSeconds { get; private set; }
@@ -74,8 +75,10 @@ namespace Scalpal.Anatomy.Tissue
         {
             LastStepLossMilliliters = 0;
             if (IsFaulted) return false;
-            if (!InRange(seconds, 0, MaxStepSeconds) || ElapsedSeconds + seconds > MaximumSimulationSeconds)
+            if (!InRange(seconds, 0, MaxStepSeconds))
                 return Fault();
+            // An intact vessel has no injury simulation clock and cannot expire during practice.
+            if (InjuryAreaSquareMeters == 0) return true;
             double emitted = Math.Min(FlowCubicMetersPerSecond * seconds,
                 Math.Max(0, initialSourceCubicMeters - cumulativeLossCubicMeters));
             double nextLoss = Math.Min(initialSourceCubicMeters, cumulativeLossCubicMeters + emitted);
@@ -83,7 +86,7 @@ namespace Scalpal.Anatomy.Tissue
                 return Fault();
             emitted = nextLoss - cumulativeLossCubicMeters;
             cumulativeLossCubicMeters = nextLoss;
-            ElapsedSeconds += seconds;
+            ElapsedSeconds = Math.Min(MaximumSimulationSeconds, ElapsedSeconds + seconds);
             LastStepLossMilliliters = emitted * MillilitersPerCubicMeter;
             return true;
         }

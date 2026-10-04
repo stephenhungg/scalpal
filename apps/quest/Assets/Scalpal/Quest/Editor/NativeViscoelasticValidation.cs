@@ -202,7 +202,7 @@ namespace Scalpal.Quest.Editor
             Assert(volume.BeginHandle(nodes[3], .001f), "actual volume acquires movable apex for strain loading");
             var target = nodes[3] + Vector3.right * .001f;
             for (int i = 0; i < 20; i++) volume.Step(1f / 90, target, Vector3.zero);
-            Assert(volume.Handle >= 0 && (volume.HandlePosition - target).sqrMagnitude < 1e-12f, "actual solver accepts bounded handle displacement");
+            Assert(volume.Handle >= 0 && (volume.HandlePosition - target).sqrMagnitude < 1e-6f && (volume.HandlePosition - nodes[3]).sqrMagnitude > 1e-10f, "actual solver accepts real compliant handle displacement");
             bool nonzeroStrain = false, nonzeroViscous = false;
             for (int cell = 0; cell < cells.Length; cell++)
             {
@@ -217,13 +217,15 @@ namespace Scalpal.Quest.Editor
             volume.Freeze(); loaded.AssertRetained(volume, "tracking freeze retains material memory");
             Assert(volume.Handle < 0, "tracking freeze releases loading handle");
             for (int i = 0; i < positions.Length; i++) Assert((volume.Positions[i] - positions[i]).sqrMagnitude == 0, "tracking freeze preserves loaded geometry");
-            int intactNodes = volume.NodeCount; float mass = volume.TotalMass;
+            int intactNodes = volume.NodeCount; var topology = new NativeVolumeValidation.TopologySnapshot(volume);
             Assert(volume.CutSweep(new Vector3(-.005f, -.005f, 0), new Vector3(.06f, -.005f, 0), new Vector3(-.005f, .06f, 0), .0001f) == 1,
                 "actual finite cut fractures the shared material face");
-            Assert(volume.NodeCount > intactNodes && volume.CutFaceCount == 1 && Near(volume.TotalMass, mass), "fracture changes node fans while conserving material mass");
+            Assert(volume.NodeCount > intactNodes && volume.CutFaceCount == 1, "fracture changes node fans");
+            topology.Validate(volume, true);
             loaded.AssertRetained(volume, "fracture preserves cell material history across new node bindings");
             volume.Reset();
-            Assert(volume.CutFaceCount == 0 && volume.NodeCount == intactNodes && Near(volume.TotalMass, mass), "retry restores intact coupled mechanics");
+            Assert(volume.CutFaceCount == 0 && volume.NodeCount == intactNodes, "retry restores intact coupled mechanics");
+            topology.Validate(volume);
             foreach (var history in Histories(volume))
             {
                 Assert(!history.HasHistory && Field<TissueTensor>(history, "previous").SquaredNorm == 0, "retry clears cell committed strain");
@@ -233,8 +235,8 @@ namespace Scalpal.Quest.Editor
 
         static void RejectedVolumeTrial()
         {
-            // A thin tetrahedron with pinned base and movable apex: the final handle
-            // projection forces inversion independently of constitutive solver strength.
+            // A thin tetrahedron with pinned base and movable apex. A deliberately
+            // inverted prescribed base forces rejection independently of compliant grasp retries.
             var nodes = new[] { Vector3.zero, Vector3.right * .03f, Vector3.up * .03f, Vector3.forward * .0002f };
             var volume = new TissueVolume(nodes, new[] { new TissueVolume.Cell { a = 0, b = 1, c = 2, d = 3 } }, new[] { CoupledMaterial() }, new[] { true, true, true, false });
             Assert(volume.BeginHandle(nodes[3], .00005f), "thin cell acquires apex loading handle");
@@ -249,11 +251,13 @@ namespace Scalpal.Quest.Editor
                 volume.Step(invalid, target, Vector3.zero); accepted.AssertRetained(volume, "invalid solver timestep retains committed history");
             }
             Assert(volume.BeginHandle(target, .00005f), "thin cell reacquires its accepted apex");
-            var positions = (Vector3[])volume.Positions.Clone(); float mass = volume.TotalMass;
-            volume.Step(1f / 90, Vector3.back * .0002f, Vector3.zero);
-            Assert(volume.Handle < 0, "inverted thin-cell trial is rejected and releases handle");
+            var positions = (Vector3[])volume.Positions.Clone(); var topology = new NativeVolumeValidation.TopologySnapshot(volume);
+            Assert(volume.SetBoundaryTarget(1, -nodes[1]), "negative prescribed base deterministically forces inversion");
+            volume.Step(1f / 90, target, Vector3.zero);
+            Assert(volume.Handle >= 0, "rejected inverted prescribed trial retains grasp for a later safe retry");
             for (int i = 0; i < positions.Length; i++) Assert((volume.Positions[i] - positions[i]).sqrMagnitude == 0, "rejected thin-cell trial rolls geometry back to accepted state");
-            Assert(Near(volume.TotalMass, mass) && volume.CutFaceCount == 0, "rejected trial preserves reference mass and topology");
+            Assert(volume.CutFaceCount == 0, "rejected trial preserves cut topology");
+            topology.Validate(volume, true);
             accepted.AssertRetained(volume, "inverted solver trial cannot advance material history");
         }
 

@@ -17,11 +17,30 @@ import type { SurgicalCase } from "./types.js";
 
 export type EncounterPhase = "interview" | "attending" | "scored";
 
+// ElevenLabs premade voices. The account has no premade elderly female voice, so the senior and older
+// female presets use the most mature-sounding middle-aged female voices (Lily, Alice).
 export const DEFAULT_PATIENT_VOICES: Record<Encounter["persona"]["voiceKey"], string> = {
-  adult_female: "EXAVITQu4vr4xnSDxMaL", // Sarah
-  parent_female: "XrExE9yKIg1WjnnlVkGX", // Matilda
-  adult_male: "iP95p4xoKVk53GoZ742B", // Chris
+  adult_female: "EXAVITQu4vr4xnSDxMaL", // Sarah, young female
+  parent_female: "XrExE9yKIg1WjnnlVkGX", // Matilda, middle-aged female
+  adult_male: "iP95p4xoKVk53GoZ742B", // Chris, middle-aged male
+  mature_female: "hpp4J3VqNfWAUOO0d1Us", // Bella, middle-aged female
+  middle_female: "XrExE9yKIg1WjnnlVkGX", // Matilda, for an adult patient speaking for herself
+  older_female: "Xb7hH8MSUJpSbSDYk0k2", // Alice, middle-aged British female
+  senior_female: "pFZP5JQG7iQjIQuC4Bku", // Lily, middle-aged British female (closest to elderly)
+  middle_male: "nPczCjzI2devNBz1zQrb", // Brian, middle-aged male
 };
+
+// Authored demo symptoms attach only to the chart they were written for. The persona's sex is the sick
+// patient's (never inferred from the speaker's voice). A persona written for a chart without shared
+// demographics attaches only when the chart truly has none, so identity is confirmed in person.
+export function demographicsMatch(encounter: Encounter, kase: SurgicalCase): boolean {
+  const p = encounter.persona;
+  const chart = kase.patient;
+  if (p.chartDemographics === "not_shared") {
+    return !chart.name && chart.age < 0 && !chart.sex && kase.brief.dataGaps.some((g) => g.code === "no_demographics");
+  }
+  return chart.name === p.patientName && chart.age === p.age && chart.sex.toLowerCase() === p.sex;
+}
 
 export interface Assessment {
   diagnosis: string;
@@ -50,6 +69,9 @@ export interface Scorecard {
   total: number;
   max: number;
   grade: string;
+  procedureId: string; // always the surgery this patient needs, whatever the learner proposed
+  procedureTitle: string;
+  procedureChosenCorrectly: boolean;
   sections: ScoreSection[];
   criticalMissed: FoundItem[];
   criticalFound: FoundItem[];
@@ -78,7 +100,7 @@ const LABELS: Record<string, string> = {
   general_appearance: "general appearance", vitals: "vital signs", abdomen_inspection: "abdominal inspection", abdomen_palpation: "abdominal palpation",
   mcburney_point: "McBurney's point", rebound: "rebound tenderness", guarding_rigidity: "guarding and rigidity", rovsing: "Rovsing sign", psoas: "psoas sign",
   obturator: "obturator sign", murphy: "Murphy sign", cva_tenderness: "costovertebral angle tenderness", chest_lungs: "chest exam", genitourinary: "genitourinary exam",
-  pelvic: "pelvic exam", cbc: "CBC", crp: "CRP", bmp: "basic metabolic panel", lactate: "lactate", lipase: "lipase", urinalysis: "urinalysis",
+  pelvic: "pelvic exam", cbc: "CBC", crp: "CRP", bmp: "basic metabolic panel", lactate: "lactate", lipase: "lipase", urinalysis: "urinalysis", lfts: "liver function tests",
   pregnancy_test: "pregnancy test", ultrasound: "ultrasound", ct_abdomen_pelvis: "CT abdomen and pelvis", type_and_screen: "type and screen",
 };
 export const labelOf = (id: string) => LABELS[id] ?? id.replaceAll("_", " ");
@@ -89,8 +111,28 @@ const URGENCY_WORDS: Record<Encounter["urgency"], string[]> = {
   elective: ["elective", "schedule", "outpatient"],
 };
 
-const norm = (s: string) => s.toLowerCase();
-const matchesAllGroups = (text: string, groups: string[][]) => groups.every((g) => g.some((k) => norm(text).includes(k)));
+const norm = (s: string) => s.toLowerCase().replaceAll("’", "'");
+
+// Negation-aware keyword check for what the learner commits to (diagnosis, procedure, timing): "not
+// appendicitis" or "not urgent" must not earn credit. A keyword counts when at least one mention is not
+// negated within a few words before it (or by a trailing "unlikely"/"ruled out") in the same clause.
+const NEGATED_BEFORE = /\b(?:not|no|never|nor|isn't|isnt|aren't|wasn't|don't|dont|doesn't|won't|wouldn't|unlikely|doubt|doubtful|without|less likely|rules? out|ruled out|ruling out|exclude[sd]?|excluding)\b/;
+const NEGATED_AFTER = /^\s+(?:is\s+|are\s+|was\s+|seems\s+|looks\s+)?(?:very\s+|quite\s+)?(?:unlikely|less likely|not likely|ruled out|excluded|doubtful)\b/;
+const NEGATION_WINDOW_WORDS = 4;
+const CLAUSE_BREAK = /[,;.!?:()]|\bbut\b|\bhowever\b|\bthough\b/;
+
+function mentions(text: string, keyword: string): boolean {
+  for (const clause of norm(text).split(CLAUSE_BREAK)) {
+    for (let at = clause.indexOf(keyword); at !== -1; at = clause.indexOf(keyword, at + 1)) {
+      const before = clause.slice(0, at).trim().split(/\s+/).slice(-NEGATION_WINDOW_WORDS).join(" ");
+      const wordEnd = clause.slice(at + keyword.length).search(/\s|$/);
+      const after = clause.slice(at + keyword.length + wordEnd);
+      if (!NEGATED_BEFORE.test(before) && !NEGATED_AFTER.test(after)) return true;
+    }
+  }
+  return false;
+}
+const matchesAllGroups = (text: string, groups: string[][]) => groups.every((g) => g.some((k) => mentions(text, k)));
 
 export class EncounterSession {
   phase: EncounterPhase = "interview";
@@ -262,14 +304,14 @@ export class EncounterSession {
     };
 
     const procedureOk = matchesAllGroups(a.procedure, e.procedureKeywords) || matchesAllGroups(a.diagnosis, e.procedureKeywords);
-    const urgencyOk = URGENCY_WORDS[e.urgency].some((w) => norm(`${a.urgency} ${a.procedure}`).includes(w));
+    const urgencyOk = URGENCY_WORDS[e.urgency].some((w) => mentions(`${a.urgency}. ${a.procedure}`, w));
     const plan: ScoreSection = {
       id: "plan",
       label: "Plan",
       max: 10,
       score: (procedureOk ? 6 : 0) + (urgencyOk ? 4 : 0),
       found: [...(procedureOk ? ["procedure"] : []), ...(urgencyOk ? [`${e.urgency} timing`] : [])],
-      missed: [...(procedureOk ? [] : ["laparoscopic appendectomy"]), ...(urgencyOk ? [] : [`${e.urgency} timing`])],
+      missed: [...(procedureOk ? [] : [this.kase.procedure.title.toLowerCase()]), ...(urgencyOk ? [] : [`${e.urgency} timing`])],
     };
 
     const ddxText = norm(a.differential.join(" "));
@@ -293,6 +335,8 @@ export class EncounterSession {
     for (const m of criticalMissed) feedback.push(`Must fix: you did not cover ${m.label}. ${m.why}`);
     if (diagnosisResult === "partial") feedback.push(`Close: you named ${e.diagnosis.partial?.label.toLowerCase()}, but the full picture is ${e.diagnosis.label.toLowerCase()}.`);
     if (diagnosisResult === "incorrect" || diagnosisResult === "missing") feedback.push(`The diagnosis was ${e.diagnosis.label.toLowerCase()}.`);
+    // A wrong plan never dead-ends the demo: the operating room loads the surgery this patient needs.
+    if (!procedureOk) feedback.push(`The surgery this patient needs is a ${this.kase.procedure.title.toLowerCase()}, and that is what we will do in the operating room.`);
     if (!urgencyOk) feedback.push(`Timing: this case is ${e.urgency}.`);
     if (named.length < 3) feedback.push(`Broaden the differential: consider ${differential.missed.join(", ").toLowerCase()}.`);
     for (const x of items.filter((i) => !this.has(i) && !e.critical.includes(i)).slice(0, 3)) feedback.push(`Also missed ${labelOf(x.id)}: ${x.why}`);
@@ -315,6 +359,9 @@ export class EncounterSession {
       total,
       max: 100,
       grade,
+      procedureId: this.kase.procedureId,
+      procedureTitle: this.kase.procedure.title,
+      procedureChosenCorrectly: procedureOk,
       sections,
       criticalMissed,
       criticalFound,
@@ -326,6 +373,18 @@ export class EncounterSession {
       feedback,
       spoken: spokenParts.join(" "),
     };
+  }
+
+  // What the attending learned in the office, carried into the operating room prompt.
+  carryover(): string {
+    if (this.phase !== "scored" || !this.assessment) return "";
+    const card = this.score();
+    const lines = [
+      `Pre-op interview score ${card.total}/100 (${card.grade}). The learner diagnosed "${this.assessment.diagnosis || "nothing"}" (${card.diagnosisResult}).`,
+      card.procedureChosenCorrectly ? "" : `They proposed "${this.assessment.procedure || "no procedure"}"; the case needs a ${this.kase.procedure.title.toLowerCase()}.`,
+      card.criticalMissed.length ? `In the interview they missed: ${card.criticalMissed.map((m) => m.label).join(", ")}. Bring these up when they matter during the operation.` : "They covered every critical item in the interview.",
+    ];
+    return lines.filter(Boolean).join(" ");
   }
 
   state() {

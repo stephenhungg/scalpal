@@ -24,9 +24,11 @@ npm run build && npm start  # bundled (esbuild) production build
 npm run worker:synthetic  # synthetic motion worker (labelled output; not reconstruction)
 ```
 
-On first start without `SPACETIMEDB_TOKEN`, the gateway creates an identity, saves its token to `.gateway-token`, and logs the `spacetime call … add_service_identity` command that registers it. In production, store that token as a secret.
+On first start without `SPACETIMEDB_TOKEN`, the gateway creates an identity, saves its token to `.gateway-token`, and logs the `spacetime call … add_service_identity` command that registers it. In production, store that token as a secret: with `NODE_ENV=production` (the Docker image and `fly.toml`) the gateway refuses to start without `SPACETIMEDB_TOKEN`, because the token file does not survive a container restart.
 
 `GET /healthz` reports database connection, service registration, storage driver and which providers are configured.
+
+The gateway listens on port 8788 by default (`PORT`). Preop/coach uses 8787, and the motion worker (`services/motion`, `gateway-worker`) targets `http://localhost:8788`.
 
 ## Tests
 
@@ -34,7 +36,10 @@ The integration tests need a local `spacetime start`. They publish the module to
 
 ```sh
 npm test
+npm run test:unit   # no SpacetimeDB needed
 ```
+
+The integration harness publishes with `--delete-data=always`, so it refuses any database not named `scalpal-test-*` and any server that is not local (the `local` CLI server with a loopback `TEST_SPACETIMEDB_URI`). Set `TEST_SPACETIME_ALLOW_REMOTE=1` to target a remote server on purpose; the name rule still applies.
 
 They cover:
 

@@ -11,7 +11,9 @@ import type { ProcedureStep, Severity, StepAction, SurgicalCase } from "./types.
 export type CoachEvent =
   | EngineEvent
   | { type: "focus"; structureId: string } // learner gaze or instrument hover, from Unity
-  | { type: "tracking"; valid: boolean }; // registration validity; invalid pauses scoring
+  | { type: "tracking"; valid: boolean } // registration validity; invalid pauses scoring
+  // Simulated vessel injury from the headset's tissue model; totalMl is cumulative for the attempt.
+  | { type: "bleeding"; structureId: string; active: boolean; rateMlPerMin: number; totalMl: number };
 
 export type AlertKind =
   | "mistake"
@@ -21,7 +23,9 @@ export type AlertKind =
   | "case_complete"
   | "stuck"
   | "tracking_lost"
-  | "tracking_restored";
+  | "tracking_restored"
+  | "bleeding"
+  | "bleeding_controlled";
 
 export type AlertPriority = "urgent" | "normal" | "low";
 
@@ -46,6 +50,17 @@ export interface CoachAlert {
 export interface LoggedAlert extends CoachAlert {
   seq: number;
   simEvent: string; // exact text to send as a user message when this alert becomes an LLM turn
+}
+
+// A completed step, kept so Jarvis can refer back ("you nicked the ileum two steps ago").
+export interface StepCheckpoint {
+  stepId: string;
+  title: string;
+  seconds: number;
+  mistakes: number;
+  hints: number;
+  bloodLossMl: number;
+  at: string;
 }
 
 export interface StructureRef {
@@ -118,7 +133,10 @@ export interface CoachSnapshot {
   trackingValid: boolean;
   lastEvent: string;
   recentMistakes: CoachMistakeView[];
-  completedSteps: { stepId: string; title: string; seconds: number; mistakes: number }[];
+  completedSteps: StepCheckpoint[];
+  bloodLossMl: number;
+  scene: { summary: string; at: string; source: string };
+  activeBleeds: { structure: StructureRef; rateMlPerMin: number }[];
   mistakeCount: number;
   highSeverityMistakeCount: number;
   hintsUsed: number;
@@ -179,7 +197,11 @@ export class CoachSession {
   private lastEvent = "Session started.";
   private warnedFocus = new Set<string>();
   private mistakes: CoachMistakeView[] = [];
-  private completed: { stepId: string; title: string; seconds: number; mistakes: number }[] = [];
+  private completed: StepCheckpoint[] = [];
+  private stepHints = 0;
+  private bleeds = new Map<string, number>(); // structureId -> ml/min
+  private bloodLossMl = 0;
+  private scene = { summary: "", at: "", source: "" }; // latest vision summary of the learner's view
   private commands: CoachCommand[] = [];
   private alertSeq = 0;
   private commandSeq = 0;
@@ -265,7 +287,39 @@ export class CoachSession {
     return [...new Set(step.mistakes.map((m) => m.structure))];
   }
 
+  private checkpoint(step: ProcedureStep, seconds: number): StepCheckpoint {
+    return {
+      stepId: step.id,
+      title: step.title,
+      seconds,
+      mistakes: this.mistakes.filter((m) => m.stepId === step.id).length,
+      hints: this.stepHints,
+      bloodLossMl: Math.round(this.bloodLossMl),
+      at: this.clock().toISOString(),
+    };
+  }
+
+  private handleBleeding(e: { structureId: string; active: boolean; rateMlPerMin: number; totalMl: number }): EventOutcome {
+    this.bloodLossMl = Math.max(this.bloodLossMl, Number.isFinite(e.totalMl) ? e.totalMl : 0);
+    const alerts: CoachAlert[] = [];
+    const known = this.bleeds.has(e.structureId);
+    if (e.active) {
+      this.bleeds.set(e.structureId, Math.max(0, e.rateMlPerMin));
+      if (!known) {
+        this.lastEvent = `Bleeding started from the ${this.name(e.structureId).toLowerCase()}.`;
+        alerts.push(this.alert("bleeding", "urgent", bleedingLine(this.name(e.structureId)), [e.structureId], this.engine.current?.id ?? "", `bleeding.${e.structureId}`));
+      }
+    } else if (known) {
+      this.bleeds.delete(e.structureId);
+      this.lastEvent = `Bleeding from the ${this.name(e.structureId).toLowerCase()} controlled. Total blood loss ${Math.round(this.bloodLossMl)} ml.`;
+      alerts.push(this.alert("bleeding_controlled", "low", `Bleeding controlled. Total loss about ${Math.round(this.bloodLossMl)} milliliters.`, [e.structureId]));
+    }
+    this.changed(alerts);
+    return { accepted: true, reason: "", alerts };
+  }
+
   private resetStep() {
+    this.stepHints = 0;
     this.stepStartedAt = this.lastProgressAt = this.ms();
     this.offTarget = 0;
     this.tier = 0;
@@ -280,7 +334,8 @@ export class CoachSession {
       this.seenEventIds.set(meta.eventId, "");
       if (this.seenEventIds.size > 10000) this.seenEventIds.delete(this.seenEventIds.keys().next().value!);
     }
-    if (meta.stepId && event.type !== "focus" && event.type !== "tracking") {
+    // No catch-up while tracking is lost: handle() rejects the event, and nothing may be synthesized either.
+    if (meta.stepId && event.type !== "focus" && event.type !== "tracking" && event.type !== "bleeding" && this.trackingValid) {
       this.reconcile(meta.stepId);
       if (this.desynced) {
         // Preserve rejection across a lost HTTP response; retrying this event must
@@ -293,8 +348,10 @@ export class CoachSession {
     return this.handle(event);
   }
 
-  // The headset's CaseRunner owns progression. If it is ahead, catch up silently; if it is behind or on a
-  // step we do not know, flag the desync so Jarvis trusts the headset instead of coaching the wrong step.
+  // The headset's CaseRunner owns progression. If it is exactly one step ahead (the event that completed our
+  // current step was lost), catch up that one step. A larger jump, a step behind, or a step we do not know is
+  // flagged as a desync so Jarvis trusts the headset; skipped steps are never synthesized as completed,
+  // otherwise one event with a late stepId would award the whole procedure with a perfect record.
   private reconcile(headsetStepId: string) {
     this.headsetStepId = headsetStepId;
     const steps = this.kase.procedure.steps;
@@ -304,13 +361,13 @@ export class CoachSession {
       this.desynced = false;
       return;
     }
-    if (target > current) {
-      for (let guard = 0; guard < 500 && this.engine.current && this.engine.current.id !== headsetStepId; guard++) {
-        const before = this.engine.current;
+    const before = this.engine.current;
+    if (before && target !== -1 && steps[target]?.id === before.next) {
+      for (let guard = 0; guard < 500 && this.engine.current === before; guard++) {
         const e = this.nextCorrectEvent();
         if (!e) break;
         const r = this.engine.handle(e);
-        if (r.advanced) this.completed.push({ stepId: before.id, title: before.title, seconds: 0, mistakes: this.mistakes.filter((m) => m.stepId === before.id).length });
+        if (r.advanced) this.completed.push(this.checkpoint(before, 0));
       }
       current = this.engine.current ? steps.findIndex((s) => s.id === this.engine.current!.id) : steps.length;
       this.resetStep();
@@ -324,6 +381,7 @@ export class CoachSession {
 
   handle(event: CoachEvent): EventOutcome {
     if (event.type === "tracking") return this.handleTracking(event.valid);
+    if (event.type === "bleeding") return this.handleBleeding(event);
     if (event.type === "focus") return this.handleFocus(event.structureId);
 
     const step = this.engine.current;
@@ -347,8 +405,7 @@ export class CoachSession {
       alerts.push(this.alert("mistake", urgent ? "urgent" : "normal", say, [m.structure, ...step.targets.slice(0, 1)], step.id, `mistake.${m.id}`));
     } else if (result.advanced) {
       const seconds = Math.round((this.ms() - this.stepStartedAt) / 1000);
-      const stepMistakes = this.mistakes.filter((m) => m.stepId === step.id).length;
-      this.completed.push({ stepId: step.id, title: step.title, seconds, mistakes: stepMistakes });
+      this.completed.push(this.checkpoint(step, seconds));
       this.resetStep();
       this.lastEvent = `Completed step: ${step.title}.`;
       const next = this.engine.current;
@@ -448,6 +505,7 @@ export class CoachSession {
     if (!step) return { tier: 0, say: "The procedure is complete. Nothing left to do.", highlight: [] };
     this.tier = Math.min(3, this.tier + 1);
     this.hintsUsed += 1;
+    this.stepHints += 1;
     const hint = this.hintAt(step, this.tier);
     this.lastEvent = `Learner asked for a hint (tier ${this.tier}).`;
     this.changed([]);
@@ -554,6 +612,13 @@ export class CoachSession {
     return { alerts: this.alertLog.filter((a) => a.seq > seq), latestSeq: this.alertLogSeq };
   }
 
+  // A one-line description of what the learner can see, from the scene watcher.
+  setScene(summary: string, source: string) {
+    if (!summary || summary === this.scene.summary) return;
+    this.scene = { summary: summary.slice(0, 300), at: this.clock().toISOString(), source };
+    this.changed([]);
+  }
+
   pendingCommands(): CoachCommand[] {
     return this.commands.filter((c) => c.status === "pending");
   }
@@ -590,7 +655,10 @@ export class CoachSession {
     const level = this.stuckLevel();
     const highSeverity = this.mistakes.filter((m) => m.severity === "high").length;
     const view = step ? this.stepView(step) : emptyStepView();
-    const guidance = step
+    const bleeding = [...this.bleeds.keys()][0];
+    const guidance = bleeding && step
+      ? { say: `Control the bleeding from the ${this.name(bleeding).toLowerCase()} first: grasp or press to slow it, suction so you can see, then seal or clip the vessel.`, highlight: [bleeding] }
+      : step
       ? this.hintAt(step, Math.max(1, this.tier, level))
       : { say: `The ${procedure.title.toLowerCase()} is complete.`, highlight: [] };
 
@@ -624,6 +692,9 @@ export class CoachSession {
       lastEvent: this.lastEvent,
       recentMistakes: this.mistakes.slice(-5),
       completedSteps: [...this.completed],
+      bloodLossMl: Math.round(this.bloodLossMl),
+      scene: { ...this.scene },
+      activeBleeds: [...this.bleeds].map(([id, rate]) => ({ structure: this.ref(id), rateMlPerMin: Math.round(rate * 10) / 10 })),
       mistakeCount: this.mistakes.length,
       highSeverityMistakeCount: highSeverity,
       hintsUsed: this.hintsUsed,
@@ -678,11 +749,22 @@ export function nextStepLine(title: string): string {
 }
 
 // Every pre-renderable line for a case: high-severity mistake warnings, tracking loss, and next-step callouts.
+export function bleedingLine(structureName: string): string {
+  return `Stop. Bleeding from the ${structureName.toLowerCase()}. Get control first.`;
+}
+
+// Structures that can bleed in a case: its vessels and the solid organs with a raw surface.
+const BLEEDERS = new Set(["liver"]);
+export function bleedingStructures(kase: SurgicalCase): { id: string; name: string }[] {
+  return kase.anatomy.filter((a) => (a.system === "cardiovascular" || BLEEDERS.has(a.id)) && kase.procedure.structures.includes(a.id)).map((a) => ({ id: a.id, name: a.displayName }));
+}
+
 export function reflexLines(kase: SurgicalCase, mode: PresentationMode = "mixed_reality"): { key: string; text: string }[] {
   const lines = kase.procedure.steps.flatMap((s) => s.mistakes.filter((m) => m.severity === "high").map((m) => ({ key: `mistake.${m.id}`, text: reflexLine(m.feedback) })));
   const unique = [...new Map(lines.map((l) => [l.key, l])).values()];
   const callouts = kase.procedure.steps.slice(1).map((s) => ({ key: `step.${s.id}`, text: nextStepLine(s.title) }));
-  return [...unique, { key: "tracking_lost", text: trackingLostLine(mode) }, ...callouts];
+  const bleeds = bleedingStructures(kase).map((b) => ({ key: `bleeding.${b.id}`, text: bleedingLine(b.name) }));
+  return [...unique, { key: "tracking_lost", text: trackingLostLine(mode) }, ...bleeds, ...callouts];
 }
 
 // True when the authored hint mostly repeats the coaching sentence, so the nudge says it once.
@@ -731,7 +813,7 @@ function describeOffTarget(event: EngineEvent, name: (id: string) => string, too
 export function contextKey(s: CoachSnapshot): string {
   const parts = [
     s.status, s.step.id, s.step.progressText, s.completedCount, s.mistakeCount, s.focusStructure.id, s.stuckLevel,
-    s.trackingValid, s.hintTier, s.desynced, s.commands.map((c) => `${c.commandId}:${c.status}`).join(","),
+    s.trackingValid, s.hintTier, s.desynced, s.bloodLossMl, s.activeBleeds.map((b) => b.structure.id).join(","), s.scene.summary, s.commands.map((c) => `${c.commandId}:${c.status}`).join(","),
   ];
   let h = 2166136261;
   for (const ch of JSON.stringify(parts)) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
@@ -757,14 +839,23 @@ export function renderContext(s: CoachSnapshot): string {
     `Step ${s.stepNumber} of ${s.stepCount}: ${st.title}. ${st.instruction}`,
     `Instrument: ${st.instrumentName}${st.ports.length ? ` via ${st.ports.join(" / ")}` : ""}. Progress: ${st.progressText}. Still needed: ${st.remaining.join(", ") || "nothing"}.`,
   ];
-  if (st.dangers.length) lines.push(`Danger structures this step: ${st.dangers.map((d) => d.name).join(", ")}.`);
+  if (s.activeBleeds.length) {
+    lines.push(`ACTIVE BLEEDING: ${s.activeBleeds.map((b) => `${b.structure.name} at ${b.rateMlPerMin} ml/min`).join("; ")}. Total blood loss ${s.bloodLossMl} ml. Coach bleeding control before anything else.`);
+  } else if (s.bloodLossMl > 0) {
+    lines.push(`Blood loss so far: ${s.bloodLossMl} ml (no active bleeding).`);
+  }
+  const rough = s.completedSteps.filter((c) => c.mistakes > 0).slice(-2);
+  if (rough.length) lines.push(`Earlier: ${rough.map((c) => `${c.title} (${c.mistakes} mistake${c.mistakes === 1 ? "" : "s"}${c.hints ? `, ${c.hints} hint${c.hints === 1 ? "" : "s"}` : ""})`).join("; ")}.`);
+    if (st.dangers.length) lines.push(`Danger structures this step: ${st.dangers.map((d) => d.name).join(", ")}.`);
   if (st.patientNotes.length) lines.push(`Patient-specific: ${st.patientNotes.join(" ")}`);
+  if (s.scene.summary) lines.push(`In view (${s.scene.source || "camera"}): ${s.scene.summary}`);
   if (s.focusStructure.id) lines.push(`Learner is looking at: ${s.focusStructure.name}.`);
   lines.push(`Last event: ${s.lastEvent}`);
   lines.push(`Time on step ${s.secondsOnStep}s, ${s.secondsSinceProgress}s since progress, ${s.offTargetAttempts} off-target attempts. Coaching level: ${s.stuckLabel} (hint tier ${s.hintTier}).`);
   const recent = s.recentMistakes.filter((m) => m.stepId === st.id);
   if (recent.length) lines.push(`Mistakes this step: ${recent.map((m) => m.feedback).join(" ")}`);
-  lines.push(`If asked what to do: ${s.guidance.say}`);
+  // Hints go through get_hint so the tier escalates; this line only tells Jarvis where coaching stands.
+  lines.push(`Coaching: hint tier ${s.hintTier} of 3 used on this step. If the learner asks what to do, call get_hint.`);
   if (st.nextTitle) lines.push(`After this: ${st.nextTitle}.`);
   return lines.join("\n");
 }

@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Reflection;
 using UnityEditor;
 using UnityEngine;
@@ -133,6 +134,7 @@ namespace Scalpal.Quest.Editor
                 observe(); observe(); observe(); Assert(body.Accepted, "fresh post-origin observations automatically reacquire");
                 body.ResetFit(); Assert(!body.Accepted && !body.CandidateValid, "retry invalidates automatic fit");
                 ValidatePermissionLifecycle(body, workbench, root);
+                ValidateObservationLifetime(body);
                 presentation.passthrough = false; presentation.Apply();
                 Assert(body.anatomyFit.position == Vector3.zero && body.patientFrame.position == Vector3.zero,
                     "full VR restores authored transforms after real-body fit");
@@ -143,6 +145,60 @@ namespace Scalpal.Quest.Editor
             }
             finally { UnityEngine.Object.DestroyImmediate(root); }
             Debug.Log("SCALPAL_NATIVE_BODY_REGISTRATION_VALIDATION_OK checks=" + checks + " synthetic native depth/projection/automatic gates; no physical alignment evidence");
+        }
+
+        sealed class FailedFrame : IEnumerator, IDisposable
+        {
+            readonly bool first, current; int advances;
+            public bool Disposed { get; private set; }
+            public FailedFrame(bool first = false, bool current = false) { this.first = first; this.current = current; }
+            public object Current => current ? throw new InvalidOperationException("Synthetic yielded-value failure") : null;
+            public bool MoveNext() { if (first || ++advances > 1) throw new InvalidOperationException("Synthetic readback/encode failure"); return true; }
+            public void Reset() => throw new NotSupportedException();
+            public void Dispose() => Disposed = true;
+        }
+        static IEnumerator CompletedFrame() { yield return null; }
+        static IEnumerator Safe(NativeBodyRegistration body, IEnumerator frame) => (IEnumerator)typeof(NativeBodyRegistration)
+            .GetMethod("ObserveSafely", BindingFlags.Instance | BindingFlags.NonPublic)
+            .Invoke(body, new object[] { frame, Field<int>(body, "epoch") });
+        static void ValidateObservationLifetime(NativeBodyRegistration body)
+        {
+            var frame = new FailedFrame(); var observed = Safe(body, frame);
+            Assert(observed.MoveNext() && Field<bool>(body, "inFlight"), "yielded acquisition holds one in-flight lease");
+            Assert(!observed.MoveNext() && frame.Disposed && !Field<bool>(body, "inFlight"),
+                "exception after yielded readback clears lease and disposes frame");
+            Assert(body.Status.Contains("retrying"), "failed acquisition reports retry instead of silent permanent wedge");
+            foreach (var failing in new[] { new FailedFrame(first: true), new FailedFrame(current: true) })
+            {
+                var retry = Safe(body, failing);
+                Assert(!retry.MoveNext() && failing.Disposed && !Field<bool>(body, "inFlight"),
+                    "initial or yielded-value exception cannot retain acquisition lease");
+            }
+            var success = Safe(body, CompletedFrame());
+            Assert(success.MoveNext() && !success.MoveNext() && !Field<bool>(body, "inFlight"),
+                "fresh acquisition can finish after prior failure");
+            var canceledFrame = new FailedFrame(); var canceled = Safe(body, canceledFrame);
+            Assert(canceled.MoveNext() && Field<bool>(body, "inFlight"), "cancellation fixture is actually in flight");
+            ((IDisposable)canceled).Dispose();
+            Assert(canceledFrame.Disposed && !Field<bool>(body, "inFlight"), "iterator cancellation clears lease and inner resources");
+            var texture = new Texture2D(9, 7, TextureFormat.RGBA32, false);
+            try
+            {
+                Invoke(body, "EnsureReadback", texture); var buffer = Field<Texture2D>(body, "readback");
+                Assert(buffer.width == 9 && buffer.height == 7, "readback uses actual texture dimensions, independent of negotiated metadata");
+                buffer.LoadRawTextureData(new byte[9 * 7 * 4]);
+                Assert(buffer.GetRawTextureData<byte>().Length == 9 * 7 * 4, "actual-size RGBA readback accepts exactly the acquired payload");
+                Invoke(body, "EnsureReadback", texture);
+                Assert(ReferenceEquals(buffer, Field<Texture2D>(body, "readback")), "same acquired dimensions reuse buffer");
+            }
+            finally { UnityEngine.Object.DestroyImmediate(texture); }
+            var resized = new Texture2D(3, 5, TextureFormat.RGBA32, false);
+            try
+            {
+                Invoke(body, "EnsureReadback", resized); var buffer = Field<Texture2D>(body, "readback");
+                Assert(buffer.width == 3 && buffer.height == 5, "changed texture dimensions replace old readback buffer");
+            }
+            finally { UnityEngine.Object.DestroyImmediate(resized); }
         }
 
         static void Invoke(NativeBodyRegistration body, string method, params object[] arguments)

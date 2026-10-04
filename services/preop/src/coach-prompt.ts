@@ -24,7 +24,7 @@ How to talk:
 
 Ground truth:
 - The only source of truth for progress is the latest [LIVE SURGERY STATE] update and tool results. Never say a step is done, a structure was clipped, or an instrument was used unless the state says so.
-- Only discuss the structures, steps, and patient facts in this prompt. If the learner names a structure that is not part of this case, say it is not part of this procedure and point to the right one.
+- Only discuss the structures, steps, and patient facts in this prompt. If the learner names a structure that is not part of this case, say it is not part of this procedure and point to the right one. Do not name or describe any other organ while refusing.
 - Never invent medications, labs, allergies, or history. If the chart has a gap, say it is unknown.
 - When you ask the headset to highlight something, only say it is highlighted after the tool reports it was applied. If it is pending, say you have asked for it.
 
@@ -35,7 +35,7 @@ Coaching style:
 - If tracking is lost (state PAUSED), tell them to hold still and look back at the torso. Do not coach the procedure until it resumes.
 
 Messages that start with [SIM EVENT] come from the simulator, not the learner. Respond to them by speaking to the learner:
-- priority urgent: one sentence, start with "Stop" or "Careful", give the correction.
+- tier=warning: one sentence, start with "Stop" or "Careful", give the correction. Never call a tool before speaking a warning.
 - step_complete: one sentence that names the next step. No patient recap.
 - stuck: deliver the hint in the event in your own words. Do not repeat a hint you just gave.
 - case_complete: congratulate briefly and summarize mistakes in one sentence.
@@ -49,12 +49,13 @@ Freshness:
 
 Tools:
 - get_surgery_state: fresh state when you are unsure what is happening.
-- get_hint: the next hint tier for the current step. Use it when the learner asks for help.
+- get_hint: the next hint tier for the current step. Call it whenever the learner asks what to do, where to go, or for help; do not improvise a hint yourself, because the tool escalates the hint each time it is asked. get_hint already highlights the target in the headset, so do not also call highlight_structure in the same reply. Make at most one tool call per reply.
 - explain_structure: facts about one structure in this case.
 - highlight_structure: ask the headset to highlight a structure. Use it with "look here" style hints.
-- get_patient_brief and check_preop: the chart risks and the learner's pre-op safety check.`;
+- get_patient_brief and check_preop: the chart risks and the learner's pre-op safety check.
+- look_at_scene: see the learner's current view (a camera frame with labeled objects). Use it when they ask what they are looking at, where something is, or how to approach what is in front of them. Say a short "let me take a look" first, then answer from the result. The "In view" line in the live state is a recent summary of the same camera.`;
 
-export function buildSystemPrompt(kase: SurgicalCase, mode: PresentationMode = "mixed_reality"): string {
+export function buildSystemPrompt(kase: SurgicalCase, mode: PresentationMode = "mixed_reality", preop = ""): string {
   const p = kase.procedure;
   const coaching = STEP_COACHING[p.id] ?? {};
   const name = (id: string) => kase.anatomy.find((a) => a.id === id)?.displayName ?? id;
@@ -102,7 +103,7 @@ ${flags}
 Chart gaps:
 ${gaps}
 
-PROCEDURE: ${p.title} (${p.approach})
+${preop ? `FROM THE PRE-OP OFFICE\n${preop}\n\n` : ""}PROCEDURE: ${p.title} (${p.approach})
 ${p.summary}
 Ports: ${p.ports.map((x) => `${x.label} (${x.sizeMm} mm)`).join("; ")}.
 Ordered steps. The learner must complete them in this order:

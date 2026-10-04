@@ -80,7 +80,7 @@ namespace Scalpal.Quest.Editor
             for (int i = 0; i < 8; i++)
             {
                 Assert(TissueCage.Finite(cage.Positions[i]), "finite solved corner");
-                if ((i & 4) != 0) Assert(Near(cage.Positions[i], cage.Rest[i]), "posterior attachment remains pinned");
+                if (cage.IsPinned(i)) Assert(Near(cage.Positions[i], cage.Rest[i]), "posterior attachment remains pinned");
             }
             int[,] tets = { {0,1,2,4}, {1,2,3,7}, {1,4,5,7}, {2,4,6,7}, {1,2,4,7} };
             for (int t = 0; t < 5; t++)
@@ -121,6 +121,9 @@ namespace Scalpal.Quest.Editor
                 Assert(simulation.TissueCount == 1 && tissue && tissue.Cage != null, "bind only available authored tissue ID");
                 Assert(filter.sharedMesh != source && filter.sharedMesh == collider.sharedMesh, "render and contact share private runtime mesh");
                 AssertVertices(original, filter.sharedMesh.vertices, "rest source geometry preserved");
+                int contactSteps=simulation.ContactSteps;
+                simulation.Simulate(Step*3+.00001f);
+                Assert(simulation.ContactSteps==contactSteps+3,"contact runs after each90Hz substep, independently of30Hz mesh commit");
                 EnableInstrument(instrument); Physics.SyncTransforms();
                 Assert(Physics.ComputePenetration(sphere, sphere.transform.position, sphere.transform.rotation,
                     collider, collider.transform.position, collider.transform.rotation, out _, out _), "fixture has actual tip penetration");
@@ -172,6 +175,12 @@ namespace Scalpal.Quest.Editor
                 Assert(filter.sharedMesh == source && collider.sharedMesh == source, "explicit Editor disposal is idempotent");
                 UnityEngine.Object.DestroyImmediate(tissue);
                 Assert(filter.sharedMesh == source && collider.sharedMesh == source, "Editor component removal retains restored source references");
+                obj.transform.localRotation=Quaternion.Euler(0,180,0);
+                simulation.Initialize(anatomy,rig,()=>ready);
+                var rotated=obj.GetComponent<DeformableTissue>();
+                Assert(simulation.TissueCount==1&&rotated&&rotated.Cage.IsPinned(0)&&!rotated.Cage.IsPinned(4),"180degree imported rotation pins the actual posterior face in anatomy coordinates");
+                root.transform.rotation=Quaternion.Euler(17,41,-9);simulation.Initialize(anatomy,rig,()=>ready);
+                Assert(rotated.Cage.IsPinned(0)&&!rotated.Cage.IsPinned(4),"common scene rotation does not change anatomical attachments");
             }
             finally
             {
@@ -218,15 +227,18 @@ namespace Scalpal.Quest.Editor
                     var relativeScale = authored.transform.lossyScale / session.anatomy.transform.lossyScale.x;
                     Assert(relativeScale.x > 0 && Mathf.Abs(relativeScale.x-relativeScale.y) < relativeScale.x*.001f && Mathf.Abs(relativeScale.x-relativeScale.z) < relativeScale.x*.001f,
                         "actual imported target has a uniform source-to-meter conversion: " + id);
-                    Assert(tissue.Initialize(presets[item], relativeScale.x), "actual imported target accepts metric cage: " + id);
+                    var posterior=authored.transform.InverseTransformDirection(session.anatomy.transform.TransformDirection(Vector3.forward));
+                    Assert(tissue.Initialize(presets[item], relativeScale.x,posterior), "actual imported target accepts metric cage with transformed posterior attachments: " + id);
+                    Assert(Vector3.Dot(tissue.Cage.PosteriorAxis,posterior)>.99999f,"FBX rotation transforms authored posterior axis explicitly: "+id);
                     Assert(Mathf.Abs(Vector3.Distance(tissue.Cage.Rest[0],tissue.Cage.Rest[1])-bounds.size.x*relativeScale.x) < .00001f,
                         "actual cage dimensions include FBX import scaling in source meters: " + id);
                     Debug.Log($"SCALPAL_NATIVE_TISSUE_SOURCE_UNITS id={id} sourceUnitScale={relativeScale.x:G6} rawBounds={bounds.size.ToString("F6")} metricBounds={(bounds.size*relativeScale.x).ToString("F6")}");
                     Assert(filter.sharedMesh != source && filter.sharedMesh == collider.sharedMesh,
                         "actual target gets one private render/contact mesh: " + id);
                     AssertVertices(original, filter.sharedMesh.vertices, "actual target preserves rest vertices: " + id);
-                    Assert(tissue.Cage.BeginHandle(tissue.Cage.Rest[0]), "actual target permits anterior handle: " + id);
-                    Vector3 target = tissue.Cage.Rest[0] + Vector3.left * Mathf.Min(.0005f, presets[item].maxDisplacement * .1f);
+                    int movable=0;while(tissue.Cage.IsPinned(movable))movable++;
+                    Assert(tissue.Cage.BeginHandle(tissue.Cage.Rest[movable]), "actual target permits anterior handle: " + id);
+                    Vector3 target = tissue.Cage.Rest[movable] + Vector3.left * Mathf.Min(.0005f, presets[item].maxDisplacement * .1f);
                     for (int frame = 0; frame < 30; frame++) tissue.Step(Step, target);
                     tissue.CommitSurface();
                     CheckBounded(tissue.Cage, presets[item].maxDisplacement);
