@@ -15,9 +15,9 @@ The user replaced the selection and presentation flow on October 3, 2026. This s
 
 Every FinchNode demo patient needs an authored diagnosis encounter: FinchNode lists 12 scenarios, 10 of them with a patient (`connect-cancelled` and `connect-failed` have none); 8 have an authored case plan and 3 have an authored encounter, so 7 encounters are missing. Surgical simulations must exist for each procedure a diagnosis can lead to. See the [demo flow](demo-flow.md) for acceptance details, [experience UX](experience-ux.md) for the recommended interaction design, and the [integration map](system-integration.md#explore--office--or-route) for the current gaps.
 
-## Separate Diagnosis Experience
+## Diagnosis Office Component
 
-The user requested a separate Quest 3S doctor-office encounter simulator: interview/examine fictional male and female patients from authored FinchNode demo cases, form a diagnosis and differential, and receive Jarvis attending feedback grounded in actions actually performed. The office uses Matthew's existing encounter engine and distinct patient/attending voices, with a usable visual fallback. Its Blender room follows the user's flowery MHacks theme request, with CC0 MakeHuman characters and rounded glass panels using Inter. It does not replace or change the ongoing surgical/tissue practice path. See [diagnosis office](diagnosis-office.md) for exact sources and verified limits.
+The Quest 3S diagnosis office is a core stage of the latest flow. Its current independently buildable checkpoint supports two fictional adult cases, Matthew's existing encounter engine, distinct patient/attending voices and a usable visual fallback. Its Blender room follows the user's flowery MHacks theme request, with CC0 MakeHuman characters and rounded glass panels using Inter. Explore-selected subject IDs, remaining patient encounters and a same-attempt OR handoff are the next integration work; the forced-versus-learner-choice procedure policy remains unresolved. Existing surgical/tissue work is preserved. See [diagnosis office](diagnosis-office.md) for exact sources and verified limits.
 
 ## Abdominal Tissue Direction
 
