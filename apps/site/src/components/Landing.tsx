@@ -24,6 +24,14 @@ export function Landing() {
       <div className="absolute inset-0 z-0">
         <AdamLayer onTouch={launch} introSpeed={1.5} />
       </div>
+      {/* Once the page launches, dim the hands so the bright glyphs don't fight the text. */}
+      <motion.div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 z-[1] bg-black"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: launched ? 0.55 : 0 }}
+        transition={{ duration: 0.9, ease: [0.44, 0, 0.56, 1] }}
+      />
       {launched && (
         <>
           <motion.nav
