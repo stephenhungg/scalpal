@@ -99,6 +99,8 @@ export class EncounterSession {
   readonly tests: TestId[] = [];
   readonly log: EncounterLogEntry[] = [];
   assessment: Assessment | null = null;
+  readonly transcript: { at: string; speaker: "learner" | "patient" | "coach"; text: string }[] = [];
+  private listeners = new Set<(event: { kind: string; payload: unknown }) => void>();
   version = 0;
   private startedAt: number;
 
@@ -111,9 +113,28 @@ export class EncounterSession {
     this.startedAt = clock().getTime();
   }
 
+  // Observers (the realtime bridge) see every logged step and transcript line as it happens.
+  subscribe(fn: (event: { kind: string; payload: unknown }) => void): () => void {
+    this.listeners.add(fn);
+    return () => this.listeners.delete(fn);
+  }
+
+  emit(kind: string, payload: unknown) {
+    for (const fn of this.listeners) fn({ kind, payload });
+  }
+
   private record(kind: EncounterLogEntry["kind"], id: string, text: string) {
-    this.log.push({ at: this.clock().toISOString(), kind, id, text });
+    const entry = { at: this.clock().toISOString(), kind, id, text };
+    this.log.push(entry);
     this.version += 1;
+    this.emit("log", entry);
+  }
+
+  addTranscript(speaker: "learner" | "patient" | "coach", text: string) {
+    const line = { at: this.clock().toISOString(), speaker, text: text.slice(0, 2000) };
+    this.transcript.push(line);
+    if (this.transcript.length > 500) this.transcript.shift();
+    this.emit("transcript", line);
   }
 
   private chartLines(section: string): string[] {

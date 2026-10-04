@@ -78,6 +78,17 @@ export function registerEncounterRoutes(app: Hono, options: EncounterRouteOption
     return c.json({ phase: s.phase, attendingPrompt: attendingPrompt(s), attendingFirstMessage: attendingFirstMessage(s), state: s.state(), actions: encounterActions(s.id) });
   });
 
+  app.post("/encounters/:id/transcript", async (c) => {
+    const s = get(c);
+    if (!s) return missing(c);
+    const { speaker, text } = await body(c);
+    if ((speaker !== "learner" && speaker !== "patient" && speaker !== "coach") || typeof text !== "string" || !text.trim()) {
+      return bad(c, 400, "invalid_transcript", 'Send {"speaker": "learner" | "patient" | "coach", "text": "..."}.', encounterActions(s.id));
+    }
+    s.addTranscript(speaker, text.trim());
+    return c.json({ lines: s.transcript.length, actions: encounterActions(s.id) });
+  });
+
   app.get("/encounters/:id/score", (c) => {
     const s = get(c);
     if (!s) return missing(c);

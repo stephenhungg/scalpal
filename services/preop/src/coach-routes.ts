@@ -335,7 +335,7 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
 
   // Jarvis voice page (laptop browser) and its ElevenLabs connection details.
   app.get("/jarvis", (c) => c.html(readFileSync(new URL("./jarvis/index.html", import.meta.url), "utf8")));
-  for (const file of ["app.js", "arbiter.js"]) {
+  for (const file of ["app.js", "arbiter.js", "encounter.js"]) {
     app.get(`/jarvis/${file}`, (c) =>
       c.body(readFileSync(new URL(`./jarvis/${file}`, import.meta.url), "utf8"), 200, { "Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "no-cache" }),
     );
