@@ -22,6 +22,7 @@ import { createContextFeed, type ContextFeed } from "./jarvis/context-feed.js";
 import type { EncounterVoices } from "./encounter-routes.js";
 import type { Action, SurgicalCase } from "./types.js";
 import { registerRobotRoutes } from "./robot-routes.js";
+import { debriefText } from "./debrief.js";
 
 // Live coach API. Unity (or the SpacetimeDB bridge) posts exercise events here; the Scalpal voice
 // page reads state, hints, and alerts from it. Sessions live in memory: fine for one demo laptop,
@@ -629,12 +630,43 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
   });
 
   // Headset demos -> simulated arm + hand policy -> graded replay (services/motion robot-serve).
-  registerRobotRoutes(app, {
+  const robot = registerRobotRoutes(app, {
     dataDir: options.robotDataDir ?? process.env.SCALPAL_ROBOT_DIR ?? fileURLToPath(new URL("../.robot", import.meta.url)),
     now: options.now,
     session: (sid) => (SESSION_ID.test(sid) ? (sessions.get(sid) ?? null) : null),
     realtime: options.realtime,
     recordAttempt: (sid, attempt) => void pushRobotAttempt(sid, attempt),
+  });
+
+  // Scalpal's spoken recap of the finished run: deterministic text from the final state, rendered once in the
+  // reflex voice. The mp3 route speaks the last text issued for the session, never client text.
+  const debriefs = new Map<string, string>();
+  app.get("/coach/sessions/:sid/debrief", async (c) => {
+    const s = getSession(c);
+    if (!s) return missing(c);
+    c.header("Cache-Control", "no-store");
+    const text = debriefText(s.snapshot(), robot.resultView(s));
+    debriefs.set(s.id, text);
+    if (!reflex?.configured) return c.json({ text, audioUrl: null });
+    try {
+      await reflex.render(text);
+      return c.json({ text, audioUrl: `/coach/sessions/${s.id}/debrief.mp3` });
+    } catch (err) {
+      console.warn("[coach] debrief TTS failed:", err instanceof Error ? err.message : err);
+      return c.json({ text, audioUrl: null });
+    }
+  });
+  app.get("/coach/sessions/:sid/debrief.mp3", async (c) => {
+    const s = getSession(c);
+    if (!s) return missing(c);
+    const text = debriefs.get(s.id);
+    if (!text || !reflex?.configured) return bad(c, 404, "debrief_not_ready", "Request /debrief first.", coachActions(s.id));
+    try {
+      const audio = await reflex.render(text);
+      return c.body(new Uint8Array(audio), 200, { "Content-Type": "audio/mpeg", "Cache-Control": "no-store" });
+    } catch {
+      return bad(c, 503, "debrief_voice_failed", "Scalpal speech is unavailable.", coachActions(s.id));
+    }
   });
 
   // Demo driver: lets the laptop exercise Scalpal before the headset is wired in.

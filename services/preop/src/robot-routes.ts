@@ -205,9 +205,7 @@ export function registerRobotRoutes(app: Hono, options: RobotRouteOptions) {
     return c.json({ stored: true }, 201);
   });
 
-  app.get("/coach/sessions/:sid/robot-result", (c) => {
-    const s = options.session(sid(c));
-    if (!s) return noSession(c);
+  const resultView = (s: CoachSession) => {
     const own = results.get(s.id) ?? null;
     const latestDemo = [...demos].reverse().find((d) => d.sessionId === s.id) ?? null;
     const shown = own ?? baseline;
@@ -215,13 +213,18 @@ export function registerRobotRoutes(app: Hono, options: RobotRouteOptions) {
     const pending = latestDemo !== null && (own === null || own.demoId !== latestDemo.demoId);
     const status = pending ? "pending" : shown ? "ready" : "unavailable";
     const stepId = shown?.stepId ?? latestDemo?.stepId ?? "mark_incision";
-    return c.json({
+    return {
       status, stepId, stepTitle: stepTitle(s, stepId),
       success: shown?.success ?? null, pathErrorMm: shown?.pathErrorMm ?? null, policySuccessRate: shown?.policySuccessRate ?? null,
       demos: shown?.demos ?? { human: 0, synthetic: 0 }, synthetic: shown?.synthetic ?? true, videoUrl: shown?.videoUrl ?? null,
       demoId: shown?.demoId ?? null, pendingDemoId: pending ? latestDemo!.demoId : null, createdAt: shown?.createdAt ?? null,
       details: shown?.details ?? {},
-    });
+    };
+  };
+  app.get("/coach/sessions/:sid/robot-result", (c) => {
+    const s = options.session(sid(c));
+    if (!s) return noSession(c);
+    return c.json(resultView(s));
   });
 
   // Replay videos: the worker uploads the MP4, players stream it with Range requests.
@@ -281,4 +284,5 @@ export function registerRobotRoutes(app: Hono, options: RobotRouteOptions) {
   } catch (err) {
     console.error("[robot] could not reload stored demos", err);
   }
+  return { resultView };
 }
