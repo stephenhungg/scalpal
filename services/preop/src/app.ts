@@ -314,14 +314,17 @@ export function createApp(options: AppOptions = {}) {
   app.post("/patients/:id/preop-check", async (c) => {
     const target = await resolve(c.req.param("id"));
     if (!target) return fail(c, 400, "invalid_patient_id", "Patient ids are lowercase letters, digits, and dashes.", [routes.patients()]);
-    const body = (await c.req.json().catch(() => ({}))) as { selected?: unknown };
+    const body = (await c.req.json().catch(() => ({}))) as { selected?: unknown; scope?: unknown };
+    if (body.scope !== undefined && body.scope !== "" && body.scope !== "chart" && body.scope !== "surgical") {
+      return fail(c, 400, "invalid_scope", 'scope is "chart" (default) or "surgical".', [routes.caseFor(target.subject)]);
+    }
     if (!Array.isArray(body.selected) || body.selected.some((s) => typeof s !== "string")) {
       return fail(c, 400, "invalid_selection", 'Send {"selected": ["bleeding", ...]} using checklistOptions types.', [routes.caseFor(target.subject)]);
     }
     const kase = await caseOrUnavailable(target.subject, target.scenarioId);
     if (!kase) return fail(c, 404, "patient_not_found", "No synthetic patient with that id.", [routes.patients()]);
     if (!kase.procedureId) return fail(c, 409, "case_unavailable", kase.statusReason, kase.actions);
-    return c.json(scorePreopCheck(kase, body.selected as string[]));
+    return c.json(scorePreopCheck(kase, body.selected as string[], body.scope === "surgical" ? "surgical" : "chart"));
   });
 
   app.get("/procedures", (c) =>

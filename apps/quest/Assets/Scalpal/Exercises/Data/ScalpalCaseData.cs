@@ -320,6 +320,8 @@ namespace Scalpal.Exercises.Data
     public class PreopCheckRequest
     {
         public string[] selected;
+        // "surgical" scores only step-pinned risks (the OR Time-Out set); empty means the full chart.
+        public string scope;
     }
 
     [Serializable]

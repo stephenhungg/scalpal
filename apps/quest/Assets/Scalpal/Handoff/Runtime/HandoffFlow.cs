@@ -308,7 +308,7 @@ namespace Scalpal.Handoff
             // Only risks the learner individually planned for count as caught; skipped ones are reported missed.
             var selected = Ticket.confirmedRiskTypes.Distinct().ToArray();
             string json = null;
-            yield return Http(Ticket.serviceUrl + "/patients/" + Uri.EscapeDataString(Ticket.patientId) + "/preop-check", JsonUtility.ToJson(new PreopCheckRequest { selected = selected }), value => json = value);
+            yield return Http(Ticket.serviceUrl + "/patients/" + Uri.EscapeDataString(Ticket.patientId) + "/preop-check", JsonUtility.ToJson(new PreopCheckRequest { selected = selected, scope = "surgical" }), value => json = value);
             if (!ReferenceEquals(ticket, Ticket) || !consumer || consumer != surgery) { loading = false; yield break; }
             loading = false;
             if (!focused || ShellTransition.Busy || (ShellPause.Instance && ShellPause.Instance.IsPaused)
