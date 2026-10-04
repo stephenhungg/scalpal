@@ -74,6 +74,11 @@ namespace Scalpal.Surgery
         // A held, tracked tool touching tissue with the trigger released: nothing is applied, so tell the learner
         // which input acts (tool, verb, tissue). Edge-triggered per touch; never scored or sent to the coach.
         public event Action<InstrumentBehaviour, string, string> TouchedWithoutTrigger;
+        // A held, triggered blade outside the surgical field, every sampled frame (presentation only, never scored):
+        // the incision view draws where it meets the visible skin.
+        public event Action<InstrumentBehaviour> BladeOutsideField;
+        // Regions cut outside the field and not yet controlled: the same facts RegionInjured reports to the coach.
+        public bool IsRegionInjured(string region) => injuredRegions.Contains(region);
         public string LastRejection { get; private set; } = "";
         public double ActiveSeconds => activeSeconds;
         public double TimeMs => activeSeconds * 1000;
@@ -744,6 +749,7 @@ namespace Scalpal.Surgery
         void OutsideField(ToolState state, string verb, Vector3 point)
         {
             string region = BodyRegion(torso.InverseTransformPoint(point));
+            if (verb == "cut") BladeOutsideField?.Invoke(state.tool);
             if (region == "") return;
             if (verb == "cut") { if (injuredRegions.Add(region)) RegionInjured?.Invoke(region, state.tool, false); }
             else if ((verb == "clamp" || verb == "tie" || verb == "seal") && injuredRegions.Remove(region)) RegionInjured?.Invoke(region, state.tool, true);
