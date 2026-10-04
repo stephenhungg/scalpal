@@ -5,6 +5,8 @@ import { Panel, Pill, useAction } from './ui';
 // Volunteer vitals from services/vitals (Presage). Values only show when Presage marks them
 // stable; demo mode is labelled. The OR monitor in the headset uses the captured baseline.
 
+// trace points are [timestamp us, value]
+type TracePoint = [number, number] | number;
 type Reading = { bpm: number; confidence: number } | null;
 type Snapshot = {
   mode: 'demo' | 'live';
@@ -12,7 +14,7 @@ type Snapshot = {
   status: { ok: boolean; reason: string; code: number | null };
   pulse: Reading;
   breathing: Reading;
-  traces: { pulse: number[]; breathing: number[] };
+  traces: { pulse: TracePoint[]; breathing: TracePoint[] };
   updatedAt: number | null;
 };
 type Baseline = { hr: number; rr: number; source: 'measured' | 'demo' | 'authored'; note?: string };
@@ -37,7 +39,8 @@ function useVitals() {
   return { snap, connected };
 }
 
-function Trace({ values, color }: { values: number[]; color: string }) {
+function Trace({ points, color }: { points: TracePoint[]; color: string }) {
+  const values = points.map(p => (Array.isArray(p) ? p[1] : p)).filter(Number.isFinite);
   if (values.length < 2) return <div className="vitals-trace empty-trace" />;
   const min = Math.min(...values);
   const span = Math.max(...values) - min || 1;
@@ -49,7 +52,7 @@ function Trace({ values, color }: { values: number[]; color: string }) {
   );
 }
 
-function Metric({ name, unit, reading, trace, color }: { name: string; unit: string; reading: Reading; trace: number[]; color: string }) {
+function Metric({ name, unit, reading, trace, color }: { name: string; unit: string; reading: Reading; trace: TracePoint[]; color: string }) {
   return (
     <div className="vitals-metric">
       <div className="muted small">{name}</div>
@@ -58,7 +61,7 @@ function Metric({ name, unit, reading, trace, color }: { name: string; unit: str
         <span className="muted small"> {unit}</span>
       </div>
       <div className="muted small">{reading ? `${Math.round(reading.confidence)}% confidence` : 'measuring'}</div>
-      <Trace values={trace} color={color} />
+      <Trace points={trace} color={color} />
     </div>
   );
 }
