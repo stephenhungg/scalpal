@@ -2,7 +2,7 @@
 
 This corpus supplies audible patient responses when live provider voice is unavailable. It contains locally synthesized speech for the two current authored demo patients, not provider recordings, voice clones or redistributed speech models.
 
-The exact source is `services/preop/src/catalog/encounters.ts` at repository snapshot `71f4bc9`. The manifest records the actual catalog SHA-256 so authoring checks detect later changes. Only each patient's authored greeting and explicit first-person history facts are synthesized. No chart fallback, examination finding, test result, diagnosis, differential answer key or attending assessment is voiced by this corpus.
+The exact source is `services/preop/src/catalog/encounters.ts` at repository snapshot `814e551`. The manifest records the actual catalog SHA-256 so authoring checks detect later changes. Only each patient's authored greeting and explicit first-person history facts are synthesized. No chart fallback, examination finding, test result, diagnosis, differential answer key or attending assessment is voiced by this corpus.
 
 ## Identity and Runtime Lookup
 
