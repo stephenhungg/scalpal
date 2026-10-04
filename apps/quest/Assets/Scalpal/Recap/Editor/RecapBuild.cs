@@ -43,6 +43,9 @@ namespace Scalpal.Recap.Editor
             panel.diagnosisValue=Text(panel.scoreRoot.transform,"Diagnosis score","82 / 100",ScalpalTextRole.Title,-1.2f,.36f,.70f,.22f,.080f);
             panel.surgeryLabel=Text(panel.scoreRoot.transform,"Surgery label","Surgery · assisted",ScalpalTextRole.Label,-1.2f,.06f,.70f,.11f,.030f);
             panel.surgeryValue=Text(panel.scoreRoot.transform,"Surgery score","76 / 100",ScalpalTextRole.Title,-1.2f,-.05f,.70f,.22f,.080f);
+            // The run's mistakes under the surgery score, one short line each (sized with the longest allowed copy).
+            panel.mistakeLines=new TextMeshPro[RecapPanel.MaxMistakeLines];
+            for(int i=0;i<panel.mistakeLines.Length;i++) panel.mistakeLines[i]=Text(panel.scoreRoot.transform,"Mistake "+(i+1),"• "+new string('M',RecapPanel.MaxMistakeChars),ScalpalTextRole.Body,-1.2f,-.175f-i*.07f,.96f,.07f,.022f);
             // Robot replay: the coach's streamed video in a grey-glow frame, one result line, one optional provenance line.
             panel.robotRoot=new GameObject("Robot replay");panel.robotRoot.transform.SetParent(root,false);
             var v=c.gameObject.AddComponent<RecapVideo>();c.replay=v;v.controller=c;
@@ -61,7 +64,7 @@ namespace Scalpal.Recap.Editor
             // Brand floors (32 mm/m labels, 24 mm/m body) for each string's real distance from the viewer.
             ScalpalBrandLayout.SizeForViewer(root,Viewer);
             // Sized with the longest copy; the controller writes the real lines at runtime.
-            panel.robotLine.text=RecapPanel.Pending;panel.robotNote.text="";panel.surgeryLabel.text="Surgery";
+            panel.robotLine.text=RecapPanel.Pending;panel.robotNote.text="";panel.surgeryLabel.text="Surgery";foreach(var line in panel.mistakeLines){line.text="";line.gameObject.SetActive(false);}
             panel.emptyLine.gameObject.SetActive(false);panel.videoSurface.SetActive(false);panel.robotNote.gameObject.SetActive(false);
             EditorSceneManager.SaveScene(scene,ScenePath);AssetDatabase.SaveAssets();
             Debug.Log("SCALPAL_RECAP_PREPARED "+ScenePath);

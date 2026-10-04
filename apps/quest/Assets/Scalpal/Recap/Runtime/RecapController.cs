@@ -7,6 +7,7 @@ namespace Scalpal.Recap
 {
     // The run ending: two scores and the simulated robot's replay of the demo step. The robot result comes from
     // the coach (GET /coach/sessions/:id/robot-result); it is polled while pending and times out quietly.
+    // On open, Scalpal speaks a short debrief of the run once (GET /coach/sessions/:id/debrief); silent if unavailable.
     public sealed class RecapController : MonoBehaviour
     {
         public enum RobotState { Pending, Ready, Unavailable }
@@ -18,17 +19,19 @@ namespace Scalpal.Recap
             public float pathErrorMm;
             public RobotDemos demos;
         }
+        [Serializable] public sealed class Debrief { public string text, audioUrl; }
 
         public RecapPanel panel;
         public RecapVideo replay;
-        public float robotPollSeconds = 3, robotTimeoutSeconds = 150;
+        public float robotPollSeconds = 3, robotTimeoutSeconds = 150, debriefRobotWaitSeconds = 6;
+        public AudioSource voice;
         public RunResult Result { get; private set; }
         public RobotState Robot { get; private set; } = RobotState.Pending;
         public RobotResult RobotReply { get; private set; }
         public bool RobotPathErrorKnown { get; private set; }
         RecapRunContext context;
         int generation;
-        UnityWebRequest pending;
+        UnityWebRequest pending, debriefRequest;
 
         void Start()
         {
@@ -40,10 +43,10 @@ namespace Scalpal.Recap
             CancelRequests();
             if (result != null) RunResultContract.Validate(result);
             Result = result; Robot = RobotState.Pending; RobotReply = null; RobotPathErrorKnown = false;
-            replay.Stop();
+            replay.Stop(); if (voice) voice.Stop();
             if (!context) context = RecapRunContext.Ensure();
             if (result == null || string.IsNullOrEmpty(context.coachSessionId) || !SafeEndpoint(CoachUrl)) Robot = RobotState.Unavailable;
-            else StartCoroutine(PollRobot(generation));
+            else { StartCoroutine(PollRobot(generation)); StartCoroutine(SpeakDebrief(generation)); }
             panel.Refresh();
         }
         string CoachUrl => context && !string.IsNullOrEmpty(context.voiceServiceUrl) ? context.voiceServiceUrl.TrimEnd('/') : "http://localhost:8787";
@@ -52,7 +55,43 @@ namespace Scalpal.Recap
         {
             generation++; StopAllCoroutines();
             if (pending != null) { try { pending.Abort(); pending.Dispose(); } catch (ObjectDisposedException) { } pending = null; }
+            if (debriefRequest != null) { try { debriefRequest.Abort(); debriefRequest.Dispose(); } catch (ObjectDisposedException) { } debriefRequest = null; }
         }
+        // Speaks once per recap. Waits briefly for the robot so a ready result can be included, then fetches the
+        // debrief text and its mp3 (rendered by the coach in Scalpal's voice) and plays it.
+        IEnumerator SpeakDebrief(int version)
+        {
+            float wait = Time.realtimeSinceStartup + debriefRobotWaitSeconds;
+            while (version == generation && Robot == RobotState.Pending && Time.realtimeSinceStartup < wait) yield return null;
+            if (version != generation) yield break;
+            Debrief debrief = null;
+            using (var request = UnityWebRequest.Get(CoachUrl + "/coach/sessions/" + Uri.EscapeDataString(context.coachSessionId) + "/debrief"))
+            {
+                request.timeout = 20; debriefRequest = request;
+                yield return request.SendWebRequest();
+                if (debriefRequest == request) debriefRequest = null;
+                if (version != generation) yield break;
+                if (request.result != UnityWebRequest.Result.Success) { Debug.LogWarning("[Scalpal.Recap] debrief unavailable (" + request.responseCode + "): " + request.error); yield break; }
+                try { debrief = JsonUtility.FromJson<Debrief>(request.downloadHandler.text); } catch (ArgumentException) { }
+            }
+            if (debrief == null || !DebriefAudioValid(debrief.audioUrl)) { Debug.Log("[Scalpal.Recap] debrief without audio: " + debrief?.text); yield break; }
+            using (var request = UnityWebRequestMultimedia.GetAudioClip(CoachUrl + debrief.audioUrl, AudioType.MPEG))
+            {
+                request.timeout = 20; debriefRequest = request;
+                yield return request.SendWebRequest();
+                if (debriefRequest == request) debriefRequest = null;
+                if (version != generation) yield break;
+                if (request.result != UnityWebRequest.Result.Success) { Debug.LogWarning("[Scalpal.Recap] debrief audio failed (" + request.responseCode + "): " + request.error); yield break; }
+                var clip = DownloadHandlerAudioClip.GetContent(request);
+                if (!clip) yield break;
+                if (!voice) { voice = gameObject.AddComponent<AudioSource>(); voice.playOnAwake = false; voice.spatialBlend = 0; }
+                voice.loop = false; voice.clip = clip; voice.Play();
+                Debug.Log("[Scalpal.Recap] Scalpal debrief: " + debrief.text);
+            }
+        }
+        // Coach-relative debrief audio only (/coach/sessions/<id>/debrief.mp3).
+        public static bool DebriefAudioValid(string path) => !string.IsNullOrEmpty(path) && path.StartsWith("/coach/sessions/", StringComparison.Ordinal)
+            && path.EndsWith("/debrief.mp3", StringComparison.Ordinal) && !path.Contains("..") && !path.Contains("://");
         IEnumerator PollRobot(int version)
         {
             float deadline = Time.realtimeSinceStartup + robotTimeoutSeconds;
@@ -122,6 +161,6 @@ namespace Scalpal.Recap
                 if (hub) hub.Enter();
             }));
         }
-        void OnDisable() { CancelRequests(); if (replay) replay.Stop(); }
+        void OnDisable() { CancelRequests(); if (replay) replay.Stop(); if (voice) voice.Stop(); }
     }
 }

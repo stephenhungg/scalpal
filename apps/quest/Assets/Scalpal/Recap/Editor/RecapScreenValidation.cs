@@ -13,6 +13,7 @@ namespace Scalpal.Recap.Editor
     public static class RecapScreenValidation
     {
         static int checks;
+        const string Mistake = "• Off-target contact";
         static void Check(bool pass, string message) { checks++; if (!pass) throw new InvalidOperationException("Recap screen: " + message); }
         const string Ready = "{\"status\":\"ready\",\"stepId\":\"mark_incision\",\"stepTitle\":\"Mark McBurney incision\",\"success\":true,\"pathErrorMm\":6.2,\"policySuccessRate\":0.8,\"demos\":{\"human\":0,\"synthetic\":40},\"synthetic\":true,\"videoUrl\":\"/robot/replays/session-a.mp4\",\"demoId\":\"demo-abcdef12\",\"details\":{\"rollouts\":5}}";
         const string Missed = "{\"status\":\"ready\",\"stepId\":\"mark_incision\",\"stepTitle\":\"Mark McBurney incision\",\"success\":false,\"pathErrorMm\":24.4,\"policySuccessRate\":0.2,\"demos\":{\"human\":1,\"synthetic\":0},\"synthetic\":false,\"videoUrl\":\"/robot/replays/session-b.mp4\"}";
@@ -44,29 +45,34 @@ namespace Scalpal.Recap.Editor
                 // Pending: one quiet line, no video, no provenance.
                 c.Load(r); c.ApplyRobot(PendingReply);
                 Check(c.Robot == RecapController.RobotState.Pending, "pending reply keeps polling state");
-                Expect(c, "pending", "Diagnosis", "82 / 100", "Surgery", "76 / 100", RecapPanel.Pending, "Choose another patient", "Retry surgery");
+                Expect(c, "pending", "Diagnosis", "82 / 100", "Surgery", "76 / 100", Mistake, RecapPanel.Pending, "Choose another patient", "Retry surgery");
                 Check(!c.panel.videoSurface.activeInHierarchy, "no video while the robot is learning");
                 // Pending that never resolves times out to unavailable, never to a guessed result.
                 c.RobotTimedOut();
-                Expect(c, "timed out", "Diagnosis", "82 / 100", "Surgery", "76 / 100", RecapPanel.Unavailable, "Choose another patient", "Retry surgery");
+                Expect(c, "timed out", "Diagnosis", "82 / 100", "Surgery", "76 / 100", Mistake, RecapPanel.Unavailable, "Choose another patient", "Retry surgery");
 
                 // Ready on synthetic demos: the result line, the provenance line and the streamed video from the coach.
                 c.Load(r); c.ApplyRobot(Ready);
-                Expect(c, "ready synthetic", "Diagnosis", "82 / 100", "Surgery", "76 / 100", "Robot · Mark McBurney incision · Success · 6 mm",
+                Expect(c, "ready synthetic", "Diagnosis", "82 / 100", "Surgery", "76 / 100", Mistake, "Robot · Mark McBurney incision · Success · 6 mm",
                     "Learned from 40 demos (synthetic)", "Choose another patient", "Retry surgery");
-                Check(c.replay.Url == "http://localhost:8787/robot/replays/session-a.mp4" && c.replay.robotPlayer.url == c.replay.Url && c.panel.videoSurface.activeInHierarchy,
-                    "replay streams from the coach origin plus the coach-relative videoUrl: " + c.replay.Url);
+                // Android's player refuses cleartext HTTP: the replay downloads to the cache first, then plays the local file.
+                Check(c.replay.Url == "http://localhost:8787/robot/replays/session-a.mp4" && c.replay.Downloading && string.IsNullOrEmpty(c.replay.robotPlayer.url) && c.panel.videoSurface.activeInHierarchy,
+                    "replay downloads from the coach origin plus the coach-relative videoUrl before playing: " + c.replay.Url);
+                string local = RecapVideo.LocalPath(c.replay.Url);
+                Check(local.StartsWith(Application.temporaryCachePath, StringComparison.Ordinal) && local.EndsWith("robot-replay-session-a.mp4", StringComparison.Ordinal), "replay cache path: " + local);
+                c.replay.PlayLocal(local);
+                Check(!c.replay.Downloading && c.replay.robotPlayer.url == "file://" + local && c.replay.Showing, "the downloaded replay plays from the local file: " + c.replay.robotPlayer.url);
                 // A player error drops to the unavailable line; the score panels stay.
                 typeof(RecapVideo).GetMethod("Error", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).Invoke(c.replay, new object[] { c.replay.robotPlayer, "validation decode error" });
-                Expect(c, "replay error", "Diagnosis", "82 / 100", "Surgery", "76 / 100", RecapPanel.Unavailable, "Choose another patient", "Retry surgery");
+                Expect(c, "replay error", "Diagnosis", "82 / 100", "Surgery", "76 / 100", Mistake, RecapPanel.Unavailable, "Choose another patient", "Retry surgery");
                 Check(!c.panel.videoSurface.activeInHierarchy, "a failed replay hides the video");
 
                 // Ready on headset demos only: no provenance line, missed rounds the error.
                 c.Load(r); c.ApplyRobot(Missed);
-                Expect(c, "ready missed", "Diagnosis", "82 / 100", "Surgery", "76 / 100", "Robot · Mark McBurney incision · Missed · 24 mm", "Choose another patient", "Retry surgery");
+                Expect(c, "ready missed", "Diagnosis", "82 / 100", "Surgery", "76 / 100", Mistake, "Robot · Mark McBurney incision · Missed · 24 mm", "Choose another patient", "Retry surgery");
                 // Mixed demos never read as all-human; an unmeasured error is omitted, not shown as 0 mm.
                 c.Load(r); c.ApplyRobot(Mixed);
-                Expect(c, "ready mixed", "Diagnosis", "82 / 100", "Surgery", "76 / 100", "Robot · Mark McBurney incision · Success",
+                Expect(c, "ready mixed", "Diagnosis", "82 / 100", "Surgery", "76 / 100", Mistake, "Robot · Mark McBurney incision · Success",
                     "Learned from 1 headset + 40 synthetic demos", "Choose another patient", "Retry surgery");
                 Check(!c.panel.videoSurface.activeInHierarchy && string.IsNullOrEmpty(c.replay.Url), "no videoUrl, no video");
 
@@ -75,7 +81,7 @@ namespace Scalpal.Recap.Editor
                 {
                     c.Load(r); c.ApplyRobot(json);
                     Check(c.Robot == RecapController.RobotState.Unavailable, label + " reply is unavailable");
-                    Expect(c, label, "Diagnosis", "82 / 100", "Surgery", "76 / 100", RecapPanel.Unavailable, "Choose another patient", "Retry surgery");
+                    Expect(c, label, "Diagnosis", "82 / 100", "Surgery", "76 / 100", Mistake, RecapPanel.Unavailable, "Choose another patient", "Retry surgery");
                 }
                 c.Load(r); c.ApplyRobot(Ready.Replace("/robot/replays/session-a.mp4", "http://elsewhere.invalid/x.mp4"));
                 Check(string.IsNullOrEmpty(c.replay.Url) && !c.panel.videoSurface.activeInHierarchy, "an absolute or foreign videoUrl is never streamed");
@@ -95,6 +101,16 @@ namespace Scalpal.Recap.Editor
                 skipped.surgery.available = false; skipped.surgery.demoAssisted = true;
                 c.Load(skipped); c.ApplyRobot(UnavailableReply);
                 Expect(c, "skipped", "Diagnosis", "Skipped", "Surgery · assisted", "Unavailable", RecapPanel.Unavailable, "Choose another patient", "Retry surgery");
+                // Mistake lines: from the surgery grade's guardrails, at most four, "No mistakes" for a clean run.
+                var clean = Fixture(); clean.surgery.demoAssisted = false; clean.surgery.guardrailViolations = new TimedFact[0];
+                c.Load(clean); c.ApplyRobot(UnavailableReply);
+                Expect(c, "no mistakes", "Diagnosis", "82 / 100", "Surgery", "76 / 100", RecapPanel.NoMistakes, RecapPanel.Unavailable, "Choose another patient", "Retry surgery");
+                var messy = Fixture(); messy.surgery.demoAssisted = false;
+                messy.surgery.guardrailViolations = new[] { "Cut before clamping the appendicular artery. Clamp first.", "contact_bowel", "Grasped the ileum", "Cautery on the cecum", "Stapled the ileum" }
+                    .Select((label, i) => new TimedFact { id = "g" + i, label = label, atSeconds = i }).ToArray();
+                c.Load(messy); c.ApplyRobot(UnavailableReply);
+                Expect(c, "many mistakes", "Diagnosis", "82 / 100", "Surgery", "76 / 100", "• Cut before clamping the appendicular artery", "• Contact bowel", "• Grasped the ileum", "+2 more",
+                    RecapPanel.Unavailable, "Choose another patient", "Retry surgery");
                 var missing = Fixture(); missing.diagnosisAvailable = false; missing.diagnosis = null;
                 Check(RecapPanel.Clinical(missing) == "Unavailable", "missing diagnosis is Unavailable, not zero");
 
@@ -105,7 +121,7 @@ namespace Scalpal.Recap.Editor
                 c.Load(null);
                 context.coachSessionId = savedSession; context.voiceServiceUrl = savedUrl; context.result = savedResult;
             }
-            Debug.Log("SCALPAL_RECAP_SCREEN_OK checks=" + checks + " states=pending,ready,unavailable,timeout,replayError,noResult headset=false decoder=false");
+            Debug.Log("SCALPAL_RECAP_SCREEN_OK checks=" + checks + " states=pending,ready,unavailable,timeout,replayError,noResult,mistakes video=download-then-file headset=false decoder=false");
         }
         static RunResult Fixture() => RunResultContract.Parse(File.ReadAllText(RecapBuild.Root + "/Fixtures/sample-run-result.json"));
 
