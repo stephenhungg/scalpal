@@ -163,6 +163,9 @@ namespace Scalpal.Shell
             if (forward.sqrMagnitude < .5f) forward = Vector3.forward;
             // Level with the horizon: yaw-only facing, never the head's pitch or roll.
             panel.SetPositionAndRotation(head.transform.position + forward * 1.0f + Vector3.down*.07f,ScalpalPlacement.Level(forward));
+            // Paused at timeScale 0 no physics step runs, so new/moved button colliders are invisible to the
+            // pointer raycast until synced (the Quest pause menu looked fine but ignored every press).
+            Physics.SyncTransforms();
         }
         public void Recenter()
         {
