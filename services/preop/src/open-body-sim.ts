@@ -19,13 +19,14 @@ const ROUGH_SKIN = { verb: "grasp", tissueId: "skin", instrumentId: "toothed_for
 // Tools the learner would plausibly grab by mistake, per expected tool.
 const WRONG_TOOL: Record<string, string> = { retractor: "scalpel", skin_marker: "scalpel", hemostat: "metzenbaum_scissors", babcock: "toothed_forceps" };
 
-// Correct actions come from authored fixtures with fixed timestamps; move them after the last recorded
-// action so they apply after other simulated actions. Their ids stay, so the fixture tracks what is done.
+// Correct actions come from authored fixtures with fixed timestamps. Only when another simulated action
+// already moved the body clock past one is it moved just after the last action; ids stay, so the fixture
+// still tracks what is done.
 export function restampForBody(s: CoachSession, e: CoachEvent | null): CoachEvent | null {
   const body = s.engine.body;
   if (!e || !body || e.type !== "surgery") return e;
   const lastT = body.log.at(-1)?.action.timeMs ?? 0;
-  return { ...e, evidence: { ...e.evidence, timeMs: Math.max(e.evidence.timeMs, lastT + 1000) } };
+  return { ...e, evidence: { ...e.evidence, timeMs: !body.log.length || e.evidence.timeMs >= lastT ? e.evidence.timeMs : lastT + 1 } };
 }
 
 export function openBodySimulation(s: CoachSession, kind: string): CoachEvent[] | null {
