@@ -99,6 +99,29 @@ describe("choice-based office interview", () => {
     expect(surgery.json.firstMessage).toMatch(/^Scrubbed in with you/);
   });
 
+  it("returns the seated speakers' demographics, including a parent speaking for a child", async () => {
+    const { req } = rig();
+    const adult = await req("POST", "/interviews", { patientId: "patient-demo-multi-source" });
+    // The Quest seats a 40-year-old woman who speaks for herself.
+    expect(adult.json).toMatchObject({ speaker: "patient", patientAge: 40, patientSex: "female", speakerAge: 40, speakerSex: "female" });
+    // Committed content: Theo (9) is seated as a child and his mother Laura speaks from the companion chair.
+    const app = createApp({ client: fixtureClient(), now: () => NOW, coachTickMs: 0 });
+    const theo = (await (await app.request("/interviews", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ patientId: "patient-demo-pediatric-asthma" }) })).json()) as Record<string, unknown>;
+    expect(theo).toMatchObject({ speaker: "parent", speakerName: "Laura Abernathy", patientName: "Theo Abernathy", patientAge: 9, patientSex: "male", speakerSex: "female" });
+    expect(theo.speakerAge).toBeGreaterThanOrEqual(18);
+  });
+
+  it("matches a spoken letter without a classifier, and asks again when nothing matched", async () => {
+    const { req } = rig(null); // no ANTHROPIC_API_KEY: saying the letter must still work
+    const id = (await req("POST", "/interviews", { patientId: "patient-demo-multi-source" })).json.interviewId;
+    const lettered = await req("POST", `/interviews/${id}/answer`, { text: "option c" });
+    expect(lettered.status).toBe(200);
+    expect(lettered.json.pick).toMatchObject({ key: "C", via: "voice" });
+    const unclear = await req("POST", `/interviews/${id}/answer`, {});
+    expect(unclear.status).toBe(422);
+    expect(unclear.json).toMatchObject({ error: { code: "unclear_answer" }, heard: "" });
+  });
+
   it("says when a patient has no authored interview", async () => {
     const { req } = rig();
     expect((await req("POST", "/interviews", { patientId: "patient-demo-sparse" })).json.error.code).toBe("no_interview");
