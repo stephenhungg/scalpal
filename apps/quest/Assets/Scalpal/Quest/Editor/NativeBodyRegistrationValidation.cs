@@ -132,6 +132,7 @@ namespace Scalpal.Quest.Editor
                 Assert(!body.Accepted && !body.CandidateValid, "XR origin change invalidates cached registration");
                 observe(); observe(); observe(); Assert(body.Accepted, "fresh post-origin observations automatically reacquire");
                 body.ResetFit(); Assert(!body.Accepted && !body.CandidateValid, "retry invalidates automatic fit");
+                ValidatePermissionLifecycle(body, workbench, root);
                 presentation.passthrough = false; presentation.Apply();
                 Assert(body.anatomyFit.position == Vector3.zero && body.patientFrame.position == Vector3.zero,
                     "full VR restores authored transforms after real-body fit");
@@ -142,6 +143,77 @@ namespace Scalpal.Quest.Editor
             }
             finally { UnityEngine.Object.DestroyImmediate(root); }
             Debug.Log("SCALPAL_NATIVE_BODY_REGISTRATION_VALIDATION_OK checks=" + checks + " synthetic native depth/projection/automatic gates; no physical alignment evidence");
+        }
+
+        static void Invoke(NativeBodyRegistration body, string method, params object[] arguments)
+            => typeof(NativeBodyRegistration).GetMethod(method, BindingFlags.Instance | BindingFlags.NonPublic).Invoke(body, arguments);
+        static T Field<T>(NativeBodyRegistration body, string name)
+            => (T)typeof(NativeBodyRegistration).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic).GetValue(body);
+        static bool SourcesOff(NativeBodyRegistration body) => !body.cameraAccess.enabled && !body.surfaceAccess.enabled;
+
+        static void ValidatePermissionLifecycle(NativeBodyRegistration body, NativeWorkbench workbench, GameObject root)
+        {
+            // Keep the fixture inactive: enabled flags are tested without starting hardware or OS permission prompts.
+            workbench.trackingOrigin = root.transform;
+            body.cameraAccess = root.AddComponent<Meta.XR.PassthroughCameraAccess>(); body.cameraAccess.enabled = false;
+            body.surfaceAccess = root.AddComponent<Meta.XR.EnvironmentRaycastManager>(); body.surfaceAccess.enabled = false;
+            body.StopTracking();
+            Invoke(body, "WaitForPermissions");
+            Assert(Field<bool>(body, "awaitingPermissions") && !body.EnabledByOperator && SourcesOff(body),
+                "permission request keeps camera and depth off until permission and XR readiness");
+            Invoke(body, "OnApplicationPause", true);
+            Assert(Field<bool>(body, "awaitingPermissions") && !body.EnabledByOperator && SourcesOff(body),
+                "Android permission-dialog pause preserves pending opt-in without starting capture");
+            Invoke(body, "CompletePermissionWait", true, false);
+            Assert(Field<bool>(body, "awaitingPermissions") && !body.EnabledByOperator && SourcesOff(body),
+                "permission grant while XR loses focus waits for tracking readiness");
+            Invoke(body, "CompletePermissionWait", true, true);
+            Assert(!Field<bool>(body, "awaitingPermissions") && body.EnabledByOperator && body.cameraAccess.enabled && body.surfaceAccess.enabled,
+                "granted permission after XR resumes activates detection from original opt-in");
+            Assert(body.surfaceAccess.CustomTrackingSpace == workbench.trackingOrigin, "resumed depth source uses existing tracking origin");
+            Invoke(body, "OnApplicationPause", true);
+            Assert(!Field<bool>(body, "awaitingPermissions") && !body.EnabledByOperator && SourcesOff(body),
+                "normal active-app pause stops participant detection and requires fresh opt-in");
+            Invoke(body, "CompletePermissionWait", true, true);
+            Assert(!body.EnabledByOperator && SourcesOff(body), "late grant after active pause cannot restart capture");
+
+            Invoke(body, "WaitForPermissions");
+            Invoke(body, "CompletePermissionWait", false, true);
+            Assert(!body.EnabledByOperator && SourcesOff(body), "denied or missing permission never enables a source");
+            int deniedGeneration = Field<int>(body, "epoch");
+            Invoke(body, "CancelPermissionRequest", deniedGeneration);
+            Assert(!Field<bool>(body, "awaitingPermissions") && !body.EnabledByOperator && SourcesOff(body),
+                "current denial cancels pending request");
+            Assert(body.Status.ToLowerInvariant().Contains("denied"), "denial is visible instead of indefinite waiting");
+
+            Invoke(body, "WaitForPermissions");
+            int canceledGeneration = Field<int>(body, "epoch");
+            body.StopTracking();
+            Invoke(body, "CompletePermissionWait", true, true);
+            Assert(!Field<bool>(body, "awaitingPermissions") && !body.EnabledByOperator && SourcesOff(body),
+                "operator stop cancels pending request and late grant cannot capture");
+            Invoke(body, "WaitForPermissions");
+            Invoke(body, "CancelPermissionRequest", canceledGeneration);
+            Assert(Field<bool>(body, "awaitingPermissions") && !body.EnabledByOperator && SourcesOff(body),
+                "stale denial from canceled request cannot cancel newer opt-in");
+            Invoke(body, "CompletePermissionWait", true, true);
+            Assert(body.EnabledByOperator && !Field<bool>(body, "awaitingPermissions"), "new opt-in survives stale permission callback");
+            string activeStatus = body.Status;
+            Invoke(body, "CancelPermissionRequest", Field<int>(body, "epoch"));
+            Assert(body.EnabledByOperator && body.Status == activeStatus, "denial callback cannot undo already completed permission request");
+
+            Invoke(body, "WaitForPermissions");
+            body.presentation.passthrough = false;
+            Invoke(body, "Update");
+            Invoke(body, "CompletePermissionWait", true, true);
+            Assert(!Field<bool>(body, "awaitingPermissions") && !body.EnabledByOperator && SourcesOff(body),
+                "switching to full VR cancels pending participant-camera opt-in");
+            body.presentation.passthrough = true;
+            Invoke(body, "WaitForPermissions");
+            Invoke(body, "OnDisable");
+            Invoke(body, "CompletePermissionWait", true, true);
+            Assert(!Field<bool>(body, "awaitingPermissions") && !body.EnabledByOperator && SourcesOff(body),
+                "component disable cancels pending request and late grant cannot activate disabled detector");
         }
 
         static BodySurfaceSnapshot Surface() => Surface(Quaternion.identity, Vector3.zero);

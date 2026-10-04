@@ -173,8 +173,8 @@ namespace Scalpal.Quest.Editor
         static void ApplySessionSettings()
         {
             PlayerSettings.productName = "Scalpal Surgical Session";
-            PlayerSettings.bundleVersion = "0.3.1-auto-body";
-            PlayerSettings.Android.bundleVersionCode = 6;
+            PlayerSettings.bundleVersion = "0.3.2-auto-body";
+            PlayerSettings.Android.bundleVersionCode = 7;
             // Meta's OpenXR camera-pose plugin requires linear lighting; retain built-in rendering.
             PlayerSettings.colorSpace = ColorSpace.Linear;
             var settings = OpenXRSettings.GetSettingsForBuildTargetGroup(BuildTargetGroup.Android);

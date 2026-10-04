@@ -26,7 +26,7 @@ namespace Scalpal.Quest
         public bool CandidateValid => candidateValid && Time.realtimeSinceStartup - observationTime < 0.75f;
         public string Status { get; private set; } = "Participant agreed? Left stick: enable local body detection";
         public bool EnabledByOperator { get; private set; }
-        bool previousClick, candidateValid, inFlight;
+        bool previousClick, candidateValid, inFlight, awaitingPermissions;
         int epoch, stableFrames;
         Plane plane;
         BodyRegistrationMath.Fit candidate, accepted;
@@ -75,6 +75,11 @@ namespace Scalpal.Quest
                     if (subscribed.Add(subsystem)) subsystem.trackingOriginUpdated += OriginChanged;
             }
             if (!presentation || !presentation.passthrough) { StopTracking(); return; }
+            if (awaitingPermissions)
+            {
+                CompletePermissionWait(PermissionsGranted(), workbench.IsReady);
+                if (awaitingPermissions) Status = "Waiting for camera/spatial permission and headset readiness";
+            }
             var left = InputDevices.GetDeviceAtXRNode(XRNode.LeftHand);
             left.TryGetFeatureValue(CommonUsages.primary2DAxisClick, out bool click);
             if (click && !previousClick && workbench.IsReady) EnableDetection();
@@ -98,15 +103,61 @@ namespace Scalpal.Quest
             ResetFit();
             if (!cameraAccess || !surfaceAccess || !EnvironmentRaycastManager.IsSupported)
             { Status = "Automatic body depth unavailable on this runtime; alignment paused"; return; }
-            EnabledByOperator = true;
 #if UNITY_ANDROID && !UNITY_EDITOR
             var permissions = new List<string>();
             if (!Permission.HasUserAuthorizedPermission("horizonos.permission.HEADSET_CAMERA"))
                 permissions.Add("horizonos.permission.HEADSET_CAMERA");
             if (!Permission.HasUserAuthorizedPermission(OVRPermissionsRequester.ScenePermission))
                 permissions.Add(OVRPermissionsRequester.ScenePermission);
-            if (permissions.Count > 0) Permission.RequestUserPermissions(permissions.ToArray());
+            if (permissions.Count > 0)
+            {
+                WaitForPermissions();
+                int generation = epoch;
+                var callbacks = new PermissionCallbacks();
+                callbacks.PermissionDenied += _ => CancelPermissionRequest(generation);
+                callbacks.PermissionDeniedAndDontAskAgain += _ => CancelPermissionRequest(generation);
+                Permission.RequestUserPermissions(permissions.ToArray(), callbacks);
+                return;
+            }
 #endif
+            ActivateSources();
+        }
+
+        static bool PermissionsGranted()
+        {
+#if UNITY_ANDROID && !UNITY_EDITOR
+            return Permission.HasUserAuthorizedPermission("horizonos.permission.HEADSET_CAMERA")
+                && Permission.HasUserAuthorizedPermission(OVRPermissionsRequester.ScenePermission);
+#else
+            return false; // Editor fixtures explicitly provide synthetic permission outcomes.
+#endif
+        }
+
+        void WaitForPermissions()
+        {
+            EnabledByOperator = false; awaitingPermissions = true;
+            if (cameraAccess) cameraAccess.enabled = false;
+            if (surfaceAccess) surfaceAccess.enabled = false;
+            Status = "Allow camera/spatial permissions to finish enabling detection";
+        }
+
+        void CompletePermissionWait(bool granted, bool ready)
+        {
+            if (!awaitingPermissions || !granted || !ready) return;
+            awaitingPermissions = false;
+            ActivateSources();
+        }
+
+        void CancelPermissionRequest(int generation)
+        {
+            if (generation != epoch || !awaitingPermissions) return;
+            StopTracking();
+            Status = "Camera/spatial permission denied; left stick to try enabling detection again";
+        }
+
+        void ActivateSources()
+        {
+            EnabledByOperator = true; awaitingPermissions = false;
             surfaceAccess.CustomTrackingSpace = workbench.trackingOrigin;
             surfaceAccess.enabled = true;
             cameraAccess.enabled = true;
@@ -269,7 +320,10 @@ namespace Scalpal.Quest
         public void ResetFit() { epoch++; Accepted = candidateValid = false; stableFrames = 0; Hide(); }
         public void StopTracking()
         {
-            if (EnabledByOperator) { ResetFit(); EnabledByOperator = false; if (cameraAccess) cameraAccess.enabled = false; if (surfaceAccess) surfaceAccess.enabled = false; }
+            if (EnabledByOperator || awaitingPermissions) ResetFit();
+            EnabledByOperator = awaitingPermissions = false;
+            if (cameraAccess) cameraAccess.enabled = false;
+            if (surfaceAccess) surfaceAccess.enabled = false;
             Status = "Participant agreed? Left stick: enable local body detection";
         }
         void OriginChanged(XRInputSubsystem subsystem)
@@ -278,7 +332,15 @@ namespace Scalpal.Quest
             ResetFit();
             Status = "XR origin changed; automatically reacquiring torso depth";
         }
-        void OnApplicationPause(bool paused) { if (paused) StopTracking(); }
+        void OnApplicationPause(bool paused)
+        {
+            if (!paused) return;
+            // The permission dialog may pause the player before any acquisition starts.
+            // Preserve only this pending opt-in; capture stays off until both grants and XR
+            // readiness return. A pause after acquisition begins still cancels acquisition.
+            if (awaitingPermissions) { Hide(); return; }
+            StopTracking();
+        }
         void OnDisable()
         {
             // Deactivation stops coroutines without reaching their normal inFlight cleanup.
