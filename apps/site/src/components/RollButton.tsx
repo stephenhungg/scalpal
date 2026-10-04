@@ -29,6 +29,13 @@ export function RollButton({ label, hoverLabel = label, variant = "primary", hre
     const t = setTimeout(() => setCopied(false), 1800);
     return () => clearTimeout(t);
   }, [copied]);
+  // Keep the original labels' width while "Copied" shows, so the button doesn't shrink.
+  const sizer = copied ? (
+    <span aria-hidden className="invisible flex h-0 flex-col overflow-hidden">
+      <span className="whitespace-nowrap">{label}</span>
+      <span className="whitespace-nowrap">{hoverLabel}</span>
+    </span>
+  ) : null;
   if (copied) {
     label = "Copied";
     hoverLabel = "Copied";
@@ -72,8 +79,9 @@ export function RollButton({ label, hoverLabel = label, variant = "primary", hre
       setCopied(true);
     };
     return (
-      <motion.button type="button" onClick={onCopy} className={`${base} ${look} ${className}`} initial="rest" animate="rest" whileHover="hover" aria-live="polite">
+      <motion.button type="button" onClick={onCopy} className={`${base} ${look} ${className} flex-col`} initial="rest" animate="rest" whileHover="hover" aria-live="polite">
         {inner}
+        {sizer}
       </motion.button>
     );
   }
