@@ -21,6 +21,7 @@ namespace Scalpal.Surgery
             public string instance, tissueId = "";
             public SurgeryTissueTarget target;
             public SurgeryInstrumentLatch latch;
+            public OrganMobilization mobile;
             public readonly OpenSurgeryStroke stroke = new OpenSurgeryStroke();
             public readonly List<Vector3> marker = new List<Vector3>();
             public Vector3 previous, anchor, contact, rawSurface, handleOffset;
@@ -33,6 +34,7 @@ namespace Scalpal.Surgery
         readonly List<ToolState> states = new List<ToolState>();
         readonly List<SurgeryTissueTarget> targets = new List<SurgeryTissueTarget>();
         readonly Dictionary<string, BodyAction> pendingTentReleases = new Dictionary<string, BodyAction>();
+        readonly List<OrganMobilization> mobility = new List<OrganMobilization>();
         AnatomyExerciseBinding exercise;
         Transform torso, wound;
         Func<bool> gate;
@@ -51,11 +53,13 @@ namespace Scalpal.Surgery
         public double TimeMs => activeSeconds * 1000;
         public bool Ready => isActiveAndEnabled && exercise && exercise.CanScore && exercise.Body != null && torso && wound && gate != null && gate();
         public IReadOnlyList<SurgeryTissueTarget> Targets => targets;
+        public IReadOnlyList<OrganMobilization> Mobility => mobility;
 
         public void Initialize(AnatomyExerciseBinding binding, InstrumentBehaviour[] tools, Transform torsoFrame, Transform woundFrame, Func<bool> canInteract)
         {
             ClearTransient(); foreach (var state in states) if (state.latch) state.latch.Clear();
-            states.Clear(); targets.Clear();
+            foreach (var group in mobility) group.RestoreRest();
+            states.Clear(); targets.Clear(); mobility.Clear();
             exercise = binding; torso = torsoFrame; wound = woundFrame; gate = canInteract;
             foreach (var tool in tools ?? Array.Empty<InstrumentBehaviour>())
             {
@@ -96,6 +100,22 @@ namespace Scalpal.Surgery
             if (!target || targets.Contains(target)) return;
             target.Refresh(); targets.Add(target);
         }
+        // Groups come from scene/case data. Each attempt starts with every group at its authored rest pose.
+        public bool ConfigureMobility(IEnumerable<MobileOrganGroup> groups, out string status)
+        {
+            ClearTransient(); foreach (var group in mobility) group.RestoreRest();
+            mobility.Clear(); status = "";
+            bool all = true;
+            foreach (var definition in groups ?? Array.Empty<MobileOrganGroup>())
+            {
+                var group = OrganMobilization.Create(exercise ? exercise.anatomy : null, definition, out var reason);
+                if (group == null) { all = false; status += (status.Length > 0 ? "; " : "") + reason; continue; }
+                if (mobility.Exists(other => { foreach (var part in group.Parts) if (other.Contains(part)) return true; return false; }))
+                { all = false; status += (status.Length > 0 ? "; " : "") + "mobile groups overlap"; continue; }
+                mobility.Add(group);
+            }
+            return all;
+        }
         public void SetTargets(SurgeryTissueTarget[] supplied)
         {
             ClearTransient(); targets.Clear();
@@ -104,6 +124,7 @@ namespace Scalpal.Surgery
         public void ResetInteractions()
         {
             ClearTransient(); foreach (var state in states) if (state.latch) state.latch.Clear();
+            foreach (var group in mobility) group.RestoreRest(); // A retry starts from the authored anatomy.
             pendingTentReleases.Clear(); // A previous attempt's measurements cannot enter its replacement.
             attemptBody = exercise ? exercise.Body : null;
             attemptPrefix = Guid.NewGuid().ToString("N"); sequence = 0; activeSeconds = 0; tickClock = 0;
@@ -136,7 +157,13 @@ namespace Scalpal.Surgery
             DrainTentReleases();
             // A fit correction is not tool travel. The next stable sample starts new anchors and
             // stroke history with zero speed; the registered active-time clock still advances.
-            if (!frameChanged) foreach (var state in states) SampleTool(state, seconds);
+            if (!frameChanged)
+            {
+                foreach (var state in states) SampleTool(state, seconds);
+                // Released groups ease back unless delivered; held groups moved with their tool above.
+                // A fit correction is not organ motion, so a correction frame never settles a group.
+                foreach (var group in mobility) group.Settle(seconds, wound);
+            }
             if (tickClock >= .25f)
             {
                 tickClock %= .25f;
@@ -258,6 +285,11 @@ namespace Scalpal.Surgery
             if (!state.grasping)
             {
                 state.grasping = true; state.anchor = point;
+                if (state.target)
+                {
+                    var group = mobility.Find(candidate => !candidate.Held && candidate.Contains(state.target.transform));
+                    if (group != null && group.BeginHold(state.contact)) state.mobile = group;
+                }
                 if (state.target) state.rawSurface = state.target.transform.InverseTransformPoint(state.contact);
                 var deformable = state.target ? state.target.Deformable : null;
                 if (deformable && deformable.Cage != null)
@@ -271,6 +303,8 @@ namespace Scalpal.Surgery
                 }
             }
             Vector3 measuredPoint = point;
+            // The mobilized group follows the tool first; the cage then deforms about its new pose.
+            if (state.mobile != null) state.mobile.Follow(point, seconds);
             if (state.target)
             {
                 var deformable = state.target.Deformable;
@@ -437,6 +471,7 @@ namespace Scalpal.Surgery
                 pendingTentReleases[state.lastTentMeasurement.tissueId] = state.lastTentMeasurement.Copy();
             state.lastTentMeasurement = null;
             if (state.ownsHandle && state.target && state.target.Deformable?.Cage != null) state.target.Deformable.Cage.ReleaseHandle();
+            if (state.mobile != null) { state.mobile.EndHold(); state.mobile = null; }
             state.tissueId = ""; state.target = null; state.grasping = state.ownsHandle = state.committed = false;
             state.stroke.Reset(); state.marker.Clear(); state.strokeSent = state.dwell = state.sinceSent = 0;
         }
