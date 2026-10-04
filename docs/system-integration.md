@@ -1,5 +1,9 @@
 # System Integration Map
 
+## Shared Preop Service Dependency Correction
+
+Restoration `9fbfbbc` is present at audited main `075bb38`. `ScalpalPreopService.cs` retains GUID `7e5d1bd4423a946858e02b36d170c73e`; Shell's `HubController` and `ShellBuild` consume it on main and in all four active sibling worktrees (`scalpal-shell`, `scalpal-handoff`, `scalpal-surgery`, `scalpal-recap`). The earlier cleanup `5668231` missed the then-unpublished Shell dependency. Preserve this service. Before future shared-code removal, search both symbols and Unity GUID references across those working trees, not just committed main or scene bindings; defer removal when the reference check is incomplete. This correction was verified by source/reference inspection; no new Unity or hardware test was run for this documentation change. The Q1 build evidence below remains unchanged.
+
 ## Latest Quest Integration Checkpoint — October 4, 2026, 12:23 AM EDT
 
 Quest integration owner checkpoint Q1. Source `b1d57c1`; Unity6000.0.66f2; development ARM64 IL2CPP APK **`0.6.0-flow` / Android code11**. The single player contains **Launch → DiagnosisOffice → NativeSession (AR or VR) → RunEnding**. APK80,398,944 bytes; SHA256 `8e4d5f2aa01711d51d7404c8fc95cb4cb3523ac2e3b7e153b161f43be2af7e69`. Local artifact: `../work/builds/scalpal-unified-0.6.0-flow-b1d57c1.apk` (outside Git). No raw footage, private session configuration or device logs are committed.
