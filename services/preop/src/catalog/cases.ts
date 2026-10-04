@@ -114,6 +114,7 @@ export function fallbackPlan(age: number): CasePlan {
 type StepRole = "entry" | "ports" | "critical" | "bleeding" | "hemostasis";
 
 export const STEP_ROLES: Record<string, Record<StepRole, string>> = {
+  open_appendectomy: { entry: "mark_incision", ports: "incise_skin", critical: "ligate_base", bleeding: "divide_mesoappendix", hemostasis: "inspect_clean" },
   lap_cholecystectomy: { entry: "access_umbilical", ports: "working_ports", critical: "critical_view", bleeding: "liver_bed", hemostasis: "hemostasis" },
   lap_appendectomy: { entry: "access_umbilical", ports: "working_ports", critical: "find_appendix", bleeding: "divide_mesoappendix", hemostasis: "irrigate" },
   lap_sigmoid_colectomy: { entry: "access_umbilical", ports: "working_ports", critical: "identify_ureter", bleeding: "divide_ima", hemostasis: "leak_test" },

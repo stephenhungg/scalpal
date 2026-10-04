@@ -143,17 +143,23 @@ export interface CoachSnapshot {
   elapsedSeconds: number;
   guidance: { say: string; highlight: string[] };
   commands: CoachCommand[];
+  openBody: boolean;
+  bodyFacts: { key: string; value: number }[];
+  achievedMilestones: string[];
+  orderDeviations: string[];
+  decisionPrompts: { id: string; prompt: string; choices: string[] }[];
 }
 
 export interface StuckPolicy {
   // Seconds without progress before each hint tier, and off-target attempts that trigger the same tier.
-  seconds: [number, number, number];
-  attempts: [number, number, number];
+  seconds: [number, number, number, number?];
+  attempts: [number, number, number, number?];
 }
 
 export const DEFAULT_STUCK_POLICY: StuckPolicy = { seconds: [20, 45, 75], attempts: [2, 3, 5] };
 
-export const STUCK_LABELS = ["on track", "nudge", "look here", "walk through"] as const;
+export const OPEN_BODY_STUCK_POLICY: StuckPolicy = { seconds: [15, 25, 40, 60], attempts: [2, 3, 5, 8] };
+export const STUCK_LABELS = ["on track", "nudge", "look here", "walk through", "assistance offer"] as const;
 
 const VERBS: Record<StepAction, string> = {
   place_port: "place",
@@ -211,7 +217,7 @@ export class CoachSession {
     readonly id: string,
     readonly kase: SurgicalCase,
     private readonly clock: () => Date = () => new Date(),
-    private readonly policy: StuckPolicy = DEFAULT_STUCK_POLICY,
+    private readonly policy: StuckPolicy = kase.procedure.id === "open_appendectomy" ? OPEN_BODY_STUCK_POLICY : DEFAULT_STUCK_POLICY,
     readonly mode: PresentationMode = "mixed_reality",
   ) {
     this.engine = new StepEngine(kase.procedure);
@@ -335,7 +341,7 @@ export class CoachSession {
       if (this.seenEventIds.size > 10000) this.seenEventIds.delete(this.seenEventIds.keys().next().value!);
     }
     // No catch-up while tracking is lost: handle() rejects the event, and nothing may be synthesized either.
-    if (meta.stepId && event.type !== "focus" && event.type !== "tracking" && event.type !== "bleeding" && this.trackingValid) {
+    if (!this.kase.procedure.openBody && meta.stepId && event.type !== "focus" && event.type !== "tracking" && event.type !== "bleeding" && this.trackingValid) {
       this.reconcile(meta.stepId);
       if (this.desynced) {
         // Preserve rejection across a lost HTTP response; retrying this event must
@@ -345,7 +351,10 @@ export class CoachSession {
         return { accepted: false, reason: "step_desynchronized", alerts: [] };
       }
     }
-    return this.handle(event);
+    if (this.engine.body && meta.stepId) this.headsetStepId = meta.stepId;
+    const outcome = this.handle(event);
+    if (meta.eventId && outcome.reason.startsWith("invalid:")) this.seenEventIds.set(meta.eventId, outcome.reason);
+    return outcome;
   }
 
   // The headset's CaseRunner owns progression. If it is exactly one step ahead (the event that completed our
@@ -381,9 +390,11 @@ export class CoachSession {
 
   handle(event: CoachEvent): EventOutcome {
     if (event.type === "tracking") return this.handleTracking(event.valid);
-    if (event.type === "bleeding") return this.handleBleeding(event);
+    if (event.type === "bleeding") return this.kase.procedure.openBody
+      ? { accepted: false, reason: "body_state_authoritative", alerts: [] } : this.handleBleeding(event);
     if (event.type === "focus") return this.handleFocus(event.structureId);
 
+    if (this.engine.body) return this.handleBodyEvent(event);
     const step = this.engine.current;
     if (!step) return { accepted: false, reason: "case_completed", alerts: [] };
     if (!this.trackingValid) {
@@ -410,7 +421,8 @@ export class CoachSession {
       this.lastEvent = `Completed step: ${step.title}.`;
       const next = this.engine.current;
       if (next) {
-        alerts.push(this.alert("step_complete", "normal", `${step.title} done. ${nextStepLine(next.title)}`, next.targets, next.id, `step.${next.id}`, nextStepLine(next.title)));
+        const line = this.kase.procedure.id === "open_appendectomy" ? STEP_COACHING.open_appendectomy?.[next.id]?.why ?? next.instruction : `${step.title} done. ${nextStepLine(next.title)}`;
+        alerts.push(this.alert("step_complete", "normal", line, next.targets, next.id, `step.${next.id}`, line));
       } else {
         const total = this.mistakes.length;
         alerts.push(this.alert("case_complete", "normal", `That completes the ${this.kase.procedure.title.toLowerCase()} with ${total === 0 ? "no mistakes" : `${total} mistake${total === 1 ? "" : "s"}`}.`, [], step.id));
@@ -434,6 +446,56 @@ export class CoachSession {
       }
     }
 
+    alerts.push(...this.checkStuck());
+    this.changed(alerts);
+    return { accepted: true, reason: "", alerts };
+  }
+
+  // The body reducer is the only authority for consequences; the current milestone is advice.
+  private handleBodyEvent(event: EngineEvent): EventOutcome {
+    if (!this.trackingValid) return { accepted: false, reason: "tracking_invalid", alerts: [] };
+    if (event.type !== "surgery") return { accepted: false, reason: "invalid: body action required", alerts: [] };
+    const body = this.engine.body!;
+    if (body.log.some(r => r.action.actionId === event.evidence.actionId)) return { accepted: false, reason: "duplicate", alerts: [] };
+    const count = body.log.length;
+    const mistakeCount = this.engine.mistakes.length;
+    const previous = this.engine.current;
+    const wasComplete = this.engine.completed;
+    const achieved = new Set(this.engine.completedMilestones);
+    this.engine.handle(event);
+    if (body.log.length === count) return { accepted: false, reason: "invalid: body action rejected", alerts: [] };
+    this.inputCount++;
+    const record = body.log.at(-1)!;
+    const alerts: CoachAlert[] = [];
+    this.lastEvent = `${event.evidence.verb} on ${this.name(event.evidence.tissueId)}: ${record.outcomes.join(", ") || "applied"}.`;
+    for (const m of this.engine.mistakes.slice(mistakeCount)) {
+      this.mistakes.push({ stepId: previous?.id ?? "", mistakeId: m.id, severity: m.severity, structure: m.structure, feedback: m.feedback, at: this.clock().toISOString() });
+      const urgent = m.severity === "high";
+      alerts.push(this.alert("mistake", urgent ? "urgent" : "normal", urgent ? reflexLine(m.feedback) : m.feedback,
+        [m.structure], "", urgent ? `mistake.${m.id}` : ""));
+    }
+    const nowBleeding = new Map<string, number>();
+    for (const tissue of body.tissues) if (body.get(tissue.id, "bleeding") > 0) nowBleeding.set(tissue.id, tissue.flowMlPerSecond * 60);
+    this.bloodLossMl = body.get("", "bloodLostMl");
+    for (const [id] of nowBleeding) if (!this.bleeds.has(id))
+      alerts.push(this.alert("bleeding", "urgent", bleedingLine(this.name(id)), [id], "", `bleeding.${id}`));
+    for (const [id] of this.bleeds) if (!nowBleeding.has(id))
+      alerts.push(this.alert("bleeding_controlled", "low", "Bleeding controlled. Check the field.", [id], ""));
+    this.bleeds = nowBleeding;
+    const newly = this.kase.procedure.steps.filter(s => this.engine.completedMilestones.has(s.id) && !achieved.has(s.id));
+    for (const milestone of newly) this.completed.push(this.checkpoint(milestone, Math.round((this.ms() - this.stepStartedAt) / 1000)));
+    if (newly.length) {
+      this.resetStep();
+      const next = this.engine.current;
+      if (next && (!previous || next.id !== previous.id)) {
+        const line = STEP_COACHING[this.kase.procedure.id]?.[next.id]?.why ?? next.instruction;
+        alerts.push(this.alert("step_complete", "normal", line, next.targets, next.id, `step.${next.id}`, line));
+      }
+    }
+    if (!wasComplete && this.engine.completed)
+      alerts.push(this.alert("case_complete", "normal", "Case goals reached. Review the recorded safety findings.", [], ""));
+    // A physical obstruction or injury warrants help; harmless exploration is not a wrong-tool error.
+    if (record.outcomes.includes("not_exposed") || this.engine.mistakes.length > mistakeCount) this.offTarget++;
     alerts.push(...this.checkStuck());
     this.changed(alerts);
     return { accepted: true, reason: "", alerts };
@@ -484,8 +546,8 @@ export class CoachSession {
     if (this.done || !this.trackingValid) return 0;
     const idle = (this.ms() - this.lastProgressAt) / 1000;
     let level = 0;
-    for (let i = 0; i < 3; i++) {
-      if (idle >= this.policy.seconds[i]! || this.offTarget >= this.policy.attempts[i]!) level = i + 1;
+    for (let i = 0; i < this.policy.seconds.length; i++) {
+      if (idle >= (this.policy.seconds[i] ?? Infinity) || this.offTarget >= (this.policy.attempts[i] ?? Infinity)) level = i + 1;
     }
     return level;
   }
@@ -495,26 +557,33 @@ export class CoachSession {
     const level = this.stuckLevel();
     if (!step || level <= this.tier) return [];
     this.tier = level;
+    this.hintsUsed += 1;
+    this.stepHints += 1;
     const hint = this.hintAt(step, level);
-    return [this.alert("stuck", "normal", hint.say, hint.highlight)];
+    return [this.alert("stuck", "normal", hint.say, hint.highlight, step.id, this.kase.procedure.id === "open_appendectomy" ? `hint.${step.id}.${level}` : "")];
   }
 
   // Learner asked for help: deliver the next tier immediately.
   requestHint(): { tier: number; say: string; highlight: string[] } {
     const step = this.engine.current;
     if (!step) return { tier: 0, say: "The procedure is complete. Nothing left to do.", highlight: [] };
-    this.tier = Math.min(3, this.tier + 1);
+    this.tier = Math.min(this.policy.seconds.length, this.tier + 1);
     this.hintsUsed += 1;
     this.stepHints += 1;
     const hint = this.hintAt(step, this.tier);
     this.lastEvent = `Learner asked for a hint (tier ${this.tier}).`;
-    this.changed([]);
+    this.changed([this.alert("stuck", "normal", hint.say, hint.highlight, step.id, this.kase.procedure.id === "open_appendectomy" ? `hint.${step.id}.${this.tier}` : "")]);
     return { tier: this.tier, ...hint };
   }
 
   hintAt(step: ProcedureStep, tier: number): { say: string; highlight: string[] } {
     const coaching = STEP_COACHING[this.kase.procedure.id]?.[step.id];
     const remaining = this.remainingTargets(step);
+    if (tier >= 4) return { say: "Need assistance? Ask for a demonstration before continuing.", highlight: step.targets };
+    if (this.kase.procedure.id === "open_appendectomy") return {
+      say: tier <= 1 ? (coaching?.why ?? step.instruction) : (coaching?.lookHere ?? step.instruction),
+      highlight: tier <= 1 ? [] : step.targets,
+    };
     if (tier <= 1) {
       const why = coaching?.why ?? step.instruction;
       const authored = step.hints[0] && !restates(why, step.hints[0]) ? ` ${step.hints[0]}` : "";
@@ -547,6 +616,8 @@ export class CoachSession {
         const labels = [`${left} more on the ${this.name(target).toLowerCase()}`];
         return { text: `${verb} the ${this.name(target).toLowerCase()} ${left} more time${left === 1 ? "" : "s"}`, structures: [target], labels };
       }
+      case "body_predicate":
+        return { text: step.instruction, structures: step.targets, labels: [step.instruction] };
       case "confirm":
         return { text: "confirm when the step is finished", structures: [], labels: ["confirmation"] };
       default: {
@@ -563,6 +634,8 @@ export class CoachSession {
     switch (check.type) {
       case "apply_count":
         return `${applied} of ${check.count} applied`;
+      case "body_predicate":
+        return "waiting for measured body-state predicates";
       case "confirm":
         return "waiting for confirmation";
       case "place_ports":
@@ -632,6 +705,7 @@ export class CoachSession {
     if (step.check.type === "apply_count" || step.check.type === "confirm") return events[0] ?? null;
     return (
       events.find((e) => {
+        if (e.type === "surgery") return !this.engine.body?.log.some(record => record.action.actionId === e.evidence.actionId);
         if (e.type === "place_port") return !done.includes(e.portId);
         if (e.type === "touch" || e.type === "identify") return !done.includes(e.structureId);
         return true;
@@ -701,6 +775,11 @@ export class CoachSession {
       elapsedSeconds: Math.round((now - this.startedAt) / 1000),
       guidance,
       commands: [...this.commands],
+      openBody: Boolean(this.engine.body),
+      bodyFacts: this.engine.body ? [...this.engine.body.facts].map(([key, value]) => ({ key, value })) : [],
+      achievedMilestones: [...this.engine.completedMilestones],
+      orderDeviations: [...this.engine.orderDeviations],
+      decisionPrompts: (procedure.openBody?.decisions ?? []).map(({ id, prompt, choices }) => ({ id, prompt, choices })),
     };
   }
 
@@ -761,10 +840,19 @@ export function bleedingStructures(kase: SurgicalCase): { id: string; name: stri
 
 export function reflexLines(kase: SurgicalCase, mode: PresentationMode = "mixed_reality"): { key: string; text: string }[] {
   const lines = kase.procedure.steps.flatMap((s) => s.mistakes.filter((m) => m.severity === "high").map((m) => ({ key: `mistake.${m.id}`, text: reflexLine(m.feedback) })));
+  for (const rule of kase.procedure.openBody?.guardrails ?? []) if (rule.severity === "high")
+    lines.push({ key: `mistake.${rule.id}`, text: reflexLine(rule.feedback) });
   const unique = [...new Map(lines.map((l) => [l.key, l])).values()];
-  const callouts = kase.procedure.steps.slice(1).map((s) => ({ key: `step.${s.id}`, text: nextStepLine(s.title) }));
+  const callouts = (kase.procedure.openBody ? kase.procedure.steps : kase.procedure.steps.slice(1)).map((s) => ({ key: `step.${s.id}`, text: kase.procedure.id === "open_appendectomy" ? STEP_COACHING.open_appendectomy?.[s.id]?.why ?? s.instruction : nextStepLine(s.title) }));
+  const hints = kase.procedure.id === "open_appendectomy" ? kase.procedure.steps.flatMap((s) => [1, 2, 3, 4].map((tier) => ({
+    key: `hint.${s.id}.${tier}`, text: tier === 4 ? "Need assistance? Ask for a demonstration before continuing."
+      : tier === 1 ? STEP_COACHING.open_appendectomy?.[s.id]?.why ?? s.instruction
+      : STEP_COACHING.open_appendectomy?.[s.id]?.lookHere ?? s.instruction,
+  }))) : [];
   const bleeds = bleedingStructures(kase).map((b) => ({ key: `bleeding.${b.id}`, text: bleedingLine(b.name) }));
-  return [...unique, { key: "tracking_lost", text: trackingLostLine(mode) }, ...bleeds, ...callouts];
+  for (const tissue of kase.procedure.openBody?.tissues ?? []) if (tissue.perfused && !bleeds.some(b => b.key === `bleeding.${tissue.id}`))
+    bleeds.push({ key: `bleeding.${tissue.id}`, text: bleedingLine(kase.anatomy.find(a => a.id === tissue.id)?.displayName ?? tissue.id.replaceAll("_", " ")) });
+  return [...unique, { key: "tracking_lost", text: trackingLostLine(mode) }, ...bleeds, ...callouts, ...hints];
 }
 
 // True when the authored hint mostly repeats the coaching sentence, so the nudge says it once.
@@ -797,6 +885,8 @@ function emptyStepView(): CoachStepView {
 
 function describeOffTarget(event: EngineEvent, name: (id: string) => string, tool: (id: string) => string, port: (id: string) => string): string {
   switch (event.type) {
+    case "surgery":
+      return `Applied ${event.evidence.verb} to ${name(event.evidence.tissueId).toLowerCase()}; no new milestone reached.`;
     case "touch":
       return `Touched the ${name(event.structureId).toLowerCase()} with the ${tool(event.instrumentId).toLowerCase()}; that does not advance this step.`;
     case "identify":
@@ -813,7 +903,7 @@ function describeOffTarget(event: EngineEvent, name: (id: string) => string, too
 export function contextKey(s: CoachSnapshot): string {
   const parts = [
     s.status, s.step.id, s.step.progressText, s.completedCount, s.mistakeCount, s.focusStructure.id, s.stuckLevel,
-    s.trackingValid, s.hintTier, s.desynced, s.bloodLossMl, s.activeBleeds.map((b) => b.structure.id).join(","), s.scene.summary, s.commands.map((c) => `${c.commandId}:${c.status}`).join(","),
+    s.bodyFacts, s.achievedMilestones, s.orderDeviations, s.trackingValid, s.hintTier, s.desynced, s.bloodLossMl, s.activeBleeds.map((b) => b.structure.id).join(","), s.scene.summary, s.commands.map((c) => `${c.commandId}:${c.status}`).join(","),
   ];
   let h = 2166136261;
   for (const ch of JSON.stringify(parts)) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
@@ -826,6 +916,7 @@ export function renderContext(s: CoachSnapshot): string {
     return [
       `[LIVE SURGERY STATE v${s.version}] ${s.procedureTitle} for ${s.patientLabel}: COMPLETE.`,
       `Mistakes: ${s.mistakeCount} (${s.highSeverityMistakeCount} high severity). Hints used: ${s.hintsUsed}. Time: ${s.elapsedSeconds}s.`,
+      ...(s.openBody ? [`Body facts: ${s.bodyFacts.map(f => `${f.key}=${f.value}`).join("; ")}.`, `Expected-order deviations: ${s.orderDeviations.join(", ") || "none"}.`] : []),
       s.completedSteps.map((c) => `${c.title} ${c.seconds}s${c.mistakes ? `, ${c.mistakes} mistake(s)` : ""}`).join("; "),
     ].join("\n");
   }
@@ -836,9 +927,15 @@ export function renderContext(s: CoachSnapshot): string {
   const lines = [
     ...(desync ? [desync] : []),
     `[LIVE SURGERY STATE v${s.version}] ${s.procedureTitle} for ${s.patientLabel}. ${s.status === "paused" ? "PAUSED: tracking lost, anatomy hidden, scoring paused." : ""}`.trim(),
-    `Step ${s.stepNumber} of ${s.stepCount}: ${st.title}. ${st.instruction}`,
+    `${s.openBody ? "Suggested milestone" : "Step"} ${s.stepNumber} of ${s.stepCount}: ${st.title}. ${st.instruction}`,
     `Instrument: ${st.instrumentName}${st.ports.length ? ` via ${st.ports.join(" / ")}` : ""}. Progress: ${st.progressText}. Still needed: ${st.remaining.join(", ") || "nothing"}.`,
   ];
+  if (s.openBody) {
+    lines.push("Open body: expected order is guidance, never an action gate. Only report measured facts and detected guardrails.");
+    lines.push(`Achieved milestones: ${s.achievedMilestones.join(", ") || "none"}. Expected-order deviations: ${s.orderDeviations.join(", ") || "none"}.`);
+    lines.push(`Body facts: ${s.bodyFacts.map(f => `${f.key}=${f.value}`).join("; ") || "no measurements yet"}.`);
+    for (const d of s.decisionPrompts) lines.push(`Authored decision ${d.id}: ${d.prompt} Choices: ${d.choices.join(", ")}.`);
+  }
   if (s.activeBleeds.length) {
     lines.push(`ACTIVE BLEEDING: ${s.activeBleeds.map((b) => `${b.structure.name} at ${b.rateMlPerMin} ml/min`).join("; ")}. Total blood loss ${s.bloodLossMl} ml. Coach bleeding control before anything else.`);
   } else if (s.bloodLossMl > 0) {
@@ -855,7 +952,7 @@ export function renderContext(s: CoachSnapshot): string {
   const recent = s.recentMistakes.filter((m) => m.stepId === st.id);
   if (recent.length) lines.push(`Mistakes this step: ${recent.map((m) => m.feedback).join(" ")}`);
   // Hints go through get_hint so the tier escalates; this line only tells Jarvis where coaching stands.
-  lines.push(`Coaching: hint tier ${s.hintTier} of 3 used on this step. If the learner asks what to do, call get_hint.`);
+  lines.push(`Coaching: hint tier ${s.hintTier} of ${s.openBody ? 4 : 3} used on this step. If the learner asks what to do, call get_hint.`);
   if (st.nextTitle) lines.push(`After this: ${st.nextTitle}.`);
   return lines.join("\n");
 }

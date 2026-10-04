@@ -1,3 +1,4 @@
+import { validBodyAction, type BodyAction } from "./open-body.js";
 import { readFileSync } from "node:fs";
 import type { Context, Hono } from "hono";
 import { streamSSE } from "hono/streaming";
@@ -340,10 +341,14 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
     const s = getSession(c);
     if (!s) return missing(c);
     const after = Number(c.req.query("after") ?? "0");
-    const { alerts, latestSeq } = s.alertsAfter(Number.isFinite(after) ? after : 0);
+    if (!Number.isSafeInteger(after) || after < 0) return bad(c, 400, "invalid_cursor", "after must be a nonnegative integer.", coachActions(s.id));
+    // Native Quest polling has no SSE listener: advance stall hints on this active poll too.
+    s.tick();
+    const { alerts, latestSeq } = s.alertsAfter(after);
     return c.json({
       alerts: alerts.map((a) => ({ ...a, reflexRoute: a.reflexKey && reflex?.configured ? `/jarvis/reflex/${s.id}/${a.reflexKey}` : "" })),
       latestSeq,
+      snapshot: s.snapshot(),
       actions: coachActions(s.id),
     });
   });
@@ -562,6 +567,17 @@ function parseEvent(e: unknown): CoachEvent | string {
       return id("structureId") || { type: "identify", structureId: str("structureId") };
     case "confirm":
       return { type: "confirm" };
+    case "surgery": {
+      if (!ev.evidence || typeof ev.evidence !== "object" || Array.isArray(ev.evidence)) return "surgery needs evidence";
+      const evidence = ev.evidence as unknown as BodyAction;
+      if (!validBodyAction(evidence)) return "invalid body action measurements, tool verb, or coordinate frame";
+      for (const value of [evidence.actionId, evidence.instrumentId, evidence.instrumentInstanceId, evidence.tissueId, evidence.layer]) {
+        if (!EVENT_ID.test(value)) return "invalid body action identifier";
+      }
+      if (evidence.secondaryInstanceId && !EVENT_ID.test(evidence.secondaryInstanceId)) return "invalid secondary tool instance";
+      if (evidence.choice && !EVENT_ID.test(evidence.choice)) return "invalid body decision choice";
+      return { type: "surgery", evidence };
+    }
     case "focus":
       return str("structureId") === "" ? { type: "focus", structureId: "" } : id("structureId") || { type: "focus", structureId: str("structureId") };
     case "tracking":
@@ -574,7 +590,7 @@ function parseEvent(e: unknown): CoachEvent | string {
       return id("structureId") || { type: "bleeding", structureId: str("structureId"), active: ev.active, rateMlPerMin: rate, totalMl: total };
     }
     default:
-      return "type must be place_port, touch, identify, confirm, focus, tracking, or bleeding";
+      return "type must be place_port, touch, identify, confirm, surgery, focus, tracking, or bleeding";
   }
 }
 

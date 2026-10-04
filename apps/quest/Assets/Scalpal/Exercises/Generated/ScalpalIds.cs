@@ -157,6 +157,14 @@ namespace Scalpal.Exercises.Generated
 
     public static class InstrumentIds
     {
+        public const string SkinMarker = "skin_marker";
+        public const string ToothedForceps = "toothed_forceps";
+        public const string Retractor = "retractor";
+        public const string Babcock = "babcock";
+        public const string Hemostat = "hemostat";
+        public const string RightAngleClamp = "right_angle_clamp";
+        public const string MetzenbaumScissors = "metzenbaum_scissors";
+        public const string SutureTie = "suture_tie";
         public const string Scalpel = "scalpel";
         public const string Trocar5mm = "trocar_5mm";
         public const string Trocar12mm = "trocar_12mm";
@@ -176,6 +184,14 @@ namespace Scalpal.Exercises.Generated
 
     public static class InstrumentPrefabs
     {
+        public const string SkinMarker = "inst_skin_marker";
+        public const string ToothedForceps = "inst_toothed_forceps";
+        public const string Retractor = "inst_retractor";
+        public const string Babcock = "inst_babcock";
+        public const string Hemostat = "inst_hemostat";
+        public const string RightAngleClamp = "inst_right_angle_clamp";
+        public const string MetzenbaumScissors = "inst_metzenbaum_scissors";
+        public const string SutureTie = "inst_suture_tie";
         public const string Scalpel = "inst_scalpel";
         public const string Trocar5mm = "inst_trocar_5mm";
         public const string Trocar12mm = "inst_trocar_12mm";
@@ -194,6 +210,14 @@ namespace Scalpal.Exercises.Generated
 
         public static readonly string[] All =
         {
+            SkinMarker,
+            ToothedForceps,
+            Retractor,
+            Babcock,
+            Hemostat,
+            RightAngleClamp,
+            MetzenbaumScissors,
+            SutureTie,
             Scalpel,
             Trocar5mm,
             Trocar12mm,
@@ -217,6 +241,7 @@ namespace Scalpal.Exercises.Generated
         public const string LapCholecystectomy = "lap_cholecystectomy";
         public const string LapAppendectomy = "lap_appendectomy";
         public const string LapSigmoidColectomy = "lap_sigmoid_colectomy";
+        public const string OpenAppendectomy = "open_appendectomy";
     }
 
     public static class StepIds
@@ -265,6 +290,20 @@ namespace Scalpal.Exercises.Generated
             public const string Extract = "extract";
             public const string Anastomosis = "anastomosis";
             public const string LeakTest = "leak_test";
+            public const string Close = "close";
+        }
+
+        public static class OpenAppendectomy
+        {
+            public const string MarkIncision = "mark_incision";
+            public const string InciseSkin = "incise_skin";
+            public const string OpenFascia = "open_fascia";
+            public const string SplitMuscle = "split_muscle";
+            public const string OpenPeritoneum = "open_peritoneum";
+            public const string DeliverAppendix = "deliver_appendix";
+            public const string DivideMesoappendix = "divide_mesoappendix";
+            public const string LigateBase = "ligate_base";
+            public const string InspectClean = "inspect_clean";
             public const string Close = "close";
         }
     }
