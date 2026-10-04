@@ -2,7 +2,7 @@
 
 import { motion } from "motion/react";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { AdamLayer } from "./AdamLayer";
 import { BlurWords } from "./BlurWords";
 import { FadeIn } from "./FadeIn";
@@ -11,25 +11,13 @@ import { wordCount } from "@/lib/text";
 
 const TITLE = "Scalpal.";
 const LEDE = "Practice surgery in mixed reality with a voice coach, and turn every rep into motion a robot hand can replay.";
-const SEEN = "scalpal:launched";
 
 // Loader: only the hands are on screen until the fingertips touch, then the page launches
-// (nav, word blur-in, button). Coming back within the same tab skips the wait.
+// (nav, word blur-in, button).
 export function Landing() {
   const [launched, setLaunched] = useState(false);
 
-  useEffect(() => {
-    try {
-      if (sessionStorage.getItem(SEEN)) setLaunched(true);
-    } catch {}
-  }, []);
-
-  const launch = useCallback(() => {
-    setLaunched(true);
-    try {
-      sessionStorage.setItem(SEEN, "1");
-    } catch {}
-  }, []);
+  const launch = () => setLaunched(true);
 
   return (
     <main className="relative h-dvh overflow-hidden">
