@@ -1,7 +1,7 @@
 import type { Context, Hono } from "hono";
 import { ENCOUNTERS_BY_PLAN, type Encounter } from "./catalog/encounters.js";
 import { DEFAULT_PATIENT_VOICES } from "./encounter.js";
-import { letterFrom, type AnswerClassifier, type SpeechToText } from "./answer-classifier.js";
+import { letterFrom, wordMatch, type AnswerClassifier, type SpeechToText } from "./answer-classifier.js";
 import { loadPatientContent } from "./interview-content.js";
 import { interviewPatientPrompt } from "./interview-prompt.js";
 import { InterviewSession } from "./interview.js";
@@ -130,10 +130,8 @@ export function registerInterviewRoutes(app: Hono, options: InterviewRouteOption
     }
     // A bare letter ("B", "option c") needs no model; anything else goes to the classifier.
     if (!key && heard) key = letterFrom(heard);
-    if (!key && heard) {
-      if (!options.classifier) return bad(c, 503, "classifier_unconfigured", "Spoken answers need ANTHROPIC_API_KEY; tap a choice instead.", actionsFor(s.id));
-      key = await options.classifier.classify(heard, round.choices);
-    }
+    // The model when configured; shared content words otherwise (or when the model is unreachable or unsure).
+    if (!key && heard) key = (options.classifier ? await options.classifier.classify(heard, round.choices) : null) ?? wordMatch(heard, round.choices);
     if (!key) return bad(c, 422, "unclear_answer", heard ? `Heard "${heard}", which did not match one choice. Say A, B, C or D, or tap one.` : "Send key, text or audio.", actionsFor(s.id), { heard });
     if (heard) s.transcript("learner", heard);
     const out = s.pick(key, via, heard)!;

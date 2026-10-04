@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { createApp } from "../src/app.js";
-import { letterFrom, type AnswerClassifier } from "../src/answer-classifier.js";
+import { letterFrom, wordMatch, type AnswerClassifier } from "../src/answer-classifier.js";
 import { validateInterview, type InterviewChoice, type InterviewRound, type PatientInterview } from "../src/interview-types.js";
 import { NOW, fixtureClient } from "./helpers.js";
 
@@ -57,6 +57,21 @@ describe("interview content", () => {
     expect(letterFrom("I'll go with d")).toBe("D");
     expect(letterFrom("the second one")).toBe("B");
     expect(letterFrom("I would ask about her allergies")).toBeNull();
+  });
+
+  // Without ANTHROPIC_API_KEY a paraphrased move must still land: learners speak the question, not the option.
+  it("matches a paraphrased move by shared words, and refuses a tie or a vague reply", () => {
+    const choices = [
+      { key: "A" as const, text: "Ask whether anyone in her family has had bowel cancer" },
+      { key: "B" as const, text: "Ask when the pain started and whether it has moved since then" },
+      { key: "C" as const, text: "Ask her to rate the pain from zero to ten" },
+      { key: "D" as const, text: "Ask what usually sets off her migraines" },
+    ];
+    expect(wordMatch("When did your pain start, and has it moved anywhere?", choices)).toBe("B");
+    expect(wordMatch("Does anyone in your family have bowel cancer?", choices)).toBe("A");
+    expect(wordMatch("On a scale of zero to ten how bad is it", choices)).toBe("C");
+    expect(wordMatch("tell me about the pain", choices)).toBeNull();
+    expect(wordMatch("hmm I'm not sure", choices)).toBeNull();
   });
 });
 
