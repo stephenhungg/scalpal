@@ -30,7 +30,7 @@ function parseWorkerTokens(raw: string | undefined): Map<string, string> {
 export type StorageDriver = 'local' | 's3';
 
 export function loadConfig() {
-  const port = Number(env('PORT', '8787'));
+  const port = Number(env('PORT', '8788'));
   const storageDriver = env('STORAGE_DRIVER', 'local') as StorageDriver;
   if (storageDriver !== 'local' && storageDriver !== 's3') {
     throw new Error(`STORAGE_DRIVER must be 'local' or 's3'`);

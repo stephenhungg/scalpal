@@ -8,14 +8,14 @@ primary_region = "ord"
 
 [env]
   NODE_ENV = "production"
-  PORT = "8787"
+  PORT = "8788"
   STORAGE_DRIVER = "s3"
   SPACETIMEDB_URI = "wss://maincloud.spacetimedb.com"
   SPACETIMEDB_DB = "scalpal"
   PUBLIC_BASE_URL = "https://scalpal-gateway.fly.dev"
 
 [http_service]
-  internal_port = 8787
+  internal_port = 8788
   force_https = true
   # The gateway holds a live database connection and fulfils grants; it must
   # not scale to zero.

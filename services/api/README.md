@@ -28,6 +28,8 @@ On first start without `SPACETIMEDB_TOKEN`, the gateway creates an identity, sav
 
 `GET /healthz` reports database connection, service registration, storage driver and which providers are configured.
 
+The gateway listens on port 8788 by default (`PORT`). Preop/coach uses 8787, and the motion worker (`services/motion`, `gateway-worker`) targets `http://localhost:8788`.
+
 ## Tests
 
 The integration tests need a local `spacetime start`. They publish the module to a throwaway `scalpal-test` database and run the real gateway in-process:

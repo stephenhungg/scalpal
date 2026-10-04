@@ -57,7 +57,7 @@ When no hand is found or the clip won't decode, it fails without retry. Download
 
 To rerun it, copy `integration/silas-e2e.test.ts` into `services/api/test/` on Nathan's branch. With `spacetime start` running, run `E2E_CLIP=<clip> MOTION_DIR=<this folder> node --import tsx --test test/silas-e2e.test.ts`. The stand-in gateway tests in `tests/test_gateway_worker.py` cover the failure paths (no hand, stale run) without SpacetimeDB.
 
-Current consolidated-source boundary verification also ran the real gateway, SpacetimeDB and worker on a fresh throwaway database with a generated ten-frame blank clip. Signed upload/hash verification and inference reached final no-hand failure on run 1 with zero outputs, while a previously completed learning result stayed completed. This proves that failure route, not real-hand reconstruction. The worker defaults to local gateway port 8788 (coach is 8787); override with `GATEWAY_URL` or `--gateway` for hosted routing.
+Current consolidated-source boundary verification also ran the real gateway, SpacetimeDB and worker on a fresh throwaway database with a generated ten-frame blank clip. Signed upload/hash verification and inference reached final no-hand failure on run 1 with zero outputs, while a previously completed learning result stayed completed. This proves that failure route, not real-hand reconstruction. The worker defaults to local gateway port 8788, the API gateway's default (preop/coach is 8787); override with `GATEWAY_URL` or `--gateway` for hosted routing.
 
 ## Local Worker Boundary (standalone)
 
