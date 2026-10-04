@@ -519,6 +519,7 @@ namespace Scalpal.EncounterOffice.Editor
                 voice=fixture.AddComponent<QuestJarvisVoice>();
                 RunInterview(session,voice,dialogue,endpoint,EncounterContract.FemalePatientId,true,connections,Run);
                 RunInterview(session,voice,dialogue,endpoint,"patient-demo-pediatric-asthma",false,connections,Run);
+                RunSkip(session,voice,endpoint,Run);
                 // Stale responses from an abandoned patient never reach the next one.
                 session.voice=null;session.StartPatient(EncounterContract.MalePatientId);Run();string maleId=session.State.encounterId;
                 session.Choose("A");var stale=Drain(session);Check(stale.Step(),"old-patient answer request begins");
@@ -619,6 +620,61 @@ namespace Scalpal.EncounterOffice.Editor
             }
             finally { Scalpal.Handoff.HandoffRun.Clear(); }
             voice.Disconnect();
+        }
+        // Skip to surgery from the explore card (selection flag -> case -> Theatre card, no interview) and from the office pause
+        // (leave a running interview): the case's procedure, chart-flag Time-Out risks, a coach session without encounterId,
+        // and a recap that reads Skipped.
+        static void RunSkip(NativeEncounterSession session,QuestJarvisVoice voice,string endpoint,Func<Pump> run)
+        {
+            var flowObject=new GameObject("SkipHandoffFlowFixture");GameObject nativeObject=null;
+            var previousTicket=Scalpal.Handoff.HandoffRun.Current;
+            try
+            {
+                var flow=flowObject.AddComponent<Scalpal.Handoff.HandoffFlow>();
+                var card=UnityEngine.Object.Instantiate(Resources.Load<Scalpal.Handoff.HandoffCard>("HandoffCard"),flowObject.transform);
+                Set(flow,"card",card);Set(flow,"nextHealth",float.MaxValue);Set(flow,"focused",true);
+                const string patient=EncounterContract.FemalePatientId;
+                var kase=JsonUtility.FromJson<Scalpal.Exercises.Data.SurgicalCase>(DirectText(endpoint,"GET","/patients/"+patient+"/case",null));
+                // Explore: the detail card's Skip to surgery stages the selection with the skip flag for the office scene.
+                Check(Scalpal.Shell.ShellTransition.TryStageSelection(patient,endpoint,true)&&Scalpal.Shell.ShellTransition.TryConsumeSelection(out var selection)&&selection.skipToSurgery&&selection.patientId==patient,"explore's Skip to surgery stages the patient with the skip flag");
+                session.voice=null;session.StartPatient(patient,true);var skipped=run();
+                Check(skipped.exchanges.Count==1&&skipped.exchanges[0].path=="/patients/"+patient+"/case"&&session.Skipped&&session.State.encounterId==""&&session.Round==null,"skip from explore loads only the case: no interview is created");
+                // The isolated fixture has no paired bridge; give the run the office's captured shared attempt, as production does.
+                Set(session,"sharedSessionId","skip-session");Set(session,"sharedAttemptId","skip-attempt");
+                Check(Scalpal.Handoff.HandoffFlow.OpenSkipped(session),"the skipped run opens the theatre handoff");
+                var ticket=Scalpal.Handoff.HandoffRun.Current;
+                Check(ticket.skipped&&ticket.encounterId==""&&ticket.procedureId==kase.procedureId&&ticket.patientId==patient&&EncounterContract.IsSkipped(ticket.scorecard)&&ticket.scorecard.diagnosisResult=="skipped"&&!ticket.escalated,"the skipped ticket targets the case's procedure with no interview and diagnosis skipped");
+                var risks=Scalpal.Handoff.HandoffFlow.ReviewRisks(ticket.scorecard);
+                Check(risks.Length>0&&risks.Length==kase.brief.flags.Select(flag=>flag.type).Distinct().Count()&&risks.All(risk=>risk.status=="chart"),"Time-Out still reviews the case's chart risks: "+risks.Length);
+                Set(flow,"nextRefresh",0f);Call(flow,"Update");
+                Check(Get<string>(flow,"phase")=="theatre"&&Get<string>(card,"heading")=="To theatre"&&Get<string[]>(card,"actions")[1]=="Virtual OR (VR)","skip reaches the Theatre card (AR/VR choice)");
+                // Coach session: no encounterId at all.
+                nativeObject=new GameObject("SkipCoachFixture");nativeObject.SetActive(false);
+                var native=nativeObject.AddComponent<Scalpal.Quest.NativeCaseSession>();
+                string coachJson=native.CoachRequestJson();
+                Check(!coachJson.Contains("encounterId")&&coachJson.Contains("\"patientId\":\""+patient+"\"")&&coachJson.Contains("\"mode\":\"virtual\""),"the skipped coach request carries patient and mode and no encounterId: "+coachJson);
+                var coach=JsonUtility.FromJson<CoachCreated>(DirectText(endpoint,"POST","/coach/sessions",coachJson));
+                Check(coach.sessionId.StartsWith("coach-",StringComparison.Ordinal)&&coach.snapshot.procedureId==kase.procedureId&&!coach.systemPrompt.Contains("Pre-op interview score"),"the coach session is created for the case's procedure without interview carryover");
+                // Recap: Clinical reasoning reads Skipped, not zero and not missing data.
+                Check(ticket.sharedSessionId=="skip-session"&&ticket.attemptId=="skip-attempt","the skipped run keeps the office's shared attempt");
+                var result=Scalpal.Recap.RecapSessionIntegration.FromHandoff(ticket,kase,"skip-session","skip-attempt");
+                string clinical=Scalpal.Recap.RecapPanel.Clinical(result);
+                Check(result.diagnosisSkipped&&!result.diagnosisAvailable&&clinical.Contains("Skipped")&&!clinical.Contains("Not available")&&!clinical.Contains("0 / "),"recap shows Clinical reasoning: Skipped");
+                Scalpal.Handoff.HandoffRun.Clear();
+                // Office pause: Skip to surgery leaves a running interview for the same Theatre card.
+                session.StartPatient(patient);run();
+                Check(session.State.phase=="interview"&&session.RoundVisible,"precondition: an interview is running");
+                Set(session,"sharedSessionId","skip-session");Set(session,"sharedAttemptId","skip-attempt");
+                int before=0;
+                Check(session.SkipToSurgery()&&session.Skipped&&session.Round==null&&!session.AwaitingPatient&&Scalpal.Handoff.HandoffRun.Current!=null&&Scalpal.Handoff.HandoffRun.Current.skipped
+                    &&Scalpal.Handoff.HandoffRun.Current.procedureId==kase.procedureId&&Get<string>(flow,"phase")=="theatre","skip from the office pause leaves the interview for the Theatre card");
+                Check(Drain(session).exchanges.Count==before,"skipping sends nothing more to the interview");
+            }
+            finally
+            {
+                Scalpal.Handoff.HandoffRun.Clear();if(previousTicket!=null)typeof(Scalpal.Handoff.HandoffRun).GetProperty("Current").GetSetMethod(true).Invoke(null,new object[]{previousTicket});
+                UnityEngine.Object.DestroyImmediate(flowObject);if(nativeObject)UnityEngine.Object.DestroyImmediate(nativeObject);
+            }
         }
         // The patient speaks one reply: agent response, audio, then drained playback; the round gate then opens.
         static void Speak(NativeEncounterSession session,QuestJarvisVoice voice)
