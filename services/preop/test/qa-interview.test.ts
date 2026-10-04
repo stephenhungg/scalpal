@@ -87,13 +87,15 @@ async function run(patientId: string, strategy: Strategy, r = rig()) {
     expect(last.patient.clinicianMove).toBe(choice.text);
     expect(last.patient.direction).toBe(choice.patientCue);
     if (i < iv.rounds.length - 1) {
-      expect(last.next).not.toBeNull();
+      expect(last.next).toBeTruthy();
+      expect(last.done).toBe(false);
       expect(last.scorecard ?? null).toBeNull();
       expect(last.patient.closing).toBe("");
       expect((await r.req("GET", `/interviews/${id}/score`)).status).toBe(409);
     }
   }
-  expect(last.next).toBeNull();
+  expect(last.next).toBeUndefined();
+  expect(last.done).toBe(true);
   expect(last.scorecard).toBeTruthy();
   expect(last.patient.closing).toBe(iv.closingLine ?? "");
   expect(last.state.findings).toEqual(picked.flatMap((c) => (c.finding ? [c.finding] : [])));
@@ -148,7 +150,7 @@ describe.each(PATIENTS)("office interview: %s", (patientId) => {
   // BUG: POST /interviews/:id/answer returns `finding: null` (picks without a finding), `scorecard: null`
   // (every non-final pick), `next: null` and `state.round: null` (final pick). unitySafetyErrors flags all
   // of them; JsonUtility turns each into an empty default object, so the client must special-case it.
-  it.skip("BUG: every interview response body passes unitySafetyErrors", async () => {
+  it("FIXED: every interview response body passes unitySafetyErrors", async () => {
     const { r } = await run(patientId, byGrade("correct"));
     for (const b of r.bodies) if (b.status === 200 || b.status === 201) expect(unitySafetyErrors(b.json), b.route).toEqual([]);
   });
@@ -213,7 +215,7 @@ describe("carryover into the operating room", () => {
 
   // BUG: article agreement. With procedure "Open appendectomy" the carryover reads "the case needs a open
   // appendectomy" (interview.ts carryover()) and the scorecard feedback "needs is a open appendectomy" (score()).
-  it.skip("BUG: wrong-plan wording uses the right article for 'open appendectomy'", async () => {
+  it("FIXED: wrong-plan wording uses the right article for 'open appendectomy'", async () => {
     const r = rig();
     const iv = interviewOf("patient-demo-multi-source");
     const iid = (await r.req("POST", "/interviews", { patientId: "patient-demo-multi-source" })).json.interviewId;
@@ -264,13 +266,13 @@ describe("spoken answers", () => {
 
   // BUG (minor): "d as in dog" is a natural way to disambiguate a spoken letter and is not matched without
   // the model; with no ANTHROPIC_API_KEY the route answers 503 classifier_unconfigured instead of picking D.
-  it.skip("BUG: letterFrom('d as in dog') = D", () => {
+  it("FIXED: letterFrom('d as in dog') = D", () => {
     expect(letterFrom("d as in dog")).toBe("D");
   });
 
   // BUG: the "named" regex takes the first "option X" anywhere in the utterance, so ambiguous or
   // self-corrected speech locks in a pick without the model or a re-ask.
-  it.skip("BUG: ambiguous or corrected letter speech does not pick the first letter", () => {
+  it("FIXED: ambiguous or corrected letter speech does not pick the first letter", () => {
     expect(letterFrom("option a or option b")).toBeNull();
     expect(letterFrom("option a and option b")).toBeNull();
     expect(letterFrom("option a, no wait, option b")).not.toBe("A");
@@ -326,7 +328,7 @@ describe("spoken answers", () => {
 
   // BUG (minor): whitespace-only text with no classifier configured answers 503 classifier_unconfigured
   // ("Spoken answers need ANTHROPIC_API_KEY") instead of 422 unclear_answer, because `heard` is not trimmed.
-  it.skip("BUG: whitespace-only text is unclear (422), not a missing classifier (503)", async () => {
+  it("FIXED: whitespace-only text is unclear (422), not a missing classifier (503)", async () => {
     const r = rig();
     const iid = (await r.req("POST", "/interviews", { patientId: "patient-demo-multi-source" })).json.interviewId;
     expect((await r.req("POST", `/interviews/${iid}/answer`, { text: "   " })).status).toBe(422);

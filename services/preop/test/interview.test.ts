@@ -79,17 +79,19 @@ describe("choice-based office interview", () => {
     expect(unclear.status).toBe(422);
     expect(unclear.json.error.code).toBe("unclear_answer");
     const spoken = await req("POST", `/interviews/${id}/answer`, { text: "I'd ask about her allergies" });
-    expect(spoken.json.pick).toMatchObject({ key: "B", via: "voice", grade: "correct" });
+    expect(spoken.json.pick).toMatchObject({ key: "B", via: "voice" });
+    expect(spoken.json.pick.grade).toBeUndefined();
 
     for (const key of ["D", "A", "A", "C"]) await req("POST", `/interviews/${id}/answer`, { key }); // history partial, exam, labs wrong, dx
     const last = await req("POST", `/interviews/${id}/answer`, { key: "B" }); // plan wrong
-    expect(last.json.next).toBeNull();
+    expect(last.json.next).toBeUndefined();
+    expect(last.json.done).toBe(true);
     expect(last.json.patient.closing).toBe("Okay, let's do it.");
     const card = last.json.scorecard;
     expect(card).toMatchObject({ kind: "interview", procedureId: expect.any(String), procedureChosenCorrectly: false, diagnosisResult: "correct" });
     // 10 + 10 + 5 (partial) + 15 + 0 (labs wrong) + 25 + 0 (plan wrong)
     expect(card.total).toBe(65);
-    expect(card.feedback.join(" ")).toMatch(/needs is a .*appendectomy/);
+    expect(card.feedback.join(" ")).toMatch(/needs is an? .*appendectomy/);
     expect(Object.fromEntries(card.carryoverItems.map((i: any) => [i.type, i.status]))).toMatchObject({ latex: "found" });
     expect((await req("POST", `/interviews/${id}/answer`, { key: "A" })).status).toBe(409);
 

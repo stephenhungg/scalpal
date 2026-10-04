@@ -24,11 +24,11 @@ This replaces the free-form interview plus attending flow (`/encounters`). Those
    - `{text}` for speech already transcribed on device;
    - `{audio, mimeType}` (base64, under ~20 s) for raw speech. The server transcribes it (ElevenLabs `scribe_v1`) and matches it to a choice (a bare letter or "option b" directly; otherwise Claude Haiku).
 
-   `422 unclear_answer` with `heard` means re-ask ("Say A, B, C or D, or tap one"). Success returns:
-   - `pick`, `choice`, `heard`;
-   - `finding` (an exam or test result to show on screen, not spoken);
-   - `next` (the next round, or `null`);
-   - `scorecard` (on the last pick);
+   `422 unclear_answer` with `heard` means re-ask ("Say A, B, C or D, or tap one"). Success returns (optional fields are omitted, never `null`, because Unity's JsonUtility turns null into an empty object):
+   - `pick` (`{roundId, key, via, heard}`, no grade: scores show only at the end), `choice`, `heard`, `done`;
+   - `finding` (only when the pick revealed an exam or test result; show it on screen, never spoken);
+   - `next` (the next round, omitted after the last pick);
+   - `scorecard` (only on the last pick);
    - `patient: {clinicianMove, direction, closing}`.
 5. Make the patient reply: send `[DIRECTION] <direction>` as a contextual update, then `[CLINICIAN] <clinicianMove>` as the user message. On the last pick, append the closing line to the direction. Wait for the reply to finish, then show the next round.
 6. After the last round, show the scorecard on screen (`GET /interviews/:id/score` returns it again). Nobody speaks it.

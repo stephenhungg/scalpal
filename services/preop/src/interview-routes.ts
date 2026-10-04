@@ -117,13 +117,13 @@ export function registerInterviewRoutes(app: Hono, options: InterviewRouteOption
     if (!round) return bad(c, 409, "invalid_phase", "The interview is already scored.", actionsFor(s.id));
     const b = await body(c);
     let key: ChoiceKey | null = typeof b.key === "string" && /^[ABCD]$/.test(b.key) ? (b.key as ChoiceKey) : null;
-    let heard = typeof b.text === "string" ? b.text.slice(0, 1000) : "";
+    let heard = typeof b.text === "string" ? b.text.trim().slice(0, 1000) : "";
     const via = key ? "tap" : "voice";
     if (!key && typeof b.audio === "string") {
       if (!options.speechToText) return bad(c, 503, "speech_unconfigured", "Speech answers need ELEVENLABS_API_KEY; tap a choice instead.", actionsFor(s.id));
       if (b.audio.length > MAX_AUDIO_CHARS) return bad(c, 400, "audio_too_large", "Keep spoken answers under about 20 seconds.", actionsFor(s.id));
       try {
-        heard = await options.speechToText.transcribe(Buffer.from(b.audio, "base64"), typeof b.mimeType === "string" ? b.mimeType : "audio/webm");
+        heard = (await options.speechToText.transcribe(Buffer.from(b.audio, "base64"), typeof b.mimeType === "string" ? b.mimeType : "audio/webm")).trim();
       } catch (e) {
         return bad(c, 503, "speech_failed", `Could not transcribe that (${(e as Error).message}). Tap a choice or try again.`, actionsFor(s.id));
       }

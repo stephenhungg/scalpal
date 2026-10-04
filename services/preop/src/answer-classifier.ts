@@ -16,15 +16,18 @@ export interface SpeechToText {
 const KEYS: ChoiceKey[] = ["A", "B", "C", "D"];
 const ORDINALS: Record<string, ChoiceKey> = { first: "A", second: "B", third: "C", fourth: "D", last: "D" };
 
-// "B", "option b", "answer C", "I'll go with d", "the second one"; null when not a bare letter pick.
+// "B", "option b", "answer C", "I'll go with d", "d as in dog", "the second one"; null when the words do
+// not name exactly one letter (a hedge between two, a negation, or a correction goes to the model or a re-ask).
 export function letterFrom(heard: string): ChoiceKey | null {
   const t = heard.trim().toLowerCase().replace(/[.!?,]/g, " ").replace(/\s+/g, " ").trim();
-  const bare = t.match(/^(?:(?:option|answer|choice|letter|go with|i choose|i pick|pick|i'll go with|i'll pick)\s+)?([abcd])$/);
+  const bare = t.match(/^(?:(?:option|answer|choice|letter|go with|i choose|i pick|pick|i'll go with|i'll pick)\s+)?([abcd])(?: as in [a-z]+)?(?: please)?$/);
   if (bare) return bare[1]!.toUpperCase() as ChoiceKey;
-  const named = t.match(/\b(?:option|answer|choice|letter)\s+([abcd])\b/);
-  if (named) return named[1]!.toUpperCase() as ChoiceKey;
-  const ord = t.match(/\bthe (first|second|third|fourth|last) (?:one|option|answer|choice)\b/);
-  if (ord) return ORDINALS[ord[1]!] ?? null;
+  if (/\b(?:not|no wait|wait|actually|or|and)\b/.test(t)) return null;
+  const named = [...t.matchAll(/\b(?:option|answer|choice|letter)\s+([abcd])\b/g)].map((m) => m[1]!);
+  if (new Set(named).size === 1) return named[0]!.toUpperCase() as ChoiceKey;
+  if (named.length) return null;
+  const ord = [...t.matchAll(/\bthe (first|second|third|fourth|last) (?:one|option|answer|choice)\b/g)].map((m) => m[1]!);
+  if (new Set(ord).size === 1) return ORDINALS[ord[0]!] ?? null;
   return null;
 }
 
