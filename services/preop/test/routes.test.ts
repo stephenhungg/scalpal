@@ -119,6 +119,17 @@ describe("FinchNode Connect admissions", () => {
     expect((list.json.patients as { patientId: string; kind: string }[]).some((p) => p.patientId === "u_test_polypharmacy_senior" && p.kind === "sandbox")).toBe(true);
   });
 
+  // The explore page enables "Begin encounter" from this flag, so it must track the authored catalog,
+  // not a client-side list, and must never offer an interview for a non-patient connection scenario.
+  it("marks which listed patients have an authored diagnosis interview", async () => {
+    const list = await call("GET", "/patients");
+    const patients = list.json.patients as { patientId: string; status: string; encounterAvailable: boolean }[];
+    const priya = patients.find((p) => p.patientId === "patient-demo-multi-source");
+    expect(priya?.encounterAvailable).toBe(true);
+    for (const p of patients.filter((p) => !p.patientId)) expect(p.encounterAvailable).toBe(false);
+    for (const p of patients.filter((p) => p.status === "blocked")) expect(p.encounterAvailable).toBe(false);
+  });
+
   it("admission returns FinchNode's hosted consent link", async () => {
     const admit = await call("POST", "/admit/baseline-adult");
     expect(String(admit.json.connectUrl)).toMatch(/^https:\/\/finchnode\.com\/connect\//);

@@ -61,8 +61,11 @@ async function highlight(s: CoachSession, structure: string, deps: ToolDeps): Pr
 export async function runTool(s: CoachSession, name: string, params: Record<string, unknown>, deps: ToolDeps): Promise<string | null> {
   const text = (k: string) => (typeof params[k] === "string" ? (params[k] as string) : "");
   switch (name as ToolName) {
-    case "get_surgery_state":
-      return deps.renderContext(s);
+    case "get_surgery_state": {
+      // The live card carries only salient facts; the tool returns the full measured table too.
+      const facts = s.snapshot().bodyFacts;
+      return facts.length ? `${deps.renderContext(s)}\nAll body facts: ${facts.map((f) => `${f.key}=${f.value}`).join("; ")}.` : deps.renderContext(s);
+    }
     case "get_hint": {
       const hint = s.requestHint();
       const lit = hint.highlight[0] ? ` ${await highlight(s, hint.highlight[0], deps)}` : "";
