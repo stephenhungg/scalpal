@@ -188,6 +188,22 @@ describe("encounter routes", () => {
     expect((await req("GET", `/encounters/${id}`)).json.state.version).toBe(scored.json.state.version);
   });
 
+  // The summary carries exam findings and test results. During the interview only the patient agent is
+  // connected, and the patient must never learn findings it is told not to say.
+  it("withholds the attending summary while the patient interview is running", async () => {
+    const id = (await req("POST", "/encounters", { patientId: "multi-source-overlap" })).json.encounterId;
+    await req("POST", `/encounters/${id}/tools/examine`, { maneuver: "rebound" });
+    await req("POST", `/encounters/${id}/tools/order_test`, { test: "cbc" });
+    const early = await req("POST", `/encounters/${id}/tools/get_encounter_summary`, {});
+    expect(early.status).toBe(409);
+    expect(early.json.error.code).toBe("invalid_phase");
+    expect(JSON.stringify(early.json)).not.toMatch(/Rebound tenderness in the right lower quadrant|13\.1/);
+    await req("POST", `/encounters/${id}/attending`);
+    expect((await req("POST", `/encounters/${id}/tools/get_encounter_summary`, {})).json.result).toMatch(/Rebound tenderness/);
+    await req("POST", `/encounters/${id}/tools/record_assessment`, { diagnosis: "appendicitis", differential: [], procedure: "appendectomy", urgency: "urgent" });
+    expect((await req("POST", `/encounters/${id}/tools/get_encounter_summary`, {})).status).toBe(200);
+  });
+
   it("does not attach authored fictional symptoms to real or mismatched records", async () => {
     for (const changes of [{ synthetic: false }, { patient: { name: "Different Patient", age: 30, sex: "male", displayLabel: "Different Patient" } }, { patient: { name: "Jonah Okoye", age: 40, sex: "male", displayLabel: "Jonah Okoye" } }, { patient: { name: "Jonah Okoye", age: 30, sex: "female", displayLabel: "Jonah Okoye" } }]) {
       const client = fixtureClient();

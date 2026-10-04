@@ -134,6 +134,8 @@ export function registerEncounterRoutes(app: Hono, options: EncounterRouteOption
         return bad(c, 400, "invalid_tool_argument", `Send a supported ${interviewTool.key}.`, encounterActions(s.id));
       }
     }
+    // The summary includes exam findings and test results, so the patient agent (interview phase) must never get it.
+    if (name === "get_encounter_summary" && s.phase === "interview") return wrongPhase(c, s, "attending or scored");
     if (name === "record_assessment") {
       if (s.phase !== "attending") return wrongPhase(c, s, "attending");
       if (!["diagnosis", "procedure", "urgency"].every((key) => typeof p[key] === "string") ||
