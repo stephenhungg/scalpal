@@ -215,7 +215,13 @@ namespace Scalpal.Quest.Editor
                     var clone = UnityEngine.Object.Instantiate(authored.gameObject, root.transform);
                     var filter = clone.GetComponent<MeshFilter>(); var collider = clone.GetComponent<MeshCollider>();
                     var tissue = clone.GetComponent<DeformableTissue>() ?? clone.AddComponent<DeformableTissue>();
-                    Assert(tissue.Initialize(presets[item]), "actual imported target accepts cage: " + id);
+                    var relativeScale = authored.transform.lossyScale / session.anatomy.transform.lossyScale.x;
+                    Assert(relativeScale.x > 0 && Mathf.Abs(relativeScale.x-relativeScale.y) < relativeScale.x*.001f && Mathf.Abs(relativeScale.x-relativeScale.z) < relativeScale.x*.001f,
+                        "actual imported target has a uniform source-to-meter conversion: " + id);
+                    Assert(tissue.Initialize(presets[item], relativeScale.x), "actual imported target accepts metric cage: " + id);
+                    Assert(Mathf.Abs(Vector3.Distance(tissue.Cage.Rest[0],tissue.Cage.Rest[1])-bounds.size.x*relativeScale.x) < .00001f,
+                        "actual cage dimensions include FBX import scaling in source meters: " + id);
+                    Debug.Log($"SCALPAL_NATIVE_TISSUE_SOURCE_UNITS id={id} sourceUnitScale={relativeScale.x:G6} rawBounds={bounds.size.ToString("F6")} metricBounds={(bounds.size*relativeScale.x).ToString("F6")}");
                     Assert(filter.sharedMesh != source && filter.sharedMesh == collider.sharedMesh,
                         "actual target gets one private render/contact mesh: " + id);
                     AssertVertices(original, filter.sharedMesh.vertices, "actual target preserves rest vertices: " + id);

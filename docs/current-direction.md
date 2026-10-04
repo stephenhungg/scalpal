@@ -2,7 +2,7 @@
 
 ## Abdominal Tissue Direction
 
-The user selected appendectomy/abdomen for the first material/physics expansion. The focused tissue milestone adds 39 shared-frame exterior, abdominal wall, skeletal and vascular references to the existing preview (81 structures total), layer inspection controls, procedural appearance and gated local grasp deformation on three existing practice targets. These are demo-tuned mechanics, not measured tissue viscosity or a complete layered body simulator. Skin thickness, fat/peritoneum volumes, topology cutting, circulation and physical performance remain missing/unverified. See [tissue simulation](tissue-simulation.md) for actual routing, evidence and next steps.
+The user selected appendectomy/abdomen for the material/physics expansion. The focused tissue milestone adds39 shared-frame exterior, abdominal wall, skeletal and vascular references (81 preview structures total). The current feature revision adds a connected three-layer tetrahedral abdominal wall, finite blade-driven topology cuts, sampled organ contact, per-cell material memory and geometry-driven bleeding controls. Editor mechanics and session-boundary checks passed. Contact preserves authored rest attachments; imported FBX coordinates explicitly convert to meters. These are uncalibrated teaching mechanics: measured material fits, broader contact coverage, vessel wall/lumen mechanics, high-fidelity tissue appearance and actual Quest performance remain unfinished. See [tissue simulation](tissue-simulation.md) and the [physics goal](physics-implementation-plan.md) for routing and evidence.
 
 ## Latest Body Registration Correction
 

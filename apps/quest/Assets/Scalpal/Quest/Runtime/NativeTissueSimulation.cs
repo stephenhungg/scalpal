@@ -12,6 +12,7 @@ namespace Scalpal.Quest
     public sealed class NativeTissueSimulation : MonoBehaviour
     {
         readonly List<DeformableTissue> tissues = new List<DeformableTissue>();
+        readonly TissueContactSolver contactSolver = new TissueContactSolver();
         NativeWorkbench workbench;
         AnatomyController anatomy;
         Func<bool> ready;
@@ -29,12 +30,18 @@ namespace Scalpal.Quest
         {
             ResetTissues(); tissues.Clear(); anatomy = controller; workbench = rig; ready = canInteract;
             Bind("appendix", TissuePreset.Bowel); Bind("mesoappendix", TissuePreset.Mesentery); Bind("appendicular_artery", TissuePreset.Artery);
+            contactSolver.Initialize(tissues,true);
+            if(contactSolver.SupportedBodies != tissues.Count) Debug.LogWarning("SCALPAL_TISSUE_CONTACT_UNAVAILABLE " + contactSolver.Status);
         }
         void Bind(string id, TissuePreset preset)
         {
             if (!anatomy || !anatomy.TryGetPart(id, out var part)) return;
+            Vector3 meshScale=part.transform.lossyScale,frameScale=anatomy.transform.lossyScale;
+            float factor=meshScale.x/frameScale.x;
+            if(!TissueCage.Finite(meshScale)||!TissueCage.Finite(frameScale)||!(factor>0)||
+                Mathf.Abs(meshScale.y/frameScale.y-factor)>factor*.001f||Mathf.Abs(meshScale.z/frameScale.z-factor)>factor*.001f)return;
             var tissue = part.GetComponent<DeformableTissue>() ?? part.gameObject.AddComponent<DeformableTissue>();
-            if (tissue.Initialize(preset)) tissues.Add(tissue);
+            if (tissue.Initialize(preset,factor)) tissues.Add(tissue);
             else { Debug.LogWarning("SCALPAL_TISSUE_UNAVAILABLE id=" + id); Destroy(tissue); }
         }
         void LateUpdate() => Simulate(Time.deltaTime);
@@ -54,20 +61,21 @@ namespace Scalpal.Quest
             while (accumulator >= StepSeconds && steps++ < 4)
             {
                 foreach (var tissue in tissues)
-                    tissue.Step(StepSeconds, tissue == grabbed ? tissue.transform.InverseTransformPoint(tool.actionPoint.position) + localOffset : Vector3.zero);
+                    tissue.Step(StepSeconds, tissue == grabbed ? tissue.ToMeters(tissue.transform.InverseTransformPoint(tool.actionPoint.position)) + localOffset : Vector3.zero);
                 accumulator -= StepSeconds;
             }
             surfaceClock += Mathf.Clamp(seconds, 0, .05f);
             if (surfaceClock >= 1f/30f)
             {
                 double begin = Time.realtimeSinceStartupAsDouble;
+                contactSolver.Solve(true);
                 foreach (var tissue in tissues) tissue.CommitSurface();
                 peakSurfaceMs = Mathf.Max(peakSurfaceMs, (float)((Time.realtimeSinceStartupAsDouble - begin) * 1000));
-                surfaceCommits++; surfaceClock = 0;
+                surfaceCommits++; surfaceClock %= 1f/30f;
             }
             if (Application.isPlaying && Time.realtimeSinceStartupAsDouble >= nextTiming)
             {
-                Debug.Log($"SCALPAL_NATIVE_TISSUE_TIMING targets={tissues.Count} surfaceCommits={surfaceCommits} peakSurfaceMs={peakSurfaceMs:F2}");
+                Debug.Log($"SCALPAL_NATIVE_TISSUE_TIMING targets={tissues.Count} surfaceCommits={surfaceCommits} peakSurfaceMs={peakSurfaceMs:F2} contactSupported={contactSolver.SupportedBodies} contactPairs={contactSolver.AppliedPairs} excessResidualMm={contactSolver.MaximumResidualPenetrationMeters*1000:F2} authoredOverlapMm={contactSolver.MaximumAuthoredOverlapMeters*1000:F2} samplingGapMm={contactSolver.MaximumSamplingGapMeters*1000:F2}");
                 nextTiming = Time.realtimeSinceStartupAsDouble + 5; peakSurfaceMs=0; surfaceCommits=0;
             }
         }
@@ -98,7 +106,7 @@ namespace Scalpal.Quest
                 }
             }
             if (!grabbed) return;
-            Vector3 local = grabbed.transform.InverseTransformPoint(tool.actionPoint.position);
+            Vector3 local = grabbed.ToMeters(grabbed.transform.InverseTransformPoint(tool.actionPoint.position));
             if (!grabbed.Cage.BeginHandle(local)) { Release(); return; }
             localOffset = grabbed.Cage.HandlePosition - local; // No snap to a distant cage corner on acquisition.
         }

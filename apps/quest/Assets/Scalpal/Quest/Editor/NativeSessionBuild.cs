@@ -398,6 +398,12 @@ namespace Scalpal.Quest.Editor
             Scalpal.Instruments.Editor.InstrumentRuntimeValidation.Run();
             NativeProcedureInputValidation.Run();
             NativeTissueValidation.Run();
+            NativeVolumeValidation.Run();
+            NativeViscoelasticValidation.Run();
+            NativeVolumeRuntimeValidation.Run();
+            NativeBleedingValidation.Run();
+            NativeVesselRuntimeValidation.Run();
+            NativeTissueContactValidation.Run();
             NativeAppendectomyValidation.Run();
             NativeSessionBoundaryValidation.Run();
             NativeCoachRelayValidation.Run();
