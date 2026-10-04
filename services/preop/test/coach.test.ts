@@ -349,12 +349,41 @@ describe("headset authority and retries", () => {
     expect(again.snapshot.eventCount).toBe(1);
   });
 
-  it("catches up to a headset that is ahead", async () => {
+  it("catches up to a headset that is one step ahead (its completing event was lost)", async () => {
     const sid = await start();
+    await post(`/coach/sessions/${sid}/simulate`, { kind: "complete_step" });
+    await post(`/coach/sessions/${sid}/simulate`, { kind: "complete_step" });
+    await post(`/coach/sessions/${sid}/simulate`, { kind: "complete_step" });
     const r = await post(`/coach/sessions/${sid}/events`, { event: { type: "touch", structureId: "mesoappendix", instrumentId: "maryland_dissector", stepId: "mesoappendix_window" } });
     expect(r.snapshot).toMatchObject({ desynced: false, resyncCount: 1, headsetStepId: "mesoappendix_window" });
     expect(r.snapshot.step.id).toBe("divide_mesoappendix"); // caught up, then the touch completed the window
     expect(r.alerts[0].kind).toBe("step_complete");
+  });
+
+  // One forged or buggy event must not award the whole procedure: skipped steps were never performed, so
+  // the coach flags the gap instead of synthesizing a perfect record for them.
+  it("refuses to skip steps on a single event's stepId", async () => {
+    const sid = await start();
+    const last = (await post(`/coach/sessions/${sid}/simulate`, { kind: "tracking_restored" })).snapshot.stepCount as number;
+    expect(last).toBeGreaterThan(2);
+    const kase = (await (await app.request("/patients/patient-demo-pediatric-asthma/case")).json()) as { procedure: { steps: { id: string }[] } };
+    const finalStep = kase.procedure.steps.at(-1)!.id;
+    const r = await post(`/coach/sessions/${sid}/events`, { event: { type: "confirm", stepId: finalStep, eventId: "evt-skip" } });
+    expect(r.results[0]).toMatchObject({ accepted: false, reason: "step_desynchronized" });
+    expect(r.snapshot.status).not.toBe("completed");
+    expect(r.snapshot.completedCount).toBe(0);
+    expect(r.snapshot.desynced).toBe(true);
+    const jump = await post(`/coach/sessions/${sid}/events`, { event: { type: "touch", structureId: "mesoappendix", instrumentId: "maryland_dissector", stepId: "mesoappendix_window" } });
+    expect(jump.snapshot.completedCount).toBe(0);
+    expect(jump.snapshot.step.id).toBe(kase.procedure.steps[0]!.id);
+  });
+
+  it("does not catch up while tracking is invalid", async () => {
+    const sid = await start();
+    await post(`/coach/sessions/${sid}/simulate`, { kind: "tracking_lost" });
+    const r = await post(`/coach/sessions/${sid}/events`, { event: { type: "place_port", portId: "left_lower", stepId: "working_ports" } });
+    expect(r.results[0]).toMatchObject({ applied: false, reason: "tracking_invalid" });
+    expect(r.snapshot.completedCount).toBe(0);
   });
 
   it("flags a headset that is behind and tells Jarvis to trust it", async () => {
