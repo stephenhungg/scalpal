@@ -1,0 +1,188 @@
+{
+  "patientId": "patient-demo-multi-source",
+  "patientName": "Priya Ramaswamy",
+  "urgency": "urgent",
+  "site": "Abdomen — appendix / right lower quadrant",
+  "carryoverItems": [
+    {
+      "flagId": "flag_latex",
+      "type": "latex",
+      "severity": "high",
+      "label": "Latex allergy",
+      "detail": "Latex allergy on file. The operating room, gloves, catheters, and equipment must be latex free before the patient enters.",
+      "status": "missed",
+      "historyTopics": [],
+      "testIds": [],
+      "stepIds": [
+        "access_umbilical"
+      ]
+    },
+    {
+      "flagId": "flag_anemia",
+      "type": "anemia",
+      "severity": "moderate",
+      "label": "Anemia (hemoglobin 11.6)",
+      "detail": "Lower tolerance for blood loss. Type and screen, and know the latest hemoglobin before incision.",
+      "status": "missed",
+      "historyTopics": [],
+      "testIds": [],
+      "stepIds": [
+        "irrigate"
+      ]
+    },
+    {
+      "flagId": "flag_incomplete_chart",
+      "type": "incomplete_chart",
+      "severity": "moderate",
+      "label": "Incomplete chart (1 gap)",
+      "detail": "No usable creatinine or eGFR on file. Kidney function is unknown.",
+      "status": "missed",
+      "historyTopics": [
+        "medications"
+      ],
+      "testIds": [],
+      "stepIds": [
+        "access_umbilical"
+      ]
+    }
+  ],
+  "total": 8,
+  "max": 100,
+  "grade": "Needs work",
+  "procedureId": "lap_appendectomy",
+  "procedureTitle": "Laparoscopic appendectomy",
+  "procedureChosenCorrectly": false,
+  "sections": [
+    {
+      "id": "history",
+      "label": "History",
+      "max": 25,
+      "score": 3,
+      "found": [
+        "onset",
+        "medications"
+      ],
+      "missed": [
+        "allergies",
+        "menstrual history and pregnancy",
+        "last oral intake",
+        "pain migration",
+        "nausea and vomiting",
+        "fever",
+        "bowel habits",
+        "urinary symptoms",
+        "past surgical history",
+        "past medical history"
+      ]
+    },
+    {
+      "id": "exam",
+      "label": "Examination",
+      "max": 15,
+      "score": 5,
+      "found": [
+        "abdominal palpation"
+      ],
+      "missed": [
+        "vital signs",
+        "rebound tenderness"
+      ]
+    },
+    {
+      "id": "workup",
+      "label": "Workup",
+      "max": 15,
+      "score": 0,
+      "found": [],
+      "missed": [
+        "pregnancy test",
+        "CBC",
+        "urinalysis",
+        "CT abdomen and pelvis"
+      ]
+    },
+    {
+      "id": "diagnosis",
+      "label": "Diagnosis",
+      "max": 20,
+      "score": 0,
+      "found": [],
+      "missed": [
+        "Acute appendicitis"
+      ]
+    },
+    {
+      "id": "plan",
+      "label": "Plan",
+      "max": 10,
+      "score": 0,
+      "found": [],
+      "missed": [
+        "laparoscopic appendectomy",
+        "urgent timing"
+      ]
+    },
+    {
+      "id": "differential",
+      "label": "Differential",
+      "max": 15,
+      "score": 0,
+      "found": [],
+      "missed": [
+        "Ectopic pregnancy",
+        "Ovarian torsion",
+        "Ruptured ovarian cyst"
+      ]
+    }
+  ],
+  "criticalMissed": [
+    {
+      "kind": "history",
+      "id": "allergies",
+      "label": "allergies",
+      "why": "She has a latex allergy (a contact rash from gloves, low criticality on her chart). The room, gloves, and catheters must still be latex free."
+    },
+    {
+      "kind": "history",
+      "id": "menstrual_pregnancy",
+      "label": "menstrual history and pregnancy",
+      "why": "A woman of reproductive age with right lower quadrant pain needs pregnancy excluded: ectopic pregnancy is the can't-miss diagnosis."
+    },
+    {
+      "kind": "test",
+      "id": "pregnancy_test",
+      "label": "pregnancy test",
+      "why": "History alone does not exclude pregnancy. Order a beta-hCG before imaging and surgery."
+    },
+    {
+      "kind": "history",
+      "id": "last_meal",
+      "label": "last oral intake",
+      "why": "Last oral intake sets anesthesia timing and aspiration risk."
+    }
+  ],
+  "criticalFound": [],
+  "diagnosisGiven": "",
+  "diagnosisExpected": "Acute appendicitis",
+  "diagnosisResult": "missing",
+  "differentialNamed": [],
+  "differentialSuggestions": [
+    "Ectopic pregnancy",
+    "Ovarian torsion",
+    "Ruptured ovarian cyst"
+  ],
+  "feedback": [
+    "Must fix: you did not cover allergies. She has a latex allergy (a contact rash from gloves, low criticality on her chart). The room, gloves, and catheters must still be latex free.",
+    "Must fix: you did not cover menstrual history and pregnancy. A woman of reproductive age with right lower quadrant pain needs pregnancy excluded: ectopic pregnancy is the can't-miss diagnosis.",
+    "Must fix: you did not cover pregnancy test. History alone does not exclude pregnancy. Order a beta-hCG before imaging and surgery.",
+    "Must fix: you did not cover last oral intake. Last oral intake sets anesthesia timing and aspiration risk.",
+    "The diagnosis was acute appendicitis.",
+    "The surgery this patient needs is a laparoscopic appendectomy, and that is what we will do in the operating room.",
+    "Timing: this case is urgent.",
+    "Broaden the differential: consider ectopic pregnancy, ovarian torsion, ruptured ovarian cyst.",
+    "Also missed pain migration: Pain that starts at the umbilicus and moves to the right lower quadrant is the classic appendicitis pattern.",
+    "Also missed nausea and vomiting: Anorexia and nausea after the pain starts support appendicitis.",
+    "Also missed fever: Fever points to inflammation and, when high, to perforation."
+  ],
+  "spoken": "Needs work: 8 out of 100. The big miss: allergies. She has a latex allergy (a contact rash from gloves, low criticality on her chart). The room, gloves, and catheters must still be latex free."
+}

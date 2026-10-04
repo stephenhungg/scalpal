@@ -1,29 +1,22 @@
 /** scalpal.run_result.v1. Transport only: the encounter and surgery graders own scores. */
 export interface Fact { id: string; label: string; atSeconds: number }
 export interface FoundItem { kind: string; id: string; label: string; why: string }
-export interface Diagnosis {
-  total: number; max: number; grade: string; procedureId: string; procedureTitle: string;
-  procedureChosenCorrectly: boolean;
-  sections: { id: string; label: string; score: number; max: number; found: string[]; missed: string[] }[];
-  criticalMissed: FoundItem[]; criticalFound: FoundItem[];
-  diagnosisGiven: string; diagnosisExpected: string; diagnosisResult: 'correct' | 'partial' | 'incorrect' | 'missing';
-  differentialNamed: string[]; differentialSuggestions: string[];
-  risksFound: { id: string; type: string; label: string; severity: string; source: string }[];
-  risksMissed: Diagnosis['risksFound']; feedback: string[]; spoken: string;
-}
+// Type-only import: the server remains the sole clinical grading authority.
+import type { Scorecard } from '../../../../services/preop/src/encounter';
+export type Diagnosis = Scorecard;
 export interface RunResult {
   schemaVersion: 'scalpal.run_result.v1'; runId: string; sessionId: string; attemptId: string;
   encounterId: string; patientId: string; procedureId: string; isSample: boolean;
-  diagnosis: Diagnosis | null;
+  diagnosisAvailable: boolean; diagnosis: Diagnosis | null;
   surgery: {
-    available: boolean; total: number; max: number; grade: string;
+    available: boolean; demoAssisted: boolean; total: number; max: number; grade: string;
     milestones: Fact[]; guardrailViolations: Fact[]; orderDeviations: Fact[];
     decisions: (Fact & { correct: boolean })[]; bloodLossMl: number;
     economy: { available: boolean; leftPathMeters: number; rightPathMeters: number; durationSeconds: number };
     hints: Fact[];
   };
   replay: { jobId: string; status: 'queued' | 'processing' | 'ready' | 'failed'; failureReason: string;
-    sourceVideoUrl: string; replayVideoUrl: string; source: 'learner' | 'rehearsal' | 'sample';
+    sourceArtifactId: string; replayArtifactId: string; jobRun: number; source: 'learner' | 'rehearsal' | 'sample' | 'unknown';
     durationSeconds: number; captureStartRunSeconds: number; clockAligned: boolean };
   demo: { enabled: boolean; patientId: string; showSuggestedQuestions: boolean; skipMarking: boolean;
     preExpose: boolean; timeLapseNonKeySteps: boolean; replayHighlightSeconds: number };
@@ -51,15 +44,19 @@ export function parseRunResult(raw: string, expectedSessionId?: string): RunResu
   ensure(v.runId && v.sessionId && v.attemptId, 'Run, session and attempt IDs are required.');
   ensure(!expectedSessionId || v.sessionId === expectedSessionId, 'This result belongs to a different session.');
   boolFields(v, ['isSample']);
-  if (v.diagnosis !== null) {
+  if (v.diagnosisAvailable === undefined) v.diagnosisAvailable = object(v.diagnosis) && Number(v.diagnosis.max) > 0;
+  boolFields(v, ['diagnosisAvailable']);
+  if (!v.diagnosisAvailable) v.diagnosis = null;
+  if (v.diagnosisAvailable) {
     const d = v.diagnosis; ensure(object(d), 'diagnosis must be a scorecard or null.');
     numberFields(d, ['total', 'max']); ensure(Number(d.max) > 0 && Number(d.total) <= Number(d.max), 'Invalid diagnosis score range.');
-    textFields(d, ['grade', 'procedureId', 'procedureTitle', 'diagnosisGiven', 'diagnosisExpected', 'spoken']);
+    textFields(d, ['patientId', 'patientName', 'site', 'grade', 'procedureId', 'procedureTitle', 'diagnosisGiven', 'diagnosisExpected', 'spoken']);
     boolFields(d, ['procedureChosenCorrectly']);
     ensure(['correct', 'partial', 'incorrect', 'missing'].includes(String(d.diagnosisResult)), 'Invalid diagnosis result.');
     ['differentialNamed', 'differentialSuggestions', 'feedback'].forEach(k => ensure(strings(d[k]), `Invalid diagnosis ${k}.`));
     ['criticalFound', 'criticalMissed'].forEach(k => ensure(Array.isArray(d[k]) && d[k].every(x => object(x) && ['kind', 'id', 'label', 'why'].every(f => typeof x[f] === 'string')), `Invalid ${k}.`));
-    ['risksFound', 'risksMissed'].forEach(k => ensure(Array.isArray(d[k]) && d[k].every(x => object(x) && ['id', 'type', 'label', 'severity', 'source'].every(f => typeof x[f] === 'string')), `Invalid ${k}.`));
+    ensure(['urgent', 'emergency', 'elective'].includes(String(d.urgency)), 'Invalid diagnosis urgency.');
+    ensure(Array.isArray(d.carryoverItems) && d.carryoverItems.every(x => object(x) && ['flagId', 'type', 'severity', 'label', 'detail'].every(k => typeof x[k] === 'string') && ['found', 'missed', 'chart_only'].includes(String(x.status)) && ['historyTopics', 'testIds', 'stepIds'].every(k => strings(x[k]))), 'Invalid carryoverItems.');
     ensure(Array.isArray(d.sections) && d.sections.every(x => object(x) && typeof x.id === 'string' && typeof x.label === 'string' && finite(x.score) && finite(x.max) && strings(x.found) && strings(x.missed)), 'Invalid diagnosis sections.');
   }
   const s = v.surgery; ensure(object(s), 'Missing surgery.'); boolFields(s, ['available']);
@@ -71,12 +68,22 @@ export function parseRunResult(raw: string, expectedSessionId?: string): RunResu
   const r = v.replay; ensure(object(r), 'Missing replay.');
   textFields(r, ['jobId', 'failureReason']); boolFields(r, ['clockAligned']); numberFields(r, ['durationSeconds', 'captureStartRunSeconds']);
   ensure(['queued', 'processing', 'ready', 'failed'].includes(String(r.status)), 'Invalid replay status.');
-  ensure(['learner', 'rehearsal', 'sample'].includes(String(r.source)), 'Invalid replay source.');
-  ensure(videoUrl(r.sourceVideoUrl) && videoUrl(r.replayVideoUrl), 'Replay URLs must be HTTP(S) or local absolute paths.');
-  ensure(r.status !== 'ready' || !!r.replayVideoUrl, 'Ready replay requires a video URL.');
+  ensure(['learner', 'rehearsal', 'sample', 'unknown'].includes(String(r.source)), 'Invalid replay source.');
+  // URLs from legacy exports must never become durable playback authority.
+  for (const field of ['sourceVideoUrl', 'replayVideoUrl']) {
+    ensure(r[field] === undefined || videoUrl(r[field]), 'Replay URLs must be HTTP(S) or local absolute paths.');
+    delete r[field];
+  }
+  r.sourceArtifactId ??= ''; r.replayArtifactId ??= ''; r.jobRun ??= 0;
+  textFields(r, ['sourceArtifactId', 'replayArtifactId']); numberFields(r, ['jobRun']);
+  ensure(r.status !== 'ready' || r.source === 'sample' || (!!r.jobId && !!r.replayArtifactId), 'Ready replay requires a job and artifact ID.');
+  ensure(r.status !== 'ready' || r.source !== 'unknown', 'Replay provenance unavailable.');
   ensure(r.status !== 'failed' || !!r.failureReason, 'Failed replay requires a reason.');
   const d = v.demo; ensure(object(d), 'Missing demo flags.'); textFields(d, ['patientId']);
   boolFields(d, ['enabled', 'showSuggestedQuestions', 'skipMarking', 'preExpose', 'timeLapseNonKeySteps']); numberFields(d, ['replayHighlightSeconds']);
+  if (s.demoAssisted !== undefined) boolFields(s, ['demoAssisted']);
+  s.demoAssisted = s.demoAssisted === true || d.enabled || d.skipMarking || d.preExpose || d.timeLapseNonKeySteps;
+  Object.freeze(d);
   return v as unknown as RunResult;
 }
 
@@ -98,4 +105,21 @@ export function errorMarkers(result: RunResult) {
   return [...result.surgery.guardrailViolations, ...result.surgery.orderDeviations]
     .map(f => ({ ...f, clipSeconds: f.atSeconds - r.captureStartRunSeconds }))
     .filter(f => f.clipSeconds >= 0 && f.clipSeconds <= r.durationSeconds);
+}
+
+/** One honest window centered near a logged key event; times are capture-relative. */
+export function highlightWindow(result: RunResult) {
+  const duration = result.replay.durationSeconds;
+  if (!result.demo.enabled || result.demo.replayHighlightSeconds <= 0) return { start: 0, end: duration };
+  const length = Math.min(20, result.demo.replayHighlightSeconds, duration);
+  let at = 0;
+  if (result.replay.source === 'learner' && result.replay.clockAligned && result.surgery.available) {
+    const toClip = (f: Fact) => f.atSeconds - result.replay.captureStartRunSeconds;
+    const valid = (f: Fact) => toClip(f) >= 0 && toClip(f) <= duration;
+    const key = result.surgery.guardrailViolations.filter(valid).sort((a, b) => a.atSeconds - b.atSeconds)[0]
+      ?? result.surgery.milestones.filter(f => /incis|ligat/i.test(`${f.id} ${f.label}`) && valid(f)).sort((a, b) => a.atSeconds - b.atSeconds)[0];
+    if (key) at = Math.max(0, toClip(key) - 3);
+  }
+  const start = Math.min(at, Math.max(0, duration - length));
+  return { start, end: start + length };
 }
