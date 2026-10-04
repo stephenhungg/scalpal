@@ -1,12 +1,12 @@
 @import "tailwindcss";
 
-/* Measured from aeterna.framer.ai at 1440x900 and 390x844. */
+/* Type and spacing measured from aeterna.framer.ai at 1440x900 and 390x844; dark palette. */
 :root {
-  --bg: rgb(245, 245, 245);
-  --ink: rgb(0, 0, 0);
-  --ink-70: rgba(0, 0, 0, 0.7);
-  --ink-50: rgba(0, 0, 0, 0.5);
-  --cross: rgb(190, 190, 190);
+  --bg: rgb(0, 0, 0);
+  --ink: rgb(255, 255, 255);
+  --ink-70: rgba(255, 255, 255, 0.7);
+  --ink-50: rgba(255, 255, 255, 0.5);
+  --cross: rgb(80, 80, 80);
 }
 
 @theme inline {
@@ -47,4 +47,11 @@ body {
     line-height: 24px;
     letter-spacing: -0.4px;
   }
+}
+
+/* From MatthewKim323/adam src/index.css */
+.ascii-adam {
+  display: block;
+  width: 100%;
+  height: 100%;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-// From MatthewKim323/adam (src/components/AsciiAdam.tsx). Changed: this header and the arm colors (neutral, so both read black on the light page).
+// From MatthewKim323/adam (src/components/AsciiAdam.tsx), unchanged apart from this header and both arms set to white.
 import { useEffect, useRef } from 'react'
 
 /*
@@ -71,7 +71,7 @@ void main() {
   vec4 L = layer(u_left, p, u_leftX, u_leftSize);
   vec4 R = layer(u_right, p, u_rightX, u_rightSize);
 
-  // Scalpal site palette: both arms neutral. The page inverts this layer, so they read black.
+  // Scalpal site: both arms white
   float lg = dot(L.rgb, vec3(0.299, 0.587, 0.114));
   vec3 lcol = vec3(lg);
   float rg = dot(R.rgb, vec3(0.299, 0.587, 0.114));

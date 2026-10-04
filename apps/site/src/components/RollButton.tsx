@@ -21,7 +21,7 @@ type Props = {
 export function RollButton({ label, hoverLabel = label, variant = "primary", href, download, external, className = "", ...rest }: Props) {
   const base =
     "group relative inline-flex h-[46px] items-center justify-center overflow-visible px-5 text-[14px] font-semibold leading-[22px] min-[810px]:h-[50px] min-[810px]:px-9";
-  const look = variant === "primary" ? "bg-ink text-white" : "bg-bg text-ink";
+  const look = variant === "primary" ? "bg-ink text-bg" : "bg-bg text-ink";
   const inner = (
     <>
       {variant === "secondary" && <Crosshairs />}

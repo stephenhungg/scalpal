@@ -25,11 +25,11 @@ Both files are gitignored. Host the APK somewhere public (a release asset on a p
 The visual system follows the aeterna Framer template, measured from the live site at 1440×900 and 390×844:
 - Instrument Serif headline at 110/100 with -3px tracking (52/50 on phones)
 - Geist Mono everywhere else
-- `rgb(245,245,245)` background, full-bleed (no column rules)
+- black background, white type, full-bleed (no column rules)
 - word-by-word blur-in entrance: 0.5s per word, 50ms stagger
 - the button label roll uses a spring (stiffness 230, damping 24) fitted to the measured hover trace (within 1px at every sample)
 - the button row fades in 0.4s, starting ~460ms after the first word (measured 463ms on the reference)
 
-The reaching arms are Matthew's ASCII Adam (`src/components/AsciiAdam.tsx` plus `public/hero/ascii/`, from [MatthewKim323/adam](https://github.com/MatthewKim323/adam)), unchanged. It was built for a black page, so `AdamLayer` inverts it with a hue turn and multiplies it onto the light background. It's placed below the button.
+The reaching arms are Matthew's ASCII Adam (`src/components/AsciiAdam.tsx` plus `public/hero/ascii/`, from [MatthewKim323/adam](https://github.com/MatthewKim323/adam)), unchanged. It fills the screen behind the hero on the black page, as in his repo, with both arms set to white.
 
 No template assets or code are used. Fonts are Google Fonts (OFL).

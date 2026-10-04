@@ -27,7 +27,7 @@ export default function Explore() {
             {DEMO_VIDEO_URL ? (
                 <video className="block aspect-video w-full bg-black" src={DEMO_VIDEO_URL} controls playsInline preload="metadata" />
               ) : (
-                <div className="flex aspect-video w-full items-center justify-center bg-[rgb(236,236,236)] text-[14px] text-black/50">
+                <div className="flex aspect-video w-full items-center justify-center bg-[rgb(18,18,18)] text-[14px] text-white/50">
                   Demo video coming soon
                 </div>
               )}
@@ -38,13 +38,13 @@ export default function Explore() {
               {APK_URL ? (
                 <RollButton href={APK_URL} download label="Download for Quest" hoverLabel="Get the APK" />
               ) : (
-                <span className="inline-flex h-[46px] cursor-not-allowed items-center bg-black/40 px-5 text-[14px] font-semibold text-white min-[810px]:h-[50px] min-[810px]:px-9">
+                <span className="inline-flex h-[46px] cursor-not-allowed items-center bg-white/30 px-5 text-[14px] font-semibold text-black min-[810px]:h-[50px] min-[810px]:px-9">
                   Download soon
                 </span>
               )}
               <RollButton href="/" variant="secondary" label="Back" hoverLabel="Home" />
             </div>
-            <p className="text-[14px] leading-[22px] text-black/50">Meta Quest 3 and 3S. Install with SideQuest or adb.</p>
+            <p className="text-[14px] leading-[22px] text-white/50">Meta Quest 3 and 3S. Install with SideQuest or adb.</p>
           </FadeIn>
         </section>
       </Shell>
