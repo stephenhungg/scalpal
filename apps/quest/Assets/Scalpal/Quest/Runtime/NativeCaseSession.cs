@@ -391,7 +391,7 @@ namespace Scalpal.Quest
             Publish(); return true;
         }
 
-        void WorkbenchRetry() { if (!HasHandoff || Phase == "Recap") Retry(); }
+        void WorkbenchRetry() { if (!HasHandoff) Retry(); }
 
         public void Retry()
         {
@@ -579,7 +579,7 @@ namespace Scalpal.Quest
         }
         public void PauseHandoffPractice()
         {
-            practicePaused = true; anatomy.SetRegistrationValid(false); coach.Tracking(false); voice.Disconnect();
+            practicePaused = true; SetHandoffVoiceAllowed(false); anatomy.SetRegistrationValid(false); coach.Tracking(false); voice.Disconnect();
         }
         public bool ResumeHandoffPractice()
         {

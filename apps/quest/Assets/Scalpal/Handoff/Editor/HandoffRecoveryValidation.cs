@@ -44,6 +44,13 @@ namespace Scalpal.Handoff.Editor
             Assert((string)journal[0].GetType().GetField("Item2").GetValue(journal[0]) == "umbilical"
                 && (string)journal[1].GetType().GetField("Item2").GetValue(journal[1]) == "working_ports", "journal retains the event's original validating step");
 
+            var evidence = new Scalpal.Exercises.Data.BodyAction { actionId = "original" };
+            Call(session, "RecordLocalCoachEvent", new CaseEvent { evidence = evidence }, "body");
+            evidence.actionId = "changed";
+            var recorded = (CaseEvent)journal[2].GetType().GetField("Item1").GetValue(journal[2]);
+            Assert(recorded.evidence.actionId == "original", "recovery journal snapshots mutable body evidence");
+            journal.RemoveAt(2);
+
             Ready(session);
             var old = Start(session);
             Inject(old.Current, Created(candidate));

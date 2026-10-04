@@ -5,6 +5,7 @@ using System.Text;
 using Scalpal.EncounterOffice;
 using Scalpal.Exercises.Data;
 using Scalpal.Quest;
+using Scalpal.Shell;
 using Scalpal.Voice;
 using UnityEngine;
 using UnityEngine.Android;
@@ -23,7 +24,7 @@ namespace Scalpal.Handoff
         string phase = "office", rendered = "", failure = "";
         float entered, nextRefresh, nextCoachRetry, nextHealth, lossStarted = -1;
         int realigns;
-        bool loading, healthBusy, focused = true, wasPaused, fitConfirmed, coachTried, menuDown;
+        bool shellPaused, loading, healthBusy, focused = true, wasPaused, fitConfirmed, coachTried, menuDown;
         HandoffTicket Ticket => HandoffRun.Current;
         string ReturnLabel
         {
@@ -52,10 +53,10 @@ namespace Scalpal.Handoff
         void BindScene()
         {
             office = FindFirstObjectByType<NativeEncounterSession>(); surgery = FindFirstObjectByType<NativeCaseSession>();
-            if (!office && !surgery && !loading) { HandoffRun.Clear(); phase = "office"; if (card) card.Hide(); }
+            if (!office && !surgery) { HandoffRun.Clear(); loading = false; phase = "office"; if (card) card.Hide(); }
             if (surgery && Ticket != null && !loading) SetPhase("register");
         }
-        void OnDestroy() { SceneManager.sceneLoaded -= Loaded; SetFade(0); }
+        void OnDestroy() { SceneManager.sceneLoaded -= Loaded; }
         void SetPhase(string value)
         {
             phase = value; entered = Time.unscaledTime; rendered = "";
@@ -68,10 +69,23 @@ namespace Scalpal.Handoff
         }
         void Update()
         {
-            if (!card || loading || !focused) return;
+            if (!card) return;
+            // The global shell owns its menu. Keep surgery stopped even though its HTTP/voice
+            // coroutines use realtime clocks; restore our explicit fit/resume gate afterwards.
+            if (ShellPause.Instance && ShellPause.Instance.IsPaused)
+            {
+                if (!shellPaused) { shellPaused = true; if (surgery) surgery.PauseHandoffPractice(); DisconnectAll(); card.Hide(); rendered = ""; }
+                return;
+            }
+            if (shellPaused)
+            {
+                shellPaused = false; rendered = "";
+                if (surgery && Ticket != null) { fitConfirmed = false; SetPhase(Ticket.practiceStarted ? "paused" : "register"); }
+            }
+            if (loading || !focused || ShellTransition.Busy) return;
             var left = UnityEngine.XR.InputDevices.GetDeviceAtXRNode(UnityEngine.XR.XRNode.LeftHand);
             left.TryGetFeatureValue(UnityEngine.XR.CommonUsages.menuButton, out bool menu);
-            if (menu && !menuDown)
+            if (!ShellPause.Instance && menu && !menuDown)
             {
                 if (surgery && Ticket?.practiceStarted == true) { surgery.PauseHandoffPractice(); SetPhase("paused"); }
                 else if (office) SetPhase("setup");
@@ -140,32 +154,16 @@ namespace Scalpal.Handoff
         }
         IEnumerator Transition()
         {
+            var ticket = Ticket;
             loading = true; SetPhase("transition");
             if (office) office.StopVoice();
-            Show("Pre-op · " + Ticket.scorecard.patientName, Ticket.procedureTitle + " · " + Ticket.scorecard.urgency + "\nExplore · Office · OR · Replay · Recap\nStay where you are.", Array.Empty<string>(), null);
-            yield return Fade(0, 1, .4f);
-            var operation = SceneManager.LoadSceneAsync("NativeSession", LoadSceneMode.Single);
-            operation.allowSceneActivation = false;
-            while (operation.progress < .9f) yield return null;
-            operation.allowSceneActivation = true;
-            while (!operation.isDone) yield return null;
-            BindScene();
-            yield return null;
-            card.Recenter();
-            yield return Fade(1, 0, Ticket.presentationMode == "mixed_reality" ? 1f : .5f);
-            loading = false; fitConfirmed = false; realigns = 0; SetPhase("register");
-        }
-        IEnumerator Fade(float from, float to, float duration)
-        {
-            float start = Time.unscaledTime;
-            while (Time.unscaledTime - start < duration) { SetFade(Mathf.Lerp(from, to, (Time.unscaledTime - start) / duration)); yield return null; }
-            SetFade(to);
-        }
-        static void SetFade(float amount)
-        {
-#if UNITY_ANDROID && !UNITY_EDITOR
-            OVRManager.SetColorScaleAndOffset(new Vector4(1-amount, 1-amount, 1-amount, 1), Vector4.zero, true);
-#endif
+            card.Hide();
+            // Use the shell's single transition owner so its pause/back controls cannot race OR loading.
+            yield return ShellTransition.Ensure().Load("NativeSession", "Pre-op · " + ticket.scorecard.patientName + "\n" + ticket.procedureTitle, revealSeconds: ticket.presentationMode == "mixed_reality" ? 1f : .5f);
+            if (!ReferenceEquals(ticket, Ticket)) yield break;
+            BindScene(); loading = false;
+            if (!surgery) { failure = ShellTransition.LastError ?? "Operating room unavailable"; SetPhase("theatre"); yield break; }
+            card.Recenter(); fitConfirmed = false; realigns = 0; SetPhase("register");
         }
         void Registration()
         {
@@ -246,10 +244,15 @@ namespace Scalpal.Handoff
         IEnumerator ConfirmTimeOut()
         {
             if (loading || !Ticket.AllConfirmed) yield break;
+            var ticket = Ticket; var consumer = surgery; string attempt = Ticket.attemptId;
             loading = true;
             var selected = Ticket.scorecard.carryoverItems.Select(item => item.type).Distinct().ToArray();
             string json = null;
             yield return Http(Ticket.serviceUrl + "/patients/" + Uri.EscapeDataString(Ticket.patientId) + "/preop-check", JsonUtility.ToJson(new PreopCheckRequest { selected = selected }), value => json = value);
+            if (!ReferenceEquals(ticket, Ticket) || !consumer || consumer != surgery) yield break;
+            loading = false;
+            if (!focused || ShellTransition.Busy || (ShellPause.Instance && ShellPause.Instance.IsPaused)
+                || phase != "timeout" || ticket.attemptId != attempt) yield break;
             PreopCheckResult result = null;
             try { if (json != null) result = JsonUtility.FromJson<PreopCheckResult>(json); } catch (ArgumentException) { }
             if (result != null && (result.patientId != Ticket.patientId || result.caseId != Ticket.verifiedCase.caseId))
@@ -328,15 +331,15 @@ namespace Scalpal.Handoff
             for (int i = 0; i < SceneManager.sceneCountInBuildSettings; i++)
             {
                 var path = SceneUtility.GetScenePathByBuildIndex(i);
-                if (path.Contains("/Shell/")) { SceneManager.LoadScene(i); return; }
+                if (path.Contains("/Shell/")) { ShellPause.ReturningToExplore = true; SceneManager.LoadScene(i); return; }
             }
             SceneManager.LoadScene("DiagnosisOffice"); // Explicit temporary fallback until Shell lands.
         }
         void OnApplicationFocus(bool value)
         {
             focused = value;
-            if (!value && surgery && Ticket?.practiceStarted == true) { wasPaused = true; surgery.PauseHandoffPractice(); }
-            if (value && wasPaused) { wasPaused = false; fitConfirmed = false; SetPhase("paused"); }
+            if (!value && surgery) { wasPaused = Ticket?.practiceStarted == true; surgery.PauseHandoffPractice(); }
+            if (value && surgery && Ticket != null) { fitConfirmed = false; SetPhase(wasPaused ? "paused" : "register"); wasPaused = false; }
         }
         void OnApplicationPause(bool pause) => OnApplicationFocus(!pause);
     }

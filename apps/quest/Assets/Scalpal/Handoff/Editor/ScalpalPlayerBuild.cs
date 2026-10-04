@@ -100,7 +100,8 @@ namespace Scalpal.Handoff.Editor
                 throw new InvalidOperationException("SCALPAL_QUEST_APK must be an absolute output path.");
             Prepare();
             EncounterOfficeBuild.Verify();
-            NativeSessionBuild.Validate();
+            Scalpal.Shell.Editor.ShellValidation.Run();
+            NativeSessionBuild.Verify();
             HandoffValidation.Verify();
             ValidateSceneOrder();
             Directory.CreateDirectory(Path.GetDirectoryName(output));

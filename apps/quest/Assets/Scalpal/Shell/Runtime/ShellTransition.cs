@@ -69,7 +69,7 @@ namespace Scalpal.Shell
             // Runs after Start's private endpoint config read, preserving the explicit Explore service choice.
             office.baseUrl=handoff.serviceUrl; office.StartPatient(handoff.patientId);
         }
-        public IEnumerator Load(string scene,string title,Action afterLoad=null)
+        public IEnumerator Load(string scene,string title,Action afterLoad=null,float revealSeconds=.4f)
         {
             if (Busy) yield break;
             LastError=null;
@@ -102,7 +102,7 @@ namespace Scalpal.Shell
                 PositionFade(); CreateTitle(string.IsNullOrEmpty(LastError)?title:"Unable to begin\n"+LastError);
                 yield return new WaitForSecondsRealtime(.8f);
                 ClearTitle();
-                yield return Fade(1,0,.4f);
+                yield return Fade(1,0,Mathf.Clamp(revealSeconds,.1f,2f));
             }
             finally
             {

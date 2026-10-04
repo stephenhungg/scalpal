@@ -21,6 +21,7 @@ namespace Scalpal.Quest
         void RecordLocalCoachEvent(CaseEvent action, string step)
         {
             if (!localCaptionAttempt) return;
+            action.evidence = action.evidence?.Copy();
             localCoachEvents.Add((action, step));
             if (localCoachReady) coach.Forward(action, step);
         }
