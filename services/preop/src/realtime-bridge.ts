@@ -19,8 +19,18 @@ export interface RealtimeSink {
   // The choice-based office interview, mirrored through the same encounter tables.
   attachInterview?(i: InterviewSession): void;
   interviewResult?(i: InterviewSession, card: InterviewScorecard): void;
+  // Operating-room logs for the companion dashboard (docs/operation-flow.md "Dashboard"): what the state
+  // tracker saw, alerts, vitals samples, checklist changes and the case outcome. Fire and forget.
+  simLog?(entry: SimLogEntry): void;
   // Resolves to the headset's resolution, or null when the shared session cannot carry the command.
   highlight(targetId: string, timeoutMs?: number): Promise<{ status: string; reason: string } | null>;
+}
+
+export interface SimLogEntry {
+  coachSessionId: string;
+  kind: "event" | "alert" | "vitals" | "checklist" | "outcome";
+  text: string; // one human-readable line
+  data?: unknown; // structured payload, JSON-serialized when stored
 }
 
 export const NO_REALTIME: RealtimeSink = {
