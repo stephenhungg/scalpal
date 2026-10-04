@@ -112,10 +112,10 @@ class RobotWorker:
         ev = evaluate(policy, self.robot, k=self.rollouts)
         return policy, info, ev, (n_human, n_synthetic), train_s
 
-    def _publish_video(self, ro, ghost, name: str) -> tuple[str | None, dict]:
+    def _publish_video(self, ro, ghost, name: str, *, source: str) -> tuple[str | None, dict]:
         path = self.root / "replays" / name
         t0 = time.perf_counter()
-        info = render_rollout(self.robot, ro, ghost, path)
+        info = render_rollout(self.robot, ro, ghost, path, source=source)
         info["renderS"] = round(time.perf_counter() - t0, 1)
         url = None
         if self.coach:
@@ -131,7 +131,7 @@ class RobotWorker:
         policy, info, ev, (n_human, n_synthetic), train_s = self._train_eval(synthetic_only=True)
         ghost = synthetic_set(self.n_synthetic + 1, seed=0)[-1]  # held out of training
         ro = rollout(policy, self.robot, ghost.landmarks, PatientPose(PATIENT_BASE_POS.copy()), START_OFFSET)
-        url, vid = self._publish_video(ro, ghost.stroke_points(), f"baseline-{info['key']}.mp4")
+        url, vid = self._publish_video(ro, ghost.stroke_points(), f"baseline-{info['key']}.mp4", source="synthetic-held-out")
         details = {"showcase": {**ro.summary(), "ghost": "synthetic held-out demo"}, "evaluation": ev, "training": info,
                    "video": vid, "curve": self.curve(), "notes": NOTES, "cycleS": round(time.perf_counter() - t0, 1),
                    "trainS": round(train_s, 1)}
@@ -159,7 +159,7 @@ class RobotWorker:
         policy, info, ev, (n_human, n_synthetic), train_s = self._train_eval()
         # The replay: the policy on this learner's patient (authored landmarks unless the frames say otherwise).
         ro = rollout(policy, self.robot, human.landmarks, PatientPose(PATIENT_BASE_POS.copy()), START_OFFSET)
-        url, vid = self._publish_video(ro, human.stroke_points(), f"{demo_id}.mp4")
+        url, vid = self._publish_video(ro, human.stroke_points(), f"{demo_id}.mp4", source=human.source)
         self.export()
         details = {"humanDemo": {"source": human.source, "grade": grade, "usedForTraining": bool(grade["success"]), "retarget": human.meta},
                    "showcase": ro.summary(), "evaluation": ev, "training": info, "video": vid, "curve": self.curve(),

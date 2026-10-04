@@ -216,3 +216,31 @@ These are proposals for the capture and replay boundaries in [integration contra
 - Monocular estimates: metric depth, wrist position, and wrist orientation are not reconstructed. Finger poses inherit MediaPipe's 3D errors, which are clearly visible on foreshortened, palm-facing hands.
 - One hand per job (`--hand Right|Left`, right by default). Both Shadow hands are vendored, and the left was checked on a mirrored copy of the sample clip (finger bend r 0.87 to 0.98).
 - No physics, object contact, or task outcome. This is joint-target playback, not a learned policy.
+
+### Demo presentation exports
+
+`RobotWorker.baseline()` renders `out/robot/replays/baseline-<policy-key>.mp4`;
+`process()` retains `<demo-id>.mp4` for the coach upload and Quest recap consumer.
+The 1280×720 streamable H.264 replay now establishes the full arm, reveals the
+source stroke, holds a fixed contact camera, and finishes with two seconds of
+actual shared milestone facts. Source/robot radii are 0.8/1.0 mm, with a dashed
+source at its original patient-frame coordinates. Beauty rendering hides sites,
+uses a matte draped field and updates MuJoCo lights after each kinematic pose.
+Policy, IK, skin surface, landmark coordinates and grading predicates are unchanged.
+
+The baseline caption explicitly says **held-out synthetic stroke, 0 headset
+demonstrations**. Worker captures carry `headset`, `stand-in` or `synthetic`
+provenance into the renderer; unknown provenance stays unverified. Training still
+admits passing demonstrations only. A PASS overlay requires rollout success;
+position error is `markErrorMm`, not `pathErrorMm`.
+
+Render the existing saved curve without retraining:
+
+```sh
+uv run python -m scalpal_motion.mark.plot learning-results/robot_mark_curve.json /path/to/learning-curve-mark-incision.png
+```
+
+The 1920×1080 chart preserves saved aggregate values and shows the range across
+two training seeds. The same 30 evaluation scenarios are reused by those seeds;
+60 rollouts are not 60 distinct patients. Its synthetic-only caption is guarded
+against mixed/headset datasets. Exported videos/PNGs remain outside Git.

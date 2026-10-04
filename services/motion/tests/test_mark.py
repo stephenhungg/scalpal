@@ -155,6 +155,8 @@ def test_short_rollout_and_worker_cycle_produce_a_coach_result(tmp_path):
     assert result["demoId"] == "demo-test0001"
     assert result["pathErrorMm"] is None or result["pathErrorMm"] >= 0
     assert 0 <= result["policySuccessRate"] <= 1
+    assert result["details"]["video"]["source"] == "stand-in"
+    assert "not a headset recording" in result["details"]["video"]["sourceCaption"]
     assert result["videoUrl"] is None  # no coach to upload to; the file is local
     ev = result["details"]["evaluation"]
     assert ev["rollouts"] == 2 and ev["medianIkErrorMm"] < 1.0

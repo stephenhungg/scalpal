@@ -1,5 +1,14 @@
 # System Integration Map
 
+## Demo Visual Presentation — October 4, 2026
+
+Audited source `a16b735` (main), fetched motion branch `a901a50f560b55d978a84155a429985d55552886`, coach branch `f94f583ff9c494cd8098e7befc2445b6ad6e2837`, encounter branch `3be2ac0a59a7e1bb78d390d5b015764533d5fd9a`, and companion branch `b078f880ac141c3a15835fd5cfddf77d373fc818`. Actual current producers/consumers inspected: `ControllerMotionCapture` → coach `robot-routes.ts` → `mark/worker.py` → replay PUT → `RecapController` / VideoPlayer. The existing `scalpal.controller_motion.v1`, `scalpal.robot_result.v1`, `mark_incision`, coach-relative `/robot/replays/<file>.mp4`, baseline fallback and retry flow remain unchanged. Rendering adds only provenance metadata inside free-form `details.video`; no shared state reducer or progression engine is added.
+
+The Python renderer now carries source provenance through baseline and session publishing; held-out synthetic and stand-in captures never become headset claims. A fixed contact view follows the arm establishing shot/source reveal, then shows actual midpoint/length/angle facts for two seconds. Patient coordinates, clocks, IK, policy weights, scored skin and milestone predicates are preserved. All new scene geometry is non-colliding presentation. The saved chart uses original synthetic-only results and the range across seeds, with repeated evaluation scenarios disclosed. Physical headset capture/playback and complete-session verification remain outstanding; these exports are simulated evidence.
+
+Verification: `cd services/motion && uv run pytest` passed **100 tests, 2 optional skips**. The real coach route and shared mark golden fixture passed **14 tests**. Cached baseline policy `4f7e755cf53c341a` produced a successful simulated showcase: midpoint error **2.59 mm**, length **56.29 mm**, angle **4.14°**. The re-encoded artifact is **8.5 s, H.264/yuv420p, 1280×720, 30 fps, faststart**. Establish/source/contact/result frames and the **1920×1080** curve were extracted/visually inspected. No retraining, source curve edits, headset operation or physical robot test was performed.
+
+
 ## Latest Quest Integration Checkpoint — October 4, 2026, Q6: Persistent Injuries and Operative Appearance
 
 Packaged source **`049fd33`**, including visual/persistence milestone **`5a6f502`**, closure correction `fbb6067`, version checkpoint `9e9a2de`, and Matthew's coach memory/output/urgent-clip changes `44b1289` / `2d7a9c1` plus additive robot routes `8a5a256`. The shared operating-room core remains available in learner-selected AR and VR; these views do not replace body state, scoring, registration or lifecycle authority. Research and all ten graphics-backed operative stages are in [the surgery visual audit](surgery-visual-audit.md) and its [primary-source acceptance criteria](research/open-appendectomy-visuals.md).

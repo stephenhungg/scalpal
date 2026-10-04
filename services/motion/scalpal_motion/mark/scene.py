@@ -129,6 +129,10 @@ def build_model() -> mujoco.MjModel:
         if not path.exists():
             raise SystemExit(f"Menagerie model missing at {path}. From services/motion run:\n  {FETCH_HINT}")
     arm = mujoco.MjSpec.from_file(str(MENAGERIE_PANDA))
+    for light in arm.lights:  # replace the imported Menagerie spotlight
+        light.diffuse = [0, 0, 0]
+        light.specular = [0, 0, 0]
+        light.castshadow = False
     hand = mujoco.MjSpec.from_file(str(MENAGERIE_HAND))
     forearm = hand.body("rh_forearm")
     forearm.pos = [0, 0, 0]
@@ -143,34 +147,59 @@ def build_model() -> mujoco.MjModel:
     site_R = np.c_[fingers, np.cross(tip_dir, fingers), tip_dir]  # site x = fingers, z = marker tip direction
     marker = forearm.add_body(name="marker", pos=list(grip), quat=list(_mat2quat(site_R)))
     marker.add_geom(name="marker_body", type=mujoco.mjtGeom.mjGEOM_CAPSULE, size=[0.007, MARKER_HALF, 0],
-                    pos=[0, 0, MARKER_TIP - MARKER_HALF - 0.008], rgba=[0.32, 0.18, 0.55, 1], contype=0, conaffinity=0)
+                    pos=[0, 0, MARKER_TIP - MARKER_HALF - 0.016], rgba=[0.32, 0.18, 0.55, 1], contype=0, conaffinity=0)
     marker.add_geom(name="marker_cap", type=mujoco.mjtGeom.mjGEOM_CYLINDER, size=[0.0072, 0.012, 0],
                     pos=[0, 0, MARKER_TIP - 2 * MARKER_HALF - 0.004], rgba=[0.95, 0.95, 0.95, 1], contype=0, conaffinity=0)
+    # Cosmetic nib terminates at the unchanged IK site. No new contacts.
+    marker.add_geom(name="marker_nib", type=mujoco.mjtGeom.mjGEOM_CAPSULE,
+                    size=[0.0015, 0.005, 0], pos=[0, 0, MARKER_TIP - 0.0065],
+                    rgba=[0.045, 0.035, 0.065, 1], contype=0, conaffinity=0)
     marker.add_site(name="marker_tip", pos=[0, 0, MARKER_TIP], size=[0.002, 0, 0], rgba=[0.1, 0.05, 0.2, 1])
     hand.option.cone = arm.option.cone  # contact settings are irrelevant here (kinematic); avoids an attach conflict
     arm.site("attachment_site").attach_body(forearm, "", "")
 
     arm.option.timestep = 0.002
     w = arm.worldbody
-    arm.add_texture(name="floor", type=mujoco.mjtTexture.mjTEXTURE_2D, builtin=mujoco.mjtBuiltin.mjBUILTIN_CHECKER,
-                    rgb1=[0.86, 0.87, 0.89], rgb2=[0.80, 0.81, 0.83], width=300, height=300)
-    arm.add_material(name="floor", textures=["", "floor"], texrepeat=[6, 6], texuniform=True)
-    w.add_light(pos=[0.4, 0, 2.0], dir=[0, 0, -1], type=mujoco.mjtLightType.mjLIGHT_DIRECTIONAL, diffuse=[0.7, 0.7, 0.7])
-    w.add_light(pos=[1.2, -1.0, 1.2], dir=[-0.6, 0.6, -0.6], diffuse=[0.4, 0.4, 0.4])
+    # Matte beauty materials; geometry and all scoring coordinates stay unchanged.
+    for name, rgba in [("floor", [0.055, 0.075, 0.10, 1]),
+                       ("table", [0.10, 0.14, 0.17, 1]),
+                       ("drape", [0.12, 0.32, 0.34, 1]),
+                       ("skin", [0.76, 0.48, 0.34, 1])]:
+        arm.add_material(name=name, rgba=rgba, specular=0.06, shininess=0.12, reflectance=0)
+    w.add_light(pos=[0.2, -0.8, 1.8], dir=[0.25, 0.3, -1],
+                type=mujoco.mjtLightType.mjLIGHT_DIRECTIONAL,
+                diffuse=[0.55, 0.52, 0.48], specular=[0.08, 0.08, 0.08], castshadow=False)
+    w.add_light(pos=[1.3, 0.8, 1.0], dir=[-0.3, -0.5, -1],
+                type=mujoco.mjtLightType.mjLIGHT_DIRECTIONAL, castshadow=False,
+                diffuse=[0.24, 0.28, 0.32], specular=[0.05, 0.05, 0.05])
     w.add_geom(name="floor", type=mujoco.mjtGeom.mjGEOM_PLANE, size=[3, 3, 0.05], pos=[0, 0, -0.40], material="floor")
     _skin_mesh(arm)
     patient = w.add_body(name="patient", mocap=True)
-    patient.add_geom(name="skin", type=mujoco.mjtGeom.mjGEOM_MESH, meshname="skin", rgba=[0.95, 0.78, 0.68, 1],
+    patient.add_geom(name="skin", type=mujoco.mjtGeom.mjGEOM_MESH, meshname="skin", material="skin",
                      contype=0, conaffinity=0)
     patient.add_geom(name="drape", type=mujoco.mjtGeom.mjGEOM_BOX, size=[0.32, 0.02, 0.45], pos=[0, -0.075, -0.06],
-                     rgba=[0.33, 0.55, 0.62, 1], contype=0, conaffinity=0)
+                     material="drape", contype=0, conaffinity=0)
+    patient.add_geom(name="abdomen_silhouette", type=mujoco.mjtGeom.mjGEOM_ELLIPSOID,
+                     size=[0.24, 0.085, 0.36], pos=[0, -0.105, -0.055],
+                     material="drape", contype=0, conaffinity=0)
+    # Four thin non-colliding sheets mask the rectangular patch edges, leaving
+    # x [-.17, .055], z [-.21, .035] exposed around the existing working field.
+    for name, pos, size in [
+        ("left", [-0.245, -0.001, -0.06], [0.075, 0.004, 0.45]),
+        ("right", [0.1875, -0.001, -0.06], [0.1325, 0.004, 0.45]),
+        ("cranial", [-0.0575, -0.001, 0.2125], [0.1125, 0.004, 0.1775]),
+        ("caudal", [-0.0575, -0.001, -0.36], [0.1125, 0.004, 0.15]),
+    ]:
+        patient.add_geom(name="field_" + name, type=mujoco.mjtGeom.mjGEOM_BOX,
+                         pos=pos, size=size, material="drape", contype=0, conaffinity=0)
     for name, p in [("right_asis", [-0.13, -0.015, -0.14]), ("umbilicus", [0, 0, 0])]:
         patient.add_site(name=name, pos=p, size=[0.005, 0, 0], rgba=[0.15, 0.35, 0.75, 1])
     w.add_geom(name="table", type=mujoco.mjtGeom.mjGEOM_BOX, size=[0.5, 0.4, 0.15], pos=[0.95, 0, -0.25],
-               rgba=[0.55, 0.57, 0.6, 1], contype=0, conaffinity=0)
+               material="table", contype=0, conaffinity=0)
     model = arm.compile()
-    model.vis.headlight.ambient[:] = [0.35, 0.35, 0.35]
-    model.vis.headlight.diffuse[:] = [0.5, 0.5, 0.5]
+    model.vis.headlight.ambient[:] = [0.22, 0.24, 0.28]
+    model.vis.headlight.diffuse[:] = [0.22, 0.22, 0.22]
+    model.vis.headlight.specular[:] = [0, 0, 0]
     model.vis.global_.offwidth = max(model.vis.global_.offwidth, 1280)
     model.vis.global_.offheight = max(model.vis.global_.offheight, 720)
     return model
