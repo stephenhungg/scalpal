@@ -125,7 +125,7 @@ def main():
         command = [unity, "-batchmode", "-nographics", "-projectPath", str(REPO / "apps/quest"),
                    "-buildTarget", "Android", "-executeMethod", "Scalpal.Quest.Editor.NativeSessionBuild.Verify",
                    "-quit", "-logFile", str(log)]
-        passed = check("Editor scene/components + synthetic scoring/attempt fixtures", command, timeout=240)
+        passed = check("Editor scene/components + synthetic scoring/attempt fixtures", command, timeout=900)
         output = log.read_text(errors="replace") if log.exists() else ""
         # Require the terminal marker: an editor exit alone is not proof the method ran.
         if passed and "SCALPAL_NATIVE_SESSION_VERIFY_OK" not in output:
@@ -140,10 +140,12 @@ def main():
     if args.suite in {"all", "player"}:
         unity = environment.get("SCALPAL_UNITY", UNITY_DEFAULT)
         player_log = Path(tempfile.gettempdir()) / ("scalpal-player-verify-" + uuid.uuid4().hex + ".log")
+        # Includes the real-consumer wound placement sweep; bounded synthetic loaded
+        # steps take longer than the former component-only gate in the Mono Editor.
         passed = check("unified Shell/Office/AR-VR OR/Replay-Recap Editor gates", [unity,
                        "-batchmode", "-nographics", "-projectPath", str(REPO / "apps/quest"),
                        "-buildTarget", "Android", "-executeMethod",
-                       "Scalpal.Handoff.Editor.ScalpalPlayerBuild.Verify", "-quit", "-logFile", str(player_log)], timeout=360)
+                       "Scalpal.Handoff.Editor.ScalpalPlayerBuild.Verify", "-quit", "-logFile", str(player_log)], timeout=1200)
         output = player_log.read_text(errors="replace") if player_log.exists() else ""
         if passed and "SCALPAL_PLAYER_VERIFY_OK" not in output:
             failures.append("unified player verification marker absent")

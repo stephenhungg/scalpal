@@ -16,7 +16,7 @@ namespace Scalpal.Anatomy.Tissue
         public struct Face
         {
             public int a,b,c,cell,neighbor;
-            public bool cut;
+            public bool cut, separated;
         }
         public readonly Vector3[] Original;
         public readonly Cell[] Cells;
@@ -28,7 +28,13 @@ namespace Scalpal.Anatomy.Tissue
         readonly float[] restVolumes, lambdas;
         readonly MaxwellHistory[] histories;
         readonly int[,] binding;
+        TissueJacobianSolve.CellData[] jacobianCells;
+        bool[,] nodeMaterials;
+        // Optional ordered noninversion acceleration. Material energy/history stay managed.
+        public bool UseBurstJacobianSolver { get; set; }
+        public bool LastStepUsedBurst { get; private set; }
         readonly List<int> cutCandidates=new List<int>();
+        readonly List<int> interfaceCandidates=new List<int>();
         readonly List<Vector3> surfaceVertices=new List<Vector3>();
         readonly List<int>[] surfaceTriangles;
         Vector3[] positions, rest, previous, velocities, previousVelocities;
@@ -40,6 +46,7 @@ namespace Scalpal.Anatomy.Tissue
         sealed class MaterialHandle
         {
             public int id, material, cell, a, b, c;
+            public float patchRadius;
             public Vector3 barycentric, origin, acceptedTarget, requestedTarget, trialTarget;
             public int[] nodes = Array.Empty<int>();
             public Vector3[] offsets = Array.Empty<Vector3>(), multipliers = Array.Empty<Vector3>();
@@ -67,6 +74,7 @@ namespace Scalpal.Anatomy.Tissue
         public Vector3[] Rest => rest;
         public float NodeMass(int node) => nodeMass[node];
         public int CutFaceCount { get; private set; }
+        public int SeparatedFaceCount { get; private set; }
         public int NodeCount => positions.Length;
         public float ReferenceVolume { get; private set; }
         public float TotalMass { get; private set; }
@@ -74,12 +82,16 @@ namespace Scalpal.Anatomy.Tissue
         public bool Dirty { get; private set; }=true;
         public const int MaxNodes=4096;
         public const int MaxCutFaces=512;
+        public const int MaxRefinedCutFaces=1024;
+        public int CutFaceBudget { get; }
         const float NumericVelocityDamping=2; // Stability tuning, NOT measured tissue viscosity.
 
-        public TissueVolume(Vector3[] nodes,Cell[] cells,VolumeMaterial[] materials,bool[] pins)
+        public TissueVolume(Vector3[] nodes,Cell[] cells,VolumeMaterial[] materials,bool[] pins,int cutFaceBudget=MaxCutFaces)
         {
             if (nodes==null || cells==null || materials==null || pins==null || nodes.Length!=pins.Length || cells.Length==0 || nodes.Length>MaxNodes)
                 throw new ArgumentException("Invalid volume inputs");
+            if(cutFaceBudget<1||cutFaceBudget>MaxRefinedCutFaces)throw new ArgumentException("Invalid fracture budget");
+            CutFaceBudget=cutFaceBudget;
             foreach(var material in materials) if(!material.HasValidUnits) throw new ArgumentException("Invalid SI material parameters");
             Original=(Vector3[])nodes.Clone(); Cells=(Cell[])cells.Clone(); Materials=(VolumeMaterial[])materials.Clone(); originalPins=(bool[])pins.Clone(); boundaryTargets=(Vector3[])nodes.Clone();
             restInverse=new TissueTensor[cells.Length]; restVolumes=new float[cells.Length]; lambdas=new float[cells.Length]; binding=new int[cells.Length,4];
@@ -153,7 +165,7 @@ namespace Scalpal.Anatomy.Tissue
             Vector3 normal=Vector3.forward;float faceDistance=float.PositiveInfinity;
             foreach(var face in Faces)
             {
-                if(face.neighbor>=0&&!face.cut)continue;
+                if(face.neighbor>=0&&!face.cut&&!face.separated)continue;
                 float current=FaceDistanceSquared(face,face.cell,point);
                 if(current>=faceDistance)continue;
                 var candidate=Vector3.Cross(Original[face.b]-Original[face.a],Original[face.c]-Original[face.a]);
@@ -216,16 +228,23 @@ namespace Scalpal.Anatomy.Tissue
         {
             faceIndex=cell=-1;contact=Vector3.zero;int material=MaterialIndex(id);
             if(material<0||!TissueCage.Finite(point)||!(radius>0)||float.IsInfinity(radius)||radius>.05f)return false;
-            float nearest=radius*radius;
+            float nearest=radius*radius,bestFacing=float.NegativeInfinity;
             for(int i=0;i<Faces.Length;i++)
             {
-                var face=Faces[i];if(face.neighbor>=0&&!face.cut)continue;
-                for(int side=0;side<(face.cut&&face.neighbor>=0?2:1);side++)
+                var face=Faces[i];if(face.neighbor>=0&&!face.cut&&!face.separated)continue;
+                for(int side=0;side<((face.cut||face.separated)&&face.neighbor>=0?2:1);side++)
                 {
                     int owner=side==0?face.cell:face.neighbor;if(Cells[owner].material!=material)continue;
-                    Vector3 sample=ClosestTriangle(point,positions[BoundRoot(owner,face.a)],positions[BoundRoot(owner,face.b)],positions[BoundRoot(owner,face.c)]);
-                    float distance=(point-sample).sqrMagnitude;if(distance>nearest)continue;
-                    nearest=distance;faceIndex=i;cell=owner;contact=sample;
+                    Vector3 a=positions[BoundRoot(owner,face.a)],b=positions[BoundRoot(owner,face.b)],c=positions[BoundRoot(owner,face.c)];
+                    Vector3 sample=ClosestTriangle(point,a,b,c);
+                    float distance=(point-sample).sqrMagnitude;if(distance>nearest+1e-12f)continue;
+                    // Coincident crack lips have different bound nodes. Choose the
+                    // outward face facing the query, not whichever owner iterates last.
+                    Vector3 center=Vector3.zero;for(int corner=0;corner<4;corner++)center+=positions[binding[owner,corner]]*.25f;
+                    Vector3 normal=Vector3.Cross(b-a,c-a).normalized;if(Vector3.Dot(normal,center-a)>0)normal=-normal;
+                    float facing=Vector3.Dot(normal,point-sample);
+                    if(Mathf.Abs(distance-nearest)<=1e-12f&&facing<bestFacing)continue;
+                    nearest=distance;bestFacing=facing;faceIndex=i;cell=owner;contact=sample;
                 }
             }
             return faceIndex>=0;
@@ -233,8 +252,9 @@ namespace Scalpal.Anatomy.Tissue
         // IDs belong to the adapter (e.g. tool instance), never to a case step.
         // Each grip holds a connected, material-specific finite patch. Its actual contact
         // is a barycentric material face point, not the commanded controller position.
-        public bool BeginMaterialHandle(int id,string materialId,Vector3 point,float radius)
+        public bool BeginMaterialHandle(int id,string materialId,Vector3 point,float radius,float patchRadius=HandleRadiusMeters)
         {
+            if(!float.IsFinite(patchRadius)||patchRadius<=0||patchRadius>.05f)return false;
             foreach(var grip in materialHandles)if(grip.id==id)return false;
             if(materialHandles.Count>=MaximumMaterialHandles||!TryMaterialFace(materialId,point,radius,out int faceIndex,out int cell,out Vector3 contact))return false;
             var face=Faces[faceIndex];
@@ -245,22 +265,32 @@ namespace Scalpal.Anatomy.Tissue
             float u=(bb*Vector3.Dot(ap,ab)-dot*Vector3.Dot(ap,ac))/denominator;
             float v=(aa*Vector3.Dot(ap,ac)-dot*Vector3.Dot(ap,ab))/denominator;
             var handle=new MaterialHandle{id=id,material=MaterialIndex(materialId),cell=cell,a=face.a,b=face.b,c=face.c,
-                barycentric=new Vector3(1-u-v,u,v),origin=contact,acceptedTarget=contact,requestedTarget=contact};
-            if(!BuildMaterialPatch(handle))return false;
-            materialHandles.Add(handle);return true;
+                barycentric=new Vector3(1-u-v,u,v),origin=contact,acceptedTarget=contact,requestedTarget=contact,patchRadius=patchRadius};
+            // Partition publication is atomic: a new tool may not erase a live grip.
+            var previousPatches=new List<(MaterialHandle grip,int[] nodes,Vector3[] offsets,float[] weights,Vector3[] multipliers)>();
+            foreach(var other in materialHandles)previousPatches.Add((other,other.nodes,other.offsets,other.weights,other.multipliers));
+            materialHandles.Add(handle);
+            bool valid=BuildMaterialPatch(handle);
+            foreach(var other in materialHandles)if(other!=handle&&PatchesCanCompete(other,handle))valid=BuildMaterialPatch(other)&&valid;
+            if(valid)return true;
+            materialHandles.Remove(handle);
+            foreach(var patch in previousPatches)
+            {patch.grip.nodes=patch.nodes;patch.grip.offsets=patch.offsets;patch.grip.weights=patch.weights;patch.grip.multipliers=patch.multipliers;}
+            return false;
         }
         Vector3 MaterialPosition(MaterialHandle grip)=>positions[BoundRoot(grip.cell,grip.a)]*grip.barycentric.x+
             positions[BoundRoot(grip.cell,grip.b)]*grip.barycentric.y+positions[BoundRoot(grip.cell,grip.c)]*grip.barycentric.z;
         bool BuildMaterialPatch(MaterialHandle grip)
         {
+            float materialRadius=grip.patchRadius;
             int seed=-1;float nearest=float.PositiveInfinity;Vector3 anchor=MaterialPosition(grip);
+            Vector3 restAnchor=RestAnchor(grip);
             foreach(int root in new[]{grip.a,grip.b,grip.c})
             {
                 int node=BoundRoot(grip.cell,root);float distance=(positions[node]-anchor).sqrMagnitude;
-                if(!pinned[node]&&distance<nearest){seed=node;nearest=distance;}
+                if(!pinned[node]&&OwnsMaterialNode(grip,restAnchor,node)&&distance<nearest){seed=node;nearest=distance;}
             }
             if(seed<0)return false;
-            Vector3 restAnchor=Original[grip.a]*grip.barycentric.x+Original[grip.b]*grip.barycentric.y+Original[grip.c]*grip.barycentric.z;
             Vector3 normal=Vector3.Cross(Original[grip.b]-Original[grip.a],Original[grip.c]-Original[grip.a]).normalized;
             var reachable=new bool[NodeCount];reachable[seed]=true;bool changed=true;
             while(changed)
@@ -274,7 +304,7 @@ namespace Scalpal.Anatomy.Tissue
                     for(int corner=0;corner<4;corner++)
                     {
                         int node=binding[cell,corner];Vector3 offset=rest[node]-restAnchor;
-                        if(reachable[node]||offset.sqrMagnitude>HandleRadiusMeters*HandleRadiusMeters)continue;
+                        if(reachable[node]||offset.sqrMagnitude>materialRadius*materialRadius)continue;
                         reachable[node]=true;changed=true;
                     }
                 }
@@ -283,13 +313,39 @@ namespace Scalpal.Anatomy.Tissue
             for(int node=0;node<NodeCount;node++)if(reachable[node]&&!pinned[node])
             {
                 Vector3 offset=rest[node]-restAnchor;
-                float radius=(offset-normal*Vector3.Dot(offset,normal)).magnitude/HandleRadiusMeters;
+                // Competing grips partition overlapping rest patches. Two tools must
+                // not prescribe opposite targets to the same node, even when a path
+                // reconnects around a finite crack tip. Rest anchors never follow jitter.
+                if(!OwnsMaterialNode(grip,restAnchor,node))continue;
+                float radius=(offset-normal*Vector3.Dot(offset,normal)).magnitude/materialRadius;
                 if(radius>=1&&node!=seed)continue;
                 nodes.Add(node);offsets.Add(positions[node]-anchor);
                 weights.Add(Mathf.Max(.05f,(1-radius)*(1-radius)));
             }
             grip.nodes=nodes.ToArray();grip.offsets=offsets.ToArray();grip.weights=weights.ToArray();grip.multipliers=new Vector3[grip.nodes.Length];
             return grip.nodes.Length>0;
+        }
+        Vector3 RestAnchor(MaterialHandle grip)=>Original[grip.a]*grip.barycentric.x+Original[grip.b]*grip.barycentric.y+Original[grip.c]*grip.barycentric.z;
+        bool OwnsMaterialNode(MaterialHandle grip,Vector3 anchor,int node)
+        {
+            float distance=(rest[node]-anchor).sqrMagnitude;
+            foreach(var other in materialHandles)
+            {
+                if(other==grip||!nodeMaterials[node,other.material])continue;
+                float competing=(rest[node]-RestAnchor(other)).sqrMagnitude;
+                if(!EligibleMaterialNode(other,node,competing))continue;
+                if(competing<distance-1e-12f||Mathf.Abs(competing-distance)<=1e-12f&&other.id<grip.id)return false;
+            }
+            return true;
+        }
+        bool EligibleMaterialNode(MaterialHandle grip,int node,float distanceSquared)=>nodeMaterials[node,grip.material]&&
+            (distanceSquared<=grip.patchRadius*grip.patchRadius||node==BoundRoot(grip.cell,grip.a)||node==BoundRoot(grip.cell,grip.b)||node==BoundRoot(grip.cell,grip.c));
+        bool PatchesCanCompete(MaterialHandle existing,MaterialHandle candidate)
+        {
+            Vector3 anchor=RestAnchor(candidate);
+            foreach(int node in existing.nodes)
+                if(EligibleMaterialNode(candidate,node,(rest[node]-anchor).sqrMagnitude))return true;
+            return false;
         }
         public bool SetMaterialHandleTarget(int id,Vector3 meters)
         {
@@ -303,7 +359,13 @@ namespace Scalpal.Anatomy.Tissue
             meters=Vector3.zero;return false;
         }
         public void ReleaseMaterialHandle(int id)
-        {for(int i=materialHandles.Count-1;i>=0;i--)if(materialHandles[i].id==id)materialHandles.RemoveAt(i);}
+        {
+            MaterialHandle removed=null;
+            for(int i=materialHandles.Count-1;i>=0;i--)if(materialHandles[i].id==id)
+            {removed=materialHandles[i];materialHandles.RemoveAt(i);}
+            if(removed==null)return;
+            foreach(var grip in materialHandles)if(PatchesCanCompete(grip,removed))BuildMaterialPatch(grip);
+        }
         void ReleaseMaterialHandles()=>materialHandles.Clear();
         public int CutFacesForMaterial(string id)
         {
@@ -320,23 +382,66 @@ namespace Scalpal.Anatomy.Tissue
         {
             int material=MaterialIndex(id);return material<0?0:FractureSweep(a,b,c,tolerance,material);
         }
-        int FractureSweep(Vector3 a,Vector3 b,Vector3 c,float contactTolerance,int material)
+        // Splitting a supported layer releases its local underlying interface without
+        // cutting either material there. The finite triangle and authored support margin
+        // select face centroids; resolution bounds the corresponding discrete opening.
+        // Both operations publish together or neither operation changes the volume.
+        public int SplitMaterialSweep(string id,string underlyingId,Vector3 a,Vector3 b,Vector3 c,float tolerance,float interfaceMargin)
+        {
+            int material=MaterialIndex(id),underlying=MaterialIndex(underlyingId);
+            if(material<0||underlying<0||material==underlying||!float.IsFinite(interfaceMargin)||interfaceMargin<=0||interfaceMargin>.05f)return 0;
+            bool adjacent=false;
+            foreach(var face in Faces)if(IsInterface(face,material,underlying)){adjacent=true;break;}
+            if(!adjacent)return 0;
+            return FractureSweep(a,b,c,tolerance,material,underlying,interfaceMargin);
+        }
+        public int SeparatedFacesForMaterials(string id,string underlyingId)
+        {
+            int material=MaterialIndex(id),underlying=MaterialIndex(underlyingId),count=0;
+            if(material<0||underlying<0||material==underlying)return 0;
+            foreach(var face in Faces)if(face.separated&&IsInterface(face,material,underlying))count++;
+            return count;
+        }
+        bool IsInterface(Face face,int material,int underlying)=>face.neighbor>=0&&
+            (Cells[face.cell].material==material&&Cells[face.neighbor].material==underlying||
+             Cells[face.cell].material==underlying&&Cells[face.neighbor].material==material);
+
+        int FractureSweep(Vector3 a,Vector3 b,Vector3 c,float contactTolerance,int material,int underlying=-1,float interfaceMargin=0)
         {
             if(!TissueCage.Finite(a)||!TissueCage.Finite(b)||!TissueCage.Finite(c)||Vector3.Cross(b-a,c-a).sqrMagnitude<1e-12f) return 0;
-            if(float.IsNaN(contactTolerance)||contactTolerance<0 || contactTolerance>.003f || CutFaceCount>=MaxCutFaces) return 0;
-            var candidate=cutCandidates;candidate.Clear();
+            if(float.IsNaN(contactTolerance)||contactTolerance<0 || contactTolerance>.003f || CutFaceCount+SeparatedFaceCount>=CutFaceBudget) return 0;
+            var candidate=cutCandidates;candidate.Clear();interfaceCandidates.Clear();
             for(int i=0;i<Faces.Length;i++)
             {
-                var face=Faces[i]; if(face.neighbor<0 || face.cut) continue;
+                var face=Faces[i]; if(face.neighbor<0 || face.cut||face.separated) continue;
                 if(material>=0&&(Cells[face.cell].material!=material||Cells[face.neighbor].material!=material))continue;
                 Vector3 p=positions[BoundRoot(face.cell,face.a)],q=positions[BoundRoot(face.cell,face.b)],r=positions[BoundRoot(face.cell,face.c)];
                 if(BladeIntersectsFace(a,b,c,p,q,r,contactTolerance)) candidate.Add(i);
             }
-            if(candidate.Count==0 || CutFaceCount+candidate.Count>MaxCutFaces) return 0;
+            // A duplicate/invalid split cannot release an interface as a side effect.
+            if(candidate.Count==0)return 0;
+            if(underlying>=0)
+            {
+                float squaredMargin=interfaceMargin*interfaceMargin;
+                for(int i=0;i<Faces.Length;i++)
+                {
+                    var face=Faces[i];if(face.cut||face.separated||!IsInterface(face,material,underlying))continue;
+                    Vector3 center=(positions[BoundRoot(face.cell,face.a)]+positions[BoundRoot(face.cell,face.b)]+positions[BoundRoot(face.cell,face.c)])/3;
+                    if((ClosestTriangle(center,a,b,c)-center).sqrMagnitude<=squaredMargin)interfaceCandidates.Add(i);
+                }
+            }
+            if(CutFaceCount+SeparatedFaceCount+candidate.Count+interfaceCandidates.Count>CutFaceBudget)return 0;
             foreach(int i in candidate) {var face=Faces[i];face.cut=true;Faces[i]=face;}
-            // Atomic topology update: refuse over-budget fracture without partial mutation.
-            if(!RebuildNodes(false)) {foreach(int i in candidate) {var face=Faces[i];face.cut=false;Faces[i]=face;} return 0;}
-            CutFaceCount+=candidate.Count; TopologyRevision++; ReleaseHandle();
+            foreach(int i in interfaceCandidates) {var face=Faces[i];face.separated=true;Faces[i]=face;}
+            // RebuildNodes computes new binding arrays privately, checking the node cap
+            // before publication. A failed budget leaves positions, grips and history intact.
+            if(!RebuildNodes(false))
+            {
+                foreach(int i in candidate) {var face=Faces[i];face.cut=false;Faces[i]=face;}
+                foreach(int i in interfaceCandidates) {var face=Faces[i];face.separated=false;Faces[i]=face;}
+                return 0;
+            }
+            CutFaceCount+=candidate.Count;SeparatedFaceCount+=interfaceCandidates.Count;TopologyRevision++;ReleaseHandle();
             // Retain each material side through cell-corner identities after fan duplication.
             // A nick must not detach a held peritoneum or weld its opposite crack lip.
             for(int i=materialHandles.Count-1;i>=0;i--)if(!BuildMaterialPatch(materialHandles[i]))materialHandles.RemoveAt(i);
@@ -379,7 +484,7 @@ namespace Scalpal.Anatomy.Tissue
             // Union cell corners around each original node through UNBROKEN incident faces.
             // A fracture splits only the connected material fans; crack tips can remain attached.
             int count=Cells.Length*4; var parent=new int[count];for(int i=0;i<count;i++)parent[i]=i;
-            foreach(var face in Faces) if(face.neighbor>=0&&!face.cut)
+            foreach(var face in Faces) if(face.neighbor>=0&&!face.cut&&!face.separated)
             {
                 UnionRoot(face.cell,face.neighbor,face.a,parent);UnionRoot(face.cell,face.neighbor,face.b,parent);UnionRoot(face.cell,face.neighbor,face.c,parent);
             }
@@ -400,6 +505,14 @@ namespace Scalpal.Anatomy.Tissue
             acceptedForces=new Vector3[positions.Length];trialForces=new Vector3[positions.Length];TotalMass=0;
             for(int i=0;i<positions.Length;i++){TotalMass+=mass[i];inverseMass[i]=pinned[i]?0:1/mass[i];}
             for(int cell=0;cell<Cells.Length;cell++)for(int corner=0;corner<4;corner++)binding[cell,corner]=nextBinding[cell,corner];
+            nodeMaterials=new bool[NodeCount,Materials.Length];
+            for(int cell=0;cell<Cells.Length;cell++)for(int corner=0;corner<4;corner++)nodeMaterials[binding[cell,corner],Cells[cell].material]=true;
+            jacobianCells=new TissueJacobianSolve.CellData[Cells.Length];
+            for(int cell=0;cell<Cells.Length;cell++)
+            {
+                jacobianCells[cell]=new TissueJacobianSolve.CellData {a=binding[cell,0],b=binding[cell,1],c=binding[cell,2],d=binding[cell,3],
+                    restInverse=restInverse[cell],restA=rest[binding[cell,0]],restB=rest[binding[cell,1]],restC=rest[binding[cell,2]],restD=rest[binding[cell,3]]};
+            }
             return true;
         }
         void UnionRoot(int a,int b,int root,int[] parent)
@@ -411,7 +524,7 @@ namespace Scalpal.Anatomy.Tissue
 
         public void Step(float seconds,Vector3 handleTarget,Vector3 acceleration)
         {
-            LastStepAccepted=false;LastStepRetries=0;LastStepBacktracks=0;LastRejectedJacobian=float.PositiveInfinity;LastRejectedCell=-1;
+            LastStepUsedBurst=false;LastStepAccepted=false;LastStepRetries=0;LastStepBacktracks=0;LastRejectedJacobian=float.PositiveInfinity;LastRejectedCell=-1;
             if(float.IsNaN(seconds)||seconds<=0||seconds>1f/30||!TissueCage.Finite(handleTarget)||!TissueCage.Finite(acceleration))return;
             Array.Copy(positions,previous,NodeCount);Array.Copy(velocities,previousVelocities,NodeCount);
             Vector3 target=Handle>=0?handleOrigin+Vector3.ClampMagnitude(handleTarget-handleOrigin,.02f):Vector3.zero;
@@ -453,6 +566,8 @@ namespace Scalpal.Anatomy.Tissue
                 // This is numerical stabilization, not tissue viscosity.
                 velocities[i]*=Mathf.Exp(-NumericVelocityDamping*dt)*predictionScale;positions[i]+=velocities[i]*dt+acceleration*(dt*dt);
             }
+            LastStepUsedBurst=UseBurstJacobianSolver&&stabilize;
+            using var jacobian=LastStepUsedBurst?new TissueJacobianSolve(positions,jacobianCells,inverseMass):null;
             for(int iteration=0;iteration<6;iteration++)
             {
                 for(int cell=0;cell<Cells.Length;cell++)SolveCell(cell,dt);
@@ -473,7 +588,16 @@ namespace Scalpal.Anatomy.Tissue
                     }
                 }
                 for(int i=0;i<NodeCount;i++)if(pinned[i])positions[i]=boundaryTargets[originalNodeFor[i]];
-                if(stabilize)for(int sweep=0;sweep<3;sweep++)for(int cell=0;cell<Cells.Length;cell++)SolveJacobianFloor(cell);
+                if(stabilize)
+                {
+                    if(jacobian!=null)jacobian.RunJacobianFloor();
+                    else for(int sweep=0;sweep<3;sweep++)
+                    {
+                        bool corrected=false;
+                        for(int cell=0;cell<Cells.Length;cell++)corrected=SolveJacobianFloor(cell)||corrected;
+                        if(!corrected)break;
+                    }
+                }
             }
             if(!ValidGeometry())
             {
@@ -525,22 +649,28 @@ namespace Scalpal.Anatomy.Tissue
         }
         TissueTensor Deformation(int cell)
         {
-            int a=binding[cell,0];return new TissueTensor(positions[binding[cell,1]]-positions[a],positions[binding[cell,2]]-positions[a],positions[binding[cell,3]]-positions[a]).Multiply(restInverse[cell]);
+            int a=binding[cell,0];
+            // The material reference is exactly strain-free. Inverting millimetre-thin
+            // rest cells must not create roundoff prestress or motion before contact.
+            if(positions[a].Equals(rest[a])&&positions[binding[cell,1]].Equals(rest[binding[cell,1]])&&
+                positions[binding[cell,2]].Equals(rest[binding[cell,2]])&&positions[binding[cell,3]].Equals(rest[binding[cell,3]]))return TissueTensor.Identity;
+            return new TissueTensor(positions[binding[cell,1]]-positions[a],positions[binding[cell,2]]-positions[a],positions[binding[cell,3]]-positions[a]).Multiply(restInverse[cell]);
         }
         // Numerical noninversion inequality for interactive grasps. This is not a
         // calibrated compressibility/fracture law; the constitutive energy is unchanged.
-        void SolveJacobianFloor(int cell)
+        bool SolveJacobianFloor(int cell)
         {
             var f=Deformation(cell);float determinant=f.Determinant;
-            if(float.IsNaN(determinant)||float.IsInfinity(determinant)||determinant>=.2f)return;
+            if(float.IsNaN(determinant)||float.IsInfinity(determinant)||determinant>=.2f)return false;
             var cofactor=new TissueTensor(Vector3.Cross(f.y,f.z),Vector3.Cross(f.z,f.x),Vector3.Cross(f.x,f.y));
             var gradient=cofactor.Multiply(restInverse[cell].Transpose());
             Vector3 g1=gradient.x,g2=gradient.y,g3=gradient.z,g0=-g1-g2-g3;
             int a=binding[cell,0],b=binding[cell,1],c=binding[cell,2],d=binding[cell,3];
             float denom=inverseMass[a]*g0.sqrMagnitude+inverseMass[b]*g1.sqrMagnitude+inverseMass[c]*g2.sqrMagnitude+inverseMass[d]*g3.sqrMagnitude;
-            if(!(denom>1e-20f)||float.IsInfinity(denom))return;
+            if(!(denom>1e-20f)||float.IsInfinity(denom))return false;
             float change=(.2f-determinant)/denom;
             positions[a]+=inverseMass[a]*change*g0;positions[b]+=inverseMass[b]*change*g1;positions[c]+=inverseMass[c]*change*g2;positions[d]+=inverseMass[d]*change*g3;
+            return true;
         }
         void SolveCell(int cell,float dt)
         {
@@ -558,10 +688,10 @@ namespace Scalpal.Anatomy.Tissue
         }
         public void Reset()
         {
-            for(int i=0;i<Faces.Length;i++){var face=Faces[i];face.cut=false;Faces[i]=face;}
+            for(int i=0;i<Faces.Length;i++){var face=Faces[i];face.cut=false;face.separated=false;Faces[i]=face;}
             foreach(var history in histories)history.Reset();
             Array.Copy(Original,boundaryTargets,Original.Length);HasAcceptedStep=false;TopologyRevision++;
-            CutFaceCount=0;LastStepAccepted=false;LastStepRetries=0;LastStepBacktracks=0;LastRejectedJacobian=float.PositiveInfinity;LastRejectedCell=-1;ReleaseHandle();ReleaseMaterialHandles();if(!RebuildNodes(true)) throw new ArgumentException("Initial material connectivity exceeds tissue node budget");Dirty=true;
+            CutFaceCount=0;SeparatedFaceCount=0;LastStepUsedBurst=false;LastStepAccepted=false;LastStepRetries=0;LastStepBacktracks=0;LastRejectedJacobian=float.PositiveInfinity;LastRejectedCell=-1;ReleaseHandle();ReleaseMaterialHandles();if(!RebuildNodes(true)) throw new ArgumentException("Initial material connectivity exceeds tissue node budget");Dirty=true;
         }
         public void Freeze(){ReleaseHandle();ReleaseMaterialHandles();Array.Clear(velocities,0,velocities.Length);}
         public void MarkCommitted()=>Dirty=false;
@@ -574,9 +704,9 @@ namespace Scalpal.Anatomy.Tissue
             float nearest=maximumDistance*maximumDistance;
             foreach(var face in Faces)
             {
-                if(face.neighbor>=0&&!face.cut)continue;
+                if(face.neighbor>=0&&!face.cut&&!face.separated)continue;
                 nearest=Mathf.Min(nearest,FaceDistanceSquared(face,face.cell,point));
-                if(face.cut&&face.neighbor>=0)nearest=Mathf.Min(nearest,FaceDistanceSquared(face,face.neighbor,point));
+                if((face.cut||face.separated)&&face.neighbor>=0)nearest=Mathf.Min(nearest,FaceDistanceSquared(face,face.neighbor,point));
             }
             return nearest;
         }
@@ -591,8 +721,8 @@ namespace Scalpal.Anatomy.Tissue
             var vertices=surfaceVertices;vertices.Clear();var submesh=surfaceTriangles;for(int i=0;i<submesh.Length;i++)submesh[i].Clear();
             foreach(var face in Faces)
             {
-                if(face.neighbor>=0&&!face.cut)continue;
-                AddSurface(face,face.cell,vertices,submesh);if(face.cut&&face.neighbor>=0)AddSurface(face,face.neighbor,vertices,submesh);
+                if(face.neighbor>=0&&!face.cut&&!face.separated)continue;
+                AddSurface(face,face.cell,vertices,submesh);if((face.cut||face.separated)&&face.neighbor>=0)AddSurface(face,face.neighbor,vertices,submesh);
             }
             mesh.Clear();mesh.SetVertices(vertices);mesh.subMeshCount=submesh.Length;
             for(int i=0;i<submesh.Length;i++)mesh.SetTriangles(submesh[i],i);mesh.RecalculateNormals();mesh.RecalculateBounds();Dirty=false;
