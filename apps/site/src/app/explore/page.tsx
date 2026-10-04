@@ -8,7 +8,7 @@ import { APK_URL, DEMO_VIDEO_URL } from "@/lib/site";
 
 export const metadata: Metadata = { title: "Scalpal · Demo" };
 
-const TITLE = "See it work.";
+const TITLE = "The future of surgery.";
 const LEDE = "One rep, from the first cut to the robot replay.";
 
 export default function Explore() {
