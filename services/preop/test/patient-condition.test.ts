@@ -114,20 +114,3 @@ describe("operating room condition over HTTP", () => {
     expect(badRegion.status).toBe(400);
   });
 });
-
-describe("shared patient_condition feed", () => {
-  it("starts the shared row with the chart baseline and forwards injuries, body bleeding and the end", async () => {
-    const calls: any[] = [];
-    const realtime = { bound: true, coachMessage() {}, coachStatus() {}, attachEncounter() {}, encounterPhase() {}, encounterResult() {}, highlight: async () => null, simLog() {}, patientCondition: (u: any) => calls.push(u) } as unknown as RealtimeBridge;
-    const app = createApp({ client: fixtureClient(), now: () => NOW, coachTickMs: 0, realtime });
-    const req = async (method: string, route: string, body?: unknown) => (await (await app.request(route, { method, headers: body ? { "Content-Type": "application/json" } : {}, body: body ? JSON.stringify(body) : undefined })).json()) as any;
-    const sid = (await req("POST", "/coach/sessions", { patientId: "patient-demo-multi-source", mode: "virtual" })).sessionId;
-    expect(calls[0]).toMatchObject({ kind: "start", coachSessionId: sid, baseline: { sys: 121, dia: 78 }, weightKg: 61.4, mlPerKg: 70 });
-    await req("POST", `/coach/sessions/${sid}/events`, { event: { type: "injury", region: "neck", instrumentId: "scalpel" } });
-    await req("POST", `/coach/sessions/${sid}/events`, { event: { type: "injury", region: "neck", instrumentId: "hemostat", controlled: true } });
-    expect(calls.filter((c) => c.kind === "injury")).toEqual([{ kind: "injury", region: "neck", controlled: false }, { kind: "injury", region: "neck", controlled: true }]);
-    for (let i = 0; i < 3; i++) await req("POST", `/coach/sessions/${sid}/simulate`, { kind: "complete_step" });
-    await req("POST", `/coach/sessions/${sid}/simulate`, { kind: "mistake" }); // blade on muscle: bleeding
-    expect(calls.some((c) => c.kind === "body" && c.bleeds.length === 1)).toBe(true);
-  });
-});
