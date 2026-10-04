@@ -65,14 +65,20 @@ For runs without the gateway, the same pipeline is available as a job-in, result
 
 ```sh
 uv run scalpal-motion process examples/job.example.json       # one job file -> out/runs/<run_id>/
-SCALPAL_MOTION_TOKEN=... uv run scalpal-motion serve --port 8765
+SCALPAL_MOTION_TOKEN=... SCALPAL_MOTION_INPUT_DIR=~/clips uv run scalpal-motion serve --port 8765
 #   POST /jobs                body: job JSON -> result JSON (synchronous, one job at a time)
 #   GET  /runs/<run_id>/<f>   hand_track.json | motion.json | replay.mp4 | result.json
 #   GET  /health
 ```
 
+The server always requires `Authorization: Bearer <token>`. Without `SCALPAL_MOTION_TOKEN` it prints a random token for that run. Served jobs may only read `input.source` from:
+- URLs under `SCALPAL_MOTION_ALLOWED_URL_PREFIXES` (comma-separated; default the local gateway's signed file route, `http://localhost:8788/files/` and `http://127.0.0.1:8788/files/`). Scheme and host:port must match exactly, and redirects are refused.
+- Local paths under `SCALPAL_MOTION_INPUT_DIR`, after resolving symlinks. When it is unset, local paths are refused.
+
+Inputs larger than `SCALPAL_MOTION_MAX_INPUT_BYTES` (default 2 GiB) are refused. `scalpal-motion process` runs your own job file and is not restricted, though URL downloads are still capped.
+
 - **Job** (`scalpal.motion_job/0`, [example](examples/job.example.json)): `job_id`, `run_id`, optional `attempt_id`, `input.artifact_id`, `input.source` (local path or signed http(s) URL), and optional `config` (`hand`, `mirrored`, `smooth`).
-- **Result** (`scalpal.motion_result/0`, [example](examples/result.example.json)): echoes the job/run/attempt/artifact IDs and has `status` `ready` or `failed`. On failure, `error.code` is one of `bad_job`, `unsupported_config`, `input_unavailable`, `decode_failed`, `no_hand_detected`, `run_exists`, or `processor_error`. The result also carries processor versions, the config used, `quality` (valid fraction, longest valid segment, vector error, segments), and `artifacts` with kind, content type, size, and sha256.
+- **Result** (`scalpal.motion_result/0`, [example](examples/result.example.json)): echoes the job/run/attempt/artifact IDs and has `status` `ready` or `failed`. On failure, `error.code` is one of `bad_job`, `unsupported_config`, `input_unavailable`, `input_not_allowed`, `input_too_large`, `decode_failed`, `no_hand_detected`, `run_exists`, or `processor_error`. The result also carries processor versions, the config used, `quality` (valid fraction, longest valid segment, vector error, segments), and `artifacts` with kind, content type, size, and sha256.
 - Run IDs start with an ASCII letter or digit, contain only ASCII letters/digits, `-`, `_`, or `.`, and have at most 128 characters. Invalid IDs are rejected rather than sanitized; output reads reject paths or symlinks outside the output root.
 - **Run isolation:** outputs go to `<output-root>/<run_id>/`. A repeated `run_id` is refused with `run_exists` and never touches the existing files, so a retry needs a new `run_id`. Deciding which run is current stays with SpacetimeDB.
 - **Not decided here:** learning completion and whether a clip counts as a useful contribution. The worker reports quality, and acceptance thresholds should come from measured clips.
