@@ -78,7 +78,8 @@ namespace Scalpal.Voice
         public void RememberSaid(string line)
         {
             if (string.IsNullOrWhiteSpace(line)) return;
-            line = line.Trim(); if (recentLines.Count > 0 && recentLines[recentLines.Count - 1] == line) return;
+            line = line.Trim(); if (line.Length > 160) line = line.Substring(0, 157) + "...";
+            if (recentLines.Count > 0 && recentLines[recentLines.Count - 1] == line) return;
             recentLines.Add(line); if (recentLines.Count > 8) recentLines.RemoveAt(0);
         }
         public void ForgetSaid() => recentLines.Clear();
@@ -480,7 +481,9 @@ namespace Scalpal.Voice
                     var decoded = DecodePcm(Convert.FromBase64String(message.audio_event.audio_base_64));
                     lock (audioLock)
                     {
-                        if (outputSamples.Count + decoded.Length > outputRate * 20) throw new InvalidDataException("Audio backlog.");
+                        // A held or slow-draining reply must not end the call: keep the newest minute, drop the oldest.
+                        int overflow = outputSamples.Count + decoded.Length - outputRate * 60;
+                        if (overflow > 0) { for (int i = 0; i < overflow && outputSamples.Count > 0; i++) outputSamples.Dequeue(); Debug.LogWarning("SCALPAL_VOICE_BACKLOG dropped=" + overflow); }
                         foreach (float sample in decoded) outputSamples.Enqueue(sample);
                     }
                     SetMode("speaking");
@@ -628,11 +631,16 @@ namespace Scalpal.Voice
         }
 
         // Unity invokes this on its audio thread. Only plain data/locking here, no Unity API calls.
+        // One voice at a time: while the simulator plays one of Jarvis's clips, the agent's own reply waits in the
+        // buffer and plays after it (an urgent clip instead ejects it with InterruptPlayback).
+        volatile bool holdOutput;
+        public bool HoldOutput { get => holdOutput; set => holdOutput = value; }
         void ReadAudio(float[] samples)
         {
             lock (audioLock)
             {
-                for (int i = 0; i < samples.Length; i++) samples[i] = outputSamples.Count > 0 ? outputSamples.Dequeue() : 0;
+                bool held = holdOutput;
+                for (int i = 0; i < samples.Length; i++) samples[i] = !held && outputSamples.Count > 0 ? outputSamples.Dequeue() : 0;
                 playbackLevel = MeasurePlaybackLevel(samples);
                 Interlocked.Exchange(ref playbackTimestamp, System.Diagnostics.Stopwatch.GetTimestamp());
             }
@@ -854,7 +862,7 @@ namespace Scalpal.Voice
 
         public void Disconnect()
         {
-            localSpeech = false;
+            localSpeech = false; holdOutput = false;
             permissionPending = false;
             generation++;
             StopAllCoroutines();

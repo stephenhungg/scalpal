@@ -77,7 +77,8 @@ namespace Scalpal.Surgery
             if (!isActiveAndEnabled || !Relevant(alert)) return;
             if (InterruptsAgent(alert))
             {
-                StopPlayback(); queued.Clear();
+                // Urgent: eject whatever is sounding (clip or agent) and play now; the waiting queue plays after it.
+                StopPlayback();
                 if (voice && voice.CoachSessionId == relay.SessionId) voice.InterruptPlayback();
                 Show(alert);
                 playback = StartCoroutine(Play(alert, generation));
@@ -150,6 +151,8 @@ namespace Scalpal.Surgery
                         if (activeClip)
                         {
                             speaker.clip = activeClip; speaker.Play();
+                            // One voice at a time: the agent's reply waits until this clip ends.
+                            if (voice && relay && voice.CoachSessionId == relay.SessionId) { voice.HoldOutput = true; heldAgent = true; }
                             // The agent did not say this clip itself: tell it, so it does not repeat the warning.
                             if (voice && relay && voice.CoachSessionId == relay.SessionId) { voice.RememberSaid(alert.say); voice.SendContext("[JARVIS SAID] \"" + alert.say + "\""); }
                             while (speaker.isPlaying && epoch == generation && Relevant(alert)) yield return null;
@@ -214,8 +217,10 @@ namespace Scalpal.Surgery
         }
         public const float CautionGapSeconds = 12;
         float cautionReadyAt;
+        bool heldAgent;
         void FinishPlayback()
         {
+            if (heldAgent && voice) voice.HoldOutput = false; heldAgent = false;
             if (playback != null && !safetyPlaying) cautionReadyAt = Time.unscaledTime + CautionGapSeconds;
             if (speaker) { speaker.Stop(); speaker.clip = null; }
             if (activeClip) Release(activeClip);
