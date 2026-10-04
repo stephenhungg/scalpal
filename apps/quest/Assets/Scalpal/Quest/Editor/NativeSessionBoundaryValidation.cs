@@ -118,6 +118,13 @@ namespace Scalpal.Quest.Editor
 
             Assert(session.exercise.CanScore && session.Practicing && session.voice.Connected,
                 "positive control: local case can score with a matched shared identity");
+            // Push to talk: Jarvis must hear silence unless the learner holds Y, so table talk never triggers replies.
+            session.PushToTalk(false);
+            Assert(session.voice.MicrophoneMuted && Scalpal.Voice.QuestJarvisVoice.EncodeMicrophonePcm(new[] { .5f, -.5f }, 1, session.voice.MicrophoneMuted).All(b => b == 0),
+                "Jarvis receives only silence while push-to-talk is released");
+            session.PushToTalk(true);
+            Assert(!session.voice.MicrophoneMuted, "holding push-to-talk opens the microphone to Jarvis");
+            session.PushToTalk(false);
             Assert(session.exercise.Submit(CaseEvent.PlacePort("umbilical"), out var accepted, out reason) && accepted.advanced,
                 "positive control: real authored umbilical placement advances");
             Assert(session.exercise.Current != null && session.exercise.Current.id == "working_ports",

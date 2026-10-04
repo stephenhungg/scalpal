@@ -313,7 +313,7 @@ namespace Scalpal.Handoff
             if (surgery.CoachPrepared && Time.unscaledTime >= nextCoachRetry) { nextCoachRetry = Time.unscaledTime + 10; surgery.ReconnectTimeOutVoice(); }
             if (!surgery.CoachPrepared && Time.unscaledTime >= nextCoachRetry)
             { nextCoachRetry = Time.unscaledTime + 10; coachTried |= surgery.PrepareTimeOut(); }
-            string voice = surgery.voice.Status == "error" ? "Voice unavailable. Continue with captions." : surgery.CoachPrepared ? "Jarvis: Scrubbed in with you. Confirm the patient, procedure and site." : "Connecting Jarvis. Captions and authored local scoring are available if the coach is offline.";
+            string voice = surgery.voice.Status == "error" ? "Voice unavailable. Continue with captions." : surgery.CoachPrepared ? "Jarvis: Scrubbed in with you. Confirm the patient, procedure and site. Hold Y to talk to me." : "Connecting Jarvis. Captions and authored local scoring are available if the coach is offline.";
             string body = "Patient: " + Ticket.scorecard.patientName + "\nProcedure: " + Ticket.procedureTitle + "\nSite: " + Ticket.scorecard.site + "\nUrgency: " + Ticket.verifiedCase.urgency + "\n" + RiskText(Ticket.scorecard) +
                 "\n" + voice + "\nMistakes are expected; this is practice.\n" + Scalpal.Capture.HandCaptureRecorder.PlannedNotice(Ticket, HandoffRun.Preflight);
             var risks = ReviewRisks(Ticket.scorecard);
