@@ -191,7 +191,7 @@ namespace Scalpal.Quest
                 ((HasHandoff || OfficeHandoff != null) && candidate.procedureId != SelectedProcedureId) ||
                 candidate.procedure == null || candidate.brief == null || !candidate.brief.synthetic ||
                 (candidate.status != "ready" && candidate.status != "needs_review"))
-            { candidate = null; Message = "Case service unavailable or case/assets mismatch. Left menu: retry connection"; yield break; }
+            { candidate = null; Message = "The case could not be loaded from the coach service."; yield break; }
             if (HasHandoff && HandoffRun.Current.skipped)
             {
                 // Skip to surgery: no interview to recheck. The live case is the source; its chart flags are the risks.

@@ -49,6 +49,7 @@ namespace Scalpal.Handoff.Editor
                 ("F12 waiting card has a way back and does not import every frame", WaitingCardReturnsAndThrottles),
                 ("F13 voice gate follows the actual phase transitions", VoiceGateFollowsPhases),
                 ("F13 unified scene order is checked against the product order", SceneOrderIsIndependent),
+                ("F14 OR entry shows no connection error while the case loads or the session joins", EntryShowsNoConnectionErrorWhileLoading),
             };
             try
             {
@@ -116,6 +117,27 @@ namespace Scalpal.Handoff.Editor
             var routine = (IEnumerator)Call(flow, "ConfirmTimeOut");
             Assert(!routine.MoveNext() && !Get<bool>(flow, "loading"), "Begin practice cannot re-post or restart a started attempt");
             Assert(ticket.practiceStarted && ticket.attemptId == attempt && ticket.AllConfirmed, "attempt, practice progress and Time-Out survive the resume");
+        }
+
+        // The learner reaches the OR with every required service up. Loading the case (about a second over adb) and the OR's
+        // own SpacetimeDB join are normal; the card must not offer "Retry connection" as if something failed.
+        static void EntryShowsNoConnectionErrorWhileLoading()
+        {
+            var flow = Flow(out var card); var native = Native(flow.gameObject); Ticket("virtual");
+            Set(flow, "surgery", native); Set(flow, "phase", "register");
+            bool NoError() => Actions(card).All(label => label.IndexOf("retry", StringComparison.OrdinalIgnoreCase) < 0 && label.IndexOf("connection", StringComparison.OrdinalIgnoreCase) < 0);
+            Set(native, "busy", true);
+            Call(flow, "Registration");
+            Assert(Heading(card) == "Preparing the operating room" && NoError(), "case loading shows a quiet preparing card without a connection retry (was " + Heading(card) + ")");
+            Set(native, "busy", false);
+            Call(flow, "Registration");
+            Assert(Heading(card) == "Case unavailable" && Actions(card)[0] == "Try again", "an actual load failure offers one plain retry");
+            ReadyForTimeOut(flow, native); Property(native.realtime, "Paired", false); Set(native.realtime, "connecting", true); Set(native.realtime, "connectStarted", Time.realtimeSinceStartup);
+            Call(flow, "TimeOut");
+            Assert(Heading(card) == "Preparing the operating room" && NoError(), "joining the shared session shows the preparing card, not a connection error (was " + Heading(card) + ")");
+            Set(native.realtime, "connecting", false);
+            Call(flow, "TimeOut");
+            Assert(Heading(card) == "Shared headset session unavailable", "a session that is really unreachable still says so");
         }
 
         // The learner returns to the office picker and starts patient B; patient A's Theatre card must not survive.

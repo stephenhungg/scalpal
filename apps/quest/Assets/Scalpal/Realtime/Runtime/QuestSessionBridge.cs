@@ -28,6 +28,9 @@ namespace Scalpal.Realtime
         public string Status { get; private set; } = "Unavailable: configure a headset invite";
         public ExerciseState ObservedState { get; private set; }
         public bool AttemptPending => attemptInFlight;
+        // Connecting, or connected and still waiting for the membership subscription and invite result
+        // (bounded like the connect timeout, so a stalled join still surfaces as unavailable).
+        public bool Joining => !Paired && Time.realtimeSinceStartup - connectStarted < 15 && (connecting || Connected && (!subscribed || !joinResolved));
         // Same client identity used by the authenticated gateway; never serialize or log it.
         public string GetClientAccessToken() => Paired ? ReadToken() : "";
         public event Action<string> AttemptFailed;
