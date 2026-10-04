@@ -11,6 +11,11 @@ using UnityEditor;
 using UnityEditor.Build.Reporting;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.XR.ARFoundation;
+using UnityEngine.XR.OpenXR;
+using UnityEngine.XR.OpenXR.Features.Meta;
+using UnityEngine.XR.OpenXR.Features.CompositionLayers;
+using Meta.XR;
 
 namespace Scalpal.Quest.Editor
 {
@@ -84,7 +89,8 @@ namespace Scalpal.Quest.Editor
 
             var previewRoot = new GameObject("SelectionPreviewPedestal").transform;
             previewRoot.position = new Vector3(-0.45f, 1.35f, 0.25f);
-            var previewObject = (GameObject)PrefabUtility.InstantiatePrefab(prefab, previewRoot);
+            var overview = AnatomyAtlasBuilder.BuildOrganOverview();
+            var previewObject = (GameObject)PrefabUtility.InstantiatePrefab(overview, previewRoot);
             previewObject.name = "SelectionAnatomy";
             var sourceBounds = MeshBounds(previewObject);
             previewObject.transform.localScale = Vector3.one * 0.7f;
@@ -103,7 +109,7 @@ namespace Scalpal.Quest.Editor
             var exercise = sessionObject.AddComponent<AnatomyExerciseBinding>();
             exercise.anatomy = anatomy;
             exercise.coach = coach;
-            exercise.presentationMode = "virtual";
+            exercise.presentationMode = "mixed_reality";
             exercise.requireCoachSynchronization = true;
             workbench.externalSessionControls = true;
             var session = sessionObject.AddComponent<NativeCaseSession>();
@@ -115,6 +121,33 @@ namespace Scalpal.Quest.Editor
             session.realtime = sessionObject.AddComponent<QuestSessionBridge>();
             session.voice = sessionObject.AddComponent<QuestJarvisVoice>();
             session.patientFrame = frame;
+            var presentation = sessionObject.AddComponent<NativePresentation>();
+            presentation.headCamera = workbench.headCamera;
+            presentation.cameraManager = workbench.headCamera.gameObject.AddComponent<ARCameraManager>();
+            presentation.virtualRoom = room;
+            presentation.virtualMannequin = mannequin;
+            presentation.anatomyFit = fit;
+            presentation.patientFrame = frame;
+            presentation.session = session;
+            session.presentation = presentation;
+            workbench.presentation = presentation;
+            var body = sessionObject.AddComponent<NativeBodyRegistration>();
+            body.workbench = workbench; body.presentation = presentation;
+            body.cameraAccess = sessionObject.AddComponent<PassthroughCameraAccess>();
+            body.cameraAccess.enabled = false;
+            body.cameraAccess.RequestedResolution = new Vector2Int(640, 480);
+            body.surfaceAccess = sessionObject.AddComponent<EnvironmentRaycastManager>();
+            body.surfaceAccess.enabled = false;
+            body.surfaceAccess.CustomTrackingSpace = workbench.trackingOrigin;
+            body.anatomyFit = fit; body.patientFrame = frame;
+            var bodyObject = (GameObject)PrefabUtility.InstantiatePrefab(overview);
+            bodyObject.name = "BodyFitOrganOverview";
+            body.bodyOverview = bodyObject.GetComponent<AnatomyController>();
+            body.bodyOverview.SetPreviewMode(true); body.bodyOverview.SetPreviewRotation(false);
+            bodyObject.SetActive(false);
+            session.bodyRegistration = body;
+            sessionObject.AddComponent<ARSession>();
+            presentation.Apply();
             session.status = workbench.status;
             workbench.status.transform.position = new Vector3(-0.15f, 1.65f, 0.3f);
             workbench.status.characterSize = 0.012f;
@@ -134,14 +167,27 @@ namespace Scalpal.Quest.Editor
             EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) };
             AssetDatabase.SaveAssets();
             Validate();
-            Debug.Log("SCALPAL_NATIVE_SESSION_PREPARED mode=virtual authoredFit=true participantRegistration=false");
+            Debug.Log("SCALPAL_NATIVE_SESSION_PREPARED view=passthrough registration=automatic_surface_body_fit physicalAlignmentUnverified=true");
         }
 
         static void ApplySessionSettings()
         {
             PlayerSettings.productName = "Scalpal Surgical Session";
-            PlayerSettings.bundleVersion = "0.2.1-main";
-            PlayerSettings.Android.bundleVersionCode = 4;
+            PlayerSettings.bundleVersion = "0.4.0-tissue";
+            PlayerSettings.Android.bundleVersionCode = 8;
+            // Meta's OpenXR camera-pose plugin requires linear lighting; retain built-in rendering.
+            PlayerSettings.colorSpace = ColorSpace.Linear;
+            var settings = OpenXRSettings.GetSettingsForBuildTargetGroup(BuildTargetGroup.Android);
+            settings.GetFeature<ARSessionFeature>().enabled = true;
+            settings.GetFeature<ARCameraFeature>().enabled = true;
+            settings.GetFeature<OpenXRCompositionLayersFeature>().enabled = true;
+            settings.GetFeature<MetaXRFeature>().enabled = true;
+            var meta = OVRProjectConfig.CachedProjectConfig;
+            meta.insightPassthroughSupport = OVRProjectConfig.FeatureSupport.Supported;
+            meta.isPassthroughCameraAccessEnabled = true;
+            meta.sceneSupport = OVRProjectConfig.FeatureSupport.Supported;
+            OVRProjectConfig.CommitProjectConfig(meta);
+            EditorUtility.SetDirty(settings);
             // The integration harness uses LAN HTTP only in this development player.
             PlayerSettings.insecureHttpOption = InsecureHttpOption.DevelopmentOnly;
         }
@@ -220,11 +266,11 @@ namespace Scalpal.Quest.Editor
                 || !session.realtime || !session.voice || !session.patientFrame || !session.status)
                 throw new InvalidOperationException("Native session has a missing required binding.");
             if (session.anatomy == session.preview || session.exercise.anatomy != session.anatomy || session.exercise.coach != session.coach
-                || session.status != session.workbench.status || session.exercise.presentationMode != "virtual" || !session.exercise.requireCoachSynchronization
+                || session.status != session.workbench.status || session.exercise.presentationMode != "mixed_reality" || !session.exercise.requireCoachSynchronization
                 || !session.workbench.externalSessionControls)
                 throw new InvalidOperationException("Native case/coach/preview bindings are inconsistent.");
             if (roots.SelectMany(root => root.GetComponentsInChildren<AnatomyExerciseBinding>(true)).Count() != 1
-                || roots.SelectMany(root => root.GetComponentsInChildren<AnatomyController>(true)).Count() != 2
+                || roots.SelectMany(root => root.GetComponentsInChildren<AnatomyController>(true)).Count() != 3
                 || roots.SelectMany(root => root.GetComponentsInChildren<CoachRelay>(true)).Count() != 1
                 || roots.SelectMany(root => root.GetComponentsInChildren<AnatomyCoachBinding>(true)).Any())
                 throw new InvalidOperationException("Native scene must have one case runner/relay and separate preview/practice anatomy.");
@@ -235,7 +281,9 @@ namespace Scalpal.Quest.Editor
                 || rig.inputs.Any(input => !input || input.trackingOrigin != rig.trackingOrigin || input.enabled))
                 throw new InvalidOperationException("Native XR/tool bindings are missing or initially ungated.");
             ValidateAnatomy(session.anatomy, false);
-            ValidateAnatomy(session.preview, true);
+            ValidateOverview(session.preview);
+            ValidateOverview(session.bodyRegistration.bodyOverview);
+            ValidatePresentation(session);
             var sourceFit = session.anatomy.transform.parent;
             if (!sourceFit || (sourceFit.localScale - Vector3.one * AnatomyScale).sqrMagnitude > 0.000001f
                 || Quaternion.Angle(sourceFit.rotation, Quaternion.Euler(90f, 0f, 0f)) > 0.001f)
@@ -265,10 +313,48 @@ namespace Scalpal.Quest.Editor
             var atlasDependencies = AssetDatabase.GetDependencies(ScenePath, true)
                 .Where(path => path.StartsWith("Assets/Scalpal/Anatomy/Models/", StringComparison.Ordinal) && path.EndsWith(".fbx", StringComparison.OrdinalIgnoreCase))
                 .Select(Path.GetFileNameWithoutExtension).OrderBy(name => name).ToArray();
-            if (!atlasDependencies.SequenceEqual(new[] { "cardiovascular", "exercise-targets", "visceral" }))
+            if (!atlasDependencies.SequenceEqual(new[] { "cardiovascular", "exercise-targets", "lymphatic", "muscular", "skeletal", "surface", "visceral" }))
                 throw new InvalidOperationException("Unexpected whole-body/detail atlas dependency in the native session.");
-            Debug.Log("SCALPAL_NATIVE_SESSION_SCENE_VALIDATED tools=15 controllers=2 anatomyInstances=2 partsPerInstance=9 trianglesPerInstance=93399 ports=3 initialValidity=false "
+            Debug.Log("SCALPAL_NATIVE_SESSION_SCENE_VALIDATED tools=15 controllers=2 practiceParts=9 practiceTriangles=93399 overviewParts=81 overviewTriangles=120125 ports=3 initialValidity=false "
                 + "sourceBounds=" + MeshBounds(session.anatomy.gameObject));
+        }
+
+        static void ValidatePresentation(NativeCaseSession session)
+        {
+            var presentation = session.presentation;
+            var settings = OpenXRSettings.GetSettingsForBuildTargetGroup(BuildTargetGroup.Android);
+            if (!presentation || presentation != session.workbench.presentation || !presentation.passthrough
+                || presentation.headCamera != session.workbench.headCamera || !presentation.cameraManager
+                || presentation.cameraManager.gameObject != presentation.headCamera.gameObject
+                || !presentation.cameraManager.enabled || presentation.virtualRoom.activeSelf
+                || presentation.headCamera.backgroundColor.a != 0f
+                || session.exercise.presentationMode != "mixed_reality"
+                || !session.GetComponent<ARSession>() || !settings.GetFeature<ARSessionFeature>().enabled
+                || !settings.GetFeature<ARCameraFeature>().enabled
+                || !settings.GetFeature<OpenXRCompositionLayersFeature>().enabled
+                || !settings.GetFeature<MetaXRFeature>().enabled
+                || !presentation.virtualMannequin || presentation.virtualMannequin.enabled
+                || !session.bodyRegistration || session.bodyRegistration.Accepted || session.bodyRegistration.EnabledByOperator
+                || !session.bodyRegistration.cameraAccess || session.bodyRegistration.cameraAccess.enabled
+                || !session.bodyRegistration.surfaceAccess || session.bodyRegistration.surfaceAccess.enabled
+                || session.bodyRegistration.surfaceAccess.CustomTrackingSpace != session.workbench.trackingOrigin
+                || session.bodyRegistration.anatomyFit != session.anatomy.transform.parent
+                || session.bodyRegistration.patientFrame != session.patientFrame
+                || session.bodyRegistration.bodyOverview.gameObject.activeSelf)
+                throw new InvalidOperationException("Passthrough/session/compositor bindings or transparent camera are missing.");
+        }
+
+        static void ValidateOverview(AnatomyController controller)
+        {
+            var parts = controller.GetComponentsInChildren<AnatomyPart>(true);
+            int triangles = controller.GetComponentsInChildren<MeshFilter>(true).Sum(filter => filter.sharedMesh.triangles.Length / 3);
+            if (parts.Length != AnatomyAtlasBuilder.OrganOverviewPartCount
+                || !parts.Select(part => part.stableId).OrderBy(id => id).SequenceEqual(AnatomyAtlasBuilder.OrganOverviewIds.OrderBy(id => id))
+                || triangles != AnatomyAtlasBuilder.OrganOverviewExpectedTriangles
+                || triangles > AnatomyAtlasBuilder.OrganOverviewTriangleBudget
+                || !controller.PreviewMode || controller.RegistrationValid
+                || controller.GetComponentsInChildren<Collider>(true).Length != 0)
+                throw new InvalidOperationException("Render-only organ overview IDs, geometry budget or preview gates are incorrect.");
         }
 
         static void ValidateAnatomy(AnatomyController controller, bool preview)
@@ -307,8 +393,17 @@ namespace Scalpal.Quest.Editor
         public static void Verify()
         {
             Validate();
+            NativeBodyAtlasValidation.Run();
+            NativeBodyRegistrationValidation.Run();
             Scalpal.Instruments.Editor.InstrumentRuntimeValidation.Run();
             NativeProcedureInputValidation.Run();
+            NativeTissueValidation.Run();
+            NativeVolumeValidation.Run();
+            NativeViscoelasticValidation.Run();
+            NativeVolumeRuntimeValidation.Run();
+            NativeBleedingValidation.Run();
+            NativeVesselRuntimeValidation.Run();
+            NativeTissueContactValidation.Run();
             NativeAppendectomyValidation.Run();
             NativeSessionBoundaryValidation.Run();
             NativeCoachRelayValidation.Run();

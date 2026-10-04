@@ -17,7 +17,7 @@ UNITY_DEFAULT = "/Applications/Unity/Hub/Editor/6000.0.66f2/Unity.app/Contents/M
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--suite", choices=("all", "services", "unity", "voice", "motion"), default="all")
+    parser.add_argument("--suite", choices=("all", "services", "unity", "voice", "motion", "registration"), default="all")
     parser.add_argument("--headset", action="store_true", help="Also check the installed player over USB.")
     parser.add_argument("--config", type=Path, help="Private development pairing JSON for --headset.")
     args = parser.parse_args()
@@ -114,6 +114,13 @@ def main():
             if line.startswith("SCALPAL_") or "error CS" in line:
                 print(line)
         print("Unity diagnostic log:", log)
+
+    if args.suite in {"all", "registration"}:
+        if not shutil.which("uv"):
+            parser.error("registration requires uv with Python 3.11 support")
+        folder = REPO / "services/registration"
+        if check("registration frozen dependencies", ["uv", "sync", "--frozen"], folder, timeout=180):
+            check("local body-pose HTTP/inference failure boundaries", ["uv", "run", "--frozen", "pytest", "-q"], folder)
 
     if args.suite in {"all", "motion"}:
         if not shutil.which("uv"):
