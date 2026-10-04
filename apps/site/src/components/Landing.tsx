@@ -7,15 +7,17 @@ import { AdamLayer } from "./AdamLayer";
 import { BlurWords } from "./BlurWords";
 import { FadeIn } from "./FadeIn";
 import { RollButton } from "./RollButton";
-import { wordCount } from "@/lib/text";
+import { TitleMorph } from "./TitleMorph";
 
-const TITLE = "Scalpal.";
+const TITLE = "scalpal.";
 const LEDE = "Practice surgery in mixed reality with a voice coach, and turn every rep into motion a robot hand can replay.";
 
-// Loader: only the hands are on screen until the fingertips touch, then the page launches
-// (nav, word blur-in, button).
+// Loader: only the hands are on screen until the fingertips touch. Then the Scalpal mark dithers
+// in where the title goes, holds, and dithers into "Scalpal."; after that the nav, subtitle
+// and button come in.
 export function Landing() {
   const [launched, setLaunched] = useState(false);
+  const [titled, setTitled] = useState(false);
 
   const launch = () => setLaunched(true);
 
@@ -37,21 +39,21 @@ export function Landing() {
           <motion.nav
             className="relative z-20 flex h-[75px] items-center px-[15px] min-[810px]:h-20 min-[810px]:px-[30px]"
             initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
+            animate={{ opacity: titled ? 1 : 0 }}
             transition={{ duration: 0.4, ease: [0.44, 0, 0.56, 1] }}
           >
             <BrandMark />
           </motion.nav>
           <section className="relative z-10 flex flex-col items-center px-[30px] pt-[148px] text-center min-[810px]:pt-[98px]">
-            <h1 className="display">
-              <BlurWords text={TITLE} />
-            </h1>
-            <p className="lede mt-4 max-w-[660px]">
-              <BlurWords text={LEDE} start={wordCount(TITLE)} />
-            </p>
-            <FadeIn delay={0.595} className="mt-[26px] min-[810px]:mt-9">
-              <RollButton href="/explore" label="Explore" hoverLabel="Watch the demo" />
-            </FadeIn>
+            <TitleMorph text={TITLE} onDone={() => setTitled(true)} />
+            <p className="lede mt-4 max-w-[660px] min-h-[56px]">{titled && <BlurWords text={LEDE} start={-3} />}</p>
+            <div className="mt-[26px] min-h-[50px] min-[810px]:mt-9">
+              {titled && (
+                <FadeIn delay={0.4}>
+                  <RollButton href="/explore" label="Explore" hoverLabel="Watch the demo" />
+                </FadeIn>
+              )}
+            </div>
           </section>
         </>
       )}
