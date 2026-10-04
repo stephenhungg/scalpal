@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-10-04T03:23:58.730Z",
+ "generatedAt": "2026-10-04T03:41:08.487Z",
  "anatomy": [
   {
    "id": "abdominal_wall",
@@ -1938,12 +1938,6 @@
       "predicates": [
        {
         "tissueId": "mesoappendix",
-        "fact": "clampCount",
-        "op": "gte",
-        "value": 2
-       },
-       {
-        "tissueId": "mesoappendix",
         "fact": "cutBetweenClamps",
         "op": "eq",
         "value": 1
@@ -3200,7 +3194,7 @@
     "dataSource": "demo",
     "consentStatus": "simulated",
     "consentReceipts": [],
-    "generatedAt": "2026-10-04T03:23:58.726Z",
+    "generatedAt": "2026-10-04T03:41:08.484Z",
     "dataAsOf": "2026-08-25T17:00:00Z",
     "patient": {
      "name": "Morgan Rivera",
@@ -4075,7 +4069,7 @@
     "dataSource": "demo",
     "consentStatus": "simulated",
     "consentReceipts": [],
-    "generatedAt": "2026-10-04T03:23:58.728Z",
+    "generatedAt": "2026-10-04T03:41:08.485Z",
     "dataAsOf": "2026-09-01T00:00:00Z",
     "patient": {
      "name": "Harriet Lindqvist",
@@ -5248,12 +5242,6 @@
        "predicates": [
         {
          "tissueId": "mesoappendix",
-         "fact": "clampCount",
-         "op": "gte",
-         "value": 2
-        },
-        {
-         "tissueId": "mesoappendix",
          "fact": "cutBetweenClamps",
          "op": "eq",
          "value": 1
@@ -5732,7 +5720,7 @@
     "dataSource": "demo",
     "consentStatus": "simulated",
     "consentReceipts": [],
-    "generatedAt": "2026-10-04T03:23:58.729Z",
+    "generatedAt": "2026-10-04T03:41:08.486Z",
     "dataAsOf": "2026-09-01T00:00:00Z",
     "patient": {
      "name": "Theo Abernathy",
@@ -6430,12 +6418,6 @@
        "predicates": [
         {
          "tissueId": "mesoappendix",
-         "fact": "clampCount",
-         "op": "gte",
-         "value": 2
-        },
-        {
-         "tissueId": "mesoappendix",
          "fact": "cutBetweenClamps",
          "op": "eq",
          "value": 1
@@ -6914,7 +6896,7 @@
     "dataSource": "demo",
     "consentStatus": "simulated",
     "consentReceipts": [],
-    "generatedAt": "2026-10-04T03:23:58.729Z",
+    "generatedAt": "2026-10-04T03:41:08.486Z",
     "dataAsOf": "2026-09-01T00:00:00Z",
     "patient": {
      "name": "Priya Ramaswamy",
@@ -7574,12 +7556,6 @@
        "predicates": [
         {
          "tissueId": "mesoappendix",
-         "fact": "clampCount",
-         "op": "gte",
-         "value": 2
-        },
-        {
-         "tissueId": "mesoappendix",
          "fact": "cutBetweenClamps",
          "op": "eq",
          "value": 1
@@ -8058,7 +8034,7 @@
     "dataSource": "demo",
     "consentStatus": "simulated",
     "consentReceipts": [],
-    "generatedAt": "2026-10-04T03:23:58.729Z",
+    "generatedAt": "2026-10-04T03:41:08.486Z",
     "dataAsOf": "2026-09-01T00:00:00Z",
     "patient": {
      "name": "Jonah Okoye",
@@ -8735,7 +8711,7 @@
     "dataSource": "demo",
     "consentStatus": "simulated",
     "consentReceipts": [],
-    "generatedAt": "2026-10-04T03:23:58.729Z",
+    "generatedAt": "2026-10-04T03:41:08.486Z",
     "dataAsOf": "2026-09-01T00:00:00Z",
     "patient": {
      "name": "Dolores Marchetti",
@@ -9170,7 +9146,7 @@
     "dataSource": "",
     "consentStatus": "",
     "consentReceipts": [],
-    "generatedAt": "2026-10-04T03:23:58.726Z",
+    "generatedAt": "2026-10-04T03:41:08.483Z",
     "dataAsOf": "",
     "patient": {
      "name": "",
@@ -9244,7 +9220,7 @@
     "dataSource": "",
     "consentStatus": "",
     "consentReceipts": [],
-    "generatedAt": "2026-10-04T03:23:58.726Z",
+    "generatedAt": "2026-10-04T03:41:08.484Z",
     "dataAsOf": "",
     "patient": {
      "name": "",
@@ -9799,7 +9775,7 @@
     "consentReceipts": [
      "rcpt_demo_consent_partial"
     ],
-    "generatedAt": "2026-10-04T03:23:58.729Z",
+    "generatedAt": "2026-10-04T03:41:08.487Z",
     "dataAsOf": "2026-09-01T00:00:00Z",
     "patient": {
      "name": "",
@@ -10629,7 +10605,7 @@
     "dataSource": "demo",
     "consentStatus": "simulated",
     "consentReceipts": [],
-    "generatedAt": "2026-10-04T03:23:58.730Z",
+    "generatedAt": "2026-10-04T03:41:08.487Z",
     "dataAsOf": "2026-09-01T00:00:00Z",
     "patient": {
      "name": "Ingrid Solano",
@@ -11339,7 +11315,7 @@
     "dataSource": "demo",
     "consentStatus": "simulated",
     "consentReceipts": [],
-    "generatedAt": "2026-10-04T03:23:58.729Z",
+    "generatedAt": "2026-10-04T03:41:08.486Z",
     "dataAsOf": "2026-09-01T00:00:00Z",
     "patient": {
      "name": "Priya Ramaswamy",

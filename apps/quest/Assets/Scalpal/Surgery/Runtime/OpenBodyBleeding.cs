@@ -42,13 +42,16 @@ namespace Scalpal.Surgery
         void Applied(BodyRecord record, InstrumentBehaviour tool)
         {
             if (record.action.verb == "fluid" || Array.IndexOf(record.outcomes,"not_exposed") >= 0) return;
-            foreach (var source in sources)
-            {
-                if (source.id != record.action.tissueId) continue;
-                if (record.action.verb == "cut" && Array.IndexOf(record.outcomes,"cut_unsecured") >= 0)
-                { source.fluid.OpenInjury(.000000785398); source.fluid.SetOccluded(false); }
-                if (record.action.verb == "clamp" || record.action.verb == "tie" || record.action.verb == "seal") source.fluid.SetOccluded(true);
-            }
+            string verb = record.action.verb;
+            if (verb == "cut" || verb == "clamp" || verb == "release" || verb == "tie" || verb == "seal")
+                foreach (var source in sources)
+                {
+                    if (source.id != record.action.tissueId) continue;
+                    // The body decides positionally whether each injury is controlled; the vessel follows it.
+                    bool open = exercise.Body.Get(source.id, "openInjuries") > 0;
+                    if (open) source.fluid.OpenInjury(.000000785398);
+                    source.fluid.SetOccluded(!open);
+                }
             if (record.action.verb == "suction" && record.action.choice == "pool_suction" && pool && pool.activeSelf)
             {
                 // Require physical tip proximity to the visible blood pool, not a remote target dwell.

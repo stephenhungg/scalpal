@@ -45,6 +45,7 @@ namespace Scalpal.Surgery.Editor
             VerifyInputBoundary(procedure);
             VerifyBase(procedure);
             VerifySpatialControl(procedure);
+            VerifyPositionalHemostasis(procedure);
             VerifyFinish(procedure);
             Debug.Log("SCALPAL_OPEN_BODY_VALIDATION_OK: " + checks + " synthetic body, case, off-path, timing and reset assertions; no physical headset test");
         }
@@ -211,6 +212,58 @@ namespace Scalpal.Surgery.Editor
             foreach (var e in CaseRunner.PerfectEvents(procedure.steps.First(s => s.id == "split_muscle"))) muscle.Handle(e);
             Require(muscle.Body.Get("muscle", "bladeUsed") == 1 && !muscle.Achieved.Contains("split_muscle"),
                 "later retraction cannot erase prior muscle cutting");
+        }
+
+        // Mirrors services/preop/test/open-body.test.ts: distanceMm runs from the structure's base,
+        // where inflow enters, so only control at or proximal to an injury stops it.
+        static void VerifyPositionalHemostasis(Procedure procedure)
+        {
+            var runner = new CaseRunner(procedure); Expose(runner, procedure);
+            BodyAction Clamp(string id, string instance, double time, float distance)
+            { var a = Action(id, "clamp", "mesoappendix", "hemostat", time, distance); a.instrumentInstanceId = instance; return a; }
+            runner.Handle(CaseEvent.Surgery(Action("meso-cut", "cut", "mesoappendix", "scalpel", 0, 10)));
+            runner.Handle(CaseEvent.Surgery(Clamp("distal-clamp", "clamp-distal", 1000, 20)));
+            Require(runner.Body.Get("mesoappendix", "bleeding") == 1, "a clamp distal to the injury does not stop its bleeding");
+            runner.Handle(CaseEvent.Surgery(Clamp("clamp-at-cut", "clamp-at-cut", 2000, 10)));
+            Require(runner.Body.Get("", "activeBleeds") == 0 && Math.Abs(runner.Body.Get("", "bloodLostMl") - 4) < .0001, "a clamp at the injury stops it after two seconds of flow");
+            runner.Handle(CaseEvent.Surgery(Action("artery-cut", "cut", "appendicular_artery", "scalpel", 2000, 30)));
+            runner.Handle(CaseEvent.Surgery(Action("artery-tie", "tie", "appendicular_artery", "suture_tie", 3000, 20)));
+            Require(runner.Body.Get("", "activeBleeds") == 0, "a tie proximal to the injury stops it");
+
+            var seal = new CaseRunner(procedure); Expose(seal, procedure);
+            seal.Handle(CaseEvent.Surgery(Action("iliac-seal", "seal", "iliac_vessels", "hook_cautery", 0, 10)));
+            seal.Handle(CaseEvent.Surgery(Action("iliac-cut", "cut", "iliac_vessels", "scalpel", 1, 40)));
+            Require(seal.Body.Get("iliac_vessels", "bleeding") == 1 && seal.Mistakes.Any(m => m.id == "cut_before_control"), "an earlier seal elsewhere does not make the vessel bloodless");
+            seal.Handle(CaseEvent.Surgery(Action("iliac-seal-at-cut", "seal", "iliac_vessels", "hook_cautery", 2, 41)));
+            Require(seal.Body.Get("iliac_vessels", "bleeding") == 0, "a seal at the injury controls it");
+
+            var loose = new CaseRunner(procedure); Expose(loose, procedure);
+            loose.Handle(CaseEvent.Surgery(Action("loose-cut", "cut", "mesoappendix", "scalpel", 0, 10)));
+            var unmeasured = Clamp("loose-clamp", "clamp-a", 1, 0); unmeasured.choice = "longitudinal_unmeasured";
+            loose.Handle(CaseEvent.Surgery(unmeasured));
+            Require(loose.Body.Get("mesoappendix", "bleeding") == 1, "an unmeasured clamp cannot control a measured injury");
+
+            var release = new CaseRunner(procedure); Expose(release, procedure);
+            release.Handle(CaseEvent.Surgery(Clamp("a", "clamp-a", 0, 5))); release.Handle(CaseEvent.Surgery(Clamp("b", "clamp-b", 0, 15)));
+            release.Handle(CaseEvent.Surgery(Action("between", "cut", "mesoappendix", "scalpel", 0, 10)));
+            Require(release.Body.Get("mesoappendix", "bleeding") == 0, "cut between clamps is controlled");
+            var off = Action("release-a", "release", "mesoappendix", "hemostat", 1000); off.instrumentInstanceId = "clamp-a";
+            release.Handle(CaseEvent.Surgery(off));
+            Require(release.Body.Get("mesoappendix", "clampCount") == 1 && release.Body.Get("mesoappendix", "bleeding") == 1 &&
+                release.Body.Log.Last().outcomes.SequenceEqual(new[]{ "rebleed" }), "releasing the proximal clamp of an untied cut re-bleeds");
+            release.Handle(CaseEvent.Surgery(Action("tie", "tie", "mesoappendix", "suture_tie", 2000, 5)));
+            off = Action("release-b", "release", "mesoappendix", "hemostat", 3000); off.instrumentInstanceId = "clamp-b";
+            release.Handle(CaseEvent.Surgery(off));
+            Require(release.Body.Get("mesoappendix", "clampCount") == 0 && release.Body.Get("mesoappendix", "bleeding") == 0, "a tied cut stays controlled after its clamps are removed");
+            off = Action("release-again", "release", "mesoappendix", "hemostat", 3000); off.instrumentInstanceId = "clamp-b";
+            release.Handle(CaseEvent.Surgery(off));
+            Require(release.Body.Log.Last().outcomes.SequenceEqual(new[]{ "not_clamped" }), "a clamp cannot be removed twice");
+            var tidy = new CaseRunner(procedure); Expose(tidy, procedure);
+            foreach (var e in CaseRunner.PerfectEvents(procedure.steps.First(st => st.id == "divide_mesoappendix"))) tidy.Handle(e);
+            foreach (var instance in new[]{ "clamp-a", "clamp-b" })
+            { off = Action("off-" + instance, "release", "mesoappendix", "hemostat"); off.instrumentInstanceId = instance; tidy.Handle(CaseEvent.Surgery(off)); }
+            var divide = procedure.openBody.milestones.First(m => m.id == "divide_mesoappendix");
+            Require(tidy.Body.Get("mesoappendix", "clampCount") == 0 && divide.predicates.All(tidy.Body.Test), "removing clamps after tying both sides keeps the mesoappendix milestone");
         }
 
         static void VerifyFinish(Procedure procedure)

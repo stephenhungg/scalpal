@@ -1063,6 +1063,8 @@ const OUTCOME_WORDS: Record<string, string> = {
   critical_injury: "injured a critical structure",
   rough_handling: "rough handling",
   missing_instance: "clamp not registered",
+  rebleed: "bleeding resumed",
+  not_clamped: "no clamp to remove",
 };
 
 // Plain words for one measured body action, e.g. "Scalpel: cut the skin, 52 mm (cut across the fibers)."
@@ -1072,6 +1074,7 @@ export function describeBodyAction(a: BodyAction, outcomes: string[], name: (id:
     cut: `cut the ${t}${a.lengthMm >= 1 ? `, ${Math.round(a.lengthMm)} mm` : ""}`,
     mark: `marked the incision line${a.lengthMm >= 1 ? `, ${Math.round(a.lengthMm)} mm` : ""}`,
     clamp: `clamped the ${t}`,
+    release: `removed the clamp from the ${t}`,
     tie: `tied the ${t}`,
     seal: `sealed the ${t}`,
     grasp: `grasped the ${t}`,
