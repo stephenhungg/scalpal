@@ -41,7 +41,7 @@ namespace Scalpal.Shell
             }
             Application.onBeforeRender += RefreshHead;
         }
-        static InputAction Action(string binding) { var action = new InputAction(binding: binding); action.Enable(); return action; }
+        static InputAction Action(string binding) { var action = new InputAction(type: InputActionType.Value, binding: binding); action.Enable(); return action; }
         void OnDisable()
         {
             Application.onBeforeRender -= RefreshHead;
@@ -69,7 +69,7 @@ namespace Scalpal.Shell
             Ready = focused && !suspended && tracked && floor && displays.Exists(d => d.running);
             if (Ready && !placed && content) { Recenter(); placed = true; }
             IsHands = false;
-            bool permitted = (!ShellTransition.Busy || allowedRoot) && (ShellPause.Instance == null || !ShellPause.Instance.IsPaused || allowedRoot);
+            bool permitted = CanPoint(ShellTransition.Busy, ShellPause.Instance != null && ShellPause.Instance.IsPaused, allowedRoot);
             Point(0, permitted); Point(1, permitted);
 #if UNITY_EDITOR
             if (focused && !suspended && permitted)
@@ -120,6 +120,7 @@ namespace Scalpal.Shell
             if (p.armed && down && !p.down && button) { button.Press(); if (!hands) device.SendHapticImpulse(0, .3f, .04f); }
             p.down = down;
         }
+        public static bool CanPoint(bool transitionBusy, bool paused, bool pauseRoot) => pauseRoot ? paused : !transitionBusy && !paused;
         ShellButton Hit(Ray ray, out Vector3 point)
         {
             point = ray.GetPoint(3);

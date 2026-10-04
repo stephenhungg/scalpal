@@ -12,7 +12,9 @@ namespace Scalpal.Shell
         // capability list. Deliberately exact demo IDs: scenario aliases must not admit real records.
         static readonly HashSet<string> AuthoredIds = new HashSet<string>(StringComparer.Ordinal)
         {
-            "patient-demo-multi-source", "patient-demo-pediatric-asthma", "patient-demo-sparse"
+            "patient-demo-multi-source", "patient-demo-pediatric-asthma", "patient-demo-sparse",
+            "patient-demo-polypharmacy", "patient-demo-001", "patient-demo-source-unavailable",
+            "patient-demo-messy-coding", "patient-demo-consent-partial"
         };
         readonly Dictionary<string, SurgicalCase> cases = new Dictionary<string, SurgicalCase>(StringComparer.Ordinal);
         PatientListEntry[] patients = Array.Empty<PatientListEntry>();
@@ -29,7 +31,7 @@ namespace Scalpal.Shell
         public bool CanBegin => Selected != null && CanSelect(Selected) &&
             (Selected.status == "ready" || Selected.status == "needs_review") &&
             HasNativeEncounter(Selected.patientId) && !DetailLoading && string.IsNullOrEmpty(DetailError) &&
-            SelectedBrief != null && SelectedBrief.patientId == SelectedPatientId && SelectedBrief.synthetic &&
+            SelectedBrief?.patient != null && SelectedBrief.patientId == SelectedPatientId && SelectedBrief.synthetic &&
             SelectedBrief.dataSource == "demo";
 
         public string AvailabilityReason => Selected == null ? "Choose a patient" :
@@ -115,6 +117,11 @@ namespace Scalpal.Shell
         public bool ApplyBrief(PreopBrief brief)
         {
             if (brief == null || brief.patientId != SelectedPatientId || Selected == null) return false;
+            if (brief.patient == null)
+            {
+                FailDetail(brief.patientId, "The chart is missing patient details. Try again.");
+                return true;
+            }
             SelectedBrief = brief;
             DetailLoading = false;
             DetailError = brief.synthetic && brief.dataSource == "demo" ? "" : "Only synthetic demo records can begin an encounter.";
@@ -138,8 +145,8 @@ namespace Scalpal.Shell
         }
 
         public SurgicalCase CaseFor(string patientId) => patientId != null && cases.TryGetValue(patientId, out var result) ? result : null;
-        // NativeEncounterSession currently rejects the pediatric encounter. Keep the capability
-        // boundary explicit until the office owner implements and verifies that patient.
+        // NativeEncounterSession currently accepts only the two adult office patients. Keep this
+        // separate from the eight authored service encounters until more native patients are verified.
         public static bool HasNativeEncounter(string patientId) => patientId == "patient-demo-multi-source" || patientId == "patient-demo-sparse";
         public static bool HasAuthoredEncounter(string patientId) => patientId != null && AuthoredIds.Contains(patientId);
         public static bool CanSelect(PatientListEntry patient) => patient != null && !string.IsNullOrEmpty(patient.patientId) &&

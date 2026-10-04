@@ -155,7 +155,7 @@ namespace Scalpal.Exercises.Preop
                     break;
                 case RouteKind.Brief:
                     var brief = json != null ? TryParse<PreopBrief>(json) : FindOfflineCase(segment)?.brief;
-                    if (brief != null && brief.patientId == segment) BriefLoaded?.Invoke(brief);
+                    if (BriefMatchesRoute(brief, segment)) BriefLoaded?.Invoke(brief);
                     else if (json != null) Fail("invalid_response", "The service returned a missing or mismatched patient chart. Try again.", route);
                     else Fail("patient_not_found", "That patient is not in the offline bundle.", route);
                     break;
@@ -235,10 +235,20 @@ namespace Scalpal.Exercises.Preop
             }
         }
 
+        bool BriefMatchesRoute(PreopBrief brief, string idOrScenario)
+        {
+            if (brief == null || string.IsNullOrEmpty(brief.patientId)) return false;
+            if (brief.patientId == idOrScenario) return true;
+            // Existing callers may request a FinchNode scenario alias. Accept only a known
+            // bundle mapping; an unrelated patient returned for that alias remains a failure.
+            var known = FindOfflineCase(idOrScenario);
+            return known != null && known.scenarioId == idOrScenario && known.patientId == brief.patientId;
+        }
+
         SurgicalCase FindOfflineCase(string idOrScenario)
         {
             var bundle = Bundle();
-            return bundle?.cases?.FirstOrDefault(c => c.patientId == idOrScenario || c.scenarioId == idOrScenario);
+            return bundle?.cases?.FirstOrDefault(c => c != null && (c.patientId == idOrScenario || c.scenarioId == idOrScenario));
         }
 
         ScalpalBundle Bundle()

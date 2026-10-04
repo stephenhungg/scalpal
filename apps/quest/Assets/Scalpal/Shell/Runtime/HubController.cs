@@ -101,7 +101,7 @@ namespace Scalpal.Shell
             Wire(); service.StopAllCoroutines(); retrying=""; offlineSeen=false; Model.ClearSelection();
             notice="Loading patient records…"; RenderDetail(); service.LoadBundle(); service.LoadPatients();
         }
-        public void BundleLoaded(ScalpalBundle bundle) { Model.ApplyBundle(bundle); notice=bundle==null?"Bundle unavailable. Refresh to retry.":"Select a chart to explore."; RenderCards(); }
+        public void BundleLoaded(ScalpalBundle bundle) { Model.ApplyBundle(bundle); notice=bundle==null?"Bundle unavailable. Refresh to retry.":"Select a chart to explore."; RenderCards(); RenderDetail(); }
         public void PatientsLoaded(PatientList list) { Model.ApplyPatients(list); notice=list?.patients==null?"Patient list unavailable. Refresh to retry.":"Select a chart to explore."; RenderCards(); RenderDetail(); }
         public void BriefLoaded(PreopBrief brief) { if(Model.ApplyBrief(brief)) RenderDetail(); }
         void CaseLoaded(SurgicalCase value)

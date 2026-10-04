@@ -26,7 +26,7 @@ namespace Scalpal.Shell.Editor
             var root=new GameObject("ScalpalHub");var hub=root.AddComponent<HubController>();
             hub.font=AssetDatabase.LoadAssetAtPath<Font>(Office+"/Fonts/Inter-Regular.ttf");
             hub.glass=CopyMaterial("hub_glass",Office+"/Materials/office_glass_card.mat",new Color(.045f,.060f,.086f,.96f));
-            hub.buttonMaterial=CopyMaterial("hub_button",Office+"/Materials/office_glass_button.mat",new Color(.065f,.082f,.11f,.96f));
+            hub.buttonMaterial=CopyMaterial("hub_button",Office+"/Materials/office_glass_button.mat",new Color(.025f,.034f,.050f,.98f));
             hub.textMaterial=AssetDatabase.LoadAssetAtPath<Material>(Office+"/Materials/office_world_text_Inter-Regular.mat");
             hub.accent=Material("hub_lilac",new Color(.78f,.69f,.92f));
             hub.service=root.AddComponent<ScalpalPreopService>();
@@ -45,6 +45,18 @@ namespace Scalpal.Shell.Editor
             // EXT hand interaction drives our pointer/pinch actions; preserve all other feature settings.
             foreach(var asset in AssetDatabase.LoadAllAssetsAtPath("Assets/XR/Settings/OpenXRPackageSettings.asset"))
             {
+                if(asset.name=="MetaQuestFeature Android")
+                {
+                    // This OpenXR package makes eye tracking required whenever Quest Pro is
+                    // targeted, even with its eye-gaze feature disabled. Quest 3S has no eye tracking.
+                    var settings=new SerializedObject(asset);var devices=settings.FindProperty("targetDevices");
+                    for(int i=0;i<devices.arraySize;i++)
+                    {
+                        var device=devices.GetArrayElementAtIndex(i);
+                        if(device.FindPropertyRelative("manifestName").stringValue=="cambria")device.FindPropertyRelative("enabled").boolValue=false;
+                    }
+                    settings.ApplyModifiedPropertiesWithoutUndo();EditorUtility.SetDirty(asset);
+                }
                 if(asset.name!="HandInteractionProfile Android")continue;
                 var serialized=new SerializedObject(asset);serialized.FindProperty("m_enabled").boolValue=true;serialized.ApplyModifiedPropertiesWithoutUndo();EditorUtility.SetDirty(asset);
             }
@@ -126,20 +138,26 @@ namespace Scalpal.Shell.Editor
             finally {camera.targetTexture=null;RenderTexture.active=previous;UnityEngine.Object.DestroyImmediate(target);UnityEngine.Object.DestroyImmediate(image);}
         }
         public static void PrepareAndVerify() { Prepare();ShellValidation.Run();CapturePreviews(); }
+        public static void BuildWithPreviews() { Prepare();CapturePreviews();Build(); }
         [MenuItem("Scalpal/Shell/Build Android")]
         public static void Build()
         {
-            ShellValidation.Run();var output=Environment.GetEnvironmentVariable("SCALPAL_SHELL_APK");
+            ShellValidation.Run();
+            // Validation intentionally exercises/mutates a scene instance. Build the committed clean scene.
+            EditorSceneManager.OpenScene(ScenePath,OpenSceneMode.Single);
+            var output=Environment.GetEnvironmentVariable("SCALPAL_SHELL_APK");
             if(string.IsNullOrEmpty(output)||!Path.IsPathRooted(output))throw new InvalidOperationException("SCALPAL_SHELL_APK requires an absolute APK path.");
+            string version=PlayerSettings.bundleVersion, product=PlayerSettings.productName;int code=PlayerSettings.Android.bundleVersionCode;
             var preloads=PlayerSettings.GetPreloadedAssets();var http=PlayerSettings.insecureHttpOption;var aab=EditorUserBuildSettings.buildAppBundle;
             try
             {
+                PlayerSettings.bundleVersion="0.6.0-shell";PlayerSettings.Android.bundleVersionCode=11;PlayerSettings.productName="Scalpal";
                 PlayerSettings.insecureHttpOption=InsecureHttpOption.DevelopmentOnly;EditorUserBuildSettings.buildAppBundle=false;Directory.CreateDirectory(Path.GetDirectoryName(output));
                 var result=BuildPipeline.BuildPlayer(new BuildPlayerOptions { scenes=EditorBuildSettings.scenes.Where(s=>s.enabled).Select(s=>s.path).ToArray(),target=BuildTarget.Android,locationPathName=output,options=BuildOptions.Development });
                 if(result.summary.result!=BuildResult.Succeeded)throw new InvalidOperationException("Shell Android build failed: "+result.summary.result);
                 Debug.Log("SCALPAL_SHELL_APK_OK bytes="+new FileInfo(output).Length);
             }
-            finally {PlayerSettings.SetPreloadedAssets(preloads);PlayerSettings.insecureHttpOption=http;EditorUserBuildSettings.buildAppBundle=aab;AssetDatabase.SaveAssets();}
+            finally {PlayerSettings.bundleVersion=version;PlayerSettings.Android.bundleVersionCode=code;PlayerSettings.productName=product;PlayerSettings.SetPreloadedAssets(preloads);PlayerSettings.insecureHttpOption=http;EditorUserBuildSettings.buildAppBundle=aab;AssetDatabase.SaveAssets();}
         }
     }
 }

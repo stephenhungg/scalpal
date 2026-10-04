@@ -29,7 +29,7 @@ namespace Scalpal.Shell.Editor
         [MenuItem("Scalpal/Shell/Validate Launch and Explore")]
         public static void Run()
         {
-            checks = 0;
+            checks = ShellInputValidation.Run();
             ValidateModel();
             ValidateExchange();
             ValidateScene();
@@ -45,7 +45,7 @@ namespace Scalpal.Shell.Editor
             var review = Entry(Male, "needs_review", "lap_cholecystectomy", "elective");
             var retry = Entry("patient-demo-rate-limited", "retry", "lap_appendectomy", "urgent");
             var blocked = Entry("patient-demo-consent-revoked", "blocked", "", "");
-            var unsupported = Entry("patient-demo-001", "ready", "lap_cholecystectomy", "urgent");
+            var unsupported = Entry("patient-validation-unauthored", "ready", "lap_cholecystectomy", "urgent");
             var pediatric = Entry("patient-demo-pediatric-asthma", "ready", "lap_appendectomy", "urgent");
             model.ApplyPatients(new PatientList { patients = new[] { blocked, review, retry, ready, unsupported, pediatric } });
             Check(model.Patients.Take(3).All(p => p.status == "ready"), "ready cases sort before review, retry and blocked");
@@ -69,6 +69,8 @@ namespace Scalpal.Shell.Editor
             Check(!model.CanBegin && !ExplorePatientModel.HasAuthoredEncounter(unsupported.patientId), "patient without authored interview cannot begin");
             model.Select(pediatric.patientId); model.ApplyBrief(Brief(pediatric.patientId));
             Check(!model.CanBegin, "authored child case is gated while office has adult-only presentation");
+            model.Select(Female); var missingPatient = Brief(Female); missingPatient.patient = null;
+            Check(model.ApplyBrief(missingPatient) && model.SelectedBrief == null && !model.DetailLoading && !model.CanBegin && model.DetailError.Length > 0, "matching-ID brief with missing patient demographics is handled as a visible failure and cannot begin");
             model.Select(Female); var nonsynthetic = Brief(Female); nonsynthetic.synthetic = false; model.ApplyBrief(nonsynthetic);
             Check(!model.CanBegin && model.DetailError.Length > 0, "non-synthetic detail cannot begin");
             model.Select(Female); var sandbox = Brief(Female); sandbox.dataSource = "sandbox"; model.ApplyBrief(sandbox);
@@ -128,6 +130,7 @@ namespace Scalpal.Shell.Editor
                 client.RequestFailedForRoute += (route, value) => failedRoute = route;
                 var getPatients = Send(client, "/patients"); getPatients.Run();
                 Check(getPatients.paths.SequenceEqual(new[] { "/patients" }) && patients?.patients?.Length == 12 && !client.IsOffline, "production client fetches all 12 scenario rows over actual HTTP");
+                Check(patients.patients.Count(patient => ExplorePatientModel.HasAuthoredEncounter(patient.patientId)) == 8 && patients.patients.Count(patient => ExplorePatientModel.HasNativeEncounter(patient.patientId)) == 2, "audited catalog distinguishes eight server-authored interviews from two implemented native-office presentations");
                 foreach (var status in new[] { "ready", "needs_review", "blocked", "retry" })
                     Check(patients.patients.Any(p => p.status == status), "actual fixture returns renderable " + status + " status");
                 var getBundle = Send(client, "/unity/bundle"); getBundle.Run();
@@ -145,6 +148,14 @@ namespace Scalpal.Shell.Editor
                 Check(model.CanBegin && model.Name(model.Selected) == "Priya Ramaswamy" && liveHub.BeginButton && liveHub.BeginButton.interactable, "actual live brief callback renders supported adult detail and enables explicit Begin");
                 Check(ShellTransition.TryStageSelection(model.SelectedPatientId, client.BaseUrl) && ShellTransition.TryConsumeSelection(out var liveSelection) && liveSelection.patientId == Female && liveSelection.serviceUrl == endpoint, "live service UI selection stages the exact production office handoff identity");
                 client.BriefLoaded -= liveHub.BriefLoaded;
+                string alias = patients.patients.Single(patient => patient.patientId == Female).scenarioId;
+                Check(alias == "multi-source-overlap", "brief scenario alias comes from actual catalog mapping");
+                brief = null; error = null;
+                var aliasBrief = Send(client, "/patients/" + alias + "/brief"); aliasBrief.Run();
+                Check(aliasBrief.paths.Single() == "/patients/multi-source-overlap/brief" && brief?.patientId == Female && brief.patient != null && error == null, "production GET brief accepts known scenario alias mapped to exact canonical patient identity");
+                brief = null; error = null;
+                typeof(ScalpalPreopService).GetMethod("Answer", Private).Invoke(client, new object[] { RouteKind.Brief, "/patients/" + alias + "/brief", JsonUtility.ToJson(Brief(Male)), null });
+                Check(brief == null && error?.error?.code == "invalid_response" && failedRoute == "/patients/" + alias + "/brief", "known alias never permits another patient's response identity");
                 foreach (var failure in new[] { new[] { "patient-demo-consent-revoked", "consent_inactive" }, new[] { "patient-demo-rate-limited", "rate_limited" }, new[] { "patient-not-found", "patient_not_found" } })
                 {
                     brief = null; error = null;
@@ -218,7 +229,7 @@ namespace Scalpal.Shell.Editor
             blockedCard.Press();
             Check(!blockedCard.interactable && hub.Model.SelectedPatientId == Female && !hub.Transitioning, "locked card's actual press cannot replace selection or launch");
             Check(!hub.Select(blocked.patientId) && !hub.Begin(), "direct blocked selection and begin commands also fail closed");
-            var unsupported = hub.Model.Patients.First(patient => ExplorePatientModel.CanSelect(patient) && !ExplorePatientModel.HasAuthoredEncounter(patient.patientId) && patient.status != "retry");
+            var unsupported = hub.Model.Patients.First(patient => ExplorePatientModel.CanSelect(patient) && !ExplorePatientModel.HasNativeEncounter(patient.patientId) && patient.status != "retry");
             Check(hub.Select(unsupported.patientId) && hub.BeginButton && !hub.BeginButton.interactable && hub.Model.AvailabilityReason == "Interview coming soon", "unsupported interview detail has explicit coming-soon reason and disabled Begin");
             hub.BeginButton.Press();
             Check(!hub.Begin() && !hub.Transitioning, "both UI press and direct Begin reject unsupported interview");
