@@ -159,9 +159,30 @@ describe("patient facts come only from tools", () => {
   });
 
   it("answers allergies and medications from the real chart when nothing is authored", () => {
-    const s = encounterFor("patient-demo-multi-source");
+    const authored = ENCOUNTERS_BY_PLAN.get("patient-demo-multi-source")!;
+    const { allergies: _a, medications: _m, ...history } = authored.history;
+    const s = new EncounterSession("enc-test", buildCase(fixture(authored.planSubject), "", NOW), { ...authored, history }, () => NOW);
     expect(s.answer("allergies").toLowerCase()).toContain("latex");
     expect(s.answer("medications")).toMatch(/records/);
+  });
+
+  it("lets a multi-source patient explain her chart in her own words", () => {
+    const s = encounterFor("patient-demo-multi-source");
+    expect(s.answer("allergies")).toMatch(/Latex gloves give me an itchy red rash/);
+    expect(s.answer("medications")).toMatch(/levothyroxine/);
+    expect(s.answer("past_medical")).toMatch(/underactive thyroid/);
+  });
+
+  // A referred patient may repeat what she was told, but parroting the greeting or the chief complaint
+  // must not score the diagnosis for the learner.
+  it("does not hand over the diagnosis in an opener or chief complaint", () => {
+    for (const e of ENCOUNTERS) {
+      for (const said of [e.persona.opener, e.history.chief_complaint ?? ""]) {
+        const s = encounterFor(e.planSubject);
+        s.recordAssessment({ diagnosis: said, differential: [], procedure: "", urgency: "" });
+        expect(s.score().diagnosisResult, `${e.planSubject}: ${said}`).toBe("incorrect");
+      }
+    }
   });
 
   it("lets a patient say what an empty chart cannot", () => {

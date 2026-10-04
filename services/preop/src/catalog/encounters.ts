@@ -170,7 +170,10 @@ export const ENCOUNTERS: Encounter[] = [
       urinary: "No burning or blood when I pee. Maybe going a little more often, I'm not sure.",
       menstrual_pregnancy: "My last period was about two weeks ago, it was normal. I don't think I'm pregnant, but I'm not on any birth control right now.",
       last_meal: "I had a small dinner at around seven last night, just soup. Only water since then, last sip about two hours ago.",
+      past_medical: "I have an underactive thyroid. I get migraines a few times a month when work is busy, but this is nothing like them. And my blood count was low last year, they said low iron, so a blood doctor put me on iron pills.",
       past_surgical: "No surgeries. I've never been operated on.",
+      medications: "A small thyroid pill every morning, levothyroxine, the low dose. I took it this morning with a sip of water. Sumatriptan when a migraine starts, but I haven't needed it this week. And an iron pill, ferrous sulfate, most days. Honestly I skip some because it upsets my stomach. I took ibuprofen last night for this.",
+      allergies: "Latex. Latex gloves give me an itchy red rash on my hands, it shows up the day after. No swelling or trouble breathing. No medicine allergies that I know of. My regular doctor's office might still say no allergies, I'm not sure it got to everyone.",
       social: "I'm an accountant. I don't smoke, I have a glass of wine on weekends.",
       family: "Nothing like this in my family that I know of.",
       recent_illness: "No, I haven't been sick lately.",
@@ -217,7 +220,7 @@ export const ENCOUNTERS: Encounter[] = [
       ddx("adenitis", "Mesenteric adenitis", "adenitis", "lymph"),
     ],
     critical: [
-      { kind: "history", id: "allergies", why: "She has a high-severity latex allergy: the room, gloves, and catheters must be latex free." },
+      { kind: "history", id: "allergies", why: "She has a latex allergy (a contact rash from gloves, low criticality on her chart). The room, gloves, and catheters must still be latex free." },
       { kind: "history", id: "menstrual_pregnancy", why: "A woman of reproductive age with right lower quadrant pain needs pregnancy excluded: ectopic pregnancy is the can't-miss diagnosis." },
       { kind: "test", id: "pregnancy_test", why: "History alone does not exclude pregnancy. Order a beta-hCG before imaging and surgery." },
       { kind: "history", id: "last_meal", why: "Last oral intake sets anesthesia timing and aspiration risk." },
@@ -398,7 +401,7 @@ export const ENCOUNTERS: Encounter[] = [
       ddx("ischemia", "Mesenteric ischemia", "ischemi"),
     ],
     critical: [
-      { kind: "history", id: "allergies", why: "His chart is empty, but he is allergic to penicillin: that changes the antibiotic for an infected abdomen. Only asking him found it." },
+      { kind: "history", id: "allergies", why: "His chart is empty, but he is allergic to penicillin: that steers the antibiotic for an infected abdomen away from piperacillin-tazobactam. Childhood hives without anaphylaxis, decades ago, still allows a cephalosporin, so ceftriaxone with metronidazole is appropriate. Only asking him found it." },
       { kind: "history", id: "medications", why: "With no chart, medications have to come from the patient." },
       { kind: "exam", id: "vitals", why: "Fever, tachycardia, and soft blood pressure mean sepsis: fluids and antibiotics before the operating room." },
       { kind: "history", id: "last_meal", why: "Last oral intake sets anesthesia timing and aspiration risk." },
@@ -492,7 +495,7 @@ export const ENCOUNTERS: Encounter[] = [
       ddx("pyelo", "Right pyelonephritis", "pyelo", "kidney infection"),
     ],
     critical: [
-      { kind: "history", id: "medications", why: "She took apixaban this morning and also takes aspirin. Apixaban clears partly through the kidneys, so with an eGFR near 30 it lingers: a planned operation usually waits about 48 hours after the last dose, with no heparin bridge, and that delay has to be weighed against early cholecystectomy." },
+      { kind: "history", id: "medications", why: "She took apixaban this morning and also takes aspirin. Apixaban clears partly through the kidneys, and her creatinine clearance is near 27: a planned operation waits at least 48 hours after the last dose, and longer at her kidney function (about 72 hours, or until an anti-Xa level is low), with no heparin bridge. That delay has to be weighed against early cholecystectomy." },
       { kind: "history", id: "allergies", why: "Contrast allergy with an eGFR near 30: avoid contrast CT and plan any intraoperative cholangiogram around the allergy. Her sulfa allergy causes hives, so sulfonamide antibiotics are out." },
       { kind: "test", id: "bmp", why: "Creatinine is up from her baseline: acute kidney injury on stage 3 CKD. Dose antibiotics and analgesics for her kidneys, avoid NSAIDs, hold metformin and lisinopril, and watch potassium because she takes a potassium supplement." },
       { kind: "history", id: "last_meal", why: "Last oral intake sets anesthesia timing and aspiration risk." },
@@ -630,10 +633,10 @@ export const ENCOUNTERS: Encounter[] = [
       demeanor: "A retired bookkeeper seen in surgery clinic, organized and matter-of-fact. Feels well now and wants to avoid another hospital stay. Remembers details of her admission clearly.",
       character:
         "You're a retired bookkeeper who still keeps your church's books in pencil, in a green ledger. You love crosswords in pen, quilting, and your tomato plants, and you're still annoyed the hospital stay made you miss them at their best. You kept a notebook during that stay but left it on the kitchen table today, and you're annoyed with yourself about it. You're matter-of-fact, precise, and a little dry. You start answers with 'Well,', say 'Let me be exact', and when you don't know something you say so plainly: 'They didn't tell me.' You're businesslike and want to get this on the calendar. Your main goal is never to go through that pain again; if told it could come back, you get more motivated, not more anxious. You're a bit irritated the hospital didn't take care of it while you were there, and may ask about that once, calmly.",
-      opener: "Hello, I'm Ingrid. The hospital told me to come see you about taking my gallbladder out after that pancreatitis business.",
+      opener: "Hello, I'm Ingrid. The hospital told me to come see you about taking my gallbladder out, after that business with my pancreas.",
     },
     history: {
-      chief_complaint: "I'm here to get my gallbladder out. Last month the gallstones gave me pancreatitis.",
+      chief_complaint: "I'm here to get my gallbladder out. Last month I ended up in the hospital. They said stones had made my pancreas angry.",
       onset: "I was in the hospital about four weeks ago, for three days. I've felt fine for the last three weeks.",
       location: "Back then it was in the upper middle of my belly, boring straight through to my back. Nothing now.",
       migration: "It stayed in the middle and went straight through to my back.",
@@ -650,6 +653,7 @@ export const ENCOUNTERS: Encounter[] = [
       past_medical: "High blood pressure and high cholesterol. And the pancreatitis last month, at Quillhaven. They said it was mild, I never went to the ICU. Before I went home they did an MRI of my bile ducts and said no stones were stuck. They asked a lot about drinking, but I hardly drink.",
       past_surgical: "I've never had surgery. I had a colonoscopy at sixty and it was fine.",
       medications: "Lisinopril in the morning and atorvastatin at night. The hospital didn't start anything new. I also take a baby aspirin most days on my own, nobody prescribed it.",
+      allergies: "Penicillin. When I was about thirty I took it for a tooth infection and got an itchy red rash on my arms and chest. It went away a few days after I stopped it. No swelling, no trouble breathing.",
       social: "I'm a retired bookkeeper and I live with my husband. I never smoked. Maybe a glass of wine at a wedding.",
       family: "My sister had gallstones.",
       recent_illness: "Just the pancreatitis.",
