@@ -41,8 +41,8 @@ namespace Scalpal.Brand
         public static readonly Color Ink70 = new Color(1, 1, 1, .70f);
         public static readonly Color Ink50 = new Color(1, 1, 1, .50f);
         public static readonly Color InkDisabled = new Color(1, 1, 1, .36f);
-        public static readonly Color AccentOrange = new Color32(242, 77, 20, 255);
-        public static readonly Color AccentGold = new Color32(255, 219, 56, 255);
+        public static readonly Color AccentOrange = new Color32(214, 214, 218, 255); // neutral grey (Stephen: no warm glow)
+        public static readonly Color AccentGold = new Color32(156, 156, 162, 255);
         // Flat uses (icons, chips) take the spark's midpoint; rims and rays use the full gradient.
         public static readonly Color Accent = Color.Lerp(AccentOrange, AccentGold, .45f);
         public static readonly Color GlassTint = new Color(.016f, .016f, .019f, .95f);

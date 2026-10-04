@@ -53,7 +53,7 @@ namespace Scalpal.Brand.Editor
             Check(brand.glass.shader.name == "Scalpal/Brand/Glass" && brand.button.shader.name == "Scalpal/Brand/Glass" && brand.glass.renderQueue < brand.button.renderQueue && brand.button.renderQueue < brand.bodyText.renderQueue, "dark glass, then buttons, then text");
             Check(brand.glass.color.maxColorComponent < .05f && brand.glass.color.a > .7f, "cards are dark translucent glass");
             Check(brand.mark && brand.mark.mainTexture == brand.markTexture && brand.markTexture, "dither logo mark texture is bound");
-            Check(brand.ray && brand.accent && ScalpalBrand.AccentOrange == (Color)new Color32(242, 77, 20, 255) && ScalpalBrand.AccentGold == (Color)new Color32(255, 219, 56, 255), "single warm accent from the site's spark");
+            Check(brand.ray && brand.accent && ScalpalBrand.AccentOrange == (Color)new Color32(214, 214, 218, 255) && ScalpalBrand.AccentGold == (Color)new Color32(156, 156, 162, 255), "single neutral grey accent for focus and hover");
         }
 
         static void ValidateStrings()

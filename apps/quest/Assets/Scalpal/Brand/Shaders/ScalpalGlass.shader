@@ -1,7 +1,7 @@
 Shader "Scalpal/Brand/Glass"
 {
     // Dark translucent card with a crisp hairline (site: white ink on near-black). Focused and
-    // primary surfaces swap the hairline for the spark gradient (orange to gold) and a faint warm glow.
+    // primary surfaces swap the hairline for the grey accent gradient and a faint glow.
     // No GrabPass, blur, render texture or extra camera: one cheap transparent pass for Quest.
     Properties
     {
