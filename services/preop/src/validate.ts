@@ -136,6 +136,9 @@ export function validateCatalog(): string[] {
     if (p.speaker === "parent" && p.name === p.patientName) at("a parent persona needs a name of their own");
     if (!Number.isInteger(p.age) || p.age < 0 || p.age > 120) at(`persona age ${p.age} is not plausible`);
     if (p.sex !== "female" && p.sex !== "male") at("persona sex must be the patient's sex (female or male)");
+    if (p.speaker === "parent" && (!Number.isInteger(p.speakerAge) || p.speakerAge! < 18 || p.speakerAge! > 120)) at("a parent persona needs its own adult speakerAge so the office can seat them");
+    if (p.speaker === "parent" && p.speakerSex !== "female" && p.speakerSex !== "male") at("a parent persona needs its own speakerSex (female or male)");
+    if (p.speaker === "patient" && (p.speakerAge !== undefined || p.speakerSex !== undefined)) at("a patient persona is the speaker; omit speakerAge and speakerSex");
     if (p.chartDemographics !== undefined && p.chartDemographics !== "not_shared") at("chartDemographics may only be \"not_shared\"");
     if (p.chartDemographics && p.speaker !== "patient") at("a persona without chart demographics must confirm identity in person, so it must be the patient");
     if (!(PATIENT_VOICE_KEYS as readonly string[]).includes(p.voiceKey) || !DEFAULT_PATIENT_VOICES[p.voiceKey]) at(`voice "${p.voiceKey}" has no default voice id`);

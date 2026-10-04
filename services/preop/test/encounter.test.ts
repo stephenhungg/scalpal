@@ -216,6 +216,19 @@ describe("patient facts come only from tools", () => {
     expect(s.summary().toLowerCase()).not.toContain("unremarkable");
   });
 
+  it("puts the seated people in state: the patient, and an adult parent beside a child", () => {
+    // The office seats an avatar for every playable patient; missing demographics left the chair empty.
+    for (const e of ENCOUNTERS) {
+      const st = encounterFor(e.planSubject).state();
+      expect(st.patientAge, e.planSubject).toBe(e.persona.age);
+      expect(st.patientSex, e.planSubject).toBe(e.persona.sex);
+      expect(st.speakerAge, e.planSubject).toBeGreaterThanOrEqual(18);
+      expect(["female", "male"], e.planSubject).toContain(st.speakerSex);
+      if (e.persona.speaker === "patient") expect([st.speakerAge, st.speakerSex]).toEqual([st.patientAge, st.patientSex]);
+    }
+    expect(encounterFor("patient-demo-pediatric-asthma").state()).toMatchObject({ speaker: "parent", patientName: "Theo Abernathy", patientAge: 9, patientSex: "male", speakerName: "Laura Abernathy", speakerAge: 41, speakerSex: "female" });
+  });
+
   it("grounds attending history in returned facts and withholds uncollected answer keys", () => {
     const s = encounterFor("patient-demo-multi-source");
     expect(attendingPrompt(s).toLowerCase()).not.toContain("latex");
