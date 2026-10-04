@@ -1,0 +1,117 @@
+---
+title: "Package format"
+description: "The scalpal.case-package.v1 layout and every field in it."
+---
+
+A case package is a folder. The skill's `assets/example-priya/` is a complete, passing example.
+
+```text
+my-case/
+  case.json                 subject, case plan, encounter
+  content/
+    patient.md              the persona the patient voice plays
+    interview.json          the office rounds
+    patient_status.md       clinical summary the coach reads in the OR
+  dossier.md                optional long-form notes
+  fixture/                  only for a subject the repo has no fixture for
+    record.json
+    scenario.json
+```
+
+`install --write` puts each piece where the app reads it:
+
+| Package | Repo |
+| --- | --- |
+| `case.json` `plan` | `CASE_PLANS` in `services/preop/src/catalog/cases.ts` |
+| `case.json` `encounter` | `ENCOUNTERS` in `services/preop/src/catalog/encounters.ts` |
+| `content/*` | `services/preop/content/patients/<subject>/` |
+| `dossier.md` | `docs/patients/<subject>.md` |
+| `fixture/*` | `services/preop/test/fixtures/` |
+
+## case.json
+
+```json
+{
+  "schema": "scalpal.case-package.v1",
+  "subject": "patient-demo-001",
+  "scenarioId": "baseline-adult",
+  "title": "Morgan Rivera: Acute appendicitis",
+  "notes": "Provenance and FinchNode fetch time.",
+  "objectives": ["Elicit and act on a penicillin allergy"],
+  "sources": ["WSES Jerusalem guidelines 2020, doi:10.1186/s13017-020-00306-3"],
+  "review": ["Authored stress glucose needs clinician review"],
+  "plan": {
+    "procedureId": "open_appendectomy",
+    "urgency": "urgent",
+    "indication": "Acute appendicitis",
+    "presentation": "Authored acute story in clinical prose.",
+    "chartNotes": [{ "text": "Only appended when the chart supports it.", "whenFlags": ["allergy"] }]
+  },
+  "encounter": { "planSubject": "patient-demo-001", "persona": { }, "history": { }, "exam": { }, "tests": { }, "diagnosis": { }, "procedureKeywords": [], "urgency": "urgent", "differential": [], "critical": [], "expected": [] }
+}
+```
+
+### plan
+
+| Field | Rule |
+| --- | --- |
+| `procedureId` | a catalog procedure; headset-playable: `open_appendectomy`, `lap_appendectomy` |
+| `urgency` | `elective`, `urgent` or `emergency`; must equal the encounter's |
+| `indication` | one line |
+| `presentation` | the authored acute story, with no claims about the chart |
+| `chartNotes` | optional sentences that fire only when listed flags, gaps or source counts are present |
+
+### encounter
+
+The scored fact base, and still the source of the persona, voice and demographics.
+
+| Field | Rule |
+| --- | --- |
+| `persona` | `speaker` patient or parent; `name`, `patientName`, `age`, `sex` must match the chart; `voiceKey`; `demeanor`; `character` (personality only, no chart facts); `opener` (must not give away the diagnosis) |
+| `history` | first-person answers per topic (`onset`, `migration`, `allergies`, `last_meal` and 17 more); must mention every charted allergy and drug |
+| `exam` | per maneuver: spoken `reaction` and on-screen `finding` |
+| `tests` | per test: `result` and `abnormal` |
+| `diagnosis` | `label` and lowercase keyword groups (every group must match), optional `partial` |
+| `procedureKeywords` | lowercase keyword groups |
+| `differential` | at least 5 alternatives with keywords |
+| `critical`, `expected` | rubric items: history topic, exam maneuver or test, each with a `why` |
+
+## content/interview.json
+
+```json
+{
+  "version": 1,
+  "patientId": "patient-demo-001",
+  "procedureId": "open_appendectomy",
+  "openingLine": "Hi. Sorry, it hurts to move.",
+  "rounds": [
+    {
+      "id": "history_onset",
+      "stage": "history",
+      "prompt": "She is lying very still and guarding her belly. What do you do next?",
+      "weight": 8,
+      "choices": [
+        {
+          "key": "A",
+          "text": "Ask when the pain started and whether it has moved",
+          "grade": "correct",
+          "feedback": "Migration from the umbilicus to the right lower quadrant is the classic pattern.",
+          "patientCue": "It started last night around my belly button, then moved down to the right.",
+          "covers": ["history:onset", "history:migration", "history:location"]
+        }
+      ]
+    }
+  ],
+  "closingLine": "Okay. How long will it take?"
+}
+```
+
+Each round has exactly four choices (A to D), one correct, at most one partial, and the weights of all rounds add up to 100. See [writing the interview](/cases/interview).
+
+## content/patient.md
+
+Second person, the patient's own knowledge: who they are, how they talk, how they feel, what they think is going on (never the diagnosis), their story, their background in lay words, what examination feels like, and how to behave.
+
+## content/patient_status.md
+
+Third person, for the coach: identity, presentation, findings, working diagnosis, procedure and urgency, each chart risk with the OR step it changes, data gaps, and what the learner should have elicited.

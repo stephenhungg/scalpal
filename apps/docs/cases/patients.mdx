@@ -1,0 +1,49 @@
+---
+title: "Choosing a patient"
+description: "FinchNode's synthetic demo patients, what Scalpal reads from them, and how the risk flags work."
+---
+
+Every Scalpal patient is a FinchNode subject. FinchNode's demo API (`https://api.finchnode.com/demo/v1`, no key) serves a fixed set of synthetic scenarios. None of them has an acute surgical problem, so every case is the real chart plus an authored acute presentation, kept separate and labeled as authored.
+
+## The demo patients
+
+| Subject | Chart | Good for |
+| --- | --- | --- |
+| `patient-demo-001` | Morgan Rivera, 38 F. Type 2 diabetes, hypertension, metformin, lisinopril, penicillin allergy | an antibiotic-choice hook |
+| `patient-demo-polypharmacy` | Harriet Lindqvist, 78 F. AF on apixaban plus aspirin, CKD, heart failure, 14 meds, sulfonamide and contrast allergies | anticoagulation, kidney and imaging decisions |
+| `patient-demo-pediatric-asthma` | Theo Abernathy, 9 M. Asthma, peanut allergy | the only child; his mom speaks for him |
+| `patient-demo-multi-source` | Priya Ramaswamy, 40 F. Hypothyroid, anemia, latex allergy, two sources that disagree | latex-free OR, reconciling records |
+| `patient-demo-sparse` | Jonah Okoye, 30 M. Almost empty chart | a previously healthy adult |
+| `patient-demo-messy-coding` | Dolores Marchetti, 63 F. Uncoded meds, weight in pounds | reconciliation and units |
+
+The rest (rate limited, consent revoked, partial consent, a source unavailable) exist to test error handling. The partial-consent chart has no name, so the headset hides it.
+
+Run `npx tsx $T chart <subject>` to see exactly what Scalpal builds for a subject.
+
+## What Scalpal reads
+
+Demographics (age at the chart's `dataAsOf`), live medications, conditions, allergies, the latest eGFR, creatinine, hemoglobin, A1c and platelets, consent, and the latest vitals for the coach's VR baseline. Documents, claims, immunizations and notes are ignored. Labs match on LOINC codes; medications, conditions and allergies match on names, so a brand name like "Eliquis" won't raise the bleeding flag.
+
+## Risk flags
+
+| Flag | Raised by | Elicited in the office by |
+| --- | --- | --- |
+| Bleeding | an anticoagulant or antiplatelet | asking about medications |
+| Latex, contrast, other allergy | an allergy | asking about allergies |
+| Renal | eGFR under 60, high creatinine, or CKD | past history or a BMP |
+| Metformin and kidneys | metformin with eGFR under 45 | medications, and past history or a BMP |
+| Diabetes | diabetes or A1c 6.5 or higher | past history, medications or a BMP |
+| Anemia | low hemoglobin or anemia | past history or a CBC |
+| Cardiac | AF, heart failure, coronary disease | past history |
+| Airway | asthma, COPD, sleep apnea | past history or recent illness |
+| Polypharmacy | 10 or more medications | medications |
+| Pediatric, elderly | under 18, 75 or over | chart only |
+| Incomplete chart | any data gap | past history, medications and allergies |
+
+A risk only becomes a Time-Out chip if the procedure pins it to a step, and an interview must let the learner elicit every one of them.
+
+## New patients
+
+- **A subject FinchNode adds** works fully: snapshot its record and scenario into the package's `fixture/` folder.
+- **An invented subject** works offline only. The live service lists only what FinchNode serves, and the headset's editor checks count patients exactly.
+- **Sandbox `u_` subjects** reuse the case of the demo scenario they mirror; don't author against them.

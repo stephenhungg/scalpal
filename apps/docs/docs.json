@@ -49,7 +49,12 @@
         "groups": [
           {
             "group": "Get started",
-            "pages": ["index", "experience", "architecture", "quickstart"]
+            "pages": [
+              "index",
+              "experience",
+              "architecture",
+              "quickstart"
+            ]
           },
           {
             "group": "Components",
@@ -65,8 +70,22 @@
             ]
           },
           {
+            "group": "Create a case",
+            "pages": [
+              "cases/overview",
+              "cases/quickstart",
+              "cases/patients",
+              "cases/package-format",
+              "cases/interview",
+              "cases/checklist"
+            ]
+          },
+          {
             "group": "Project",
-            "pages": ["status", "team"]
+            "pages": [
+              "status",
+              "team"
+            ]
           }
         ]
       },
@@ -75,7 +94,12 @@
         "groups": [
           {
             "group": "Services",
-            "pages": ["api/vitals", "api/preop", "api/gateway", "api/vision"]
+            "pages": [
+              "api/vitals",
+              "api/preop",
+              "api/gateway",
+              "api/vision"
+            ]
           }
         ]
       }

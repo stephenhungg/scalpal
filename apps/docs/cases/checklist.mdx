@@ -1,0 +1,62 @@
+---
+title: "Compatibility checklist"
+description: "Everything that must be true for a case to load, play, score and recap, plus what a new procedure costs."
+---
+
+## Before you call a case done
+
+- [ ] The subject is a FinchNode demo subject with a repo fixture, or the package carries `fixture/` and you accept offline only.
+- [ ] `check` reports 0 errors, and every warning is fixed or explained.
+- [ ] `trial` passes, or every test it flags is updated to the new case in the same change.
+- [ ] The procedure plays in the headset, or the requester knows the case is interview only.
+- [ ] The persona matches the chart, and the voice doesn't collide (or the voice change is made).
+- [ ] Every chart risk is covered by a correct pick.
+- [ ] `install --write` is done, and `gates` is green except steps that can't run here.
+- [ ] Generated files (`ScalpalIds.cs`, the asset manifest, the bundle) are committed with the change.
+- [ ] Someone has played it once, and a clinician has reviewed the content before it's shown as more than a demo.
+
+## Gates
+
+From `services/preop`, `npx tsx $T gates` runs these in order:
+
+| Gate | What it proves |
+| --- | --- |
+| `npm run validate` | 53 catalog rules: ids, ports, step chains, coaching, roles, encounters |
+| `npm run typecheck` | the catalogs still compile |
+| `npx vitest run` | catalog playthroughs, interview QA per patient, encounter rules, the Unity DTO contract, routes, coach, body sim |
+| `npm run gen:unity` | regenerated Unity ids and asset manifest |
+| `npm run export:unity -- --offline` | the offline bundle the headset ships with |
+| `npm run test:unity` | every bundled case plays to completion in the real C# engine (needs the .NET 10 SDK) |
+
+Unity editor validations and a headset run need a person.
+
+## Ids that must line up
+
+| Id | Form |
+| --- | --- |
+| subject | `patient-demo-...`, the same everywhere: plan, encounter, content folder, interview, fixture |
+| procedureId | snake case, the same in the plan, interview and procedure catalog |
+| caseId | `case_<subject>_<procedureId>`, unique in the bundle |
+
+The headset re-checks at every stage that the case, interview scorecard, coach session and Time-Out check all carry the same subject, procedure and case id.
+
+## Places that are still hard-coded
+
+| Where | What | Effect |
+| --- | --- | --- |
+| `HandoffRun.Supported` | the two appendectomies | other procedures stop at "Surgery coming soon" |
+| `ShellValidation.cs` | exactly 11 cases, 10 patients, 7 visible | a new subject fails the Unity editor gate |
+| `EncounterPatientPresentation.cs` | two generic adult avatars, guarding the right lower abdomen | no child model; other pain sites still guard there |
+| `EncounterSpeech` | offline speech for Priya and Jonah only | other patients use the live voice |
+| `encounter.test.ts` | the shared-voice groups | a new voice collision fails |
+| `offline-advanced-case.ts` | Priya must stay an open appendectomy | re-planning her breaks the export |
+
+## What a new procedure costs
+
+A procedure the headset can't run yet needs more than data:
+
+1. **Data:** the procedure, coaching for every step, step roles, facts for any new anatomy, a procedure site.
+2. **Code in TypeScript and C#:** ideal actions for every new open-body step, the branches that check for the literal `open_appendectomy` id, and any new tool verbs. The two engines must stay number-for-number identical.
+3. **Unity:** the handoff allowlist, anatomy for the region with colliders, the wound and wall layers (hard-coded at McBurney's point today), organ handling, the tool tray, briefing art and voice, then a new APK.
+
+The skill writes the data for a tier 2 case and hands back this list filled in for that procedure.
