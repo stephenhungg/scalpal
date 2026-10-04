@@ -5,8 +5,13 @@ using System.Linq;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using Scalpal.Handoff;
+using Scalpal.Quest;
+using Scalpal.Shell;
 using UnityEditor;
+using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.Rendering;
+using UnityEngine.SceneManagement;
 
 namespace Scalpal.Briefing.Editor
 {
@@ -36,6 +41,7 @@ namespace Scalpal.Briefing.Editor
             Atlas(steps, true);
             if (source.mesh) { RealImport(source.mesh); Atlas(steps, false); }
             else Debug.LogWarning("SCALPAL_BRIEFING_REAL_ATLAS_ABSENT " + BriefingBuild.ModelPath);
+            Stage();
             Flow();
             if (failures.Count > 0) throw new InvalidOperationException("Briefing validation failed (" + failures.Count + "):\n" + string.Join("\n", failures));
             Debug.Log("SCALPAL_BRIEFING_VERIFY_OK checks=" + checks + " real=" + (source.mesh != null));
@@ -51,6 +57,9 @@ namespace Scalpal.Briefing.Editor
         {
             Check(source && source.material && source.material.shader.name == "Scalpal/BriefingAtlas", "Resources handle carries the BriefingAtlas material");
             Check(source && source.material && !ShaderUtil.ShaderHasError(source.material.shader), "BriefingAtlas shader compiles");
+            Check(source && source.voidMaterial && source.voidMaterial.shader.name == "Scalpal/BriefingVoid" && !ShaderUtil.ShaderHasError(source.voidMaterial.shader)
+                && source.moteMaterial && source.moteMaterial.shader.name == "Scalpal/BriefingMote" && !ShaderUtil.ShaderHasError(source.moteMaterial.shader),
+                "Resources handle carries the compiled void and mote backdrop materials (they ship without Shader.Find)");
             if (File.Exists(BriefingBuild.ModelPath))
             {
                 var importer = (ModelImporter)AssetImporter.GetAtPath(BriefingBuild.ModelPath);
@@ -173,6 +182,23 @@ namespace Scalpal.Briefing.Editor
                     }
                     Check(visibleSet, label + ": " + step.id + " shows exactly the unpeeled parts (" + peeled.Count + " peeled)");
                     Check(focusSet && director.Step.id == step.id, label + ": " + step.id + " lifts, scales (" + scale.ToString("0.00") + "x) and lights only its " + focus.Count + " focus parts");
+                    if (focus.Count > 0)
+                    {
+                        // A spinning focus must never swing back into the torso: at every spin angle its scaled bounds
+                        // stay in front of everything left in place.
+                        var pivot = (lo + hi) * .5f; float reach = 0, front = float.MinValue;
+                        foreach (int i in focus) for (int c = 0; c < 8; c++)
+                        {
+                            var corner = new Vector3((c & 1) == 0 ? atlas.Parts[i].min.x : atlas.Parts[i].max.x, (c & 2) == 0 ? atlas.Parts[i].min.y : atlas.Parts[i].max.y, (c & 4) == 0 ? atlas.Parts[i].min.z : atlas.Parts[i].max.z);
+                            reach = Mathf.Max(reach, (corner - pivot).magnitude * scale);
+                        }
+                        for (int i = 0; i < atlas.Parts.Length; i++)
+                            if (!peeled.Contains(i) && !focus.Contains(i) && atlas.Parts[i].triangles.Length > 0) front = Mathf.Max(front, Vector3.Dot(atlas.Parts[i].max, atlas.Anterior));
+                        float lifted = Vector3.Dot(pivot, atlas.Anterior) + Vector3.Dot(atlas.Current[focus.First()].lift, atlas.Anterior);
+                        bool spins = atlas.Target[focus.First()].spin;
+                        Check(!spins || front == float.MinValue || lifted - reach >= front - 1e-4f, label + ": " + step.id + " spins clear of the torso (gap " + ((lifted - reach - front) * 1000).ToString("0") + " mm)");
+                        if (step.id == "deliver_appendix" || step.id == "divide_mesoappendix") Check(spins, label + ": the organ focus spins at " + step.id);
+                    }
                     if (step.id == "deliver_appendix" || step.id == "divide_mesoappendix") Check(scale >= 1.5f, label + ": small focus structures are enlarged at " + step.id + " (" + scale.ToString("0.00") + "x)");
                     Rows(atlas, label + " " + step.id);
                     Picking(director, focus, peeled, viewer, label + " " + step.id);
@@ -196,6 +222,7 @@ namespace Scalpal.Briefing.Editor
             }
             finally
             {
+                if (director && director.Stage) UnityEngine.Object.DestroyImmediate(director.Stage.gameObject);
                 if (director) UnityEngine.Object.DestroyImmediate(director.gameObject);
                 UnityEngine.Object.DestroyImmediate(space.gameObject);
             }
@@ -309,10 +336,177 @@ namespace Scalpal.Briefing.Editor
             }
             finally
             {
-                var leftover = UnityEngine.Object.FindObjectsByType<BriefingDirector>(FindObjectsInactive.Include, FindObjectsSortMode.None);
-                foreach (var director in leftover) UnityEngine.Object.DestroyImmediate(director.gameObject);
+                ClearBriefings();
                 UnityEngine.Object.DestroyImmediate(host);
                 current.SetValue(null, oldTicket);
+            }
+        }
+
+        static void ClearBriefings()
+        {
+            foreach (var stage in UnityEngine.Object.FindObjectsByType<BriefingStage>(FindObjectsInactive.Include, FindObjectsSortMode.None)) UnityEngine.Object.DestroyImmediate(stage.gameObject);
+            foreach (var director in UnityEngine.Object.FindObjectsByType<BriefingDirector>(FindObjectsInactive.Include, FindObjectsSortMode.None)) UnityEngine.Object.DestroyImmediate(director.gameObject);
+        }
+
+        /// <summary>Everything that decides what the head camera draws: per renderer forceRenderingOff, enabled and active;
+        /// per light/probe enabled; per collider/rigidbody/GameObject physics state; camera clear; ambient.</summary>
+        sealed class RenderState
+        {
+            public readonly Dictionary<Renderer, (bool forced, bool enabled, bool active)> renderers = new Dictionary<Renderer, (bool, bool, bool)>();
+            public readonly Dictionary<Behaviour, bool> behaviours = new Dictionary<Behaviour, bool>();
+            public readonly Dictionary<Component, string> physics = new Dictionary<Component, string>();
+            public CameraClearFlags flags; public Color background, sky, equator, ground; public AmbientMode mode;
+
+            public static RenderState Capture(Scene scene, Camera head)
+            {
+                var state = new RenderState { flags = head.clearFlags, background = head.backgroundColor, mode = RenderSettings.ambientMode,
+                    sky = RenderSettings.ambientSkyColor, equator = RenderSettings.ambientEquatorColor, ground = RenderSettings.ambientGroundColor };
+                foreach (var root in scene.GetRootGameObjects())
+                {
+                    foreach (var r in root.GetComponentsInChildren<Renderer>(true)) state.renderers[r] = (r.forceRenderingOff, r.enabled, r.gameObject.activeSelf);
+                    foreach (var l in root.GetComponentsInChildren<Light>(true)) state.behaviours[l] = l.enabled;
+                    foreach (var p in root.GetComponentsInChildren<ReflectionProbe>(true)) state.behaviours[p] = p.enabled;
+                    foreach (var c in root.GetComponentsInChildren<Collider>(true)) state.physics[c] = c.enabled + "/" + c.gameObject.activeInHierarchy;
+                    foreach (var b in root.GetComponentsInChildren<Rigidbody>(true)) state.physics[b] = b.isKinematic + "/" + b.useGravity + "/" + b.position + "/" + b.gameObject.activeInHierarchy;
+                }
+                return state;
+            }
+
+            public bool PhysicsSame(RenderState now) => physics.All(p => p.Key && now.physics.TryGetValue(p.Key, out var v) && v == p.Value);
+
+            public bool Same(Scene scene, Camera head, out string difference)
+            {
+                var now = Capture(scene, head);
+                difference = renderers.Where(r => r.Key && (!now.renderers.TryGetValue(r.Key, out var v) || v != r.Value)).Select(r => r.Key.name).FirstOrDefault()
+                    ?? behaviours.Where(b => b.Key && (!now.behaviours.TryGetValue(b.Key, out var v) || v != b.Value)).Select(b => b.Key.name).FirstOrDefault()
+                    ?? (!PhysicsSame(now) ? "physics" : null)
+                    ?? (now.flags != flags || now.background != background ? "camera clear" : null)
+                    ?? (now.mode != mode || now.sky != sky || now.equator != equator || now.ground != ground ? "ambient" : null);
+                return difference == null;
+            }
+        }
+
+        static bool Rendered(Renderer r) => r && r.enabled && !r.forceRenderingOff && r.gameObject.activeInHierarchy;
+
+        /// <summary>
+        /// The real NativeSession scene: during the briefing nothing of the OR renders (theatre, patient, tools, workbench,
+        /// monitors, lights, probes, and OR views created mid-briefing), the ethereal void and motes are present, hands
+        /// and Jarvis's dialogue box stay visible and nothing is deactivated or physically changed. Pause restores the OR
+        /// exactly and resume hides it again; finish, skip and teardown restore the exact prior render state and the
+        /// backdrop goes away after its fade. AR keeps passthrough (no void, clear camera) and hides only the overlays.
+        /// </summary>
+        static void Stage()
+        {
+            var previous = EditorSceneManager.GetSceneManagerSetup();
+            var oldTicket = HandoffRun.Current;
+            var current = typeof(HandoffRun).GetProperty(nameof(HandoffRun.Current));
+            try
+            {
+                current.SetValue(null, null);
+                var scene = EditorSceneManager.OpenScene(Scalpal.Quest.Editor.NativeSessionBuild.ScenePath, OpenSceneMode.Single);
+                var presentation = scene.GetRootGameObjects().Select(root => root.GetComponentInChildren<NativePresentation>(true)).FirstOrDefault(found => found);
+                Check(presentation && presentation.headCamera, "stage: the OR scene has its presentation and head camera");
+                if (!presentation || !presentation.headCamera) return;
+                var head = presentation.headCamera; var rig = head.transform.root;
+                // ControllerHandPose enables the hand skins while the controllers track; simulate live controllers.
+                var hands = rig.GetComponentsInChildren<Renderer>(true).Where(r => r.gameObject.activeInHierarchy).ToArray();
+                foreach (var hand in hands) hand.enabled = true;
+                Check(hands.Length > 0, "stage: the tracking rig has visible controller hands to keep");
+                // Jarvis's dialogue box lives in the OR scene as its own root; it must stay visible.
+                var dialogue = new GameObject("BriefingStageDialogueFixture"); dialogue.AddComponent<DialogueBox>();
+                var dialogueCard = GameObject.CreatePrimitive(PrimitiveType.Quad); dialogueCard.transform.SetParent(dialogue.transform, false);
+                var session = scene.GetRootGameObjects().Select(root => root.GetComponentInChildren<NativeCaseSession>(true)).FirstOrDefault(found => found);
+                foreach (bool passthrough in new[] { false, true })
+                {
+                    string mode = passthrough ? "AR" : "VR";
+                    presentation.passthrough = passthrough; presentation.Apply();
+                    foreach (string ending in passthrough ? new[] { "skip" } : new[] { "finish", "skip", "teardown" })
+                    {
+                        string label = "stage " + mode + " " + ending;
+                        var baseline = RenderState.Capture(scene, head);
+                        var director = BriefingDirector.Begin(head.transform);
+                        var stage = director.Stage;
+                        Check(stage && stage.Hidden && stage.Passthrough == passthrough, label + ": the briefing hides the OR from its first frame");
+                        Hidden(scene, rig, dialogue, director, stage, label);
+                        Check(hands.All(Rendered) && Rendered(dialogueCard.GetComponent<Renderer>()) && Rendered(director.Atlas.Renderer)
+                            && director.GetComponentsInChildren<Renderer>(true).All(r => !r.forceRenderingOff),
+                            label + ": controller hands, the dialogue box and the briefing (atlas, buttons, green box, rays) stay visible");
+                        Check(baseline.PhysicsSame(RenderState.Capture(scene, head)), label + ": no OR object is deactivated and no collider or rigidbody changes (tools cannot drop)");
+                        if (passthrough)
+                            Check(!stage.Void && head.backgroundColor == baseline.background && head.clearFlags == baseline.flags && stage.Motes,
+                                label + ": passthrough stays as it is (no opaque void, clear camera); only faint motes join the briefing");
+                        else
+                        {
+                            Check(stage.Void && Rendered(stage.Void) && stage.Void.sharedMaterial.shader.name == "Scalpal/BriefingVoid" && !stage.Void.GetComponent<Collider>()
+                                && BriefingStage.VoidRadius < head.farClipPlane && head.clearFlags == CameraClearFlags.SolidColor && head.backgroundColor == BriefingStage.VoidBottom,
+                                label + ": an ethereal gradient void (no collider, inside the far plane) surrounds the briefing over a dark clear colour");
+                            Check(stage.Motes && stage.Motes.main.maxParticles <= 300 && stage.Motes.GetComponent<ParticleSystemRenderer>().sharedMaterial.shader.name == "Scalpal/BriefingMote"
+                                && stage.Key && stage.Key.enabled && stage.Key.shadows == LightShadows.None && RenderSettings.ambientMode == AmbientMode.Flat,
+                                label + ": one cheap mote system, a soft shadowless key light and flat ambient light the anatomy");
+                        }
+                        // An OR view created mid-briefing (vitals monitor, checklist, pointer box) is hidden by the next sweep.
+                        var late = GameObject.CreatePrimitive(PrimitiveType.Cube); late.name = "LateOperatingRoomView";
+                        UnityEngine.Object.DestroyImmediate(late.GetComponent<Collider>());
+                        if (session) late.transform.SetParent(session.transform, false);
+                        stage.Sync(BriefingStage.SweepSeconds);
+                        Check(!Rendered(late.GetComponent<Renderer>()), label + ": an OR view spawned during the briefing is hidden too");
+                        if (!passthrough && ending == "finish")
+                        {
+                            // Pause/realign deactivates the briefing: the OR returns exactly; resuming hides it again.
+                            director.gameObject.SetActive(false); stage.Sync(0);
+                            bool restored = baseline.Same(scene, head, out var paused);
+                            Check(!stage.Hidden && restored && Rendered(late.GetComponent<Renderer>()) && !stage.Void.gameObject.activeInHierarchy,
+                                label + ": pausing restores the OR exactly and hides the void (" + (paused ?? "same") + ")");
+                            director.gameObject.SetActive(true); stage.Sync(0);
+                            Check(stage.Hidden && !Rendered(late.GetComponent<Renderer>()) && Rendered(stage.Void), label + ": resuming the briefing hides the OR again");
+                            Hidden(scene, rig, dialogue, director, stage, label + " resumed");
+                        }
+                        UnityEngine.Object.DestroyImmediate(late);
+                        if (ending == "teardown")
+                        {
+                            // Scene unload mid-briefing tears the stage down: OnDisable restores everything.
+                            UnityEngine.Object.DestroyImmediate(stage.gameObject);
+                            Check(baseline.Same(scene, head, out var torn), label + ": tearing the briefing down mid-step restores the OR exactly (" + (torn ?? "same") + ")");
+                            UnityEngine.Object.DestroyImmediate(director.gameObject);
+                            continue;
+                        }
+                        if (ending == "skip") director.Skip(); else for (int i = 0; i < director.Steps.Length && !director.Finished; i++) director.Next();
+                        bool same = baseline.Same(scene, head, out var difference);
+                        Check(director.Finished && same, label + ": the OR is restored to its exact prior render state at once (" + (difference ?? "same") + ")");
+                        Check(!passthrough ? stage.Fading && stage.Void.sharedMaterial.renderQueue == (int)RenderQueue.Overlay : stage.Fading, label + ": the void fades out over the restored OR");
+                        stage.Sync(BriefingStage.FadeSeconds * .5f);
+                        Check(stage && stage.Fading, label + ": the fade takes a moment");
+                        stage.Sync(BriefingStage.FadeSeconds);
+                        Check(!stage && UnityEngine.Object.FindObjectsByType<BriefingStage>(FindObjectsInactive.Include, FindObjectsSortMode.None).Length == 0
+                            && baseline.Same(scene, head, out difference), label + ": after the fade the backdrop is gone and the OR renders as before (" + (difference ?? "same") + ")");
+                        UnityEngine.Object.DestroyImmediate(director.gameObject);
+                    }
+                }
+            }
+            finally
+            {
+                ClearBriefings();
+                current.SetValue(null, oldTicket);
+                // Drop the fixture-modified scene without saving, then return to whatever was open before.
+                EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+                if (previous.Any(item => item.isLoaded && item.isActive)) EditorSceneManager.RestoreSceneManagerSetup(previous);
+            }
+        }
+
+        // Every OR root renderer, light and probe is off; the named theatre, patient, tool and monitor roots have geometry.
+        static void Hidden(Scene scene, Transform rig, GameObject dialogue, BriefingDirector director, BriefingStage stage, string label)
+        {
+            var or = scene.GetRootGameObjects().Where(root => root.transform != rig && root != dialogue && root != director.gameObject && root != stage.gameObject).ToArray();
+            var shown = or.SelectMany(root => root.GetComponentsInChildren<Renderer>(true)).Where(Rendered).Select(r => r.name).ToArray();
+            Check(shown.Length == 0, label + ": no OR renderer draws during the briefing (" + string.Join(",", shown.Take(5)) + ")");
+            Check(or.SelectMany(root => root.GetComponentsInChildren<Light>(true)).All(l => !l.enabled || !l.gameObject.activeInHierarchy)
+                && or.SelectMany(root => root.GetComponentsInChildren<ReflectionProbe>(true)).All(p => !p.enabled || !p.gameObject.activeInHierarchy),
+                label + ": OR lights and reflection probes are off");
+            foreach (var name in new[] { "VirtualOperatingRoom", "PatientRoot", "Workbench", "VirtualLaparoscopeMonitor", "inst_scalpel", "inst_atraumatic_grasper" })
+            {
+                var root = or.FirstOrDefault(found => found.name == name);
+                var all = root ? root.GetComponentsInChildren<Renderer>(true) : Array.Empty<Renderer>();
+                Check(all.Length > 0 && all.All(r => r.forceRenderingOff || !r.enabled || !r.gameObject.activeInHierarchy), label + ": " + name + " is not rendered (" + all.Length + " renderers)");
             }
         }
 

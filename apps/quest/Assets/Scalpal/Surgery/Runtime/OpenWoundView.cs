@@ -74,10 +74,15 @@ namespace Scalpal.Surgery
             mark.positionCount = points.Count;
             for (int i = 0; i < points.Count; i++) mark.SetPosition(i, points[i] + Vector3.back*.0007f);
         }
+        static readonly int WoundWorldToLocal = Shader.PropertyToID("_ScalpalWoundWorldToLocal"), WoundWindow = Shader.PropertyToID("_ScalpalWoundWindow");
         public void SetRegistrationValid(bool valid)
         {
             registered = valid; if (surfaces) surfaces.SetActive(valid);
+            // The VR patient skin opens over this wound only while its wall is live (Scalpal/PatientSkin).
+            Shader.SetGlobalMatrix(WoundWorldToLocal, transform.worldToLocalMatrix);
+            Shader.SetGlobalFloat(WoundWindow, valid ? 1 : 0);
         }
+        void OnDisable() => Shader.SetGlobalFloat(WoundWindow, 0);
         public void Apply(BodyState body)
         {
             Build(); surfaces.SetActive(registered && body != null); if (body == null) return;

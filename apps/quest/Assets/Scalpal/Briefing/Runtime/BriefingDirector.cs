@@ -12,14 +12,15 @@ namespace Scalpal.Briefing
     /// time over a floating abdomen. Each step peels the covering layers, lifts/scales/spins/glows the focus structure
     /// and plays one bundled line. Trigger or Next advances, Skip ends; steps also advance on their own (clip length or a
     /// reading timer). No network: lines are bundled clips, and missing clips fall back to captions on a timer.
-    /// HandoffFlow owns the lifecycle and reads Finished.
+    /// While it runs the OR is hidden behind an ethereal void (BriefingStage). HandoffFlow owns the lifecycle and reads Finished.
     /// </summary>
     public sealed class BriefingDirector : MonoBehaviour
     {
-        public const float Distance = .8f, Drop = .18f, ModelScale = .75f, MinimumLift = .06f, MaximumLift = .3f, LiftClearance = .02f, FocusScale = 2.5f, FocusMaximumSize = .32f, PeelDistance = .12f;
+        public const float Distance = .8f, Drop = .18f, ModelScale = .75f, MinimumLift = .06f, MaximumLift = .5f, LiftClearance = .02f, FocusScale = 2.5f, FocusMaximumSize = .32f, PeelDistance = .12f;
         public const float MinimumStepSeconds = 3.5f, ClipTailSeconds = 1.1f;
         public BriefingAtlas Atlas { get; private set; }
         public BriefingPicker Picker { get; private set; }
+        public BriefingStage Stage { get; private set; }
         public BriefingStep[] Steps { get; private set; } = System.Array.Empty<BriefingStep>();
         public int StepIndex { get; private set; } = -1;
         public BriefingStep Step => StepIndex >= 0 && StepIndex < Steps.Length ? Steps[StepIndex] : null;
@@ -50,8 +51,10 @@ namespace Scalpal.Briefing
             director.Place();
             director.Picker = BriefingPicker.Create(director.Atlas, root.transform, viewer);
             director.BuildControls();
+            director.Stage = BriefingStage.Create(director, viewer);
             if (director.Steps.Length == 0) { director.Finish(false); return director; }
             director.Enter(0);
+            director.Stage.Sync(0);
             return director;
         }
 
@@ -111,12 +114,16 @@ namespace Scalpal.Briefing
             float front = float.MinValue;
             for (int i = 0; i < Atlas.Parts.Length; i++)
                 if (!peeled.Contains(i) && !focused.Contains(i) && Atlas.Parts[i].triangles.Length > 0) front = Mathf.Max(front, Vector3.Dot(Atlas.Parts[i].max, anterior));
-            float lift = MinimumLift;
+            // The group spins about its pivot, so clear the whole scaled sweep (a sphere around the pivot), not just the
+            // part centres: otherwise the far side of a spinning organ swings back through the torso.
+            float sweep = 0;
             foreach (int part in focused)
-            {
-                float partFront = Vector3.Dot(pivot, anterior) + (Vector3.Dot(Atlas.Parts[part].center, anterior) - Vector3.Dot(pivot, anterior)) * scale;
-                if (front > float.MinValue) lift = Mathf.Max(lift, front + LiftClearance - partFront);
-            }
+                foreach (var corner in Corners(Atlas.Parts[part].min, Atlas.Parts[part].max)) sweep = Mathf.Max(sweep, (corner - pivot).magnitude * scale);
+            float lift = MinimumLift;
+            if (focused.Count > 0 && front > float.MinValue) lift = Mathf.Max(lift, front + LiftClearance + sweep - Vector3.Dot(pivot, anterior));
+            // A wall layer as big as the torso (skin, aponeurosis) cannot spin clear at a comfortable distance: it lifts
+            // forward and glows without turning.
+            bool spin = lift <= MaximumLift;
             lift = Mathf.Min(lift, MaximumLift);
             for (int i = 0; i < Atlas.Parts.Length; i++)
             {
@@ -129,9 +136,14 @@ namespace Scalpal.Briefing
                     state.alpha = 0;
                     state.peel = (anterior + (outward.sqrMagnitude > 1e-8f ? outward.normalized * .6f : Vector3.zero)).normalized * PeelDistance;
                 }
-                else if (focused.Contains(i)) { state.scale = scale; state.glow = 1; state.lift = anterior * lift; state.pivot = pivot; }
+                else if (focused.Contains(i)) { state.scale = scale; state.glow = 1; state.lift = anterior * lift; state.pivot = pivot; state.spin = spin; }
                 Atlas.SetTarget(i, state);
             }
+        }
+
+        static IEnumerable<Vector3> Corners(Vector3 min, Vector3 max)
+        {
+            for (int i = 0; i < 8; i++) yield return new Vector3((i & 1) == 0 ? min.x : max.x, (i & 2) == 0 ? min.y : max.y, (i & 4) == 0 ? min.z : max.z);
         }
 
         void Speak(BriefingStep step)
@@ -180,6 +192,7 @@ namespace Scalpal.Briefing
             StopSpeech();
             foreach (var pointer in pointers) pointer.Clear();
             gameObject.SetActive(false);
+            if (Stage) Stage.Sync(0); // Restores the OR and starts the void's fade-out.
         }
 
         /// <summary>Advances the step clock; Update drives it with unscaled time, validation drives it directly.</summary>
@@ -226,10 +239,12 @@ namespace Scalpal.Briefing
         {
             // Returning from a pause or registration interruption replays the current step's line.
             if (Atlas && Step != null && !Finished) Speak(Step);
+            if (Stage) Stage.Sync(0);
         }
 
         void OnDisable()
         {
+            if (Stage) Stage.Sync(0); // Pause/realign: the OR shows again until the briefing resumes.
             StopSpeech();
             foreach (var pointer in pointers) pointer.Clear();
         }

@@ -141,7 +141,7 @@ namespace Scalpal.Quest
             bool any=false;
             foreach (var renderer in target.renderers)
             {
-                if (!renderer || !renderer.enabled || !renderer.gameObject.activeInHierarchy) continue;
+                if (!renderer || !renderer.enabled || renderer.forceRenderingOff || !renderer.gameObject.activeInHierarchy) continue;
                 if (!any) { bounds=renderer.bounds; any=true; } else bounds.Encapsulate(renderer.bounds);
             }
             return any && Finite(bounds.center) && Finite(bounds.size) && bounds.size.sqrMagnitude>0;

@@ -28,17 +28,17 @@
   "logo": {
     "light": "/logo/light.svg",
     "dark": "/logo/dark.svg",
-    "href": "https://scalpal.vercel.app"
+    "href": "https://scalpal.tech"
   },
   "navbar": {
     "links": [
       {
         "label": "Site",
-        "href": "https://scalpal.vercel.app"
+        "href": "https://scalpal.tech"
       },
       {
         "label": "Dashboard",
-        "href": "https://scalpal-companion.vercel.app"
+        "href": "https://dashboard.scalpal.tech"
       }
     ]
   },

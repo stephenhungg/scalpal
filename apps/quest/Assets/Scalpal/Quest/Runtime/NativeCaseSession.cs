@@ -258,10 +258,13 @@ namespace Scalpal.Quest
                 {
                     if (!input.IdentifyFocused(out var reason)) Message = reason;
                 }
-                if (y && !previousY) ToggleVoice();
+                // Push to talk: Jarvis hears the learner only while Y is held (the mic streams silence otherwise),
+                // so table talk does not trigger replies. The first press also connects the voice.
+                PushToTalk(y);
+                if (y && !previousY && !voice.Connected && voice.Status != "connecting") ToggleVoice();
                 previousB = b; previousX = x; previousY = y;
             }
-            else previousB = previousX = previousY = false;
+            else { previousB = previousX = previousY = false; PushToTalk(false); }
             string focus = input.FocusedPartId ?? "";
             if (focus != selected) { selected = focus; coach.Focus(focus); }
             if (Time.unscaledTime >= nextUi)
@@ -627,6 +630,7 @@ namespace Scalpal.Quest
             Publish(); realtime.ResolveCommand(command, applied ? "applied" : "rejected", applied ? null : reason);
         }
 
+        public void PushToTalk(bool held) { if (voice) voice.MicrophoneMuted = !held; }
         void ToggleVoice()
         {
             if (voice.Connected || voice.Status == "connecting") { voiceRequested = false; voice.Disconnect(); }
@@ -641,7 +645,7 @@ namespace Scalpal.Quest
         {
             if (handoffVoiceAllowed && CoachPrepared && !voice.Connected && voice.Status != "connecting") ConnectVoice();
         }
-        void ConnectVoice() { if (HasHandoff && !handoffVoiceAllowed) return; voiceContextForce = true; voice.ConfigureConversation(voicePrompt, voiceGreeting, voiceContext); voice.Connect(coachSessionId); }
+        void ConnectVoice() { if (HasHandoff && !handoffVoiceAllowed) return; voiceContextForce = true; voice.MicrophoneMuted = true; voice.ConfigureConversation(voicePrompt, voiceGreeting, voiceContext); voice.Connect(coachSessionId); }
         void VoiceTool(QuestJarvisVoice.ToolRequest request)
         {
             voice.ResolveClientTool(request, "This action is unavailable in the native exercise", true);
@@ -720,7 +724,7 @@ namespace Scalpal.Quest
             if (PresentationMode == mode) return true; // Idempotent: preserve fit, coach and Time-Out.
             if (busy || ending || (Phase != "Selecting" && Phase != "Confirmed" && Phase != "Recap"))
             { reason = "Finish or explicitly retry the current practice before changing mode."; return false; }
-            // This is capability/consent gating, not the old office-specific VR policy.
+            // This is capability gating, not the old office-specific VR policy.
             if (mode == "mixed_reality" && (HasHandoff || OfficeHandoff != null) && !HandoffRun.Preflight.ArAvailable)
             { reason = HandoffRun.Preflight.UnavailableReason; return false; }
             if (mode == "mixed_reality" && !bodyRegistration)

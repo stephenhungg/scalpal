@@ -75,8 +75,11 @@ namespace Scalpal.Quest
                 // The monitor stands at the head of the table with the patient; it shows while the patient is
                 // in the room, and keeps a terminal outcome (death, early end) on screen after practice stops.
                 var frame=session.patientFrame;
-                bool present=!frame||frame.gameObject.activeInHierarchy;
-                if(frame&&present)Place(frame,session.workbench.trackingOrigin?session.workbench.trackingOrigin.position.y:0);
+                // In full VR the authored patient is always on the table, so the monitor stands there from OR entry (dashes until
+                // the coach streams vitals). In AR it waits for the body fit, since the frame means nothing before it.
+                bool present=!frame||frame.gameObject.activeInHierarchy||session.PresentationMode=="virtual";
+                // The aligned floor, not the tracking origin: VR locomotion raises and lowers the origin.
+                if(frame&&present)Place(frame,session.workbench?session.workbench.initialHeadFloorPosition.y:0);
                 if(Time.realtimeSinceStartupAsDouble>=nextLayout)
                 {nextLayout=Time.realtimeSinceStartupAsDouble+.5;ScalpalBrandLayout.SizeForViewer(view.transform,viewer.transform.position);}
                 view.SetActive((present||Holding)&&Vector3.Distance(view.transform.position,viewer.transform.position)>=.2f);

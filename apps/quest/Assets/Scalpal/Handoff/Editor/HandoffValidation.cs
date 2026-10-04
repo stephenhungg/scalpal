@@ -85,13 +85,13 @@ namespace Scalpal.Handoff.Editor
             {
                 var p = new TheatrePreflight { volunteerConsented = (bits & 1) != 0, cameraGranted = (bits & 2) != 0,
                     sceneGranted = (bits & 4) != 0, poseServiceOk = (bits & 8) != 0, coachServiceOk = (bits & 16) != 0 };
-                bool ready = bits == 31;
-                Assert(p.ArAvailable == ready && (p.DefaultMode == "mixed_reality") == ready, "AR requires every preflight gate: " + bits);
+                bool ready = (bits & 30) == 30;
+                Assert(p.ArAvailable == ready && (p.DefaultMode == "mixed_reality") == ready, "AR requires four capability gates independently of recording permission: " + bits);
                 Assert(HandoffRun.CanChoose("mixed_reality", p) == ready && HandoffRun.CanChoose("virtual", p), "AR is disabled and VR remains available: " + bits);
                 Assert(ready ? p.UnavailableReason == "" : !string.IsNullOrEmpty(p.UnavailableReason), "red preflight supplies a reason: " + bits);
             }
             Assert(!HandoffRun.CanChoose("other", new TheatrePreflight()) && !HandoffRun.CanChoose("mixed_reality", null), "invalid modes/preflight rejected");
-            Assert(new TheatrePreflight().UnavailableReason == "No volunteer checked in and consented", "consent failure reason");
+            Assert(new TheatrePreflight().UnavailableReason == "Camera and spatial permissions are off", "no extra consent gate precedes capabilities");
             Assert(new TheatrePreflight { volunteerConsented = true }.UnavailableReason == "Camera and spatial permissions are off", "permission failure reason");
             Assert(new TheatrePreflight { volunteerConsented = true, cameraGranted = true, sceneGranted = true }.UnavailableReason == "Body detection offline", "pose failure reason");
         }

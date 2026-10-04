@@ -70,7 +70,8 @@ namespace Scalpal.Quest.Editor
             }
             var floor = GameObject.CreatePrimitive(PrimitiveType.Cube);
             floor.name = "ToolCatchFloor";
-            floor.transform.SetPositionAndRotation(new Vector3(0, -0.08f, 0), Quaternion.identity);
+            // Top face at y = 0, the room floor and tracked floor height, so dropped tools rest on the visible floor.
+            floor.transform.SetPositionAndRotation(new Vector3(0, -0.05f, 0), Quaternion.identity);
             floor.transform.localScale = new Vector3(10, 0.1f, 10);
             floor.GetComponent<Renderer>().enabled = false;
             var text = new GameObject("HardwareTestInstructions").AddComponent<TextMesh>();

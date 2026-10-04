@@ -229,16 +229,17 @@ namespace Scalpal.Quest.Editor
             session.exercise.presentationMode = "virtual";
             ConfirmAll(ticket); SeedPrepracticeState(session);
             var identity = new IdentityState(session);
-            Assert(ticket.sourceOffice != null && HandoffRun.Preflight.ArAvailable,
-                "positive control is a scored-office source with synthetic all-green AR preflight");
+            Assert(ticket.sourceOffice != null && HandoffRun.Preflight.ArAvailable
+                && !HandoffRun.Preflight.volunteerConsented && !HandoffRun.Preflight.learnerCaptureConsented,
+                "positive control is a scored-office source with four green capabilities and no recording permissions");
             Assert(session.TrySelectOperatingRoomMode("mixed_reality", out var reason),
-                "office-source ticket may select AR through the OR entry point: " + reason);
+                "office-source ticket may select AR without recording permissions through the OR entry point: " + reason);
             Assert(ticket.presentationMode == "mixed_reality" && !ticket.timeOutConfirmed && !ticket.AllConfirmed,
                 "real mode transition updates the handoff mode and requires a new Time-Out");
             AssertReset(session); identity.AssertPreserved(session, "Confirmed");
             Assert(!session.RegistrationReady, "preflight availability cannot substitute for a measured accepted body fit");
 
-            foreach (var unavailable in new[] { "volunteerConsented", "cameraGranted", "sceneGranted", "poseServiceOk", "coachServiceOk" })
+            foreach (var unavailable in new[] { "cameraGranted", "sceneGranted", "poseServiceOk", "coachServiceOk" })
             {
                 var preflight = AllAvailable();
                 typeof(TheatrePreflight).GetField(unavailable).SetValue(preflight, false);
@@ -271,7 +272,7 @@ namespace Scalpal.Quest.Editor
             }
         };
         static TheatrePreflight AllAvailable() => new TheatrePreflight
-        { volunteerConsented = true, cameraGranted = true, sceneGranted = true, poseServiceOk = true, coachServiceOk = true };
+        { cameraGranted = true, sceneGranted = true, poseServiceOk = true, coachServiceOk = true };
         static void ConfirmAll(HandoffTicket ticket)
         {
             ticket.timeOutConfirmed = ticket.patientConfirmed = ticket.procedureConfirmed = ticket.siteConfirmed

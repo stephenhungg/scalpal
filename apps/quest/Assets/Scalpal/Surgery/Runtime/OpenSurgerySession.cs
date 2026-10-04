@@ -28,6 +28,8 @@ namespace Scalpal.Surgery
         OpenSurgeryCoach delivery;
         SurgeryFeedback feedback;
         OpenBodyBleeding bleeding;
+        SurgeryTriggerHint triggerHint;
+        GameObject toolTable;
         OpenSurgeryPanel panel;
         BodyState body;
         GameObject kit, riskAnatomy;
@@ -39,6 +41,8 @@ namespace Scalpal.Surgery
         public string Status { get; private set; } = "Waiting for an open-body case";
         public OpenBodyInteraction Interaction => interaction;
         public OpenWoundView Wound => wound;
+        // Torso-frame proxy for the right ASIS when no registered landmark is bound; the wound sits a third of the way to the umbilicus origin.
+        public static readonly Vector3 AuthoredRightAsis = new Vector3(-.13f,-.015f,-.14f);
         public bool Ready => session && session.Practicing && session.RegistrationReady && session.exercise && session.exercise.CanScore && !session.exercise.Completed && GetComponent<NativeProcedureInput>() && GetComponent<NativeProcedureInput>().InteractionReady;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -60,6 +64,8 @@ namespace Scalpal.Surgery
             if (session.exercise.Body != body) ConfigureAttempt();
             if (body == null || !interaction) return;
             ReportHands();
+            // The separate tool table holds nothing in the open case: the instrument stand is the tool surface in both modes.
+            if (toolTable && toolTable.activeSelf) toolTable.SetActive(false);
             bool valid = Ready;
             wound.SetRegistrationValid(valid);
             if (!valid) { interaction.Simulate(0); bleeding.Simulate(0); return; }
@@ -86,6 +92,8 @@ namespace Scalpal.Surgery
                 kit.transform.position = reference.position + new Vector3(0,.02f,.32f);
                 session.workbench.RegisterAdditionalTools(kit.GetComponentsInChildren<InstrumentBehaviour>(true));
             }
+            ApplyOpenToolSet();
+            if (!toolTable) foreach (var root in gameObject.scene.GetRootGameObjects()) if (root.name == "Workbench" && root.GetComponent<Collider>()) toolTable = root;
             if(!riskAnatomy)
             {
                 var risks=Resources.Load<GameObject>("OpenSurgeryRisks");
@@ -103,7 +111,7 @@ namespace Scalpal.Surgery
                 woundFrame.SetParent(session.patientFrame,false);
                 // Authored landmark proxies until the registration owner supplies actual ASIS/umbilicus
                 // transforms. These are not claims that MediaPipe resolves these bony landmarks.
-                Vector3 hip = rightAsis ? session.patientFrame.InverseTransformPoint(rightAsis.position) : new Vector3(-.13f,-.015f,-.14f);
+                Vector3 hip = rightAsis ? session.patientFrame.InverseTransformPoint(rightAsis.position) : AuthoredRightAsis;
                 Vector3 navel = umbilicus ? session.patientFrame.InverseTransformPoint(umbilicus.position) : Vector3.zero;
                 woundFrame.localPosition = OpenSurgeryStroke.McBurney(hip,navel);
                 woundFrame.localRotation = Quaternion.Euler(90,0,-35);
@@ -113,6 +121,7 @@ namespace Scalpal.Surgery
             if (plan.decisions != null && plan.decisions.Length > 0) wound.SetDecisionChoices(plan.decisions[0].choices);
             interaction = GetComponent<OpenBodyInteraction>() ?? gameObject.AddComponent<OpenBodyInteraction>();
             interaction.Submitted -= Applied; interaction.MarkerChanged -= Marked; interaction.Contacted -= Touched; interaction.RegionInjured -= Injured;
+            interaction.TouchedWithoutTrigger -= NeedsTrigger;
             interaction.Initialize(session.exercise,session.workbench.tools,session.patientFrame,woundFrame,()=>Ready);
             bool mobile = interaction.ConfigureMobility(mobileOrganGroups,out string mobility);
             bool anatomyBound = OpenSurgeryAnatomy.Bind(session.anatomy,interaction);
@@ -122,6 +131,8 @@ namespace Scalpal.Surgery
             interaction.BindWall(volume);
             session.workbench.ToolsReset-=ClearPlacements; session.workbench.ToolsReset+=ClearPlacements;
             interaction.Submitted += Applied; interaction.MarkerChanged += Marked; interaction.Contacted += Touched; interaction.RegionInjured += Injured;
+            interaction.TouchedWithoutTrigger += NeedsTrigger;
+            triggerHint = GetComponent<SurgeryTriggerHint>() ?? gameObject.AddComponent<SurgeryTriggerHint>();
             if(rightAsis && umbilicus) interaction.SetLandmarks(rightAsis.position,umbilicus.position,woundFrame.right);
             // The old vessel demonstration cannot emit a second unrelated blood pool in this case.
             var legacyVessel = GetComponent<NativeVesselSimulation>(); if(legacyVessel) legacyVessel.enabled=false;
@@ -143,6 +154,82 @@ namespace Scalpal.Surgery
                 float tether=0;
                 foreach(var group in interaction.Mobility) if(group.Contains(session.anatomy.TryGetPart("appendix",out var part)?part.transform:null)) tether=Mathf.Max(tether,group.Definition.maxTravelMm);
                 Status+=$"; delivery needs {needed:F1} mm, cage bound {maximum:F1} mm, mobilization tether {tether:F1} mm";Debug.Log("SCALPAL_OPEN_DELIVERY_BOUND "+Status);
+            }
+        }
+        // The open expected path (docs/surgery-procedure.md), in step order. Two rows on the theatre's instrument
+        // stand: the first six nearest the learner with their grips toward them, the rest facing back.
+        public static readonly string[] OpenToolSet = {
+            "skin_marker", "scalpel", "toothed_forceps", "retractor", "retractor", "babcock",
+            "hemostat", "hemostat", "right_angle_clamp", "metzenbaum_scissors", "suture_tie", "suction_irrigator", "laparoscope_30" };
+        public const string InstrumentStandPath = "RoomCollision/InstrumentStand";
+        // Only the expected-path set stays active (unpickable, unlabelled and absent from coach events otherwise);
+        // it is laid out tightly on the instrument stand beside the table. The separate tool table is hidden in VR.
+        void ApplyOpenToolSet()
+        {
+            var kept = new InstrumentBehaviour[OpenToolSet.Length];
+            foreach (var tool in session.workbench.tools ?? Array.Empty<InstrumentBehaviour>())
+            {
+                if (!tool) continue;
+                int slot = -1;
+                for (int i = 0; i < OpenToolSet.Length; i++) if (OpenToolSet[i] == tool.instrumentId && !kept[i]) { slot = i; break; }
+                if (slot >= 0) kept[slot] = tool;
+                tool.gameObject.SetActive(slot >= 0);
+            }
+            foreach (var target in session.workbench.targets ?? Array.Empty<TrainingTarget>()) if (target) target.gameObject.SetActive(false);
+            // The camera scope shows its view on a panel that follows the learner's gaze while its trigger is held,
+            // never on the fixed floating monitor.
+            foreach (var tool in session.workbench.tools ?? Array.Empty<InstrumentBehaviour>())
+            {
+                var scope = tool ? tool.GetComponent<LaparoscopeView>() : null;
+                if (!scope) continue;
+                scope.followView = true;
+                if (scope.monitor) scope.monitor.gameObject.SetActive(false);
+            }
+            var stand = session.presentation && session.presentation.virtualRoom
+                ? session.presentation.virtualRoom.transform.Find(InstrumentStandPath)?.GetComponent<BoxCollider>() : null;
+            if (!stand) { Status = "Instrument stand missing; open tools left in place"; return; }
+            // AR hides the virtual theatre, so the stand would vanish under the tools: give AR its own visible, solid copy.
+            if (session.presentation.passthrough) stand = ArStand(stand);
+            Vector3 top = stand.center + Vector3.up * stand.size.y * .5f;
+            const float grip = .045f; // handle collider half height
+            for (int i = 0; i < kept.Length; i++)
+            {
+                if (!kept[i]) continue;
+                bool near = i < 6, scope = i == 12; int column = near ? i : i - 6;
+                // Nearest the learner (stand -Z, +X side) first; the far row is offset half a pitch so long shafts pass between
+                // grips. The camera scope lies crosswise along the middle of the stand.
+                float x = scope ? 0 : (near ? .125f : .1525f) - column * .055f, z = scope ? 0 : (near ? -1 : 1) * (stand.size.z * .5f - .03f);
+                Vector3 position = stand.transform.TransformPoint(top + new Vector3(x, 0, z)) + stand.transform.up * grip;
+                Quaternion rotation = stand.transform.rotation * Quaternion.Euler(0, scope ? 90 : near ? 0 : 180, 0);
+                session.workbench.SetRestPose(kept[i], position, rotation);
+            }
+            Physics.SyncTransforms();
+        }
+        GameObject arStand;
+        // A plain steel tray on a pole at the theatre stand's pose: visible over passthrough and solid for dropped tools.
+        BoxCollider ArStand(BoxCollider theatre)
+        {
+            if (!arStand)
+            {
+                arStand = new GameObject("ArInstrumentStand");
+                arStand.transform.SetPositionAndRotation(theatre.transform.position, theatre.transform.rotation);
+                arStand.transform.localScale = theatre.transform.lossyScale;
+                var box = arStand.AddComponent<BoxCollider>(); box.center = theatre.center; box.size = theatre.size;
+                var steel = new Material(Shader.Find("Standard")) { color = new Color(.62f, .64f, .66f) };
+                steel.SetFloat("_Metallic", .6f); steel.SetFloat("_Glossiness", .55f);
+                Visual(PrimitiveType.Cube, theatre.center + Vector3.up * (theatre.size.y * .5f - .006f), new Vector3(theatre.size.x, .012f, theatre.size.z), steel);
+                float floor = session.workbench ? session.workbench.initialHeadFloorPosition.y : 0;
+                float height = Mathf.Max(.1f, arStand.transform.TransformPoint(theatre.center).y - floor) / Mathf.Max(1e-3f, arStand.transform.lossyScale.y);
+                Visual(PrimitiveType.Cylinder, theatre.center + Vector3.down * height * .5f, new Vector3(.03f, height * .5f, .03f), steel);
+                Visual(PrimitiveType.Cylinder, theatre.center + Vector3.down * (height - .01f), new Vector3(.3f, .01f, .3f), steel);
+            }
+            return arStand.GetComponent<BoxCollider>();
+            void Visual(PrimitiveType shape, Vector3 position, Vector3 scale, Material material)
+            {
+                var part = GameObject.CreatePrimitive(shape); part.transform.SetParent(arStand.transform, false);
+                part.transform.localPosition = position; part.transform.localScale = scale;
+                DestroyImmediate(part.GetComponent<Collider>()); // the box above is the one support collider
+                part.GetComponent<Renderer>().sharedMaterial = material;
             }
         }
         void Marked(IReadOnlyList<Vector3> points) => wound.SetMarker(points);
@@ -167,8 +254,18 @@ namespace Scalpal.Surgery
                     inHand[input.controller] = tool;
                 }
         }
+        // Touching tissue without the trigger does nothing; say so at the tool tip, once per touch.
+        void NeedsTrigger(InstrumentBehaviour tool, string verb, string tissueId)
+        {
+            if (!triggerHint) return;
+            XRNode? hand = null;
+            foreach (var input in session.workbench.inputs)
+                if (input && input.GetComponent<InstrumentInteractor>()?.HeldInstrument == tool) { hand = input.controller; break; }
+            triggerHint.Show(tool, verb, hand, session.workbench.headCamera ? session.workbench.headCamera.transform : null);
+        }
         void Applied(BodyRecord record, InstrumentBehaviour tool)
         {
+            if (triggerHint && tool) triggerHint.Hide();
             XRNode? hand = null;
             if(tool) foreach(var input in session.workbench.inputs)
                 if(input && input.GetComponent<InstrumentInteractor>()?.HeldInstrument == tool) { hand=input.controller; break; }
@@ -213,8 +310,9 @@ namespace Scalpal.Surgery
         void OnDestroy()
         {
             if(session && session.workbench)session.workbench.ToolsReset-=ClearPlacements;
-            if (interaction) { interaction.Submitted -= Applied; interaction.MarkerChanged -= Marked; interaction.Contacted -= Touched; interaction.RegionInjured -= Injured; }
+            if (interaction) { interaction.Submitted -= Applied; interaction.MarkerChanged -= Marked; interaction.Contacted -= Touched; interaction.RegionInjured -= Injured; interaction.TouchedWithoutTrigger -= NeedsTrigger; }
             if (woundFrame) { if(Application.isPlaying)Destroy(woundFrame.gameObject);else DestroyImmediate(woundFrame.gameObject); }
+            if (arStand) { if(Application.isPlaying)Destroy(arStand);else DestroyImmediate(arStand); }
             // Kit tools are owned by the scene/workbench; do not leave dangling registered entries.
         }
     }
