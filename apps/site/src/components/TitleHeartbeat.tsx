@@ -3,7 +3,7 @@
 import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 
-// A monitor-style ECG sweep behind the "scalpal." title, reaching a little past it on each side. Simulated, slowly drifting HR.
+// An ASCII ECG sweep behind the "scalpal." title, reaching a little past it on each side. Simulated, slowly drifting HR.
 function useHeartRate() {
   const [v, setV] = useState({ hr: 72, spo2: 98, sys: 118, dia: 76 });
   useEffect(() => {
@@ -26,6 +26,11 @@ function beat(x: number) {
   return g(0.18, 0.025, 0.12) - g(0.29, 0.008, 0.18) + g(0.31, 0.009, 1) - g(0.335, 0.01, 0.28) + g(0.55, 0.045, 0.22);
 }
 
+const SCRAMBLE = "#%*+=:.@&$?/\\|<>";
+
+// ASCII ECG: the trace is drawn as monospace glyphs on a grid ("-" flat, "/" "\\" slopes,
+// "|" spikes, "@" write head), fading with age like monitor phosphor. Moving the pointer over it
+// scrambles the glyphs nearby, the same hover language as the ASCII hands.
 export function Ecg({ hr, className = "h-[44px]" }: { hr: number; className?: string }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const hrRef = useRef(hr);
@@ -35,10 +40,15 @@ export function Ecg({ hr, className = "h-[44px]" }: { hr: number; className?: st
     const canvas = ref.current!;
     const ctx = canvas.getContext("2d")!;
     const SPEED = 170; // px per second, like a monitor sweep
-    const GAP = 26; // erased lead ahead of the write head
+    const GAP = 28; // erased lead ahead of the write head, px
+    const CW = 7, CH = 11; // glyph cell, CSS px
+    const RADIUS = 46; // hover scramble radius, CSS px
     let w = 0, h = 0, dpr = 1;
     let ys: Float32Array = new Float32Array(0);
     let head = 0, phase = 0, carry = 0, last = performance.now(), raf = 0;
+    const pointer = { x: -1e4, y: -1e4 };
+    let scramble = 0, lastMove = 0;
+    const font = `${getComputedStyle(document.body).getPropertyValue("--font-mono") || "monospace"}`;
 
     const resize = () => {
       dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -52,13 +62,25 @@ export function Ecg({ hr, className = "h-[44px]" }: { hr: number; className?: st
     resize();
     const ro = new ResizeObserver(resize);
     ro.observe(canvas);
+    const onMove = (e: PointerEvent) => {
+      const r = canvas.getBoundingClientRect();
+      pointer.x = e.clientX - r.left;
+      pointer.y = e.clientY - r.top;
+      const inside = pointer.x > -RADIUS && pointer.y > -RADIUS && pointer.x < r.width + RADIUS && pointer.y < r.height + RADIUS;
+      if (inside) lastMove = performance.now();
+    };
+    window.addEventListener("pointermove", onMove, { passive: true });
+
+    const hash = (a: number, b: number) => {
+      let x = Math.imul(a * 374761393 + b * 668265263, 1274126177);
+      x ^= x >>> 13;
+      return ((x >>> 0) % 10007) / 10007;
+    };
 
     const frame = (now: number) => {
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
       const period = 60 / hrRef.current;
-      // carry fractional pixels so the sweep speed (and so the beat spacing) is exact at any
-      // refresh rate
       carry += SPEED * dt;
       const steps = Math.floor(carry);
       carry -= steps;
@@ -69,31 +91,57 @@ export function Ecg({ hr, className = "h-[44px]" }: { hr: number; className?: st
         for (let k = 1; k <= GAP; k++) ys[(x + k) % ys.length] = NaN;
         head = (head + 1) % ys.length;
       }
+      // scramble rises while the pointer moves near the trace and settles when it rests
+      const target = now - lastMove < 120 ? 1 : 0;
+      scramble += (target - scramble) * (1 - Math.exp(-dt * (target > scramble ? 14 : 2.5)));
 
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, w, h);
+      ctx.font = `${CH}px ${font}`;
+      ctx.textBaseline = "top";
       const mid = h * 0.62, amp = h * 0.5;
-      ctx.lineWidth = 1.25;
-      ctx.lineJoin = "round";
-      ctx.strokeStyle = "rgba(255,255,255,0.22)";
-      ctx.beginPath();
-      let pen = false;
-      for (let x = 0; x < ys.length; x++) {
-        const v = ys[x];
-        if (Number.isNaN(v)) { pen = false; continue; }
-        const y = mid - v * amp;
-        if (pen) ctx.lineTo(x, y); else ctx.moveTo(x, y);
-        pen = true;
-      }
-      ctx.stroke();
-      // bright write head
-      const hx = (Math.floor(head) - 1 + ys.length) % ys.length;
-      const hv = ys[hx];
-      if (!Number.isNaN(hv)) {
-        ctx.fillStyle = "rgba(255,255,255,0.7)";
-        ctx.beginPath();
-        ctx.arc(hx, mid - hv * amp, 2, 0, Math.PI * 2);
-        ctx.fill();
+      const cols = Math.floor(w / CW), rows = Math.floor(h / CH);
+      const tick = Math.floor(now / 70);
+      const headX = (Math.floor(head) - 1 + ys.length) % ys.length;
+
+      for (let c = 0; c < cols; c++) {
+        const x0 = c * CW, x1 = Math.min(ys.length, x0 + CW);
+        let lo = Infinity, hi = -Infinity, first = NaN, lastV = NaN;
+        for (let x = x0; x < x1; x++) {
+          const v = ys[x];
+          if (Number.isNaN(v)) continue;
+          const y = mid - v * amp;
+          lo = Math.min(lo, y);
+          hi = Math.max(hi, y);
+          if (Number.isNaN(first)) first = y;
+          lastV = y;
+        }
+        const cx = x0 + CW / 2;
+        const near = scramble * Math.max(0, 1 - Math.hypot(cx - pointer.x, mid - pointer.y) / RADIUS);
+        if (lo === Infinity) {
+          // empty cell: a little noise around the pointer, like the hands' hover
+          if (near > 0.2 && hash(c, tick) < near * 0.25) {
+            const r = Math.floor(hash(c + 7, tick) * rows);
+            ctx.fillStyle = "rgba(255,255,255,0.18)";
+            ctx.fillText(SCRAMBLE[Math.floor(hash(c, r + tick) * SCRAMBLE.length)], x0, r * CH);
+          }
+          continue;
+        }
+        // age behind the write head, for the phosphor fade
+        const age = (headX - x0 + ys.length) % ys.length;
+        const alpha = 0.16 + 0.62 * Math.exp(-age / 260);
+        const r0 = Math.max(0, Math.floor(lo / CH)), r1 = Math.min(rows - 1, Math.floor(hi / CH));
+        const slope = lastV - first;
+        for (let r = r0; r <= r1; r++) {
+          let ch: string;
+          if (r1 > r0) ch = "|";
+          else if (Math.abs(slope) < 1.2) ch = (lo - r * CH) > CH * 0.55 ? "_" : "-";
+          else ch = slope < 0 ? "/" : "\\";
+          if (age < CW) ch = "@";
+          if (near > 0 && hash(c * 31 + r, tick) < near) ch = SCRAMBLE[Math.floor(hash(r, c + tick) * SCRAMBLE.length)];
+          ctx.fillStyle = `rgba(255,255,255,${age < CW ? 0.95 : alpha})`;
+          ctx.fillText(ch, x0, r * CH);
+        }
       }
       raf = requestAnimationFrame(frame);
     };
@@ -101,12 +149,12 @@ export function Ecg({ hr, className = "h-[44px]" }: { hr: number; className?: st
     return () => {
       cancelAnimationFrame(raf);
       ro.disconnect();
+      window.removeEventListener("pointermove", onMove);
     };
   }, []);
 
   return <canvas ref={ref} aria-hidden className={`block w-full ${className}`} />;
 }
-
 
 export function TitleHeartbeat({ show, instant = false }: { show: boolean; instant?: boolean }) {
   const hr = useHeartRate();
