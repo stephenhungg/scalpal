@@ -125,6 +125,25 @@ namespace Scalpal.Instruments
             if (!TrackingValid || HeldInstrument != null || instrument == null || instrument.Held) return false;
             Vector3 gripPosition = instrument.gripAnchor != null ? instrument.gripAnchor.position : instrument.transform.position;
             if ((gripPosition - transform.position).sqrMagnitude > pickupRadius * pickupRadius) return false;
+            Attach(instrument);
+            return true;
+        }
+
+        // A hand-over (the coach passing a tool on request): whatever this hand holds goes back to its rest pose, and the
+        // new tool attaches exactly as a grip pickup would, wherever it lies. Grip state is kept, so a squeezed grip holds it.
+        public bool TryHandOver(InstrumentBehaviour instrument)
+        {
+            if (!TrackingValid || instrument == null || instrument.Held) return false;
+            var previous = HeldInstrument;
+            requireTriggerRelease = true; // a tool that arrives never fires on a trigger already squeezed
+            Release();
+            if (previous) previous.ReturnToRestPose();
+            Attach(instrument);
+            return true;
+        }
+
+        void Attach(InstrumentBehaviour instrument)
+        {
             HeldInstrument = instrument;
             instrument.CaptureRestPose();
             previousParent = instrument.transform.parent;
@@ -152,7 +171,6 @@ namespace Scalpal.Instruments
             heldLocalScale = instrument.transform.localScale;
             instrument.SetTrackingValid(true);
             instrument.SetHeld(true);
-            return true;
         }
 
         public void Release()
