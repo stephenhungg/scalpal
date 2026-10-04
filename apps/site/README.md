@@ -30,8 +30,8 @@ The visual system follows the aeterna Framer template, measured from the live si
 - the button label roll uses a spring (stiffness 230, damping 24) fitted to the measured hover trace (within 1px at every sample)
 - the button row fades in 0.4s, starting ~460ms after the first word (measured 463ms on the reference)
 
-The hands in `src/components/HandsField.tsx` are a WebGL2 halftone of Michelangelo's *Creation of Adam*, a public-domain fresco. The arm cutouts come from Matthew's [adam](https://github.com/MatthewKim323/adam) hero (`public/hero/ascii/arm-*.webp`), grayscaled into `public/hands/`. Placement was fitted to the reference silhouettes. Dots are 2px on a 3px grid (1.5px cells on phones). Adam's forearm dissolves from the wrist, and the cursor lens pushes dots out into a 52px ring.
+The reaching arms are Matthew's ASCII Adam (`src/components/AsciiAdam.tsx` plus `public/hero/ascii/`, from [MatthewKim323/adam](https://github.com/MatthewKim323/adam)), unchanged. It was built for a black page, so `AdamLayer` inverts it with a hue turn and multiplies it onto the light background. It's placed below the button.
 
-The landing background is ReactBits [Pattern Waves](https://reactbits.dev/backgrounds/pattern-waves) (`src/components/PatternWaves.tsx`, via `ogl`), set to faint black dots on a transparent background. A backdrop-blur layer, masked by a soft copy of the hand silhouettes, blurs the waves wherever they pass behind the arms.
+The landing background is ReactBits [Pattern Waves](https://reactbits.dev/backgrounds/pattern-waves) (`src/components/PatternWaves.tsx`, via `ogl`), set to faint black dots on a transparent background. A backdrop-blur layer, masked to soft ovals over the arms, blurs the waves wherever they pass behind them.
 
 No template assets or code are used. Fonts are Google Fonts (OFL).

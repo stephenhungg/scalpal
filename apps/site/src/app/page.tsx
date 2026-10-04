@@ -1,7 +1,7 @@
 import { BlurWords } from "@/components/BlurWords";
 import { wordCount } from "@/lib/text";
 import { FadeIn } from "@/components/FadeIn";
-import { HandsField } from "@/components/HandsField";
+import { AdamLayer } from "@/components/AdamLayer";
 import { WaveBackground } from "@/components/WaveBackground";
 import { RollButton } from "@/components/RollButton";
 import { Shell } from "@/components/Shell";
@@ -13,11 +13,10 @@ export default function Home() {
   return (
     <main className="h-dvh overflow-hidden">
       <Shell className="h-dvh">
-        <div className="absolute inset-0 z-0">
+        {/* One stacking context so the Adam layer can multiply onto the waves. */}
+        <div className="absolute inset-0 z-0 bg-bg">
           <WaveBackground />
-        </div>
-        <div className="absolute inset-0 z-0">
-          <HandsField />
+          <AdamLayer />
         </div>
         <section className="relative z-10 flex flex-col items-center px-[30px] pt-[148px] text-center min-[810px]:pt-[98px]">
           <h1 className="display">
