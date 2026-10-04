@@ -244,7 +244,9 @@ namespace Scalpal.Quest
             bool fitValid = RegistrationReady && Practicing && SharedMatches && !recoveringLocalCoach && (!localCoachReady || coach.IsSynchronized);
             patientFrame.gameObject.SetActive(fitValid);
             anatomy.SetRegistrationValid(fitValid);
-            coach.Tracking(RegistrationReady && Practicing && SharedMatches);
+            // Report tracking only while a case is running: a deliberate pause or the end of the case is not a
+            // tracking loss, and must not make Scalpal say "I've lost headset tracking".
+            if (Practicing) coach.Tracking(RegistrationReady && SharedMatches);
             if ((!HasHandoff || HandoffVerified) && realtime.Paired && !sharedAttemptReady && !attemptRequested && !attemptFailed) RequestAttempt();
             if (workbench.IsReady)
             {
@@ -580,7 +582,7 @@ namespace Scalpal.Quest
                 result.stepId, string.IsNullOrEmpty(action.id) ? null : action.id, Message, Time.realtimeSinceStartupAsDouble * 1000);
             if (result.completed)
             {
-                Phase = "Recap"; voice.Disconnect(); anatomy.SetRegistrationValid(false); coach.Tracking(false);
+                Phase = "Recap"; voice.Disconnect(); anatomy.SetRegistrationValid(false);
                 var finalGrade = exercise.Grade;
                 int reached = finalGrade?.metMilestones?.Length ?? completedSteps;
                 int total = candidate.procedure.openBody?.milestones?.Length ?? candidate.procedure.steps.Length;
@@ -776,7 +778,7 @@ namespace Scalpal.Quest
         }
         public void PauseHandoffPractice()
         {
-            practicePaused = true; SetHandoffVoiceAllowed(false); anatomy.SetRegistrationValid(false); coach.Tracking(false); voice.Disconnect();
+            practicePaused = true; SetHandoffVoiceAllowed(false); anatomy.SetRegistrationValid(false); voice.Disconnect();
         }
         public bool ResumeHandoffPractice()
         {

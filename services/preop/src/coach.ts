@@ -582,6 +582,9 @@ export class CoachSession {
       this.lastProgressAt = this.ms();
       this.note("Tracking restored; scoring resumed.");
       alerts.push(this.alert("tracking_restored", "low", "Tracking is back. Pick up where you left off."));
+    } else if (this.engine.completed || this.condition.view().outcome.result !== "in_progress") {
+      // The case is over (finished, ended or died): the headset hiding anatomy is not a tracking loss to announce.
+      this.note("Tracking stopped after the case ended.");
     } else {
       this.note("Tracking lost; anatomy hidden and scoring paused.");
       alerts.push(this.alert("tracking_lost", "urgent", trackingLostLine(this.mode), [], this.engine.current?.id ?? "", "tracking_lost"));
