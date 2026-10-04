@@ -369,11 +369,20 @@ namespace Scalpal.Exercises.Coach
                     if (response?.results != null && response.results.Length == events.Length)
                     {
                         delivered = true;
-                        foreach (var result in response.results)
-                            if (!ReceiptDelivered(result)) { delivered = false; break; }
+                        string dropped = null;
+                        for (int i = 0; i < events.Length && delivered; i++)
+                        {
+                            if (!ReceiptDelivered(response.results[i])) delivered = false;
+                            // The headset already applied this body action; the coach did not. With no
+                            // resync yet, continuing would silently diverge local and coach body state.
+                            else if (events[i].type == "surgery" && !response.results[i].applied && response.results[i].reason == "tracking_invalid")
+                            { delivered = false; dropped = events[i].evidence?.actionId ?? ""; }
+                        }
                         if (!delivered)
                         {
-                            FailSync("coach returned a malformed or rejected event receipt; start a new attempt");
+                            FailSync(dropped != null
+                                ? "coach dropped body action " + dropped + " as tracking-invalid; local and coach body states diverged; start a new attempt"
+                                : "coach returned a malformed or rejected event receipt; start a new attempt");
                             break;
                         }
                         for (int i = 0; i < events.Length; i++) pending.Dequeue();
