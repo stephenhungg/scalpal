@@ -1,6 +1,6 @@
 import type { Context, Hono } from "hono";
 import { ENCOUNTERS_BY_PLAN, EXAM_MANEUVERS, HISTORY_TOPICS, TESTS, type Encounter } from "./catalog/encounters.js";
-import { DEFAULT_PATIENT_VOICES, EncounterSession } from "./encounter.js";
+import { DEFAULT_PATIENT_VOICES, EncounterSession, demographicsMatch } from "./encounter.js";
 import { attendingFirstMessage, attendingPrompt, patientFirstMessage, patientPrompt } from "./encounter-prompt.js";
 import { NO_REALTIME, type RealtimeSink } from "./realtime-bridge.js";
 import type { Action, SurgicalCase } from "./types.js";
@@ -54,9 +54,7 @@ export function registerEncounterRoutes(app: Hono, options: EncounterRouteOption
     }
     // Authored demo symptoms must never be attached to real records or a different patient.
     if (!kase.brief.synthetic) return bad(c, 409, "synthetic_only", "Authored interviews are available only for synthetic demo patients.", kase.actions);
-    const persona = encounter.persona;
-    const expectedSex = persona.voiceKey === "adult_female" ? "female" : "male";
-    if (kase.patient.name !== persona.patientName || kase.patient.age !== persona.age || kase.patient.sex.toLowerCase() !== expectedSex) {
+    if (!demographicsMatch(encounter, kase)) {
       return bad(c, 409, "demographics_mismatch", "The chart demographics do not match this authored demo interview.", kase.actions);
     }
     if (sessions.size >= MAX) sessions.delete(sessions.keys().next().value!);
