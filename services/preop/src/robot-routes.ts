@@ -103,7 +103,10 @@ export function registerRobotRoutes(app: Hono, options: RobotRouteOptions) {
     } catch {
       return fail(c, 400, "invalid_robot_demo", "Send JSON {stepId, frames: [scalpal.controller_motion.v1 ...]}.");
     }
-    const { stepId, frames } = parsed;
+    const { stepId, frames, frameOrigin } = parsed;
+    // Optional: where the umbilicus-origin torso frame sits inside PatientRoot (same axes). The worker defaults to
+    // NativeSession.unity's AuthoredPatientTorsoFrame (0, 1.3269, 0.2093) when it is absent.
+    if (frameOrigin !== undefined && !vec(frameOrigin, 3)) return fail(c, 400, "invalid_robot_demo", "frameOrigin must be [x, y, z] in metres.");
     if (typeof stepId !== "string" || !STEP_ID.test(stepId)) return fail(c, 400, "invalid_robot_demo", "stepId must be a procedure step id such as mark_incision.");
     if (!s.kase.procedure.steps.some((x) => x.id === stepId)) return fail(c, 400, "unknown_step", `This session's procedure has no step "${stepId}".`);
     if (!Array.isArray(frames) || frames.length < 2 || frames.length > MAX_FRAMES) return fail(c, 400, "invalid_robot_demo", `frames must hold 2 to ${MAX_FRAMES} controller motion frames.`);
@@ -118,7 +121,7 @@ export function registerRobotRoutes(app: Hono, options: RobotRouteOptions) {
       durationS: Math.max(0, Math.max(...times) - Math.min(...times)), receivedAt: options.now().toISOString(),
     };
     mkdirSync(join(demosDir, s.id), { recursive: true });
-    writeFileSync(join(demosDir, s.id, `${demoId}.json`), JSON.stringify({ schema: "scalpal.robot_demo.v1", ...meta, frames }));
+    writeFileSync(join(demosDir, s.id, `${demoId}.json`), JSON.stringify({ schema: "scalpal.robot_demo.v1", ...meta, ...(frameOrigin === undefined ? {} : { frameOrigin }), frames }));
     demos.push(meta);
     options.realtime?.simLog?.({
       coachSessionId: s.id, kind: "event",

@@ -40,13 +40,17 @@ describe("robot demo -> sim policy result routes", () => {
     // The worker discovers it by cursor and fetches the full frames unchanged.
     const list = (await req("GET", "/coach/robot/demos")).json;
     expect(list.demos).toEqual([expect.objectContaining({ demoId: posted.json.demoId, sessionId: sid, stepId: "mark_incision", stepTitle: "Mark McBurney incision", frames: 40 })]);
-    expect((await req("GET", `/coach/robot/demos?after=${posted.json.demoId}`)).json.demos).toEqual([]);
     const full = (await req("GET", `/coach/robot/demos/${posted.json.demoId}`)).json;
     expect(full.frames[3]).toEqual(frames[3]);
+    expect(full.frameOrigin).toBeUndefined();
+    const withOrigin = await req("POST", `/coach/sessions/${sid}/robot-demo`, { stepId: "mark_incision", frames, frameOrigin: [0, 1.3269, 0.2093] });
+    expect((await req("GET", `/coach/robot/demos/${withOrigin.json.demoId}`)).json.frameOrigin).toEqual([0, 1.3269, 0.2093]);
+    expect((await req("POST", `/coach/sessions/${sid}/robot-demo`, { stepId: "mark_incision", frames, frameOrigin: [0, "1"] })).status).toBe(400);
+    expect((await req("GET", `/coach/robot/demos?after=${withOrigin.json.demoId}`)).json.demos).toEqual([]);
     expect(logs.some((l) => /Robot demo received for "Mark McBurney incision"/.test(l.text))).toBe(true);
     // Until the worker answers this demo, the session result is pending (never silently stale).
     const result = (await req("GET", `/coach/sessions/${sid}/robot-result`)).json;
-    expect(result).toMatchObject({ status: "pending", stepId: "mark_incision", stepTitle: "Mark McBurney incision", pendingDemoId: posted.json.demoId });
+    expect(result).toMatchObject({ status: "pending", stepId: "mark_incision", stepTitle: "Mark McBurney incision", pendingDemoId: withOrigin.json.demoId });
   });
 
   it("rejects frames that are not patient-space capture frames, unknown steps, and bodies over 3 MB", async () => {

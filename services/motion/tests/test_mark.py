@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from scalpal_motion.mark.demos import DemoRejected, from_capture, synthetic_demo, synthetic_set, to_capture_frames
+from scalpal_motion.mark.demos import PATIENT_ROOT_TO_UMBILICUS, DemoRejected, from_capture, synthetic_demo, synthetic_set, to_capture_frames
 from scalpal_motion.mark.grader import MARK_INCISION_PREDICATES, Landmarks, check, measure_marks, measure_stroke
 from scalpal_motion.mark.scene import FETCH_HINT, MENAGERIE_PANDA
 from scalpal_motion.learning.env import MENAGERIE_HAND
@@ -62,6 +62,28 @@ def test_capture_frames_become_the_same_stroke_and_grade():
     assert np.abs(got.tip[:, [0, 2]] - demo.tip[:, [0, 2]]).max() < 1e-4  # x/z exact; y via the fitted marker offset
     assert got.grade()["facts"] == pytest.approx(demo.grade()["facts"], abs=0.5)
     assert got.grade()["success"] == demo.grade()["success"]
+
+
+def test_patient_root_frames_grade_like_the_umbilicus_frame_original():
+    # The Quest sends positions relative to PatientRoot, where the umbilicus sits at (0, 1.327, 0.209) in
+    # NativeSession.unity. Without the shift every real demo would miss McBurney by ~200 mm and be filtered out.
+    rng = np.random.default_rng(21)
+    demo = next(d for d in (synthetic_demo(rng, Landmarks.authored()) for _ in range(50)) if d.grade()["success"])
+    frames = to_capture_frames(demo)
+    right = frames[0]["controllers"][1]["position"]
+    assert right[1] > 1.2  # really in PatientRoot space, metres above the root
+    got = from_capture({"frames": frames})
+    assert got.meta["frameOrigin"] == pytest.approx(PATIENT_ROOT_TO_UMBILICUS.tolist(), abs=1e-5)
+    assert -0.13 < got.meta["tipOffsetM"] < -0.09  # the controller rides ~11 cm above the marker tip, not 1.3 m
+    assert got.grade()["success"] and got.grade()["facts"] == pytest.approx(demo.grade()["facts"], abs=0.5)
+    # An explicit frameOrigin wins: the same stroke sent in another root frame grades the same.
+    shifted = [{**f, "controllers": [{**c, "position": (np.array(c["position"]) - PATIENT_ROOT_TO_UMBILICUS + [0.5, 0.2, -0.3]).tolist()}
+                                     for c in f["controllers"]]} for f in frames]
+    other = from_capture({"frames": shifted, "frameOrigin": [0.5, 0.2, -0.3]})
+    assert other.grade()["facts"] == pytest.approx(demo.grade()["facts"], abs=0.5)
+    # Ignoring the origin (the old bug) misses McBurney by ~200 mm.
+    wrong = from_capture({"frames": frames, "frameOrigin": [0, 0, 0]})
+    assert wrong.grade()["facts"]["markErrorMm"] > 150 and not wrong.grade()["success"]
 
 
 def test_capture_ingestion_uses_the_marker_hand_and_never_bridges_long_gaps():

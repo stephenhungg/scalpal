@@ -26,6 +26,10 @@ DT = 1.0 / HZ
 PRESS_M = 0.004
 MAX_GAP_S = 0.3
 STAND_IN = "stand-in"
+# Capture frames are relative to PatientRoot. In NativeSession.unity the umbilicus-origin torso frame
+# (AuthoredPatientTorsoFrame, same axes, no rotation) sits at this local position inside PatientRoot, so frames are
+# shifted by it into the umbilicus frame the grader uses. A demo body may override it with "frameOrigin".
+PATIENT_ROOT_TO_UMBILICUS = np.array([0.0, 1.3268696, 0.20933735])
 START_OFFSET = np.array([-0.06, 0.13, -0.16])  # robot/marker start, relative to the umbilicus (patient frame)
 
 
@@ -133,6 +137,9 @@ class DemoRejected(ValueError):
 def from_capture(doc: dict, landmarks: Landmarks | None = None) -> MarkDemo:
     """Coach robot demo (scalpal.robot_demo.v1 with ControllerMotionCapture frames) -> task-space demo."""
     frames = [f for f in doc.get("frames") or [] if f.get("space") == "patient"]
+    origin = np.asarray(doc.get("frameOrigin") or PATIENT_ROOT_TO_UMBILICUS, float)
+    if origin.shape != (3,) or not np.isfinite(origin).all():
+        raise DemoRejected("frameOrigin must be three finite numbers")
     if len(frames) < 2:
         raise DemoRejected("fewer than two patient-space frames")
     frames.sort(key=lambda f: f["unityTime"])
@@ -148,7 +155,7 @@ def from_capture(doc: dict, landmarks: Landmarks | None = None) -> MarkDemo:
         if c is None:
             continue
         t.append(float(f["unityTime"]))
-        pos.append(np.array(c["position"], float))
+        pos.append(np.array(c["position"], float) - origin)
         pen = float(c.get("trigger", 0)) > 0.5 and (not held or c.get("heldInstrument") == "skin_marker")
         trig.append(1.0 if pen else 0.0)
     if len(t) < 2:
@@ -171,17 +178,18 @@ def from_capture(doc: dict, landmarks: Landmarks | None = None) -> MarkDemo:
     lm = landmarks or Landmarks.authored()
     meta = {"hand": hand, "markerHeldFrames": int(held.get(hand, 0)), "frames": len(frames), "usedFrames": int(cut),
             "truncatedAtGap": bool(len(gaps)), "durationS": round(float(t[-1] - t[0]), 2), "tipOffsetM": round(offset, 4),
-            "sessionId": doc.get("sessionId"), "stepId": doc.get("stepId"), "landmarks": "authored" if landmarks is None else "registered"}
+            "sessionId": doc.get("sessionId"), "stepId": doc.get("stepId"), "frameOrigin": origin.round(5).tolist(), "landmarks": "authored" if landmarks is None else "registered"}
     # `robot-send-demo` (the stand-in headset) stamps its frames sessionId "stand-in": those stay labelled synthetic.
     source = "stand-in" if all(f.get("sessionId") == STAND_IN for f in frames) else "headset"
     return MarkDemo(tip, pen.astype(float), lm, source, doc.get("demoId") or f"demo-{uuid.uuid4().hex[:10]}", meta)
 
 
 def to_capture_frames(demo: MarkDemo, controller_above_tip: float = 0.11) -> list[dict]:
-    """Stand-in headset: ControllerMotionCapture frames for a task-space demo (the right hand holds the marker)."""
+    """Stand-in headset: ControllerMotionCapture frames for a task-space demo (the right hand holds the marker),
+    expressed relative to PatientRoot exactly as the Quest sends them."""
     frames = []
     for i, (p, tr) in enumerate(zip(demo.tip, demo.trigger)):
-        ctrl = (p + np.array([0, controller_above_tip, 0])).round(5).tolist()
+        ctrl = (p + np.array([0, controller_above_tip, 0]) + PATIENT_ROOT_TO_UMBILICUS).round(5).tolist()  # PatientRoot frame
         frames.append({
             "schema": "scalpal.controller_motion.v1", "sessionId": STAND_IN, "frameIndex": i, "unityTime": round(i * DT, 4),
             "space": "patient", "headTracked": True, "headPosition": [-0.35, 0.45, -0.05], "headRotation": [0.0, 0.0, 0.0, 1.0],
