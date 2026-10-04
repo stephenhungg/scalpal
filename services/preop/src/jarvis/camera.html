@@ -41,6 +41,7 @@
   <span id="sess" class="pill">no coach session</span>
   <span id="track" class="pill">no body</span>
   <span id="fps" class="pill">0 fps</span>
+  <span id="held" class="pill">holding nothing</span>
 </header>
 <main>
   <div class="stage" id="stage"><video id="video" playsinline muted></video><canvas id="overlay"></canvas></div>
@@ -53,7 +54,8 @@
         <div>Finger on</div><div id="focus">nothing</div>
         <div>Instrument</div><div><select id="instrument"></select></div>
       </div>
-      <label class="muted"><input type="checkbox" id="follow" checked> use the step's instrument automatically</label>
+      <label class="muted"><input type="checkbox" id="follow" checked> use the step's instrument automatically</label><br>
+      <label class="muted"><input type="checkbox" id="byobject"> pick the instrument from the real object I'm holding (boxes)</label>
       <div class="row"><button id="identify">Identify what I'm pointing at</button><button id="confirm">Confirm step</button></div>
       <p class="muted">Point with your index finger over the patient's abdomen. Pinch (thumb to index) to use the instrument there. Jarvis hears every action.</p>
     </section>

@@ -3,7 +3,7 @@
 // anatomy, and the result goes to the live coach session exactly like headset events: focus when the
 // finger rests on a structure, touch when the learner pinches, tracking validity when the body is lost.
 // The page also plays the headset's part for Jarvis's highlights: it draws them and acks them.
-import { FilesetResolver, HandLandmarker, PoseLandmarker } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/vision_bundle.mjs";
+import { FilesetResolver, HandLandmarker, ObjectDetector, PoseLandmarker } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/vision_bundle.mjs";
 import { REGIONS, imageToUV, pinchState, portAt, portToUV, regionAt, torsoFromPose, uvToImage } from "/jarvis/body-map.js";
 
 const $ = (id) => document.getElementById(id);
@@ -13,7 +13,10 @@ const api = async (method, path, body) => {
 };
 const MODELS = "https://storage.googleapis.com/mediapipe-models";
 
-let pose = null, hands = null, stream = null;
+let pose = null, hands = null, objects = null, stream = null;
+let detections = [], held = "", frameNo = 0;
+// Real objects the 80-class COCO detector knows that can stand in for an instrument in the hand.
+const OBJECT_TO_INSTRUMENT = { scissors: "lap_scissors", knife: "scalpel", fork: "atraumatic_grasper", toothbrush: "hook_cautery", spoon: "suction_irrigator" };
 let sid = "", snapshot = null, kase = null, allowed = null, names = new Map();
 let pinched = false, focus = "", focusCandidate = "", focusSince = 0, trackingValid = null, lostSince = 0;
 let highlighted = "", lastUV = null, frames = 0, fpsAt = performance.now();
@@ -28,6 +31,7 @@ function feed(text, cls = "") {
 }
 
 const nameOf = (id) => names.get(id) ?? id.replaceAll("_", " ");
+const nameOfInstrument = (id) => kase?.instruments.find((i) => i.id === id)?.displayName.toLowerCase() ?? id.replaceAll("_", " ");
 
 async function send(event) {
   if (!sid) return;
@@ -90,6 +94,8 @@ async function loadModels() {
   };
   pose = await make(PoseLandmarker, `${MODELS}/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task`, { numPoses: 1 });
   hands = await make(HandLandmarker, `${MODELS}/hand_landmarker/hand_landmarker/float16/latest/hand_landmarker.task`, { numHands: 2 });
+  // Same COCO classes as the Quest MultiObjectDetection sample (Stephen's bottle test), in the browser.
+  objects = await make(ObjectDetector, `${MODELS}/object_detector/efficientdet_lite0/float16/latest/efficientdet_lite0.tflite`, { scoreThreshold: 0.4, maxResults: 6 });
 }
 
 async function listCameras() {
@@ -147,6 +153,28 @@ function loop() {
     lastUV = uv;
     const region = torso && uv ? regionAt(uv, allowed) : "";
 
+    // Bounding boxes every third frame; the object under the learner's fingertip counts as held.
+    if (objects && frameNo++ % 3 === 0) {
+      detections = (objects.detectForVideo(video, now).detections ?? []).map((d) => ({
+        label: d.categories[0]?.categoryName ?? "object",
+        score: d.categories[0]?.score ?? 0,
+        box: { x: d.boundingBox.originX / video.videoWidth, y: d.boundingBox.originY / video.videoHeight, w: d.boundingBox.width / video.videoWidth, h: d.boundingBox.height / video.videoHeight },
+      })).filter((d) => d.label !== "person");
+      const tip = hand?.[8];
+      const pad = 0.04;
+      const inHand = tip ? detections.find((d) => tip.x > d.box.x - pad && tip.x < d.box.x + d.box.w + pad && tip.y > d.box.y - pad && tip.y < d.box.y + d.box.h + pad) : null;
+      const label = inHand?.label ?? "";
+      if (label !== held) {
+        held = label;
+        $("held").textContent = held ? `holding ${held}` : "holding nothing";
+        $("held").className = `pill ${held ? "on" : ""}`;
+        const mapped = OBJECT_TO_INSTRUMENT[held];
+        const available = kase?.instruments.some((i) => i.id === mapped);
+        if (held) feed(`sees you holding a ${held}${mapped ? (available ? ` (as the ${nameOfInstrument(mapped)})` : " (no matching instrument in this case)") : ""}`);
+        if ($("byobject").checked && mapped && available) { $("follow").checked = false; $("instrument").value = mapped; }
+      }
+    }
+
     // Focus: report a structure once the finger has rested on it briefly.
     if (region !== focusCandidate) { focusCandidate = region; focusSince = now; }
     if (focusCandidate !== focus && now - focusSince > 250 && trackingValid) {
@@ -175,6 +203,16 @@ function loop() {
 function draw(torso, hand, region) {
   const W = canvas.width, H = canvas.height;
   ctx.clearRect(0, 0, W, H);
+  for (const d of detections) {
+    ctx.strokeStyle = d.label === held ? "#fbbf24" : "#4ade80";
+    ctx.lineWidth = 3;
+    ctx.strokeRect(d.box.x * W, d.box.y * H, d.box.w * W, d.box.h * H);
+    ctx.fillStyle = "rgba(0,0,0,.6)";
+    ctx.fillRect(d.box.x * W, d.box.y * H - 22, 150, 22);
+    ctx.fillStyle = d.label === held ? "#fbbf24" : "#4ade80";
+    ctx.font = "16px ui-sans-serif, system-ui";
+    ctx.fillText(`${d.label} ${(d.score * 100).toFixed(0)}%`, d.box.x * W + 6, d.box.y * H - 6);
+  }
   if (!torso) return;
   const P = (u, v) => { const p = uvToImage(torso, u, v); return [p.x * W, p.y * H]; };
   const poly = (pts, stroke, fill, width = 2) => {
