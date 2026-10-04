@@ -51,8 +51,9 @@ namespace Scalpal.Recap
             {
                 runId = coachSessionId, sessionId = sessionId, attemptId = attemptId,
                 encounterId = handoff?.encounterId ?? "", patientId = selected.patientId, procedureId = selected.procedureId,
-                diagnosisAvailable = handoff?.scorecard != null,
-                diagnosis = handoff?.scorecard == null ? null : JsonUtility.FromJson<DiagnosisScorecard>(JsonUtility.ToJson(handoff.scorecard)),
+                diagnosisAvailable = handoff?.scorecard != null && !EncounterContract.IsSkipped(handoff.scorecard),
+                diagnosisSkipped = EncounterContract.IsSkipped(handoff?.scorecard),
+                diagnosis = handoff?.scorecard == null || EncounterContract.IsSkipped(handoff.scorecard) ? null : JsonUtility.FromJson<DiagnosisScorecard>(JsonUtility.ToJson(handoff.scorecard)),
                 surgery = new SurgeryGrade { available = false }, demo = demo ?? new DemoFlags(),
                 replay = new ReplayResult { source = "unknown", status = "failed", failureReason = "No capture adapter has supplied a recording for this attempt." }
             };

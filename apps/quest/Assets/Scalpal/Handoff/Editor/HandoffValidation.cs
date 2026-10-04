@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using Scalpal.Brand;
+using Scalpal.Brand.Editor;
 using Scalpal.EncounterOffice;
 using Scalpal.EncounterOffice.Editor;
 using Scalpal.Exercises.Data;
@@ -32,6 +34,7 @@ namespace Scalpal.Handoff.Editor
             {
                 Preflight();
                 TimeOutGates();
+                TheatreCardPointer();
                 var state = new EncounterState { encounterId = "enc-handoff-fixture", patientId = "patient-handoff-fixture", phase = "scored",
                     assessment = new EncounterAssessment { procedure = "colectomy", diagnosis = "incorrect fixture" } };
                 var score = Score();
@@ -229,6 +232,40 @@ namespace Scalpal.Handoff.Editor
                     "paused-practice switch requests a fresh attempt and a new Time-Out");
             }
             finally { UnityEngine.Object.DestroyImmediate(host); }
+        }
+
+        // The real Theatre card: brand type, level placement, readable sizes, and both controllers' aim rays pressing options.
+        static void TheatreCardPointer()
+        {
+            EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            var origin = new GameObject("CardTrackingOrigin").transform; origin.SetPositionAndRotation(new Vector3(.4f, 0, -1), Quaternion.Euler(0, 25, 0));
+            var camera = new GameObject("CardHead").AddComponent<Camera>(); camera.transform.SetParent(origin, false);
+            camera.transform.SetLocalPositionAndRotation(new Vector3(0, 1.6f, 0), Quaternion.Euler(20, 10, 15));
+            var card = UnityEngine.Object.Instantiate(Resources.Load<HandoffCard>("HandoffCard")); card.viewer = camera;
+            try
+            {
+                int chosen = -1;
+                card.Show("To theatre", "Priya Ramaswamy, 40\nLaparoscopic appendectomy · Urgent\nVolunteer patient: virtual organs on a real person.\nVirtual OR: a virtual patient in the operating room.",
+                    new[] { "Volunteer patient (AR) · Recommended", "Virtual OR (VR)" }, index => chosen = index);
+                Assert(ScalpalPlacement.IsLevel(card.transform), "Theatre card spawns level with the horizon even when the head is pitched and rolled");
+                var brand = ScalpalBrand.Active;
+                var texts = card.GetComponentsInChildren<TMPro.TextMeshPro>();
+                Assert(texts.Single(text => text.name == "Title").font == brand.display && texts.Where(text => text.name != "Title").All(text => text.font == brand.body || text.font == brand.label), "card title is Instrument Serif; copy and actions are Geist Mono");
+                Assert(!card.GetComponentsInChildren<TextMesh>(true).Any(), "card renders no legacy TextMesh");
+                foreach (var item in ScalpalBrandLayout.Measure(card.transform, camera.transform.position))
+                    Assert(item.Passes, "card text meets its readability floor: '" + item.fit.Text.text + "' " + item.mmAt1m.ToString("F1") + " mm/m");
+                var targets = card.GetComponentsInChildren<HandoffCardTarget>();
+                Assert(targets.Length == 2 && targets.All(target => target.GetComponent<BoxCollider>()), "each Theatre option is a ray collider");
+                for (int hand = 0; hand < 2; hand++)
+                {
+                    chosen = -1;
+                    var target = targets.Single(item => item.index == 1 - hand);
+                    var result = ScalpalPointerProbe.Press(hand, origin, target.GetComponent<Collider>(), () => card.Pointer(hand), card.StepPointers);
+                    Assert(result.RayMatchesAim && result.rayVisible && (result.lineStart - result.expectedOrigin).magnitude < 1e-4f, "card ray starts at the " + (hand == 0 ? "left" : "right") + " controller aim pose");
+                    Assert(result.hovered && result.accentOnHover && chosen == 1 - hand, "aim ray + trigger chooses Theatre option " + (1 - hand) + " from the " + (hand == 0 ? "left" : "right") + " controller");
+                }
+            }
+            finally { UnityEngine.Object.DestroyImmediate(card.gameObject); UnityEngine.Object.DestroyImmediate(origin.gameObject); }
         }
 
         static T Get<T>(object instance, string field) => (T)instance.GetType().GetField(field, Private).GetValue(instance);

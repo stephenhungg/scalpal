@@ -15,7 +15,7 @@ Build and integrate against demo mode. Spend live minutes on the real setup and 
 cd services/vitals
 npm install
 npm run cameras        # lists cameras + PRESAGE_CAMERA_ID (pick the iPhone)
-npm start              # demo mode on :8790, no quota
+npm start              # demo mode on :8791, no quota
 npm run live           # real Presage measurement (uses quota, auto-stops)
 npm test               # physiology model tests
 ```
@@ -23,7 +23,7 @@ npm test               # physiology model tests
 `.env` (never committed):
 - `PRESAGE_API_KEY=`
 - `PRESAGE_CAMERA_ID=` (the iPhone's ID)
-- `PORT=8790`
+- `PORT=8791` (8790 belongs to the body-pose service in services/registration)
 
 ## Endpoints
 

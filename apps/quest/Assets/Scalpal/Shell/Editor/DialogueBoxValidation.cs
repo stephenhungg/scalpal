@@ -13,25 +13,31 @@ using UnityEngine;
 
 namespace Scalpal.Shell.Editor
 {
-    // Creates the one style asset the dialogue box reads. Existing assets are never overwritten,
-    // so a brand pass can repoint fonts/materials without this builder reverting it.
+    // Creates the one style asset the dialogue box reads and points it at the Scalpal brand
+    // (Resources/ScalpalBrand): fonts, materials and palette are synced; tuned geometry and pacing are kept.
     public static class DialogueBoxBuild
     {
         public const string StylePath = "Assets/Scalpal/Shell/Resources/" + DialogueBoxStyle.ResourcePath + ".asset";
-        const string Office = "Assets/Scalpal/EncounterOffice";
         [MenuItem("Scalpal/Shell/Prepare Dialogue Box Style")]
         public static DialogueBoxStyle PrepareStyle()
         {
+            var brand = Scalpal.Brand.Editor.ScalpalBrandBuild.Prepare();
             var style = AssetDatabase.LoadAssetAtPath<DialogueBoxStyle>(StylePath);
-            if (style) return style;
-            Directory.CreateDirectory(Path.GetDirectoryName(StylePath)); AssetDatabase.Refresh();
-            style = ScriptableObject.CreateInstance<DialogueBoxStyle>();
-            style.bodyFont = Load<Font>(Office + "/Fonts/Inter-Regular.ttf");
-            style.nameFont = Load<Font>(Office + "/Fonts/Inter-SemiBold.ttf");
-            style.glass = Load<Material>(Office + "/Materials/office_glass_card.mat");
-            style.bodyText = Load<Material>(Office + "/Materials/office_world_text_Inter-Regular.mat");
-            style.nameText = Load<Material>(Office + "/Materials/office_world_text_Inter-SemiBold.mat");
-            AssetDatabase.CreateAsset(style, StylePath); AssetDatabase.SaveAssets();
+            if (!style)
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(StylePath)); AssetDatabase.Refresh();
+                style = ScriptableObject.CreateInstance<DialogueBoxStyle>();
+                AssetDatabase.CreateAsset(style, StylePath);
+            }
+            style.bodyFont = brand.body; style.nameFont = brand.label;
+            style.glass = brand.glass; style.bodyText = brand.bodyText; style.nameText = brand.labelText;
+            style.chip = brand.accent; style.button = brand.button;
+            // Brand palette: dark glass, white ink, spark-accent roles (geometry and pacing stay as tuned).
+            var palette = ScriptableObject.CreateInstance<DialogueBoxStyle>();
+            style.cardTint = palette.cardTint; style.ink = palette.ink; style.mutedInk = palette.mutedInk; style.chipInk = palette.chipInk;
+            style.you = palette.you; style.patient = palette.patient; style.parent = palette.parent; style.attending = palette.attending; style.coach = palette.coach; style.warning = palette.warning;
+            UnityEngine.Object.DestroyImmediate(palette);
+            EditorUtility.SetDirty(style); AssetDatabase.SaveAssets();
             return style;
         }
         static T Load<T>(string path) where T : UnityEngine.Object
@@ -55,8 +61,9 @@ namespace Scalpal.Shell.Editor
             checks = 0;
             EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             var style = DialogueBoxStyle.Load();
-            Check(style && style.bodyFont && style.nameFont && style.glass && style.bodyText && style.nameText, "Resources/DialogueBoxStyle binds fonts and materials from one place");
-            Check(style.glass.shader.name == "Scalpal/Encounter Office/Glass" && style.bodyText.shader.name == "Scalpal/Encounter Office/World Text", "box reuses the office glass and world-text shaders");
+            Check(style && style.bodyFont && style.nameFont && style.glass && style.bodyText && style.nameText && style.chip && style.button, "Resources/DialogueBoxStyle binds fonts and materials from one place");
+            var brand = Scalpal.Brand.ScalpalBrand.Active;
+            Check(style.bodyFont == brand.body && style.nameFont == brand.label && style.glass == brand.glass && style.bodyText == brand.bodyText && style.nameText == brand.labelText && style.button == brand.button, "box takes Geist Mono SDF type, dark glass and buttons from the Scalpal brand");
             var head = new GameObject("ValidationHead").AddComponent<Camera>();
             head.transform.SetPositionAndRotation(new Vector3(0, 1.6f, 0), Quaternion.identity); head.tag = "MainCamera";
             var box = DialogueBox.Create(style, head.transform);
@@ -67,6 +74,7 @@ namespace Scalpal.Shell.Editor
                 Typewriter(box);
                 Follow(box, head.transform);
                 Allocations(box, head.transform);
+                Choices(box, head.transform);
                 SurgeryFeed(style, head.transform);
                 OfficeFeed(style, head.transform);
             }
@@ -97,11 +105,11 @@ namespace Scalpal.Shell.Editor
             foreach (var (speaker, name, label) in expected)
             {
                 box.Say(speaker, name, "Line from " + label);
-                var nameText = box.transform.Find("Card/Name").GetComponent<TextMesh>();
+                var nameText = box.transform.Find("Card/Name").GetComponent<TMPro.TextMeshPro>();
                 var color = box.RoleColor(speaker);
                 Check(box.Speaker == speaker && box.SpeakerLabel == label && nameText.text == label, "speaker name tag reads " + label);
                 Check(Mathf.Abs(nameText.color.r - color.r) < .01f && Mathf.Abs(nameText.color.g - color.g) < .01f, "name tag uses its role colour: " + label);
-                Check(box.transform.Find("Card/Initial").GetComponent<TextMesh>().text.Length == 1, "role chip carries a single initial: " + label);
+                Check(box.transform.Find("Card/Initial").GetComponent<TMPro.TextMeshPro>().text.Length == 1, "role chip carries a single initial: " + label);
             }
             Check(expected.Select(e => box.RoleColor(e.Item1)).Distinct().Count() == expected.Length, "each role has a distinct colour");
             Check(DialogueBox.Label(DialogueSpeaker.Patient, null) == "Patient" && DialogueBox.Label(DialogueSpeaker.Parent, " ") == "Parent", "missing patient or parent name falls back to the role label");
@@ -114,7 +122,7 @@ namespace Scalpal.Shell.Editor
             string sentence = "The pain moved down to the right side this morning and it hurts more when I walk, cough or go over bumps in the car on the way here, and I have not wanted to eat anything since.";
             box.Say(DialogueSpeaker.Patient, "Priya Ramaswamy", sentence);
             Check(box.PreviousText.StartsWith("Priya Ramaswamy · Patient:", StringComparison.Ordinal) && box.PreviousText.Contains("belly button"), "previous line moves above the new line with its speaker");
-            var previousMesh = box.transform.Find("Card/Previous").GetComponent<TextMesh>();
+            var previousMesh = box.transform.Find("Card/Previous").GetComponent<TMPro.TextMeshPro>();
             Tick(box, .1f);
             Check(box.Typing && box.VisibleText.Length > 0 && box.VisibleText.Length < 12, "text types out rather than appearing at once: '" + box.VisibleText + "'");
             Tick(box, 1.5f);
@@ -132,7 +140,7 @@ namespace Scalpal.Shell.Editor
             Tick(box, .5f);
             Check(!box.Visible, "a passive listening hint never summons a dismissed box");
             box.BeginTurn(DialogueSpeaker.You, ""); box.SetIndicator(DialogueIndicator.Listening, "", true); Tick(box, .4f);
-            var indicator = box.transform.Find("Card/Indicator").GetComponent<TextMesh>();
+            var indicator = box.transform.Find("Card/Indicator").GetComponent<TMPro.TextMeshPro>();
             Check(box.Visible && box.SpeakerLabel == "You" && indicator.text.StartsWith("listening", StringComparison.Ordinal), "held talk shows a You turn with a listening indicator");
             box.Say(DialogueSpeaker.You, "", "Where does it hurt?");
             box.SetIndicator(DialogueIndicator.Thinking, "Priya", true); Tick(box, .4f);
@@ -240,6 +248,40 @@ namespace Scalpal.Shell.Editor
             finally { UnityEngine.Object.DestroyImmediate(box.gameObject); UnityEngine.Object.DestroyImmediate(root); }
         }
 
+        // Interview choices live in the box: four selectable rows under the card, hit by the office ray or pinch.
+        static void Choices(DialogueBox box, Transform head)
+        {
+            head.SetPositionAndRotation(new Vector3(0, 1.6f, 0), Quaternion.identity);
+            box.Say(DialogueSpeaker.Parent, "Laura Abernathy", "He won't let anyone touch his belly.");
+            string longest = string.Join(" ", Enumerable.Repeat("Ask about the onset, the location and how it has moved since last night", 4));
+            box.ShowChoices("1/9", "Laura is waiting for you to start. What do you do next?", new[] { "A", "B", "C", "D" },
+                new[] { "Ask whether anyone at home smokes", "Ask when the pain started, where it began, and where it is now", "Ask Theo to rate his pain", longest });
+            box.CompleteLine(); Tick(box, .6f);
+            var rows = box.ChoiceRows;
+            Check(box.ChoicesVisible && rows.Count == 4 && rows.Select(r => r.key).SequenceEqual(new[] { "A", "B", "C", "D" }), "a round shows four keyed choice rows");
+            Check(rows.All(r => r.GetComponent<BoxCollider>() && r.GetComponent<BoxCollider>().size.x > .7f && r.GetComponent<BoxCollider>().size.y > .02f), "each choice row has a ray/pinch collider across the card width");
+            var texts = rows.Select(r => r.GetComponentInChildren<TMPro.TextMeshPro>()).ToArray();
+            Check(texts[1].text.StartsWith("B) Ask when the pain started", StringComparison.Ordinal) && texts[3].text.Split('\n').Length == 3 && texts[3].text.EndsWith("…", StringComparison.Ordinal), "choice text carries its key, wraps, and a very long choice is cut at three lines: " + texts[3].text.Replace('\n', '|'));
+            var cardBottom = box.transform.TransformPoint(new Vector3(0, -box.CardHeight / 2, 0)).y;
+            Check(rows.All(r => r.GetComponent<Renderer>().bounds.max.y < cardBottom), "choices sit below the dialogue line, never over it");
+            float bottom = rows.Min(r => r.GetComponent<Renderer>().bounds.min.y);
+            float glance = -Mathf.Atan2(bottom - head.position.y, Vector3.Distance(new Vector3(box.transform.position.x, 0, box.transform.position.z), new Vector3(head.position.x, 0, head.position.z))) * Mathf.Rad2Deg;
+            Check(glance < 50, "the last choice stays within a comfortable downward glance: " + glance);
+            string picked = null; box.ChoicePicked += key => picked = key;
+            rows[2].Highlight(); box.Tick(Frame);
+            rows[2].Press();
+            Check(picked == "C", "pressing a row (ray trigger or pinch) reports its key");
+            box.SetChoiceNote("Say A, B, C or D, or tap one. Heard: \"um\"");
+            Check(box.ChoiceNote.StartsWith("Say A, B, C or D", StringComparison.Ordinal) && box.transform.Find("Card/Choices/ChoiceNote").GetComponent<TMPro.TextMeshPro>().text.Length > 0, "an unclear spoken answer shows the re-ask note under the choices");
+            for (int i = 0; i < 72 * 20; i++) box.Tick(Frame);
+            Check(box.Visible && box.ChoicesVisible, "the box does not auto-dismiss while a round waits for an answer");
+            Check(Allocated(() => box.Tick(Frame)) == 0, "a visible round allocates nothing per frame");
+            box.HideChoices(); picked = null; rows = box.ChoiceRows;
+            Check(!box.ChoicesVisible, "choices hide while the patient speaks");
+            box.Pick("A"); Check(picked == null, "hidden choices cannot be picked");
+            box.Clear();
+        }
+
         static void OfficeFeed(DialogueBoxStyle style, Transform head)
         {
             var root = new GameObject("ValidationOffice"); root.SetActive(false);
@@ -248,25 +290,43 @@ namespace Scalpal.Shell.Editor
             {
                 var session = root.AddComponent<NativeEncounterSession>();
                 var feed = box.gameObject.AddComponent<DialogueFeed>(); feed.box = box; feed.BindOffice(session);
-                SetProperty(session, "State", new EncounterState { encounterId = "encounter-validation", patientId = "patient-demo-multi-source", patientName = "Priya Ramaswamy", speakerName = "Priya Ramaswamy", speaker = "patient", phase = "interview" });
+                SetProperty(session, "State", new EncounterState { encounterId = "int-validation01", patientId = "patient-demo-multi-source", patientName = "Priya Ramaswamy", speakerName = "Priya Ramaswamy", speaker = "patient", phase = "interview" });
+                typeof(NativeEncounterSession).GetField("encounterId", Private).SetValue(session, "int-validation01");
                 Call(session, "Transcript", "agent", "It hurts on the right side.");
                 Check(box.SpeakerLabel == "Priya Ramaswamy · Patient", "office patient voice transcript labels the patient by name");
-                Call(session, "Transcript", "user", "When did it start?");
-                Check(box.SpeakerLabel == "You" && box.FullText == "When did it start?", "office learner transcript labels You");
+                Call(session, "Transcript", "user", "[CLINICIAN] Ask where it hurts");
+                Check(box.SpeakerLabel == "Priya Ramaswamy · Patient", "the agent's echo of a pick is not shown as learner speech");
                 session.State.speaker = "parent"; session.State.patientName = "Theo Abernathy"; session.State.speakerName = "Laura Abernathy";
                 Call(session, "Transcript", "agent", "He has been coughing at night.");
                 Check(box.SpeakerLabel == "Laura Abernathy · Parent", "office parent speaker is labelled with the parent's name");
-                SetProperty(session, "Role", "attending");
-                Call(session, "Transcript", "agent", "Walk me through your differential.");
-                Check(box.SpeakerLabel == "Jarvis · Attending", "office attending transcript labels Jarvis · Attending");
+                var round = new InterviewRoundView { roundId = "history_onset", number = 1, of = 9, stage = "history", prompt = "What do you do next?",
+                    choices = new[] { "A", "B", "C", "D" }.Select(k => new InterviewChoiceView { key = k, text = "Choice " + k }).ToArray() };
+                typeof(NativeEncounterSession).GetField("round", Private).SetValue(session, round);
+                SetProperty(session, "AwaitingPatient", true); Update(feed);
+                Check(!box.ChoicesVisible, "no round is shown while the patient is still speaking");
+                SetProperty(session, "AwaitingPatient", false); Update(feed); Tick(box, .6f);
+                Check(box.ChoicesVisible && box.ChoiceHeader == "1/9" && box.ChoicePrompt == "What do you do next?" && box.ChoiceRows.Count == 4, "the round appears in the box once the patient has finished");
+                box.ChoiceRows[1].Press();
+                var pending = (System.Collections.IEnumerable)typeof(NativeEncounterSession).GetField("pending", Private).GetValue(session);
+                var operation = pending.Cast<object>().Last();
+                Check(Field<string>(operation, "path") == "/interviews/int-validation01/answer" && Field<string>(operation, "body") == "{\"key\":\"B\"}" && session.Busy,
+                    "a picked row posts {key} to the interview answer route");
+                Check(box.transform.Find("Card/Choices/ChoiceNote").GetComponent<TMPro.TextMeshPro>().text == DialogueBox.ChoiceHint, "with no note the box's last line is the hint: " + DialogueBox.ChoiceHint);
+                SetProperty(session, "LastFinding", new InterviewFinding { label = "CBC", text = "WBC 14.2", abnormal = true }); Update(feed);
+                Check(box.ChoiceResult == "Result: CBC: WBC 14.2" && box.transform.Find("Card/Choices/ChoiceResult").gameObject.activeSelf, "an exam or test finding shows as one Result line inside the box");
+                SetProperty(session, "AnswerNote", "Say A, B, C or D, or tap one."); Update(feed);
+                Check(box.ChoiceNote == "Say A, B, C or D, or tap one.", "the session's re-ask note reaches the box");
                 SetProperty(session, "TalkHeld", true); Update(feed);
-                Check(box.SpeakerLabel == "You" && box.Indicator == DialogueIndicator.Listening && box.Visible, "office talk hold opens a listening You turn");
+                Check(box.SpeakerLabel == "You" && box.Indicator == DialogueIndicator.Listening && box.Visible, "holding the answer button opens a listening You turn");
                 SetProperty(session, "TalkHeld", false); Update(feed);
                 Check(box.Indicator == DialogueIndicator.None, "no voice connection means no pending reply indicator");
+                typeof(NativeEncounterSession).GetField("round", Private).SetValue(session, null); Update(feed);
+                Check(!box.ChoicesVisible, "after the last pick the choices close");
             }
             finally { UnityEngine.Object.DestroyImmediate(box.gameObject); UnityEngine.Object.DestroyImmediate(root); }
         }
 
+        static T Field<T>(object target, string name) => (T)target.GetType().GetField(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).GetValue(target);
         static float Yaw(DialogueBox box, Transform head)
         {
             var flat = Vector3.ProjectOnPlane(box.transform.position - head.position, Vector3.up);

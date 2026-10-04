@@ -1,6 +1,8 @@
 using System;
 using System.IO;
 using System.Linq;
+using Scalpal.Brand;
+using Scalpal.Brand.Editor;
 using Scalpal.EncounterOffice;
 using Scalpal.EncounterOffice.Editor;
 using Scalpal.Exercises.Data;
@@ -23,12 +25,9 @@ namespace Scalpal.Shell.Editor
         {
             Directory.CreateDirectory(Root+"/Art/Materials");Directory.CreateDirectory(Root+"/Scenes");AssetDatabase.Refresh();
             var scene=EditorSceneManager.NewScene(NewSceneSetup.EmptyScene,NewSceneMode.Single);
+            var brand=ScalpalBrandBuild.Prepare();
             var root=new GameObject("ScalpalHub");var hub=root.AddComponent<HubController>();
-            hub.font=AssetDatabase.LoadAssetAtPath<Font>(Office+"/Fonts/Inter-Regular.ttf");
-            hub.glass=CopyMaterial("hub_glass",Office+"/Materials/office_glass_card.mat",new Color(.075f,.055f,.115f,.83f));
-            hub.buttonMaterial=CopyMaterial("hub_button",Office+"/Materials/office_glass_button.mat",new Color(.035f,.028f,.055f,.90f));
-            hub.textMaterial=AssetDatabase.LoadAssetAtPath<Material>(Office+"/Materials/office_world_text_Inter-Regular.mat");
-            hub.accent=Material("hub_lilac",new Color(.78f,.69f,.92f));
+            hub.brand=brand;
             hub.service=root.AddComponent<ScalpalPreopService>();
             var origin=new GameObject("ShellTrackingOrigin").transform;
             var head=new GameObject("TrackedHeadCamera").AddComponent<Camera>();head.transform.SetParent(origin,false);head.transform.localPosition=new Vector3(0,1.6f,0);
@@ -66,7 +65,7 @@ namespace Scalpal.Shell.Editor
             // Transition shaders are found by name at runtime; keep explicit build references.
             var graphics=new SerializedObject(AssetDatabase.LoadAllAssetsAtPath("ProjectSettings/GraphicsSettings.asset")[0]);
             var shaders=graphics.FindProperty("m_AlwaysIncludedShaders");
-            foreach(var name in new[]{"Scalpal/Shell/Fade","Scalpal/Shell/Overlay Text"})
+            foreach(var name in new[]{"Scalpal/Shell/Fade"})
             {
                 var shader=Shader.Find(name);if(!shader)throw new InvalidOperationException("Missing shell shader "+name);
                 bool exists=false;for(int i=0;i<shaders.arraySize;i++)exists|=shaders.GetArrayElementAtIndex(i).objectReferenceValue==shader;
@@ -80,11 +79,6 @@ namespace Scalpal.Shell.Editor
             var required=new[]{ScenePath,EncounterOfficeBuild.ScenePath,"Assets/Scalpal/Quest/Scenes/NativeSession.unity","Assets/Scalpal/Recap/Scenes/RunEnding.unity"};
             EditorBuildSettings.scenes=required.Select(p=>new EditorBuildSettingsScene(p,true))
                 .Concat(EditorBuildSettings.scenes.Where(s=>!required.Contains(s.path)).GroupBy(s=>s.path).Select(g=>g.First())).ToArray();
-        }
-        static Material CopyMaterial(string name,string source,Color color)
-        {
-            string path=Root+"/Art/Materials/"+name+".mat";var value=AssetDatabase.LoadAssetAtPath<Material>(path);
-            if(!value){value=new Material(AssetDatabase.LoadAssetAtPath<Material>(source));AssetDatabase.CreateAsset(value,path);}value.shader=Shader.Find("Scalpal/Shell/Frosted Glass");value.color=color;value.SetFloat("_Sheen",.012f);EditorUtility.SetDirty(value);return value;
         }
         static Material Material(string name,Color color)
         {
@@ -132,17 +126,42 @@ namespace Scalpal.Shell.Editor
             EditorSceneManager.OpenScene(ScenePath,OpenSceneMode.Single);var hub=UnityEngine.Object.FindFirstObjectByType<HubController>();hub.Initialize();
             string path=Environment.GetEnvironmentVariable("SCALPAL_SHELL_PREVIEWS");
             if(string.IsNullOrEmpty(path))path=Path.GetFullPath(Path.Combine(Application.dataPath,"../../../assets/previews/shell"));
-            Directory.CreateDirectory(path);Capture(hub.input.head,Path.Combine(path,"launch.png"));
+            Directory.CreateDirectory(path);
+            // Show the corrected laser: right controller aim pose near the hip, aimed at Start (accent hover + reticle).
+            var start=hub.content.GetComponentsInChildren<ShellButton>(true).Single(button=>button.name=="Button_Start");
+            AimPreview(hub.input,start.transform.position);
+            Capture(hub.input.head,Path.Combine(path,"launch.png"));
+            ScalpalAim.Override=null;ScalpalAim.Clock=null;hub.input.Release();
             var bundle=JsonUtility.FromJson<ScalpalBundle>(Resources.Load<TextAsset>("scalpal_bundle").text);hub.service.Configure("http://127.0.0.1:8787",true);hub.Reload();hub.Enter();hub.input.head.fieldOfView=90;
             Capture(hub.input.head,Path.Combine(path,"explore.png"));
             hub.input.head.fieldOfView=100;hub.input.head.transform.rotation=Quaternion.Euler(0,20,0);
             hub.Model.Select("patient-demo-multi-source");hub.BriefLoaded(bundle.cases.First(c=>c.patientId=="patient-demo-multi-source").brief);
             Capture(hub.input.head,Path.Combine(path,"explore-detail.png"));
+            // Transition title card: brand overlay type on the black stereo fade.
+            var head=hub.input.head;var flags=head.clearFlags;var background=head.backgroundColor;
+            var title=new GameObject("TransitionTitlePreview").AddComponent<ShellTransition>();
+            try
+            {
+                hub.content.gameObject.SetActive(false);head.clearFlags=CameraClearFlags.SolidColor;head.backgroundColor=Color.black;head.fieldOfView=80;head.transform.rotation=Quaternion.identity;
+                title.CreateTitle("Office · Priya Ramaswamy, 40\nRight lower abdominal pain since last night");
+                Capture(head,Path.Combine(path,"transition-title.png"));
+            }
+            finally { UnityEngine.Object.DestroyImmediate(title.gameObject);hub.content.gameObject.SetActive(true);head.clearFlags=flags;head.backgroundColor=background; }
             Debug.Log("SCALPAL_SHELL_PREVIEWS_OK monoEditorOnly=true path="+path);
+        }
+        // Editor-only stand-in for a tracked right controller: aim pose 0.45 m right/below the head, pointed at the target.
+        public static void AimPreview(ShellInput input,Vector3 worldTarget)
+        {
+            var origin=input.origin;var head=input.head.transform;
+            var tip=origin.InverseTransformPoint(head.position+head.right*.20f+Vector3.down*.30f+head.forward*.28f);
+            var aim=Quaternion.LookRotation(origin.InverseTransformDirection(worldTarget-origin.TransformPoint(tip)),Vector3.up);
+            float clock=0;ScalpalAim.Clock=()=>clock+=.02f;
+            ScalpalAim.Override=hand=>hand==1?new ScalpalPointerSample{kind=ScalpalPointerKind.Controller,position=tip,rotation=aim,select=0}:default;
+            Physics.SyncTransforms();input.StepPointers();
         }
         static void Capture(Camera camera,string path)
         {
-            foreach(var text in UnityEngine.Object.FindObjectsByType<EncounterOfficeText>(FindObjectsInactive.Include,FindObjectsSortMode.None))text.Fit();
+            foreach(var text in UnityEngine.Object.FindObjectsByType<ScalpalTextFit>(FindObjectsInactive.Include,FindObjectsSortMode.None))text.Fit();
             var target=new RenderTexture(2200,1400,24);var previous=RenderTexture.active;var image=new Texture2D(2200,1400,TextureFormat.RGB24,false);
             try { camera.stereoTargetEye=StereoTargetEyeMask.None;camera.targetTexture=target;camera.Render();RenderTexture.active=target;image.ReadPixels(new Rect(0,0,2200,1400),0,0);image.Apply();File.WriteAllBytes(path,image.EncodeToPNG()); }
             finally {camera.targetTexture=null;RenderTexture.active=previous;UnityEngine.Object.DestroyImmediate(target);UnityEngine.Object.DestroyImmediate(image);}

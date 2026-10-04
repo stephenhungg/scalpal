@@ -6,6 +6,8 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
+using Scalpal.Brand;
+using Scalpal.Brand.Editor;
 using Scalpal.EncounterOffice;
 using Scalpal.Exercises.Data;
 using Scalpal.Exercises.Generated;
@@ -30,6 +32,7 @@ namespace Scalpal.Shell.Editor
         public static void Run()
         {
             checks = ShellInputValidation.Run();
+            checks += ScalpalBrandValidation.Run();
             ValidateModel();
             ValidateExchange();
             ValidateScene();
@@ -315,8 +318,12 @@ namespace Scalpal.Shell.Editor
             hub.service.Configure("http://127.0.0.1:8787", true, 2);
             var start = hub.content.GetComponentsInChildren<ShellButton>(true).Single(button => button.name == "Button_Start");
             Check(!hub.Exploring && start.gameObject.activeInHierarchy, "launch starts on one active Start control");
-            start.Press();
-            Check(hub.Exploring && !start.gameObject.activeInHierarchy, "actual Start action opens explore without scene launch");
+            ValidateLaunchBrand(hub);
+            // The physical path: left controller aim pose -> ray -> Start collider -> trigger press.
+            var startPress = ScalpalPointerProbe.Press(0, hub.input.origin, start.GetComponent<Collider>(), () => hub.input.Pointer(0), hub.input.StepPointers);
+            Check(startPress.RayMatchesAim && startPress.rayVisible && (startPress.lineStart - startPress.expectedOrigin).magnitude < 1e-4f, "launch ray starts at the left controller's aim pose and points along its forward");
+            Check(startPress.hovered && startPress.accentOnHover, "aiming at Start focuses it with the brand accent");
+            Check(hub.Exploring && !start.gameObject.activeInHierarchy, "left trigger on Start opens explore without scene launch");
             hub.Reload(); // Real dispatch path with forceOffline synchronously loads Resources/scalpal_bundle.
             var patientCards = hub.content.GetComponentsInChildren<ShellButton>(true).Where(button => button.name.StartsWith("Patient_", StringComparison.Ordinal)).ToArray();
             Check(patientCards.Length == 9 && hub.Model.Patients.Length == 9 && hub.Model.UnavailableCount == 1, "offline callbacks render nine available patient cards and count the unavailable patient separately");
@@ -324,9 +331,12 @@ namespace Scalpal.Shell.Editor
             Check(patientCards.All(button => { var bounds = button.GetComponent<BoxCollider>().size; return Mathf.Abs(bounds.x - .50f) < .001f && Mathf.Abs(bounds.y - .32f) < .001f; }), "each expanded grid card is a 0.50 by 0.32 metre ray target");
             Check(hub.content.GetComponentsInChildren<ShellButton>(true).All(button => { var bounds = button.GetComponent<BoxCollider>().size; return bounds.x >= .022f && bounds.y >= .022f; }), "all shell buttons meet the 22 mm minimum target size");
             var adult = hub.Model.Patients.Single(patient => patient.patientId == Female);
-            patientCards.Single(button => button.name == "Patient_" + adult.scenarioId).Press();
+            var cardPress = ScalpalPointerProbe.Press(1, hub.input.origin, patientCards.Single(button => button.name == "Patient_" + adult.scenarioId).GetComponent<Collider>(), () => hub.input.Pointer(1), hub.input.StepPointers);
+            Check(cardPress.RayMatchesAim && cardPress.hovered, "right controller aim ray focuses a patient card");
             Check(hub.Model.SelectedPatientId == Female && hub.Model.SelectedBrief?.patientId == Female && hub.BeginButton && !hub.BeginButton.interactable && !hub.Transitioning && hub.Model.CanBegin, "actual card action loads matching offline chart but disables network-required Begin without transitioning");
             Check(!hub.Begin(), "offline chart browsing never attempts to create a network-only office encounter");
+            ValidateBeginPointer(hub);
+            ValidatePausePointer(hub);
             MeasureAndValidateTypography(hub, patientCards);
             Check(!hub.Model.Patients.Any(patient => patient.status == "blocked" || string.IsNullOrEmpty(patient.patientId)), "blocked and connection-only rows produce no patient ray targets");
             Check(!hub.Select("patient-demo-consent-revoked") && !hub.Begin(), "direct blocked selection and begin commands fail closed even without a visible card");
@@ -369,13 +379,79 @@ namespace Scalpal.Shell.Editor
             Check(!ShellTransition.TryConsumeSelection(out _), "consumed selection cannot start a second encounter");
             Check(!ShellTransition.TryStageSelection("patient/invalid", hub.service.BaseUrl) && !ShellTransition.TryStageSelection("", hub.service.BaseUrl) && !ShellTransition.TryStageSelection(Female, "file:///not-a-service"), "handoff rejects malformed or subjectless patient IDs and non-HTTP service endpoints");
             ValidatePaging(hub);
-            Check(hub.content.GetComponentsInChildren<EncounterOfficeText>(true).All(fit => !fit.enabled), "shell text fitters are disabled after event-driven fitting rather than marshaling text every frame");
+            Check(hub.content.GetComponentsInChildren<ScalpalTextFit>(true).All(fit => !fit.enabled), "shell text fitters are disabled after event-driven fitting rather than marshaling text every frame");
+            Check(!hub.content.GetComponentsInChildren<TextMesh>(true).Any(), "shell renders no legacy TextMesh (SDF TextMeshPro only)");
             var position = hub.input.head.transform.position; var rotation = hub.input.head.transform.rotation;
+            hub.input.head.transform.rotation = Quaternion.Euler(28, 15, 22);
+            hub.input.Recenter();
+            Check(ScalpalPlacement.IsLevel(hub.content), "recenter with a pitched and rolled head keeps the hub level (yaw only)");
+            hub.input.head.transform.rotation = rotation;
             hub.input.Recenter();
             Check(hub.input.head.transform.position == position && hub.input.head.transform.rotation == rotation, "recenter moves presentation while preserving tracked camera pose");
             var grid = hub.content.GetComponentsInChildren<Transform>(true).Single(transform => transform.name == "PatientCards");
             float forwardDistance = Vector3.Dot(grid.position - position, Vector3.ProjectOnPlane(hub.input.head.transform.forward, Vector3.up).normalized);
             Check(Mathf.Abs(forwardDistance - 1.3f) < .02f, "recenter preserves the authored 1.3 metre grid distance without stacking local and world offsets");
+        }
+
+        // Launch lockup in the site's brand: dither mark, "Scalpal." in Instrument Serif, Geist Mono body, readable at 1.3 m.
+        static void ValidateLaunchBrand(HubController hub)
+        {
+            var launch = hub.content.Find("Launch");
+            var brand = ScalpalBrand.Active;
+            var wordmark = launch.GetComponentsInChildren<TMPro.TextMeshPro>(true).Single(text => text.name == "Wordmark");
+            Check(wordmark.text == "Scalpal." && wordmark.font == brand.display && wordmark.characterSpacing < 0, "launch wordmark is \"Scalpal.\" in tight-tracked Instrument Serif");
+            Check(launch.GetComponentsInChildren<Renderer>(true).Any(renderer => renderer.sharedMaterial == brand.mark), "launch shows the dither logo mark");
+            Check(launch.GetComponentsInChildren<ShellButton>(true).Length == 1 && launch.GetComponentsInChildren<TMPro.TextMeshPro>(true).Length == 2, "launch is only the wordmark and one Start button (no hints or meta text)");
+            Check(launch.GetComponentsInChildren<TMPro.TextMeshPro>(true).Where(text => text != wordmark).All(text => text.font == brand.body || text.font == brand.label), "launch copy and buttons use Geist Mono");
+            Check(!launch.GetComponentsInChildren<TMPro.TextMeshPro>(true).Any(text => text.text.Contains("SCALPAL") || text.text.Contains("S C A L")), "no spaced or uppercase SCALPAL wordmark");
+            Check(ScalpalPlacement.IsLevel(launch), "launch panel is level with the horizon");
+            var measured = ScalpalBrandLayout.Measure(launch, hub.input.head.transform.position);
+            foreach (var item in measured) Check(item.Passes, "launch text meets its readability floor: '" + item.fit.Text.text + "' " + item.mmAt1m.ToString("F1") + " mm/m < " + item.minimum);
+            UnityEngine.Debug.Log("SCALPAL_SHELL_LAUNCH_TEXT " + string.Join(" | ", measured.Select(item => item.fit.Text.text.Replace("\n", " ") + "=" + item.mmAt1m.ToString("F1") + "mm/m")));
+        }
+        static void ValidateBeginPointer(HubController hub)
+        {
+            var begin = hub.BeginButton;
+            var disabled = ScalpalPointerProbe.Press(1, hub.input.origin, begin.GetComponent<Collider>(), () => hub.input.Pointer(1), hub.input.StepPointers);
+            Check(disabled.RayMatchesAim && !disabled.hovered && !hub.Transitioning, "offline (disabled) Begin cannot be focused or pressed by the ray");
+            var action = begin.action; int begun = 0;
+            try
+            {
+                begin.interactable = true; begin.action = () => begun++;
+                var enabled = ScalpalPointerProbe.Press(0, hub.input.origin, begin.GetComponent<Collider>(), () => hub.input.Pointer(0), hub.input.StepPointers);
+                Check(enabled.hovered && enabled.accentOnHover && begun == 1, "an enabled Begin on the angled chart panel is hit by the left aim ray and pressed once: hovered=" + enabled.hovered + " accent=" + enabled.accentOnHover + " begun=" + begun + " visible=" + enabled.rayVisible + " end=" + enabled.lineEnd + " target=" + begin.transform.position);
+            }
+            finally { begin.action = action; begin.interactable = hub.CanBegin; }
+        }
+        static void ValidatePausePointer(HubController hub)
+        {
+            var host = new GameObject("ValidationPause");
+            var instance = typeof(ShellPause).GetProperty("Instance");
+            var previous = instance.GetValue(null);
+            float timeScale = Time.timeScale;
+            try
+            {
+                // Awake uses DontDestroyOnLoad (play mode only); wire the same fields it would.
+                var pause = host.AddComponent<ShellPause>();
+                var pauseInput = host.AddComponent<ShellInput>(); pauseInput.enabled = false;
+                typeof(ShellPause).GetField("pauseInput", Private).SetValue(pause, pauseInput);
+                instance.GetSetMethod(true).Invoke(null, new object[] { pause });
+                pause.Configure(hub.input); pause.Pause();
+                var menu = (Transform)typeof(ShellPause).GetField("panel", Private).GetValue(pause);
+                Check(menu && ScalpalPlacement.IsLevel(menu), "pause menu spawns level with the horizon");
+                hub.input.StepPointers();
+                Check(hub.input.Pointer(0).Visual == null || !hub.input.Pointer(0).Visual.Visible, "paused hub hides its own rays");
+                var resume = menu.GetComponentsInChildren<ShellButton>().Single(button => button.name == "Button_Resume");
+                Check(resume.primary, "Resume is the primary (accent) action");
+                var pressed = ScalpalPointerProbe.Press(1, pauseInput.origin, resume.GetComponent<Collider>(), () => pauseInput.Pointer(1), pauseInput.StepPointers);
+                Check(pressed.RayMatchesAim && pressed.hovered && !pause.IsPaused, "right controller aim ray + trigger presses pause Resume");
+            }
+            finally
+            {
+                Time.timeScale = timeScale;
+                UnityEngine.Object.DestroyImmediate(host);
+                instance.GetSetMethod(true).Invoke(null, new[] { previous });
+            }
         }
 
         static ShellButton[] PatientCards(HubController hub) => hub.content.GetComponentsInChildren<ShellButton>()
@@ -404,28 +480,29 @@ namespace Scalpal.Shell.Editor
         // overlap checks does not establish Quest readability or compliance with the requested sizes.
         static void MeasureAndValidateTypography(HubController hub, ShellButton[] cards)
         {
-            var cardFits = cards.SelectMany(card => card.GetComponentsInChildren<EncounterOfficeText>())
-                .Where(fit => !string.IsNullOrWhiteSpace(fit.GetComponent<TextMesh>().text)).ToArray();
+            var cardFits = cards.SelectMany(card => card.GetComponentsInChildren<ScalpalTextFit>())
+                .Where(fit => !string.IsNullOrWhiteSpace(fit.Text.text)).ToArray();
             foreach (var fit in cardFits) fit.Fit();
-            var cardMm = cardFits.Select(fit => fit.MeasuredSize().y / Mathf.Max(1, fit.GetComponent<TextMesh>().text.Split('\n').Length) / Vector3.Distance(fit.GetComponentInParent<ShellButton>().transform.position, hub.input.head.transform.position) * 1000).ToArray();
+            var cardMm = cardFits.Select(fit => fit.MeasuredSize().y / Mathf.Max(1, fit.LineCount) / Vector3.Distance(fit.GetComponentInParent<ShellButton>().transform.position, hub.input.head.transform.position) * 1000).ToArray();
             bool minimumCardSizes = true;
             foreach (var card in cards)
             {
-                var lines = card.GetComponentsInChildren<EncounterOfficeText>().Where(fit => !string.IsNullOrWhiteSpace(fit.GetComponent<TextMesh>().text)).OrderByDescending(fit => fit.transform.position.y).ToArray();
+                var lines = card.GetComponentsInChildren<ScalpalTextFit>().Where(fit => !string.IsNullOrWhiteSpace(fit.Text.text)).OrderByDescending(fit => fit.transform.position.y).ToArray();
                 float distance = Vector3.Distance(card.transform.position, hub.input.head.transform.position);
                 minimumCardSizes &= lines.Length == 5 && lines.Select((fit, index) => fit.MeasuredSize().y / distance * 1000 >= (index == 0 ? 32 : 24) - .05f).All(value => value);
             }
-            Check(minimumCardSizes, "all five card text rows meet 32 mm name and 24 mm body at one-metre equivalent using each card's actual viewing distance");
+            Check(minimumCardSizes, "all five card text rows meet 32 mm name and 24 mm body at one-metre equivalent using each card's actual viewing distance: " + string.Join(" ", cards.Select(card => string.Join(",", card.GetComponentsInChildren<ScalpalTextFit>().Where(fit => !string.IsNullOrWhiteSpace(fit.Text.text)).OrderByDescending(fit => fit.transform.position.y).Select(fit => (fit.MeasuredSize().y / Vector3.Distance(card.transform.position, hub.input.head.transform.position) * 1000).ToString("F1"))))));
             var panel = hub.content.GetComponentsInChildren<Transform>().Single(item => item.name == "SelectedChart");
-            var detailFits = panel.GetComponentsInChildren<EncounterOfficeText>().Where(fit => !string.IsNullOrWhiteSpace(fit.GetComponent<TextMesh>().text)).ToArray();
+            var detailFits = panel.GetComponentsInChildren<ScalpalTextFit>().Where(fit => !string.IsNullOrWhiteSpace(fit.Text.text)).ToArray();
             foreach (var fit in detailFits) fit.Fit();
-            var detailMm = detailFits.Select(fit => fit.MeasuredSize().y / Mathf.Max(1, fit.GetComponent<TextMesh>().text.Split('\n').Length) / Vector3.Distance(panel.position, hub.input.head.transform.position) * 1000).ToArray();
+            var detailMm = detailFits.Select(fit => fit.MeasuredSize().y / Mathf.Max(1, fit.LineCount) / Vector3.Distance(panel.position, hub.input.head.transform.position) * 1000).ToArray();
             UnityEngine.Debug.Log("SCALPAL_SHELL_TEXT_MEASURE cardTargets=" + cards.Length +
                 " selectableTargets=" + cards.Count(card => card.interactable) +
                 " cardLineMmAt1m=" + cardMm.Min().ToString("F2") + ".." + cardMm.Max().ToString("F2") +
                 " detailLineMmAt1m=" + detailMm.Min().ToString("F2") + ".." + detailMm.Max().ToString("F2") +
-                " detailLineCounts=" + string.Join(",", detailFits.Select(fit => fit.GetComponent<TextMesh>().text.Split('\n').Length)) +
+                " detailLineCounts=" + string.Join(",", detailFits.Select(fit => fit.LineCount)) +
                 " cardAndDetailNormalization=actualPanelCenterDistance requestedBodyMm=24 requestedLabelMm=32 headset=false readabilityPassClaim=false");
+            Check(detailMm.Min() >= ScalpalBrand.BodyMinimumMmAt1m - .05f, "selected chart detail text meets the 24 mm/m body floor at its viewing distance: min=" + detailMm.Min().ToString("F2"));
             foreach (var card in cards) ValidateTextRegions(card.transform, .16f, "patient card " + card.name);
             ValidateTextRegions(panel, .36f, "selected detail");
             var originalCase = hub.Model.SelectedCase;
@@ -440,7 +517,7 @@ namespace Scalpal.Shell.Editor
                 longBrief.chart = new[] { new ChartLine { section = "Regression fixture", text = string.Join(" ", Enumerable.Repeat("Returned chart context", 60)) } };
                 hub.BriefLoaded(longBrief);
                 panel = hub.content.GetComponentsInChildren<Transform>().Single(item => item.name == "SelectedChart");
-                var directText = panel.GetComponentsInChildren<TextMesh>().Where(text => text.transform.parent == panel).ToArray();
+                var directText = panel.GetComponentsInChildren<TMPro.TextMeshPro>().Where(text => text.transform.parent == panel).ToArray();
                 Check(directText.Single(text => Mathf.Abs(text.transform.localPosition.y - .205f) < .001f).text.Split('\n').Length == 2 &&
                     directText.Single(text => Mathf.Abs(text.transform.localPosition.y - .105f) < .001f).text.Split('\n').Length == 7,
                     "long complaint and chart exercise actual bounded two-line and seven-line detail layouts");
@@ -450,22 +527,22 @@ namespace Scalpal.Shell.Editor
         }
         static void ValidateTextRegions(Transform panel, float halfHeight, string description)
         {
-            var regions = panel.GetComponentsInChildren<EncounterOfficeText>()
-                .Where(fit => !string.IsNullOrWhiteSpace(fit.GetComponent<TextMesh>().text)).Select(fit =>
+            var regions = panel.GetComponentsInChildren<ScalpalTextFit>()
+                .Where(fit => !string.IsNullOrWhiteSpace(fit.Text.text)).Select(fit =>
                 {
-                    fit.Fit(); var bounds = fit.GetComponent<Renderer>().localBounds;
+                    fit.Fit(); var bounds = fit.LocalBounds();
                     var first = panel.InverseTransformPoint(fit.transform.TransformPoint(bounds.min));
                     var second = panel.InverseTransformPoint(fit.transform.TransformPoint(bounds.max));
                     return new Vector2(Mathf.Min(first.y, second.y), Mathf.Max(first.y, second.y));
                 }).OrderByDescending(region => region.y).ToArray();
             Check(regions.All(region => region.x >= -halfHeight - .0005f && region.y <= halfHeight + .0005f), description + " measured glyph bounds stay inside panel");
             bool separated = Enumerable.Range(1, Math.Max(0, regions.Length - 1)).All(index => regions[index - 1].x >= regions[index].y - .0005f);
-            if (!separated) foreach (var fit in panel.GetComponentsInChildren<EncounterOfficeText>())
+            if (!separated) foreach (var fit in panel.GetComponentsInChildren<ScalpalTextFit>())
             {
-                var bounds = fit.GetComponent<Renderer>().localBounds;
+                var bounds = fit.LocalBounds();
                 var first = panel.InverseTransformPoint(fit.transform.TransformPoint(bounds.min));
                 var second = panel.InverseTransformPoint(fit.transform.TransformPoint(bounds.max));
-                UnityEngine.Debug.Log("SCALPAL_SHELL_TEXT_OVERLAP " + description + " y=" + first.y.ToString("F4") + ".." + second.y.ToString("F4") + " text=" + fit.GetComponent<TextMesh>().text.Replace("\n", " / "));
+                UnityEngine.Debug.Log("SCALPAL_SHELL_TEXT_OVERLAP " + description + " y=" + first.y.ToString("F4") + ".." + second.y.ToString("F4") + " text=" + fit.Text.text.Replace("\n", " / "));
             }
             Check(separated, description + " measured text rows do not vertically overlap");
         }

@@ -76,6 +76,26 @@ namespace Scalpal.Handoff
             var flow = FindFirstObjectByType<HandoffFlow>();
             return flow && flow.ImportOffice(session);
         }
+        // Skip to surgery (explore, office pause, or a patient with no authored interview): straight to the Theatre card.
+        public static bool OpenSkipped(NativeEncounterSession session)
+        {
+            var flow = FindFirstObjectByType<HandoffFlow>();
+            return flow && flow.ImportSkipped(session);
+        }
+        bool ImportSkipped(NativeEncounterSession session)
+        {
+            if (!session || !EncounterContract.IsSkipped(session.Score)) { failure = "Skip unavailable"; return false; }
+            try
+            {
+                var context = session.Score;
+                var ticket = HandoffRun.BeginSkipped(context, session.baseUrl);
+                HandoffRun.BindOfficeSource(ticket, new EncounterSurgeryHandoff { patientId = context.patientId, encounterId = "", procedureId = context.procedureId,
+                    procedureTitle = context.procedureTitle, serviceUrl = session.baseUrl, sharedSessionId = session.SharedSessionId, attemptId = session.SharedAttemptId,
+                    assessment = new EncounterAssessment(), scorecard = context });
+                office = session; ResetRunState(); failure = ""; SetPhase("theatre"); return true;
+            }
+            catch (ArgumentException exception) { HandoffRun.Clear(); failure = exception.Message; return false; }
+        }
         bool ImportOffice(NativeEncounterSession session)
         {
             if (!session) { failure = "Office unavailable"; return false; }
@@ -132,12 +152,16 @@ namespace Scalpal.Handoff
             if (phase == "setup") { SetupCard(); return; }
             if (phase == "office") return;
             if (Ticket == null) return;
-            if (phase == "score")
+            if (phase == "score" && Ticket.scorecard.kind == "interview")
+                // One compact card after the interview: score, grade, key feedback, missed rounds, and one button.
+                Show("Interview score · " + Ticket.scorecard.total + "/" + Ticket.scorecard.max + " · " + Ticket.scorecard.grade, EncounterContract.CompactScore(Ticket.scorecard),
+                    new[] { "To theatre" }, _ => SetPhase(!Ticket.escalated ? "theatre" : !Ticket.challengeSeen ? "challenge" : !Ticket.consequenceSeen ? "consequence" : "theatre"));
+            else if (phase == "score")
                 Show("Clinical reasoning · " + Ticket.scorecard.total + "/" + Ticket.scorecard.max + " · " + Ticket.scorecard.grade,
                     Ticket.scorecard.spoken + "\n\n" + RiskText(Ticket.scorecard), new[] { "To theatre", "Theatre setup (operator)" }, i => { if (i == 1) SetPhase("setup"); else SetPhase(!Ticket.escalated ? "theatre" : !Ticket.challengeSeen ? "challenge" : !Ticket.consequenceSeen ? "consequence" : "theatre"); });
             else if (phase == "challenge")
-                Show("Jarvis · One challenge", "You proposed: " + (office?.State?.assessment?.procedure ?? Ticket.scorecard.diagnosisGiven) +
-                    "\nThe findings support " + Ticket.scorecard.diagnosisExpected + ".\nWhat finding would change your plan? Reflect, then acknowledge the correct procedure. Your original reasoning score is kept.",
+                Show("One challenge", "You proposed: " + (office?.State?.assessment?.procedure ?? (string.IsNullOrEmpty(Ticket.learnerProcedure) ? Ticket.scorecard.diagnosisGiven : Ticket.learnerProcedure)) +
+                    "\nThe findings support " + (string.IsNullOrEmpty(Ticket.scorecard.diagnosisExpected) ? EncounterContract.Best(Ticket.scorecard, "diagnosis") : Ticket.scorecard.diagnosisExpected) + ".\nWhat finding would change your plan? Reflect, then acknowledge the correct procedure. Your original reasoning score is kept.",
                     new[] { "I would choose " + Ticket.procedureTitle }, _ => { Ticket.challengeSeen = true; SetPhase("consequence"); });
             else if (phase == "consequence")
             {
@@ -156,14 +180,14 @@ namespace Scalpal.Handoff
                 else { fitConfirmed = false; SetPhase("register"); }
             }, new[] { true, Ticket.presentationMode != "virtual", true });
             else if (phase == "stopped") Show("Volunteer stopped · Practice paused", "The volunteer can get up. Continue in the virtual OR with a new attempt; your office score is kept.", new[] { "Virtual OR (new attempt)", ReturnLabel }, i => { if (i == 0) SwitchToVirtual(); else BackToExplore(); });
-            else if (phase == "recap") Show("Practice complete", surgery.Message + "\nClinical reasoning: " + Ticket.scorecard.total + "/100 · " + Ticket.scorecard.grade +
+            else if (phase == "recap") Show("Practice complete", surgery.Message + "\n" + EncounterContract.ReasoningLine(Ticket.scorecard) +
                 "\n" + Scalpal.Capture.HandCaptureRecorder.StatusLine(), new[] { "Retry surgery", ReturnLabel }, i => { if (i == 1) BackToExplore(); else { surgery.Retry(); fitConfirmed = false; SetPhase("register"); } });
         }
         void Theatre()
         {
             if (!HandoffRun.Supported(Ticket.procedureId))
             {
-                Show("Surgery coming soon", "Surgery content for " + Ticket.procedureTitle + " is not built yet.\nYour office score: " + Ticket.scorecard.total + "/100 · " + Ticket.scorecard.grade,
+                Show("Surgery coming soon", "Surgery content for " + Ticket.procedureTitle + " is not built yet.\n" + EncounterContract.ReasoningLine(Ticket.scorecard),
                     new[] { ReturnLabel }, _ => BackToExplore()); return;
             }
             var preflight = HandoffRun.Preflight;
@@ -188,7 +212,7 @@ namespace Scalpal.Handoff
             loading = true; SetPhase("transition");
             if (office) office.StopVoice();
             card.Hide();
-            if (!ShellView.Font) ShellView.Configure(card.font, card.glass, card.buttonMaterial, card.textMaterial, card.buttonMaterial);
+            if (!ShellView.Configured) ShellView.Configure(Scalpal.Brand.ScalpalBrand.Active);
             // Use the shell's single transition owner so its pause/back controls cannot race OR loading.
             yield return ShellTransition.Ensure().Load("NativeSession", "Pre-op · " + ticket.scorecard.patientName + "\n" + ticket.procedureTitle, revealSeconds: ticket.presentationMode == "mixed_reality" ? 1f : .5f);
             if (!ReferenceEquals(ticket, Ticket)) { loading = false; yield break; }

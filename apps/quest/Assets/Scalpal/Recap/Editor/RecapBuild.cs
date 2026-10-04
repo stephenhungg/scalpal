@@ -5,7 +5,9 @@ using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Video;
-using Scalpal.EncounterOffice;
+using Scalpal.Brand;
+using Scalpal.Brand.Editor;
+using TMPro;
 using Scalpal.Voice;
 
 namespace Scalpal.Recap.Editor
@@ -15,8 +17,9 @@ namespace Scalpal.Recap.Editor
         public const string Root = "Assets/Scalpal/Recap";
         public const string ScenePath = Root + "/Scenes/RunEnding.unity";
         const string Office = "Assets/Scalpal/EncounterOffice";
-        static Material glass, button, textMaterial;
-        static Font font;
+        static ScalpalBrand brand;
+        // Seated/standing viewer in the recap rig's tracking space (Recap Camera below).
+        public static readonly Vector3 Viewer = new Vector3(0,1.6f,0);
         [MenuItem("Scalpal/Recap/Prepare and Verify")]
         public static void PrepareAndVerify() { Prepare(); RecapValidation.Run(); }
         public static void VerifyAndPreview() { PrepareAndVerify(); CapturePreviews(); }
@@ -25,20 +28,16 @@ namespace Scalpal.Recap.Editor
         {
             Directory.CreateDirectory(Root+"/Scenes");Directory.CreateDirectory(Root+"/Materials");
             AssetDatabase.Refresh();
-            glass=AssetDatabase.LoadAssetAtPath<Material>(Office+"/Materials/office_glass_card.mat");
-            button=AssetDatabase.LoadAssetAtPath<Material>(Office+"/Materials/office_glass_button.mat");
-            textMaterial=AssetDatabase.LoadAssetAtPath<Material>(Office+"/Materials/office_world_text_Inter-Regular.mat");
-            font=AssetDatabase.LoadAssetAtPath<Font>(Office+"/Fonts/Inter-Regular.ttf");
-            if(!glass||!button||!font||!textMaterial)throw new InvalidOperationException("Office glass and Inter assets required.");
+            brand=ScalpalBrandBuild.Prepare();
             var scene=EditorSceneManager.NewScene(NewSceneSetup.EmptyScene,NewSceneMode.Single);
             var camera=new GameObject("Recap Camera").AddComponent<Camera>();camera.tag="MainCamera";camera.transform.position=new Vector3(0,1.6f,0);camera.fieldOfView=52;camera.clearFlags=CameraClearFlags.SolidColor;camera.backgroundColor=new Color(.12f,.18f,.18f);camera.nearClipPlane=.05f;camera.gameObject.AddComponent<AudioListener>();
             var rig=new GameObject("Recap XR origin").AddComponent<RecapInput>();camera.transform.SetParent(rig.transform,true);rig.origin=rig.transform;rig.head=camera.transform;
             rig.left=new GameObject("Left controller").transform;rig.left.SetParent(rig.transform);rig.right=new GameObject("Right controller").transform;rig.right.SetParent(rig.transform);
-            rig.leftRay=Ray(rig.left);rig.rightRay=Ray(rig.right);
+            // Pointer rays are created at runtime from each controller's aim pose (ScalpalPointerHand).
             var c=new GameObject("Run ending").AddComponent<RecapController>();rig.controller=c;c.voice=c.gameObject.AddComponent<QuestJarvisVoice>();
             c.previewResult=AssetDatabase.LoadAssetAtPath<TextAsset>(Root+"/Fixtures/sample-run-result.json");
-            var root=new GameObject("World-locked glass").transform;root.position=new Vector3(0,1.6f,2.5f);
-            Surface(root,"Glass",2.65f,1.65f,Vector3.zero,glass);
+            var root=new GameObject("World-locked glass").transform;root.position=new Vector3(0,1.55f,2.05f);
+            Surface(root,"Glass",2.65f,1.65f,Vector3.zero,brand.glass);
             var panel=root.gameObject.AddComponent<RecapPanel>();c.panel=panel;panel.controller=c;
             panel.title=Text(root,"Title","Your hands, reimagined",-.0f,.70f,2.35f,.09f,.052f,TextAnchor.UpperCenter);
             panel.subtitle=Text(root,"Subtitle","Explore · Office · OR · Replay · Recap",0,.58f,2.35f,.08f,.025f,TextAnchor.UpperCenter);
@@ -47,13 +46,13 @@ namespace Scalpal.Recap.Editor
             panel.videoRoot=new GameObject("Replay stage");panel.videoRoot.transform.SetParent(root,false);
             v.sourcePlayer=Video(panel.videoRoot.transform,"Source",-.60f,.07f);
             v.robotPlayer=Video(panel.videoRoot.transform,"Shadow",.60f,.07f);
-            panel.sourceLabel=Text(panel.videoRoot.transform,"Source label","Your recording · unavailable in sample mode",-1.16f,.35f,1.12f,.05f,.023f);
-            panel.robotLabel=Text(panel.videoRoot.transform,"Robot label","Shadow hand · SYNTHETIC SAMPLE",.04f,.35f,1.12f,.05f,.023f);
+            panel.sourceLabel=Text(panel.videoRoot.transform,"Source label","Your recording · none in sample mode",-1.17f,.37f,1.16f,.08f,.023f);
+            panel.robotLabel=Text(panel.videoRoot.transform,"Robot label","Shadow hand · SYNTHETIC SAMPLE",.04f,.37f,1.12f,.08f,.023f);
             // Explicit empty-source caption remains visible; never display the sample as the learner's recording.
             panel.sourcePlaceholder=Text(panel.videoRoot.transform,"No source","Your recorded segment\nappears here when available.",-1.11f,.14f,1.0f,.15f,.027f).gameObject;
             panel.timeline=Text(panel.videoRoot.transform,"Timeline","Paused · 0 / 20 s",-1.16f,-.23f,2.32f,.13f,.024f);
-            Button(panel.videoRoot.transform,c,"Play / Pause","play",-.94f,-.45f,.40f);
-            Button(panel.videoRoot.transform,c,"− 5 seconds","back",-.49f,-.45f,.40f);Button(panel.videoRoot.transform,c,"+ 5 seconds","forward",-.04f,-.45f,.40f);
+            Button(panel.videoRoot.transform,c,"Play / Pause","play",-.90f,-.45f,.52f);
+            Button(panel.videoRoot.transform,c,"−5 s","back",-.49f,-.45f,.24f);Button(panel.videoRoot.transform,c,"+5 s","forward",-.23f,-.45f,.24f);
             Button(panel.videoRoot.transform,c,"Seek in clip","scrub",.72f,-.45f,.95f);
             panel.errorsNext=Button(panel.videoRoot.transform,c,"›","errors_next",1.10f,-.57f,.16f);
             panel.errors=new RecapButton[3];for(int i=0;i<3;i++){panel.errors[i]=Button(panel.videoRoot.transform,c,"Error timestamp","error",-.85f+i*.70f,-.57f,.65f);panel.errors[i].index=i;}
@@ -73,14 +72,15 @@ namespace Scalpal.Recap.Editor
             RenderSettings.ambientMode=AmbientMode.Flat;RenderSettings.ambientLight=new Color(.7f,.8f,.75f);
             Flowers(root);
             panel.scoreRoot.SetActive(false);panel.reflectionRoot.SetActive(false);panel.exploreButton.gameObject.SetActive(false);panel.retryButton.gameObject.SetActive(false);
-            foreach(var fit in root.GetComponentsInChildren<EncounterOfficeText>(true))fit.Fit();
+            // Brand floors (32 mm/m labels, 24 mm/m body) for each string's real distance from the viewer.
+            ScalpalBrandLayout.SizeForViewer(root,Viewer);
             EditorSceneManager.SaveScene(scene,ScenePath);AssetDatabase.SaveAssets();
             Debug.Log("SCALPAL_RECAP_PREPARED "+ScenePath);
         }
-        static TextMesh Text(Transform parent,string name,string content,float x,float y,float w,float h,float size,TextAnchor anchor=TextAnchor.UpperLeft)
+        static TextMeshPro Text(Transform parent,string name,string content,float x,float y,float w,float h,float size,TextAnchor anchor=TextAnchor.UpperLeft)
         {
-            var t=new GameObject(name).AddComponent<TextMesh>();t.transform.SetParent(parent,false);t.transform.localPosition=new Vector3(x,y,-.025f);t.font=font;t.richText=false;t.fontSize=48;t.characterSize=size*.25f;t.anchor=anchor;t.text=content;t.color=new Color(.95f,.96f,.91f);t.GetComponent<Renderer>().sharedMaterial=textMaterial;
-            var fit=t.gameObject.AddComponent<EncounterOfficeText>();fit.maximumWidth=w;fit.maximumHeight=h;fit.preferredCharacterSize=t.characterSize;fit.Fit();return t;
+            var role=name=="Title"?ScalpalTextRole.Title:name=="Label"?ScalpalTextRole.Label:ScalpalTextRole.Body;
+            return brand.Text(parent,name,content,role,new Vector3(x,y,-.025f),size*1.2f,w,h,anchor);
         }
         static GameObject Surface(Transform parent,string name,float w,float h,Vector3 pos,Material mat)
         {
@@ -89,8 +89,8 @@ namespace Scalpal.Recap.Editor
         static RecapButton Button(Transform root,RecapController c,string label,string action,float x,float y,float width)
         {
             var holder=new GameObject("Button "+action).transform;holder.SetParent(root,false);holder.localPosition=new Vector3(x,y,-.04f);
-            var go=Surface(holder,"Hit surface",width,.085f,Vector3.zero,button);var hit=go.AddComponent<BoxCollider>();hit.size=new Vector3(1,1,.2f);
-            var b=go.AddComponent<RecapButton>();b.controller=c;b.action=action;b.label=Text(holder,"Label",label,0,0,width-.025f,.068f,.025f,TextAnchor.MiddleCenter);
+            var go=Surface(holder,"Hit surface",width,.10f,Vector3.zero,brand.button);var hit=go.AddComponent<BoxCollider>();hit.size=new Vector3(1,1,.2f);
+            var b=go.AddComponent<RecapButton>();b.controller=c;b.action=action;b.label=Text(holder,"Label",label,0,0,width-.035f,.086f,.025f,TextAnchor.MiddleCenter);
             b.label.transform.SetParent(go.transform,true);return b;
         }
         static VideoPlayer Video(Transform parent,string name,float x,float y)
@@ -100,10 +100,6 @@ namespace Scalpal.Recap.Editor
             string path=Root+"/Materials/"+name+"Video.mat";var mat=AssetDatabase.LoadAssetAtPath<Material>(path);
             if(!mat){mat=new Material(Shader.Find("Unlit/Texture"));AssetDatabase.CreateAsset(mat,path);}mat.mainTexture=rt;
             var go=Surface(parent,name+" video",.68f,.51f,new Vector3(x,y,-.015f),mat);var player=go.AddComponent<VideoPlayer>();player.playOnAwake=false;player.isLooping=false;player.audioOutputMode=VideoAudioOutputMode.None;player.renderMode=VideoRenderMode.RenderTexture;player.targetTexture=rt;player.waitForFirstFrame=true;player.aspectRatio=VideoAspectRatio.FitInside;return player;
-        }
-        static LineRenderer Ray(Transform parent)
-        {
-            var line=new GameObject("Pointer").AddComponent<LineRenderer>();line.transform.SetParent(parent,false);line.positionCount=2;line.startWidth=.002f;line.endWidth=.001f;line.sharedMaterial=button;line.enabled=false;return line;
         }
         static void Flowers(Transform parent)
         {

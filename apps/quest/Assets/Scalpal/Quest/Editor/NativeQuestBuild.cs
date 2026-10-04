@@ -86,7 +86,7 @@ namespace Scalpal.Quest.Editor
             text.characterSize = 0.015f; text.fontSize = 48;
             text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             text.GetComponent<Renderer>().sharedMaterial = text.font.material;
-            text.text = "SCALPAL | NATIVE TOOL TEST\nGrip: pick up / release   Trigger: use tool\nA: reset tools and practice patch";
+            text.text = "Scalpal | Native tool test\nGrip: pick up / release   Trigger: use tool\nA: reset tools and practice patch";
             runtime.status = text;
             RenderSettings.ambientMode = AmbientMode.Flat; RenderSettings.ambientLight = new Color(0.6f, 0.65f, 0.7f);
             EditorSceneManager.SaveScene(scene, ScenePath);

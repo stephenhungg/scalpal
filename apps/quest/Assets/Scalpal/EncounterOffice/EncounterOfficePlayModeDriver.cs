@@ -41,6 +41,9 @@ namespace Scalpal.EncounterOffice.Editor
             public bool coachCarryover, coachContainsWrongProposal, coachContainsPatient;
             public string[] routes;
         }
+        [Serializable] sealed class AuthoredChoice { public string key, grade; }
+        [Serializable] sealed class AuthoredRound { public string id, stage; public AuthoredChoice[] choices; }
+        [Serializable] sealed class AuthoredInterview { public AuthoredRound[] rounds; }
         IXRInputSource previous;
         NativeEncounterSession office;
         NativeCaseSession surgery;
@@ -131,25 +134,32 @@ namespace Scalpal.EncounterOffice.Editor
             yield return ReadFixture();
             Check(fixture.attemptCount == fixture.initialAttemptCount && fixture.encounterCreates == 0, "office list does not silently create an attempt or encounter");
             office.StartPatient(jonah.patientId);
-            yield return Wait(() => office.State?.phase == "interview" && !office.Busy,
-                "real selected-patient path confirms new shared attempt then creates authoritative HTTP encounter");
+            yield return Wait(() => office.State?.phase == "interview" && !office.Busy && office.RoundVisible,
+                "real selected-patient path confirms new shared attempt, creates the HTTP interview and shows round 1");
             Check((office.voice.Status == "error" || office.voice.Status == "offline") && office.voice.LastError.Length > 0 && office.patient.Patient && office.patient.Patient.activeSelf,
-                "encounter start seats the patient and attempts the patient voice automatically (disabled fixture transport fails safely)");
+                "interview start seats the patient and attempts the patient voice automatically (disabled fixture transport fails safely)");
             encounterId = office.State.encounterId; sharedSessionId = office.realtime.SessionId; attemptId = office.realtime.AttemptId;
             procedureId = office.AuthoredProcedureId;
-            Check(office.State.patientId == jonah.patientId && !string.IsNullOrEmpty(encounterId) && !string.IsNullOrEmpty(attemptId), "selected canonical patient and encounter identity match");
+            Check(office.State.patientId == jonah.patientId && encounterId.StartsWith("int-", StringComparison.Ordinal) && !string.IsNullOrEmpty(attemptId), "selected canonical patient and interview identity match");
             yield return Wait(() => office.realtime.TryGetEncounterBinding(encounterId, out var session, out var attempt, out var patient, out var phase)
-                && session == sharedSessionId && attempt == attemptId && patient == jonah.patientId && phase == "interview", "actual reducer encounter row binds the exact office attempt");
-            office.Ask("allergies");
-            yield return Wait(() => !office.Busy && office.State.historyAsked.Any(item => item.id == "allergies"), "real interview request elicits an authored fact");
-            office.SeeAttending();
-            yield return Wait(() => !office.Busy && office.State.phase == "attending" && office.Role == "attending", "real attending endpoint switches the office role");
-            office.Draft = new EncounterAssessment { diagnosis = "kidney stone", differential = new[] { "appendicitis" }, procedure = "ureteroscopy", urgency = "elective" };
-            office.SubmitAssessment();
-            yield return Wait(() => !office.Busy && office.SurgeryReady && office.State.phase == "scored", "real assessment and score GET complete before handoff");
-            Check(!office.Score.procedureChosenCorrectly && office.Score.procedureId == procedureId && office.State.assessment.procedure == "ureteroscopy",
-                "wrong learner plan retains authored surgery and exact committed proposal");
-            Check(office.Score.carryoverItems.Length > 0, "authoritative score contains structured surgery carryover");
+                && session == sharedSessionId && attempt == attemptId && patient == jonah.patientId && phase == "interview", "actual reducer encounter row binds the exact office interview attempt");
+            // Authored answers for this fixture: every round correct except the plan, so the OR must still load the case's surgery.
+            var authored = JsonUtility.FromJson<AuthoredInterview>(File.ReadAllText(Path.GetFullPath(Path.Combine(Application.dataPath, "../../../services/preop/content/patients/" + jonah.patientId + "/interview.json"))));
+            string wrongPlan = "";
+            while (office.State.phase == "interview")
+            {
+                var round = office.Round; int number = round.number;
+                var spec = authored.rounds.Single(item => item.id == round.roundId);
+                string key = spec.stage == "plan" ? spec.choices.First(choice => choice.grade == "wrong").key : spec.choices.Single(choice => choice.grade == "correct").key;
+                if (spec.stage == "plan") wrongPlan = round.choices.Single(choice => choice.key == key).text;
+                Check(office.voice.MicrophoneMuted && !office.TalkHeld, "the microphone stays muted through the interview");
+                office.Choose(key);
+                yield return Wait(() => !office.Busy && (office.SurgeryReady || office.RoundVisible && office.Round.number == number + 1), "real answer route advances from round " + number);
+            }
+            Check(office.SurgeryReady && office.State.phase == "scored" && office.Score.kind == "interview", "real interview scores after the last round");
+            Check(!office.Score.procedureChosenCorrectly && office.Score.diagnosisResult == "correct" && office.Score.procedureId == procedureId && office.State.assessment.procedure == wrongPlan,
+                "wrong plan pick retains the case's surgery and the exact picked plan");
+            Check(office.Score.carryoverItems != null, "interview score carries structured surgery carryover");
             assessmentJson = JsonUtility.ToJson(office.State.assessment); scoreJson = JsonUtility.ToJson(office.Score);
             yield return Wait(() => office.realtime.TryGetEncounterBinding(encounterId, out var session, out var attempt, out var patient, out var phase)
                 && session == sharedSessionId && attempt == attemptId && patient == jonah.patientId && phase == "scored", "actual scored reducer row is committed before scene transition");
@@ -162,9 +172,9 @@ namespace Scalpal.EncounterOffice.Editor
                 "wrong plan routes to supported authored appendectomy");
             Check(ticket.sourceOffice.sharedSessionId == sharedSessionId && ticket.sourceOffice.attemptId == attemptId,
                 "immutable source captures actual office reducer binding");
-            yield return SelectCard("Clinical reasoning", "To theatre");
+            yield return SelectCard("Interview score", "To theatre");
             Check(FlowPhase == "challenge", "wrong plan gets one challenge before theatre");
-            yield return SelectCard("Jarvis · One challenge", "I would choose " + ticket.procedureTitle);
+            yield return SelectCard("One challenge", "I would choose " + ticket.procedureTitle);
             Check(ticket.challengeSeen && FlowPhase == "consequence", "challenge acknowledgement reveals consequence");
             yield return SelectCard("Case escalated", "Continue");
             Check(ticket.consequenceSeen && FlowPhase == "theatre", "actual consequence delay completes before theatre");
@@ -222,25 +232,25 @@ namespace Scalpal.EncounterOffice.Editor
             yield return Frames(20); yield return ReadFixture();
             Check(fixture.encounterCreates == 1 && fixture.encounterRows == 1 && fixture.encounterId == encounterId
                 && fixture.encounterPatientId == jonah.patientId && fixture.encounterAttemptId == attemptId && fixture.encounterPhase == "scored",
-                "one actual encounter row remains bound to the same scored patient attempt");
+                "one actual interview row remains bound to the same scored patient attempt");
             Check(fixture.currentAttemptId == attemptId && fixture.attemptCount == fixture.initialAttemptCount + 1
                 && fixture.attemptRows == fixture.attemptCount, "only office selection increments the actual attempt ordinal");
             Check(fixture.coachCreateCount == 1 && fixture.coachPatientId == jonah.patientId && fixture.coachEncounterId == encounterId
                 && fixture.coachMode == "virtual" && fixture.coachProcedureId == procedureId && fixture.coachSessionId == surgery.coach.SessionId,
                 "captured production coach POST carries exact patient, encounter and virtual mode once");
             Check(fixture.coachCarryover && fixture.coachContainsWrongProposal && fixture.coachContainsPatient,
-                "actual coach prompt contains this patient's office result and wrong learner proposal");
+                "actual coach prompt contains this patient's interview result and the wrong plan pick");
             var routes = fixture.routes;
             int coachIndex = Array.IndexOf(routes, "POST /coach/sessions");
-            Check(coachIndex > 0 && routes.Take(coachIndex).Count(route => route == "GET /encounters/" + encounterId + "/score") >= 2
-                && routes.Take(coachIndex).Contains("GET /encounters/" + encounterId)
+            Check(coachIndex > 0 && routes.Take(coachIndex).Count(route => route == "GET /interviews/" + encounterId + "/score") >= 2
+                && routes.Take(coachIndex).Contains("GET /interviews/" + encounterId)
                 && routes.Take(coachIndex).Count(route => route == "GET /patients/" + jonah.patientId + "/case") >= 2,
                 "actual OR rechecks live case, encounter and score before coach POST");
             Check(routes.Contains("POST /patients/" + jonah.patientId + "/preop-check"), "actual Time-Out submits the structured risk review");
             Check(!surgery.voice.enabled && fixture.providerUnavailableCount == 0 && fixture.providerFetchAttempts == 0
-                && !routes.Any(route => route.Contains("/jarvis/connection")),
+                && !routes.Any(route => route.Contains("/jarvis/connection") || route.Contains("/attending") || route.StartsWith("POST /encounters", StringComparison.Ordinal)),
                 "fixture-only disabled transport blocks automatic Time-Out voice before mic permission or provider credentials");
-            Debug.Log("SCALPAL_OFFICE_PLAYMODE_OK checks=" + checks + " realOfficeStart=true realORStart=true realSceneTransition=true liveLocalDb=true realEncounterHttp=true realCoachHttp=true sameAttempt=true canonicalHandoff=true wrongPlan=true timeOut=true timeOutRiskReviewCanFail=true syntheticCardSelections=true voiceTransportDisabled=true syntheticXR=true headsetValidated=false providerVoiceValidated=false completeDemoFlow=false");
+            Debug.Log("SCALPAL_OFFICE_PLAYMODE_OK checks=" + checks + " realOfficeStart=true realORStart=true realSceneTransition=true liveLocalDb=true realInterviewHttp=true realCoachHttp=true sameAttempt=true canonicalHandoff=true wrongPlan=true timeOut=true timeOutRiskReviewCanFail=true syntheticCardSelections=true voiceTransportDisabled=true syntheticXR=true headsetValidated=false providerVoiceValidated=false completeDemoFlow=false");
         }
         IEnumerator Guard(IEnumerator work)
         {

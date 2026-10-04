@@ -72,13 +72,23 @@ namespace Scalpal.Voice
         public event Action<string> ModeChanged;
         public event Action<string, string> Transcript; // source: user or agent
         public event Action<ToolRequest> ClientToolRequested;
+        // Completed agent turns (agent_response events) on the current connection; the office interview waits
+        // for one after each pick before it shows the next round.
+        public int AgentResponses { get; private set; }
+        public bool AnswerRecording => answerSamples != null;
+        public const float MaxAnswerSeconds = 19.5f; // the service accepts spoken answers under about 20 s
 
         Connection active;
         int generation;
         AudioClip microphoneClip, playbackClip;
         string microphoneDevice, patientId = "", prompt = "", firstMessage = "", initialContext = "";
         string lastContext = "";
-        bool encounterMode;
+        bool encounterMode, interviewMode;
+        // Hold-to-answer: learner speech recorded locally for POST /interviews/:id/answer, never streamed to the agent.
+        List<float> answerSamples;
+        AudioClip answerClip;
+        string answerDevice;
+        int answerRate, answerCursor;
         string encounterRole = "patient", encounterVoiceId = "";
         int microphoneCursor, microphoneRate, microphoneChunk;
         float microphoneStarted, lastCapture, connectionStarted;
@@ -172,7 +182,7 @@ namespace Scalpal.Voice
         public void ConnectEncounter(string encounterId, string selectedPatientId)
         {
             Disconnect();
-            encounterMode = true;
+            encounterMode = true; interviewMode = false;
             if (!applicationFocused || applicationPaused) { Fail("Return to the app and start voice explicitly."); return; }
             if (!isActiveAndEnabled || !ValidEncounterId(encounterId) || string.IsNullOrEmpty(selectedPatientId))
             { Fail("A valid encounter and patient are required."); return; }
@@ -183,10 +193,27 @@ namespace Scalpal.Voice
             StartCoroutine(Begin(generation));
         }
 
+        // The choice-based office interview (/interviews): the patient agent's prompt, first line and voice come
+        // from GET /interviews/:id/connection. The microphone stays muted; the patient hears only the picks.
+        public void ConnectInterview(string interviewId, string selectedPatientId)
+        {
+            Disconnect();
+            encounterMode = true; interviewMode = true; encounterRole = "patient";
+            MicrophoneMuted = true; // the patient hears only the picks, for the whole interview
+            if (!applicationFocused || applicationPaused) { Fail("Return to the app and start voice explicitly."); return; }
+            if (!isActiveAndEnabled || !ValidInterviewId(interviewId) || string.IsNullOrEmpty(selectedPatientId))
+            { Fail("A valid interview and patient are required."); return; }
+            CoachSessionId = interviewId;
+            patientId = selectedPatientId;
+            LastError = "";
+            SetStatus("connecting");
+            StartCoroutine(Begin(generation));
+        }
+
         public void Connect(string coachSessionId)
         {
             Disconnect();
-            encounterMode = false;
+            encounterMode = false; interviewMode = false;
             if (!applicationFocused || applicationPaused) { Fail("Return to the app and start voice explicitly."); return; }
             if (!isActiveAndEnabled || !ValidSessionId(coachSessionId)) { Fail("A valid coach session is required."); return; }
             CoachSessionId = coachSessionId;
@@ -233,6 +260,7 @@ namespace Scalpal.Voice
         // Kept separate so deterministic HTTP tests can exercise identity/roles without a mic or socket.
         IEnumerator BeginConversation(int epoch)
         {
+            if (interviewMode) { yield return BeginInterview(epoch); yield break; }
             Reply state = null;
             yield return Http("GET", SessionPath, null, r => state = r);
             if (epoch != generation) yield break;
@@ -256,12 +284,35 @@ namespace Scalpal.Voice
             }
             if (encounterMode && connection.role != encounterRole)
             { Fail("Voice service bound the " + (string.IsNullOrEmpty(connection.role) ? "wrong" : connection.role) + " agent; expected " + encounterRole + "."); yield break; }
+            OpenSocket(connection, BuildInitiation(encounterMode ? encounterRole : state.snapshot.mode ?? ""), epoch);
+        }
+
+        IEnumerator BeginInterview(int epoch)
+        {
+            Reply state = null;
+            string path = "/interviews/" + Uri.EscapeDataString(CoachSessionId);
+            yield return Http("GET", path, null, r => state = r);
+            if (epoch != generation) yield break;
+            if (state == null || !state.ok || state.interviewId != CoachSessionId || state.patientId != patientId || state.phase != "interview")
+            { Fail("Cannot load the selected interview."); yield break; }
+            Reply connection = null;
+            yield return Http("GET", path + "/connection", null, r => connection = r);
+            if (epoch != generation) yield break;
+            if (connection == null || !connection.ok)
+            { Fail("Patient voice unavailable (" + (connection?.error?.code ?? "service_unreachable") + "); tap through the interview silently."); yield break; }
+            if (connection.role != "patient") { Fail("Voice service bound the " + (string.IsNullOrEmpty(connection.role) ? "wrong" : connection.role) + " agent; expected patient."); yield break; }
+            // The server builds the patient's prompt, opening line and voice; the client never authors them.
+            prompt = connection.prompt ?? ""; firstMessage = connection.firstMessage ?? ""; encounterVoiceId = connection.voiceId ?? "";
+            OpenSocket(connection, BuildInitiation("patient"), epoch);
+        }
+
+        void OpenSocket(Reply connection, string initJson, int epoch)
+        {
             string url = connection.signedUrl;
             if (string.IsNullOrEmpty(url) && connection.mode == "public" && !string.IsNullOrEmpty(connection.agentId))
                 url = "wss://api.elevenlabs.io/v1/convai/conversation?agent_id=" + Uri.EscapeDataString(connection.agentId);
             if (!Uri.TryCreate(url, UriKind.Absolute, out var ws) || ws.Scheme != "wss" || ws.Host != "api.elevenlabs.io")
-            { Fail("Voice service did not return a supported ElevenLabs WebSocket connection."); yield break; }
-            string initJson = BuildInitiation(encounterMode ? encounterRole : state.snapshot.mode ?? "");
+            { Fail("Voice service did not return a supported ElevenLabs WebSocket connection."); return; }
             active = new Connection(epoch);
             connectionStarted = Time.realtimeSinceStartup;
             _ = RunSocket(active, ws, initJson);
@@ -364,6 +415,7 @@ namespace Scalpal.Voice
 
         void Update()
         {
+            if (answerClip) PollAnswerMicrophone();
             if (localSpeech)
             {
                 int remaining;
@@ -438,6 +490,7 @@ namespace Scalpal.Voice
                     // A new agent turn is a server boundary: the server heard the (unmuted) held microphone
                     // and moved on. Its audio ids follow the suppressed ones, which stay discarded.
                     awaitingInterruption = false;
+                    AgentResponses++;
                     Transcript?.Invoke("agent", message.agent_response_event?.agent_response ?? "");
                     break;
                 case "client_tool_call":
@@ -555,6 +608,7 @@ namespace Scalpal.Voice
                 if (!microphoneClip.GetData(samples, microphoneCursor)) { Fail("Microphone PCM read failed."); return; }
                 microphoneCursor = (microphoneCursor + microphoneChunk) % microphoneClip.samples;
                 available -= microphoneChunk;
+                if (answerSamples != null && !answerClip) AppendAnswer(samples, microphoneClip.channels);
                 // Keep the audio clock/VAD running during hold-to-talk silence; never send captured muted speech.
                 Queue(JsonUtility.ToJson(new AudioInput { user_audio_chunk = Convert.ToBase64String(EncodeMicrophonePcm(samples, microphoneClip.channels, MicrophoneMuted, AgentOutputPending())) }));
                 if (!Connected) return;
@@ -603,6 +657,103 @@ namespace Scalpal.Voice
         public void SendUserMessage(string text)
         {
             if (Connected && !string.IsNullOrEmpty(text)) Queue(JsonUtility.ToJson(new TextMessage { type = "user_message", text = text }));
+        }
+
+        // One interview pick for the patient agent: a silent direction (contextual update, never deduplicated:
+        // two rounds may legitimately repeat a cue) and then the clinician's move as the user turn.
+        public bool SendInterviewTurn(string direction, string clinicianMove)
+        {
+            if (!Connected || string.IsNullOrWhiteSpace(clinicianMove)) return false;
+            if (!string.IsNullOrWhiteSpace(direction)) Queue(JsonUtility.ToJson(new TextMessage { type = "contextual_update", text = "[DIRECTION] " + direction.Trim() }));
+            Queue(JsonUtility.ToJson(new TextMessage { type = "user_message", text = "[CLINICIAN] " + clinicianMove.Trim() }));
+            return true;
+        }
+
+        // Hold-to-answer. A live connection's microphone is tapped (it keeps sending silence to the agent);
+        // otherwise the default microphone records for this answer only. Returns false with LastError set.
+        public bool BeginAnswerRecording()
+        {
+            if (answerSamples != null) return true;
+            if (!applicationFocused || applicationPaused) { LastError = "Return to the app to answer by voice."; return false; }
+            if (Status == "connecting") { LastError = "The patient voice is still connecting; tap a choice or hold again in a moment."; return false; }
+            if (microphoneClip)
+            {
+                answerRate = microphoneRate; answerSamples = new List<float>(answerRate * 4);
+                return true;
+            }
+            if (!MicrophoneAuthorized()) { LastError = "Allow the microphone, then hold again (or tap a choice)."; return false; }
+            if (Microphone.devices.Length == 0) { LastError = "No Quest microphone is available; tap a choice."; return false; }
+            answerDevice = Microphone.devices[0]; answerRate = 16000; answerCursor = 0;
+            answerClip = Microphone.Start(answerDevice, true, 20, answerRate);
+            if (!answerClip) { LastError = "The microphone could not start; tap a choice."; return false; }
+            answerRate = answerClip.frequency; answerSamples = new List<float>(answerRate * 4);
+            return true;
+        }
+
+        public float[] EndAnswerRecording(out int rate)
+        {
+            rate = answerRate;
+            if (answerSamples == null) return new float[0];
+            if (answerClip)
+            {
+                PollAnswerMicrophone();
+                Microphone.End(answerDevice); Destroy(answerClip); answerClip = null;
+            }
+            var samples = answerSamples.ToArray(); answerSamples = null;
+            return samples;
+        }
+
+        public void CancelAnswerRecording() { EndAnswerRecording(out _); }
+
+        void PollAnswerMicrophone()
+        {
+            if (!answerClip || answerSamples == null) return;
+            int cursor = Microphone.GetPosition(answerDevice);
+            int available = (cursor - answerCursor + answerClip.samples) % answerClip.samples;
+            if (available <= 0) return;
+            var samples = new float[available * answerClip.channels];
+            if (answerClip.GetData(samples, answerCursor)) AppendAnswer(samples, answerClip.channels);
+            answerCursor = cursor;
+        }
+
+        void AppendAnswer(float[] interleaved, int channels)
+        {
+            int limit = (int)(answerRate * MaxAnswerSeconds);
+            for (int i = 0; i + channels <= interleaved.Length && answerSamples.Count < limit; i += channels)
+            {
+                float sum = 0;
+                for (int c = 0; c < channels; c++) sum += interleaved[i + c];
+                answerSamples.Add(sum / channels);
+            }
+        }
+
+        static bool MicrophoneAuthorized()
+        {
+#if UNITY_ANDROID && !UNITY_EDITOR
+            if (UnityEngine.Android.Permission.HasUserAuthorizedPermission(UnityEngine.Android.Permission.Microphone)) return true;
+            UnityEngine.Android.Permission.RequestUserPermission(UnityEngine.Android.Permission.Microphone);
+            return false;
+#else
+            if (Application.HasUserAuthorization(UserAuthorization.Microphone)) return true;
+            Application.RequestUserAuthorization(UserAuthorization.Microphone);
+            return false;
+#endif
+        }
+
+        // Mono PCM16 little-endian RIFF/WAVE, as POST /interviews/:id/answer {audio, mimeType: "audio/wav"} expects.
+        public static byte[] EncodeWav(float[] mono, int rate)
+        {
+            if (mono == null || rate <= 0) throw new ArgumentException("WAV needs mono samples and a positive rate.");
+            var pcm = EncodePcm(mono, 1);
+            var wav = new byte[44 + pcm.Length];
+            void Text(int at, string value) { for (int i = 0; i < 4; i++) wav[at + i] = (byte)value[i]; }
+            void Int(int at, int value) { wav[at] = (byte)value; wav[at + 1] = (byte)(value >> 8); wav[at + 2] = (byte)(value >> 16); wav[at + 3] = (byte)(value >> 24); }
+            void Short(int at, int value) { wav[at] = (byte)value; wav[at + 1] = (byte)(value >> 8); }
+            Text(0, "RIFF"); Int(4, 36 + pcm.Length); Text(8, "WAVE");
+            Text(12, "fmt "); Int(16, 16); Short(20, 1); Short(22, 1); Int(24, rate); Int(28, rate * 2); Short(32, 2); Short(34, 16);
+            Text(36, "data"); Int(40, pcm.Length);
+            Buffer.BlockCopy(pcm, 0, wav, 44, pcm.Length);
+            return wav;
         }
 
         public bool OwnsClientTool(ToolRequest request) => request != null && request.ConnectionGeneration == generation && pendingTools.Contains(request.ToolCallId);
@@ -657,7 +808,7 @@ namespace Scalpal.Voice
                     else ResolveClientTool(external, "This client tool is not supported by the headset.", true);
         }
 
-        string SessionPath => (encounterMode ? "/encounters/" : "/coach/sessions/") + Uri.EscapeDataString(CoachSessionId);
+        string SessionPath => (interviewMode ? "/interviews/" : encounterMode ? "/encounters/" : "/coach/sessions/") + Uri.EscapeDataString(CoachSessionId);
 
         IEnumerator Http(string method, string path, string body, Action<Reply> complete)
         {
@@ -707,7 +858,7 @@ namespace Scalpal.Voice
             if (speaker != null) { speaker.Stop(); speaker.clip = null; }
             if (playbackClip != null) { Destroy(playbackClip); playbackClip = null; }
             lock (audioLock) { outputSamples.Clear(); ResetPlaybackLevel(); }
-            pendingTools.Clear(); seenTools.Clear(); lastContext = "";
+            pendingTools.Clear(); seenTools.Clear(); lastContext = ""; AgentResponses = 0;
             lastAudioEventId = interruptedThrough = -1; awaitingInterruption = false;
             patientId = ""; CoachSessionId = "";
             SetMode("listening");
@@ -728,7 +879,7 @@ namespace Scalpal.Voice
             StatusChanged?.Invoke(value);
         }
         void SetMode(string value) { if (Mode != value) { Mode = value; ModeChanged?.Invoke(value); } }
-        void OnDisable() => Disconnect();
+        void OnDisable() { CancelAnswerRecording(); Disconnect(); }
         // Only an actual outstanding OS permission request survives its permission-dialog suspension.
         void OnApplicationPause(bool paused)
         {
@@ -780,6 +931,12 @@ namespace Scalpal.Voice
             for (int i = 6; i < id.Length; i++) if (!(id[i] >= 'a' && id[i] <= 'z') && !(id[i] >= '0' && id[i] <= '9')) return false;
             return true;
         }
+        public static bool ValidInterviewId(string id)
+        {
+            if (id == null || !id.StartsWith("int-", StringComparison.Ordinal) || id.Length < 10 || id.Length > 44) return false;
+            for (int i = 4; i < id.Length; i++) if (!(id[i] >= 'a' && id[i] <= 'z') && !(id[i] >= '0' && id[i] <= '9')) return false;
+            return true;
+        }
         public static bool ValidEncounterId(string id)
         {
             if (id == null || !id.StartsWith("enc-", StringComparison.Ordinal) || id.Length < 10 || id.Length > 44) return false;
@@ -814,7 +971,7 @@ namespace Scalpal.Voice
         [Serializable, UnityEngine.Scripting.Preserve] sealed class AgentEvent { public string agent_response; }
         [Serializable, UnityEngine.Scripting.Preserve] sealed class ToolCall { public string tool_name, tool_call_id; public bool expects_response; public ToolParameters parameters; }
         [Serializable, UnityEngine.Scripting.Preserve] sealed class ToolParameters { public string structure; public string[] selected; }
-        [Serializable, UnityEngine.Scripting.Preserve] sealed class Reply { public bool ok; public string signedUrl, agentId, mode, context, result, role; public Snapshot snapshot; public EncounterState state; public ServiceError error; }
+        [Serializable, UnityEngine.Scripting.Preserve] sealed class Reply { public bool ok; public string signedUrl, agentId, mode, context, result, role, interviewId, patientId, phase, prompt, firstMessage, voiceId; public Snapshot snapshot; public EncounterState state; public ServiceError error; }
         [Serializable, UnityEngine.Scripting.Preserve] sealed class EncounterState { public string encounterId, patientId, phase; }
         [Serializable, UnityEngine.Scripting.Preserve] sealed class ServiceError { public string code; }
         [Serializable, UnityEngine.Scripting.Preserve] sealed class Snapshot { public string sessionId, patientId, mode; }

@@ -1,7 +1,7 @@
 import type { Context, Hono } from "hono";
 import { ENCOUNTERS_BY_PLAN, type Encounter } from "./catalog/encounters.js";
 import { DEFAULT_PATIENT_VOICES } from "./encounter.js";
-import type { AnswerClassifier, SpeechToText } from "./answer-classifier.js";
+import { letterFrom, type AnswerClassifier, type SpeechToText } from "./answer-classifier.js";
 import { loadPatientContent } from "./interview-content.js";
 import { interviewPatientPrompt } from "./interview-prompt.js";
 import { InterviewSession } from "./interview.js";
@@ -74,7 +74,17 @@ export function registerInterviewRoutes(app: Hono, options: InterviewRouteOption
     sessions.set(id, s);
     meta.set(id, { prompt: interviewPatientPrompt(content, kase), firstMessage: content.interview.openingLine, voiceId: voices[persona?.voiceKey ?? "adult_female"] ?? "" });
     realtime.attachInterview?.(s);
-    return c.json({ ...s.state(), speakerName: persona?.name ?? patientName, speaker: persona?.speaker ?? "patient", openingLine: content.interview.openingLine, actions: actionsFor(id) }, 201);
+    // Demographics seat the right avatars in the Quest office: the patient, and for a parent speaker the parent beside them.
+    const speaker = persona?.speaker ?? "patient";
+    const patientAge = persona?.age ?? kase.patient.age ?? 0;
+    const patientSex = persona?.sex ?? kase.patient.sex ?? "";
+    const demographics = {
+      patientAge,
+      patientSex,
+      speakerAge: speaker === "parent" ? (persona?.speakerAge ?? 0) : patientAge,
+      speakerSex: speaker === "parent" ? (persona?.speakerSex ?? "") : patientSex,
+    };
+    return c.json({ ...s.state(), speakerName: persona?.name ?? patientName, speaker, ...demographics, openingLine: content.interview.openingLine, actions: actionsFor(id) }, 201);
   });
 
   app.get("/interviews/:id", (c) => {
@@ -118,6 +128,8 @@ export function registerInterviewRoutes(app: Hono, options: InterviewRouteOption
         return bad(c, 503, "speech_failed", `Could not transcribe that (${(e as Error).message}). Tap a choice or try again.`, actionsFor(s.id));
       }
     }
+    // A bare letter ("B", "option c") needs no model; anything else goes to the classifier.
+    if (!key && heard) key = letterFrom(heard);
     if (!key && heard) {
       if (!options.classifier) return bad(c, 503, "classifier_unconfigured", "Spoken answers need ANTHROPIC_API_KEY; tap a choice instead.", actionsFor(s.id));
       key = await options.classifier.classify(heard, round.choices);

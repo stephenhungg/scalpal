@@ -1,4 +1,4 @@
-// Real encounter/coach HTTP and RealtimeBridge; every record and identity belongs to this fixture.
+// Real interview/coach HTTP and RealtimeBridge; every record and identity belongs to this fixture.
 import { createRequire } from 'node:module';
 import { writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -42,7 +42,7 @@ app.get('/fixture/state', c => {
     coachCreateCount: coachCreates.length, coachPatientId: coach?.body.patientId ?? '', coachEncounterId: coach?.body.encounterId ?? '',
     coachMode: coach?.body.mode ?? '', coachSessionId: coach?.reply.sessionId ?? '',
     coachCarryover: String(coach?.reply.systemPrompt ?? '').includes('FROM THE PRE-OP OFFICE'),
-    coachContainsWrongProposal: String(coach?.reply.systemPrompt ?? '').includes('ureteroscopy'),
+    coachContainsWrongProposal: /Plan pick wrong/.test(String(coach?.reply.systemPrompt ?? '')),
     coachContainsPatient: String(coach?.reply.systemPrompt ?? '').includes('Jonah Okoye'),
     coachProcedureId: coach?.reply.snapshot?.procedureId ?? '', routes });
 });
@@ -51,13 +51,13 @@ const { serve } = require('@hono/node-server');
 const server = serve({ hostname: '127.0.0.1', port: 0, fetch: async (request: Request) => {
   const path = new URL(request.url).pathname;
   if (!path.startsWith('/fixture/')) routes.push(`${request.method} ${path}`);
-  if (path === '/jarvis/connection') {
+  if (path === '/jarvis/connection' || /^\/interviews\/[^/]+\/connection$/.test(path)) {
     providerUnavailableCount++;
     return Response.json({ error: 'provider_unavailable', message: 'Synthetic fixture: provider voice is unavailable' }, { status: 503 });
   }
   const body = request.method === 'POST' && path === '/coach/sessions' ? await request.clone().json() : undefined;
   const reply = await app.fetch(request);
-  if (request.method === 'POST' && path === '/encounters' && reply.status === 201) encounterCreates++;
+  if (request.method === 'POST' && path === '/interviews' && reply.status === 201) encounterCreates++;
   if (body && reply.status === 201) coachCreates.push({ body, reply: await reply.clone().json() });
   return reply;
 }}, (address: { port: number }) => {

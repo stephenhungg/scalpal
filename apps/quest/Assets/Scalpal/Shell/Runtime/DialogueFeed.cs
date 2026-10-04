@@ -8,7 +8,8 @@ using UnityEngine.SceneManagement;
 namespace Scalpal.Shell
 {
     // Routes the existing transcript and caption events into the shared dialogue box.
-    // Office: NativeEncounterSession.Line (voice transcripts, authored greeting, visual answers, Jarvis feedback).
+    // Office: NativeEncounterSession.Line (patient voice transcripts, opening line, the learner's picks) and the
+    // interview round, whose four choices it shows in the box and whose ray/pinch picks it hands back.
     // OR: QuestJarvisVoice.Transcript (learner + Jarvis coach) and OpenSurgeryCoach.Captioned (authored coaching).
     // Read-only listener: it never connects, mutes or configures voice.
     public sealed class DialogueFeed : MonoBehaviour
@@ -18,7 +19,9 @@ namespace Scalpal.Shell
         public NativeCaseSession Surgery { get; private set; }
         public QuestJarvisVoice Voice { get; private set; }
         OpenSurgeryCoach coach;
-        string lastMode = "listening", responder = "";
+        string lastMode = "listening", responder = "", shownNote = "";
+        InterviewRoundView shownRound;
+        InterviewFinding shownFinding;
         bool wasHeld;
         float awaitingUntil, nextCoachLookup;
         const float ReplyTimeout = 10;
@@ -52,6 +55,8 @@ namespace Scalpal.Shell
             Unbind();
             Office = session; Voice = session.voice;
             session.Line += OfficeLine;
+            box.ChoicePicked += OfficeChoice;
+            shownRound = null; shownNote = ""; shownFinding = null;
             var rig = FindFirstObjectByType<EncounterOfficeRig>();
             if (rig && rig.head) box.viewer = rig.head.transform;
             var panel = FindFirstObjectByType<EncounterOfficePanel>();
@@ -72,7 +77,7 @@ namespace Scalpal.Shell
 
         void Unbind()
         {
-            if (Office) Office.Line -= OfficeLine;
+            if (Office) { Office.Line -= OfficeLine; if (box) box.ChoicePicked -= OfficeChoice; }
             if (Surgery && Voice) Voice.Transcript -= SurgeryTranscript;
             if (coach) coach.Captioned -= CoachCaption;
             Office = null; Surgery = null; Voice = null; coach = null;
@@ -92,7 +97,36 @@ namespace Scalpal.Shell
             }
         }
 
-        // speaker: learner | patient | parent | attending (NativeEncounterSession.Line contract).
+        void OfficeChoice(string key) { if (Office) Office.Choose(key); }
+
+        // An exam or test finding from the latest pick: one short line in the box, never spoken.
+        public static string ResultLine(InterviewFinding finding) => "Result: " + (string.IsNullOrWhiteSpace(finding.label) ? "" : finding.label.Trim() + ": ") + (finding.text ?? "").Trim();
+
+        // Shows the round once the patient has finished speaking; hides it while they speak or after scoring.
+        void UpdateOfficeChoices()
+        {
+            if (!ReferenceEquals(Office.LastFinding, shownFinding))
+            {
+                shownFinding = Office.LastFinding;
+                box.SetResult(shownFinding == null ? "" : ResultLine(shownFinding));
+            }
+            var current = Office.Round;
+            if (!ReferenceEquals(current, shownRound))
+            {
+                shownRound = current; shownNote = Office.AnswerNote ?? "";
+                if (current == null) box.HideChoices();
+                else
+                {
+                    var keys = new string[current.choices.Length]; var texts = new string[current.choices.Length];
+                    for (int i = 0; i < keys.Length; i++) { keys[i] = current.choices[i].key; texts[i] = current.choices[i].text; }
+                    box.ShowChoices(current.number + "/" + current.of, current.prompt, keys, texts, shownNote);
+                }
+            }
+            else if (current != null && !ReferenceEquals(shownNote, Office.AnswerNote) && shownNote != (Office.AnswerNote ?? ""))
+            { shownNote = Office.AnswerNote ?? ""; box.SetChoiceNote(shownNote); }
+        }
+
+        // speaker: learner | patient | parent (NativeEncounterSession.Line contract).
         void OfficeLine(string speaker, string text)
         {
             if (speaker == "learner")
@@ -103,8 +137,7 @@ namespace Scalpal.Shell
             }
             awaitingUntil = 0;
             var state = Office ? Office.State : null;
-            if (speaker == "attending") box.Say(DialogueSpeaker.Attending, "", text);
-            else if (speaker == "parent") box.Say(DialogueSpeaker.Parent, state?.speakerName, text);
+            if (speaker == "parent") box.Say(DialogueSpeaker.Parent, state?.speakerName, text);
             else box.Say(DialogueSpeaker.Patient, state?.patientName, text);
             if (!box.protectedFace || !box.protectedFace.gameObject.activeInHierarchy) ProtectFace();
         }
@@ -133,7 +166,7 @@ namespace Scalpal.Shell
                 if (lastMode == "speaking" && box.Speaker != DialogueSpeaker.You) box.CompleteLine();
                 lastMode = mode;
             }
-            if (Office) UpdateOfficeIndicator(); else if (Surgery) UpdateSurgeryIndicator();
+            if (Office) { UpdateOfficeChoices(); UpdateOfficeIndicator(); } else if (Surgery) UpdateSurgeryIndicator();
         }
 
         void UpdateOfficeIndicator()
@@ -143,10 +176,9 @@ namespace Scalpal.Shell
             // Released talk on a live connection: the reply (and the learner's transcript) are on the way.
             if (!held && wasHeld && Voice && Voice.Connected) Await();
             wasHeld = held;
-            bool openListening = Office.OpenMicrophone && Voice && Voice.Connected && Voice.Mode == "listening";
+            // The microphone never reaches the patient; "listening" means a held spoken answer is recording.
             if (held) box.SetIndicator(DialogueIndicator.Listening, "", true);
             else if (Time.unscaledTime < awaitingUntil && (!Voice || Voice.Mode != "speaking")) box.SetIndicator(DialogueIndicator.Thinking, responder, true);
-            else if (openListening) box.SetIndicator(DialogueIndicator.Listening, "", false);
             else box.SetIndicator(DialogueIndicator.None);
         }
 
@@ -162,7 +194,6 @@ namespace Scalpal.Shell
 
         string OfficeResponder()
         {
-            if (Office.Role == "attending") return "Jarvis";
             var state = Office.State;
             string name = state == null ? "" : state.speaker == "parent" ? state.speakerName : state.patientName;
             if (string.IsNullOrWhiteSpace(name)) return "";

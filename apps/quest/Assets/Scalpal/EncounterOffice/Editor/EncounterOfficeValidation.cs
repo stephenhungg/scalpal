@@ -8,6 +8,8 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Threading;
+using Scalpal.Brand;
+using Scalpal.Brand.Editor;
 using Scalpal.Voice;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -44,8 +46,8 @@ namespace Scalpal.EncounterOffice.Editor
             Check(session&&session.voice&&session.patient&&rig&&rig.origin&&rig.head&&rig.left&&rig.right,"dedicated scene binds encounter, voice, patients and tracked rig");
             Check(session.realtime&&!session.realtime.autoConnect&&session.realtime.gameObject==session.gameObject&&session.State==null,"office binds pairing bridge without automatic networking or automatic case selection");
             Check(rig.head.transform.parent==rig.origin&&rig.left.parent==rig.origin&&rig.right.parent==rig.origin,"head and controllers share one floor tracking origin");
-            Check(rig.session==session&&rig.talkHint&&panel&&panel.microphoneMode&&panel.microphoneMode.command=="mic_mode","tracked hold-to-talk rig, first-use hint and explicit microphone mode bind the encounter");
-            Check(panel&&panel.session==session&&panel.options.Length==4&&panel.keyboard&&panel.assessment&&panel.chart&&panel.suggestions&&panel.draft,"visual fallback has paged questions, findings and editable assessment");
+            Check(rig.session==session&&rig.talkHint&&panel,"tracked hold-to-answer rig and first-use hint bind the interview");
+            Check(panel&&panel.session==session&&panel.options.Length==4&&panel.chart,"office panel has a paged patient picker and a findings/scorecard panel");
             Check(session.patient.female&&session.patient.male&&!session.patient.female.activeSelf&&!session.patient.male.activeSelf,"both generic adult presentations bind and remain hidden until authoritative demographics arrive");
             foreach(var patient in new[]{session.patient.female,session.patient.male})
                 Check(patient.GetComponentsInChildren<Transform>(true).Any(t=>t.name=="HeadPivot")&&patient.GetComponentsInChildren<Transform>(true).Any(t=>t.name=="JawPivot"),"licensed weighted human head and jaw animation nodes exist");
@@ -78,49 +80,73 @@ namespace Scalpal.EncounterOffice.Editor
             ValidateSpeechAndTalk(session.patient);
             Check(!UnityEngine.Object.FindFirstObjectByType<Scalpal.Quest.NativeCaseSession>()&&!UnityEngine.Object.FindFirstObjectByType<Scalpal.Instruments.TrainingTarget>(),"encounter scene does not instantiate surgery progression or scored tissue targets");
             var buttons=UnityEngine.Object.FindObjectsByType<EncounterOfficeButton>(FindObjectsInactive.Include,FindObjectsSortMode.None);
-            foreach(var command in new[]{"reload_patients","page","option","voice","stop","attending","submit","field","key","refresh","summary","surgery"})
-                Check(buttons.Any(button=>button.command==command&&button.GetComponent<Collider>()&&button.panel==panel),"ray-accessible control exists: "+command);
+            foreach(var command in new[]{"reload_patients","page","option"})
+                Check(buttons.Any(button=>button.command==command&&button.GetComponent<Collider>()&&button.panel==panel),"ray-accessible picker control exists: "+command);
+            panel.Refresh();
+            // Without a patient the room shows only the picker: patient list, paging and reload.
+            Check(panel.PickerConsole.gameObject.activeSelf&&!panel.FindingsConsole.gameObject.activeSelf&&!panel.assessment.gameObject.activeSelf&&!panel.keyboard.gameObject.activeSelf
+                &&buttons.Where(button=>button.gameObject.activeInHierarchy).All(button=>!EncounterOfficePanel.Retired(button.command,button.argument)),"the picker is the only console before an interview; findings, assessment, keyboard and retired controls are hidden");
+            Check(buttons.Any(button=>button.command=="attending")&&!buttons.Any(button=>(button.command=="attending"||button.command=="voice"||button.command=="stop"||button.command=="refresh")&&button.gameObject.activeInHierarchy),"Present to Jarvis, Voice, Stop and Refresh are gone from the room");
+            panel.Act("attending","");Check(session.State==null,"a retired attending command does nothing");
             Check(buttons.Any(button=>button.command=="page"&&button.argument=="patients")&&!buttons.Any(button=>button.command=="patient"&&(button.argument==EncounterContract.FemalePatientId||button.argument==EncounterContract.MalePatientId)),"patient picker uses the service list instead of fixed demo identity buttons");
-            Check(panel.surgery&&panel.surgery.command=="surgery"&&!panel.surgery.gameObject.activeSelf&&File.Exists(EncounterOfficeBuild.SurgeryScenePath),"OR action is bound, starts hidden before scoring, and the existing native surgery scene is present");
-            var voiceButton=buttons.Single(button=>button.command=="voice");panel.Refresh();
-            Check(session.VoiceEnabled&&voiceButton.label.text=="Voice on","voice auto-connect is enabled by default; with no live connection the button offers Voice on");
-            Property(session.voice,"Status","connected");panel.Refresh();Check(voiceButton.label.text=="Voice off","a live voice offers an explicit Voice off");
-            panel.Act("voice","");Check(!session.VoiceEnabled&&voiceButton.label.text=="Voice on"&&!session.voice.Connected,"Voice off disconnects, disables auto-connect and offers Voice on");
-            panel.Act("voice","");Check(session.VoiceEnabled,"Voice on re-enables auto-connect");
-            panel.Act("field","diagnosis");panel.Act("key","clear");panel.Act("key","a");panel.Act("key","space");panel.Act("key","b");panel.Act("key","back");
-            Check(session.Draft.diagnosis=="a ","ray keyboard supports letter, space, clear and backspace editing");
-            panel.Act("page","assessment");panel.Act("field","differential");panel.Act("option","Ectopic pregnancy");panel.Act("option","Ureteric stone");panel.Act("option","Ectopic pregnancy");
-            Check(session.Draft.differential.SequenceEqual(new[]{"Ureteric stone"}),"headset choices toggle learner-selected differential without prescribing one");
-            session.Draft.procedure=string.Join(" ",Enumerable.Range(0,80).Select(n=>"step"+(char)('a'+n%26))).Substring(0,400);panel.Act("field","procedure");panel.Refresh();
-            string finalDraftPage=panel.draft.text;Check(finalDraftPage.Split('\n').Length<=4&&finalDraftPage.Contains("step"),"400-character typed plan is paged into a readable three-line field region");
-            panel.Act("draft_previous","");Check(panel.draft.text!=finalDraftPage&&panel.draft.text.Split('\n').Length<=4,"draft back exposes earlier long assessment text without truncating stored plan");
-            for(int i=0;i<6;i++)panel.Act("draft_previous","");Check(panel.draft.text.Contains("stepa")&&session.Draft.procedure.Length==400,"learner can review beginning of full stored 400-character plan");
-            // The conversation lives in the shared DialogueBox; the findings panel no longer pages a duplicate transcript.
-            Check(panel.suggestions.command=="suggestions"&&!buttons.Any(button=>button.command=="response_next"||button.command=="response_previous")&&!UnityEngine.Object.FindObjectsByType<TextMesh>(FindObjectsInactive.Include,FindObjectsSortMode.None).Any(text=>text.name=="Response"),"office panels carry no duplicate transcript region");
-            panel.Act("page","history");
-            Check(panel.suggestions.gameObject.activeSelf&&panel.options.All(option=>!option.gameObject.activeSelf),"history topics start collapsed behind Suggestions for a voice-first interview");
-            panel.Act("suggestions","");
-            Check(!panel.suggestions.gameObject.activeSelf&&panel.options.All(option=>option.gameObject.activeSelf&&option.command=="option"),"Suggestions expands the paged history questions");
-            panel.Act("page","exam");
-            Check(!panel.suggestions.gameObject.activeSelf&&panel.options.Any(option=>option.gameObject.activeSelf),"examinations stay directly available without the suggestions step");
-            panel.Act("page","assessment");panel.Act("field","procedure");
-            Property(session,"Score",new EncounterScore{total=23,max=100,grade="Needs practice",feedback=Enumerable.Range(0,26).Select(n=>"Feedback item "+n).ToArray()});panel.Refresh();
-            Check(panel.chart.text.Split('\n').Length<=11&&panel.draft.text.Split('\n').Length<=3,"full score feedback is paged and assessment panel does not overflow controls");
-            var fittedTexts=UnityEngine.Object.FindObjectsByType<EncounterOfficeText>(FindObjectsInactive.Include,FindObjectsSortMode.None);
-            Check(fittedTexts.Length==UnityEngine.Object.FindObjectsByType<TextMesh>(FindObjectsInactive.Include,FindObjectsSortMode.None).Length,"every scene text has a measured bounds fitter");
+            Check(File.Exists(EncounterOfficeBuild.SurgeryScenePath),"the existing native surgery scene is present");
+            ValidatePointerTabs(rig,panel,buttons);
+            // During the interview the dialogue box is the only panel: any other visible console, button, status or label fails.
+            foreach(var phase in new[]{"interview","scored","skipped"})
+            {
+                Property(session,"State",new EncounterState{encounterId=phase=="skipped"?"":"int-scenefixture01",phase=phase,patientId=EncounterContract.FemalePatientId,patientName="Priya Ramaswamy",speaker="patient"});
+                panel.Refresh();
+                var visible=UnityEngine.Object.FindObjectsByType<Renderer>(FindObjectsSortMode.None).Where(renderer=>renderer.enabled&&renderer.gameObject.activeInHierarchy&&renderer.transform.IsChildOf(panel.transform)).ToArray();
+                Check(visible.Length==0&&!session.patient.stateLabel.gameObject.activeInHierarchy&&!rig.talkHint.gameObject.activeInHierarchy,"no office panel, button, status line or floating label is visible during the "+phase+" phase: "+string.Join(", ",visible.Select(renderer=>renderer.name).Take(5)));
+            }
+            Property(session,"State",null);panel.Refresh();
+            Check(panel.PickerConsole.gameObject.activeSelf,"leaving the interview brings the picker back");
+            // Voice is chosen in the pause menu; the session keeps the explicit on/off contract.
+            Check(session.VoiceEnabled,"voice auto-connect is enabled by default");
+            Property(session.voice,"Status","connected");session.ToggleVoice();Check(!session.VoiceEnabled&&!session.voice.Connected,"Voice off disconnects and disables auto-connect");
+            session.ToggleVoice();Check(session.VoiceEnabled,"Voice on re-enables auto-connect");
+            Check(!buttons.Any(button=>button.command=="response_next"||button.command=="response_previous")&&!UnityEngine.Object.FindObjectsByType<TMPro.TextMeshPro>(FindObjectsInactive.Include,FindObjectsSortMode.None).Any(text=>text.name=="Response"),"office panels carry no duplicate transcript region");
+            var fittedTexts=UnityEngine.Object.FindObjectsByType<ScalpalTextFit>(FindObjectsInactive.Include,FindObjectsSortMode.None).Where(fit=>fit.GetComponentInParent<EncounterOfficePanel>(true)||fit.GetComponentInParent<EncounterOfficeRig>(true)||fit.GetComponentInParent<EncounterPatientPresentation>(true)).ToArray();
+            Check(!UnityEngine.Object.FindObjectsByType<TextMesh>(FindObjectsInactive.Include,FindObjectsSortMode.None).Any(),"office renders no legacy TextMesh (static SDF TextMeshPro only)");
+            var brand=ScalpalBrand.Active;
+            Check(fittedTexts.Length>40,"office panels, talk hint and patient label carry brand fitted text");
             foreach(var fit in fittedTexts)
             {
                 fit.Fit();var measured=fit.MeasuredSize();
-                Check(measured.x<=fit.maximumWidth+.002f&&measured.y<=fit.maximumHeight+.002f,"actual generated TextMesh bounds fit their world-space region: "+fit.name);
-                Check(fit.GetComponent<Renderer>().sharedMaterial.shader.name=="Scalpal/Encounter Office/World Text"&&fit.GetComponent<Renderer>().sharedMaterial.renderQueue==3020,"depth-tested text renders above glass and buttons");
+                Check(measured.x<=fit.maximumWidth+.002f&&measured.y<=fit.maximumHeight+.002f,"laid-out SDF text fits its world-space region: "+fit.name+" '"+fit.Text.text+"' measured="+measured.x.ToString("F4")+"x"+measured.y.ToString("F4")+" max="+fit.maximumWidth.ToString("F4")+"x"+fit.maximumHeight.ToString("F4")+" size="+fit.Text.fontSize);
+                var material=fit.Text.fontSharedMaterial;
+                Check(material==brand.TextMaterial(fit.role)&&fit.Text.font==brand.Font(fit.role)&&material.renderQueue==3020,"brand SDF text renders above glass and buttons: "+fit.name);
             }
+            Check(fittedTexts.Where(fit=>fit.role==ScalpalTextRole.Title).All(fit=>fit.Text.font==brand.display)&&fittedTexts.Where(fit=>fit.role!=ScalpalTextRole.Title).All(fit=>fit.Text.font!=brand.display),"panel titles are Instrument Serif; body and buttons are Geist Mono");
+            ValidateReadability(panel);
             ValidateDialoguePlacement(session,rig,panel);
             Check(before.SequenceEqual(EditorBuildSettings.scenes.Select(s=>s.path+s.enabled)),"validation preserves surgery build scene settings");
         }
         // The shared dialogue box in the real office layout: lower middle, below the patient's face, clear of the consoles.
+        // Authored panel strings in the built layout, measured from the seated clinician's eye.
+        static void ValidateReadability(EncounterOfficePanel panel)
+        {
+            var root=panel.transform;
+            var measured=ScalpalBrandLayout.Measure(root,EncounterOfficeBuild.Viewer,true).Where(item=>item.fit.gameObject.activeInHierarchy||item.fit.transform.IsChildOf(panel.keyboard)).ToList();
+            UnityEngine.Debug.Log("SCALPAL_ENCOUNTER_TEXT_MM min="+measured.Min(item=>item.mmAt1m).ToString("F1")+" failing="+string.Join(" | ",measured.Where(item=>!item.Passes).Select(item=>item.fit.name+"="+item.mmAt1m.ToString("F1"))));
+            foreach(var item in measured)Check(item.Passes,"office text meets its floor (labels 32, body 24 mm/m): "+item.fit.name+" '"+item.fit.Text.text.Split('\n')[0]+"' "+item.mmAt1m.ToString("F1"));
+            foreach(Transform console in root)Check(ScalpalPlacement.IsLevel(console),"office console is level with the horizon: "+console.name);
+        }
+        // The picker's controls are colliders the corrected aim ray can press, from either controller.
+        static void ValidatePointerTabs(EncounterOfficeRig rig,EncounterOfficePanel panel,EncounterOfficeButton[] buttons)
+        {
+            int hand=0;
+            foreach(var control in buttons.Where(button=>button.panel==panel&&(button.command=="page"&&button.argument=="patients"||button.command=="reload_patients")).ToArray())
+            {
+                var result=ScalpalPointerProbe.Press(hand,rig.origin,control.GetComponent<Collider>(),()=>rig.Pointer(hand),rig.StepPointers);
+                Check(result.RayMatchesAim&&result.rayVisible&&(result.lineStart-result.expectedOrigin).magnitude<1e-4f,"office ray starts at the "+(hand==0?"left":"right")+" controller aim pose: "+control.command);
+                Check(result.hovered&&result.accentOnHover&&panel.Page=="patients","aim ray + trigger presses the picker's "+control.command+" from the "+(hand==0?"left":"right")+" controller");
+                hand=1-hand;
+            }
+        }
         static void ValidateDialoguePlacement(NativeEncounterSession session,EncounterOfficeRig rig,EncounterOfficePanel panel)
         {
-            session.patient.Select(AdultFixtures()[0]);panel.Act("page","history");
+            session.patient.Select(AdultFixtures()[0]);
             var feed=Scalpal.Shell.DialogueFeed.Attach();
             try
             {
@@ -134,15 +160,16 @@ namespace Scalpal.EncounterOffice.Editor
                 float centre=-Elevation(feed.box.transform.position),distance=(feed.box.transform.position-eye).magnitude;
                 Check(centre>=19.5f&&centre<=25.5f&&distance>.95f&&distance<1.05f,"interview box sits about 1 m ahead and 20-25 degrees below eye level: "+centre+" deg, "+distance+" m");
                 Check(BoxTop()<Elevation(nose)-6,"interview box stays well below the patient's face: top "+BoxTop()+" nose "+Elevation(nose));
-                panel.Act("page","assessment");Check(panel.assessment.gameObject.activeSelf,"precondition: assessment console visible");
-                feed.box.Recenter();
-                var console=panel.assessment.GetComponentInChildren<Renderer>().bounds;
-                float consoleBottom=Elevation(new Vector3(console.center.x,console.min.y,console.center.z));
-                Check(BoxTop()<=consoleBottom+.1f&&BoxTop()<Elevation(nose)-6,"box moves below the assessment console and still clears the face: box top "+BoxTop()+" console bottom "+consoleBottom);
-                Check(BoxBottom()>-50,"box remains within a comfortable downward glance: "+BoxBottom());
-                UnityEngine.Debug.Log("SCALPAL_DIALOGUE_OFFICE_PLACEMENT interviewCentreDeg=-"+centre.ToString("F1")+" noseDeg="+Elevation(nose).ToString("F1")+" assessmentBoxTopDeg="+BoxTop().ToString("F1")+" consoleBottomDeg="+consoleBottom.ToString("F1"));
+                feed.box.ShowChoices("History · Round 1 of 9","What do you do next?",new[]{"A","B","C","D"},new[]{"Ask where the pain started and where it is now","Ask about allergies","Examine the abdomen","Order a CT scan"});
+                feed.box.Recenter();feed.box.Tick(0);
+                float choicesBottom=feed.box.ChoiceRows.Min(row=>Elevation(row.GetComponent<Renderer>().bounds.min));
+                Check(BoxTop()<Elevation(nose)-6&&choicesBottom>-50,"with a round showing the box still clears the face and the last choice stays within a comfortable glance: "+choicesBottom);
+                var ray=new Ray(eye,(feed.box.ChoiceRows[1].transform.position-eye).normalized);
+                Physics.SyncTransforms();
+                Check(Physics.Raycast(ray,out var hit,6)&&hit.collider.GetComponent<Scalpal.Shell.DialogueChoice>()==feed.box.ChoiceRows[1],"the office ray reaches a choice row through the scene (no panel or patient blocks it)");
+                UnityEngine.Debug.Log("SCALPAL_DIALOGUE_OFFICE_PLACEMENT interviewCentreDeg=-"+centre.ToString("F1")+" noseDeg="+Elevation(nose).ToString("F1")+" lastChoiceDeg="+choicesBottom.ToString("F1"));
             }
-            finally { if(feed)UnityEngine.Object.DestroyImmediate(feed.gameObject);panel.Act("page","history");session.patient.Select(null); }
+            finally { if(feed)UnityEngine.Object.DestroyImmediate(feed.gameObject);session.patient.Select(null); }
         }
         static bool WeightedBone(SkinnedMeshRenderer[] skins,Transform bone)
         {
@@ -291,23 +318,38 @@ namespace Scalpal.EncounterOffice.Editor
             {
                 fixture=new GameObject("EncounterHoldAndAudioFixture");fixture.SetActive(false);
                 voice=fixture.AddComponent<QuestJarvisVoice>();var session=fixture.AddComponent<NativeEncounterSession>();session.voice=voice;
-                Property(session,"State",AdultFixtures()[0]);
+                var holdState=AdultFixtures()[0];holdState.encounterId="int-holdfixture01";Property(session,"State",holdState);
+                Set(session,"encounterId",holdState.encounterId);Set(session,"patientId",holdState.patientId);
                 Call(session,"OnEnable");Property(voice,"Status","connected");
-                Check(!session.OpenMicrophone&&!session.TalkHeld&&voice.MicrophoneMuted,"hold-to-talk begins released with microphone muted");
-                session.SetTalkHeld(true);Check(session.TalkHeld&&!voice.MicrophoneMuted,"held input unmutes the existing conversation without microphone or socket access");
-                session.SetTalkHeld(false);Check(!session.TalkHeld&&voice.MicrophoneMuted,"release mutes microphone for the patient's reply");
-                session.ToggleOpenMicrophone();session.SetTalkHeld(true);session.SetTalkHeld(false);
-                Check(session.OpenMicrophone&&!voice.MicrophoneMuted,"explicit open-microphone choice survives grip release");
-                session.ToggleOpenMicrophone();Check(!session.OpenMicrophone&&voice.MicrophoneMuted,"explicit toggle restores hold-to-talk default");
-                session.SetTalkHeld(true);Call(session,"OnApplicationFocus",false);Call(voice,"OnApplicationFocus",false);
-                Check(!session.TalkHeld&&voice.MicrophoneMuted&&!voice.PlaybackActive,"focus loss clears held input and disconnects active speech");
-                Call(session,"OnApplicationFocus",true);Call(voice,"OnApplicationFocus",true);
-                Check(!session.TalkHeld&&!voice.Connected,"focus return keeps voice stopped until an explicit user resume");
-                Property(voice,"Status","connected");session.SetTalkHeld(true);Call(session,"OnApplicationPause",true);Call(voice,"OnApplicationPause",true);
-                Check(!session.TalkHeld&&voice.MicrophoneMuted,"pause clears held input before voice disconnect");
-                Call(session,"OnApplicationPause",false);Call(voice,"OnApplicationPause",false);
-                Property(voice,"Status","connected");session.SetTalkHeld(true);Call(session,"Invalidate");
-                Check(!session.TalkHeld&&voice.MicrophoneMuted&&!voice.PlaybackActive,"case/reset invalidation clears held input, mutes microphone and clears playback");
+                Check(!session.TalkHeld&&voice.MicrophoneMuted,"the interview begins with the microphone muted");
+                session.SetTalkHeld(true);Check(!session.TalkHeld&&voice.MicrophoneMuted&&!voice.AnswerRecording,"holding the answer button before a round is showing records nothing");
+                Set(session,"round",FixtureRound(1));
+                // A live connection's microphone is tapped for the answer; a synthetic clip stands in for the device.
+                var tap=AudioClip.Create("AnswerTapFixture",16000,1,16000,false);Set(voice,"microphoneClip",tap);Set(voice,"microphoneRate",16000);
+                session.SetTalkHeld(true);
+                Check(session.TalkHeld&&voice.AnswerRecording&&voice.MicrophoneMuted,"holding records the answer locally while the agent microphone stays muted");
+                Call(voice,"AppendAnswer",Tone(16000,1.2f,.4f),1);
+                session.SetTalkHeld(false);
+                Check(!session.TalkHeld&&!voice.AnswerRecording&&voice.MicrophoneMuted,"release stops recording and the microphone is still muted");
+                var answerOperation=Get<IEnumerable>(session,"pending").Cast<object>().Last();
+                string answerBody=FieldOf<string>(answerOperation,"body");
+                var sent=JsonUtility.FromJson<InterviewAnswerAudio>(answerBody);var wav=Convert.FromBase64String(sent.audio);
+                Check(FieldOf<string>(answerOperation,"path")=="/interviews/int-holdfixture01/answer"&&sent.mimeType=="audio/wav"&&Encoding.ASCII.GetString(wav,0,4)=="RIFF"&&Encoding.ASCII.GetString(wav,8,4)=="WAVE"&&BitConverter.ToInt32(wav,24)==16000&&wav.Length==44+16000*1.2f*2,"a held spoken answer posts a mono 16-bit WAV {audio, mimeType} to the interview");
+                Set(voice,"microphoneClip",null);Call(session,"Invalidate");Set(session,"round",FixtureRound(1));Set(voice,"microphoneClip",tap);
+                session.SetTalkHeld(true);Call(voice,"AppendAnswer",Tone(16000,.1f,.4f),1);session.SetTalkHeld(false);
+                Check(session.AnswerNote.StartsWith("Too short",StringComparison.Ordinal)&&!session.Busy,"a tap of the answer button is too short to send and says so");
+                session.SetTalkHeld(true);Call(voice,"AppendAnswer",Tone(16000,25f,.4f),1);
+                Check(Get<List<float>>(voice,"answerSamples").Count==(int)(16000*QuestJarvisVoice.MaxAnswerSeconds),"a spoken answer is capped under the service's 20 second limit");
+                Call(session,"OnApplicationFocus",false);
+                Check(!session.TalkHeld&&!voice.AnswerRecording&&voice.MicrophoneMuted,"focus loss cancels a held answer");
+                Set(voice,"microphoneClip",null);
+                Call(session,"OnApplicationFocus",true);
+                UnityEngine.Object.DestroyImmediate(tap);
+                Property(voice,"Status","connected");Call(voice,"OnApplicationFocus",false);
+                Check(!voice.Connected&&voice.MicrophoneMuted&&!voice.PlaybackActive,"focus loss disconnects active speech");
+                Call(voice,"OnApplicationFocus",true);
+                Property(voice,"Status","connected");Call(session,"Invalidate");
+                Check(!session.TalkHeld&&voice.MicrophoneMuted&&!voice.PlaybackActive&&session.Round==null,"case/reset invalidation clears held input, round, playback and keeps the microphone muted");
                 Call(session,"OnDisable");
                 presentation.voice=voice;presentation.Select(AdultFixtures()[0]);presentation.SetState("speaking");
                 var jaw=presentation.female.GetComponentsInChildren<Transform>(true).Single(node=>node.name=="JawPivot");var rest=jaw.localRotation;
@@ -327,7 +369,7 @@ namespace Scalpal.EncounterOffice.Editor
                 Property(session,"Suspended",false);
                 Set(voice,"localSpeech",true);Set(session,"patientId",EncounterContract.FemalePatientId);
                 for(int i=0;i<512;i++)samples.Enqueue(.25f);Call(voice,"ReadAudio",buffer);
-                Call(session,"PlayAuthoredSpeech","answer","allergies","From your records: a changed chart-derived answer.");
+                Call(session,"PlayAuthoredSpeech","A changed line with no authored recording.");
                 Check(!voice.PlaybackActive&&voice.PlaybackLevel==0&&samples.Count==0,"a visual-only/mismatched answer interrupts the previous offline utterance rather than speaking stale facts");
                 foreach(var state in AdultFixtures())
                 {
@@ -364,164 +406,135 @@ namespace Scalpal.EncounterOffice.Editor
         }
         static void ValidateContracts()
         {
-            Check(!EncounterContract.HasError(JsonUtility.FromJson<EncounterReply>("{\"result\":\"Recorded.\"}")) && EncounterContract.HasError(JsonUtility.FromJson<EncounterReply>("{\"error\":{\"code\":\"invalid_topic\",\"message\":\"Unknown topic\"}}")),"JsonUtility absent/empty error object is not a service error; nonempty error content is");
-            Check(EncounterContract.ToolAllowed("patient","interview","answer"),"patient interviews use existing answer tool");
-            Check(!EncounterContract.ToolAllowed("patient","interview","record_assessment")&&!EncounterContract.ToolAllowed("attending","attending","answer"),"roles cannot route each other's tools");
-            Check(!EncounterContract.ToolAllowed("patient","attending","examine")&&!EncounterContract.ToolAllowed("attending","scored","record_assessment"),"mutations stop at phase boundaries");
-            Check(EncounterContract.ToolAllowed("attending","scored","get_encounter_summary"),"attending can explain grounded gathered actions after scoring");
-            var state=new EncounterState{encounterId="enc-test000",patientId=EncounterContract.FemalePatientId,version=3,patientName="Priya Ramaswamy",speaker="patient",patientSex="female",patientAge=40,speakerName="Priya Ramaswamy",speakerSex="female",speakerAge=40,phase="interview",exams=new[]{new EncounterItem{label="abdomen",finding="Authored finding"}},tests=new[]{new EncounterItem{label="CBC",result="Returned result"}}};
-            Check(EncounterContract.StateMatches(state,"enc-test000",state.patientId,3)&&!EncounterContract.StateMatches(state,"enc-other00",state.patientId,3)&&!EncounterContract.StateMatches(state,"enc-test000",EncounterContract.MalePatientId,3)&&!EncounterContract.StateMatches(state,"enc-test000",state.patientId,4),"state adoption checks id, patient and monotonic version");
-            var chart=EncounterContract.Chart(state);Check(chart.Contains("Authored finding")&&chart.Contains("Returned result")&&!chart.Contains("appendicitis"),"chart displays only returned gathered findings, with no local diagnosis facts");
-            Check(EncounterContract.Chart(null).Contains("Start a synthetic encounter"),"offline service failure does not invent findings");
+            Check(!EncounterContract.HasError(JsonUtility.FromJson<EncounterReply>("{\"result\":\"Recorded.\"}")) && EncounterContract.HasError(JsonUtility.FromJson<EncounterReply>("{\"error\":{\"code\":\"no_interview\",\"message\":\"No interview\"}}")),"JsonUtility absent/empty error object is not a service error; nonempty error content is");
+            Check(EncounterContract.ValidOfficeId("int-0123456789abcdef")&&EncounterContract.ValidOfficeId("enc-0123456789")&&!EncounterContract.ValidOfficeId("int-UPPER123")&&!EncounterContract.ValidOfficeId("coach-123456"),"office ids are interview (int-) or legacy encounter (enc-) ids");
+            Check(EncounterContract.OfficePath("int-0123456789abcdef")=="/interviews/int-0123456789abcdef"&&EncounterContract.OfficePath("enc-0123456789")=="/encounters/enc-0123456789","the OR rechecks an interview at /interviews and a legacy encounter at /encounters");
+            var live=EncounterContract.ReadOffice("{\"interviewId\":\"int-0123456789abcdef\",\"phase\":\"scored\",\"patientId\":\"patient-demo-sparse\",\"patientName\":\"Jonah Okoye\",\"round\":null,\"picks\":[],\"findings\":[]}","int-0123456789abcdef");
+            Check(live.state!=null&&live.state.encounterId=="int-0123456789abcdef"&&live.state.phase=="scored"&&live.state.patientId=="patient-demo-sparse"&&live.patient==null,"GET /interviews/:id reads into the handoff's encounter state");
+            var scored=EncounterContract.ReadOffice("{\"scorecard\":{\"kind\":\"interview\",\"total\":64,\"max\":100}}","int-0123456789abcdef");
+            Check(scored.state==null&&scored.scorecard.kind=="interview"&&scored.scorecard.total==64,"GET /interviews/:id/score carries only the scorecard");
+            var card=InterviewScore(5);card.feedback[0]="Missed: Where to start? The best move was...";card.feedback[1]="Close: almost";
+            string text=EncounterContract.CompactScore(card);var lines=text.Split('\n');
+            Check(lines.Count(line=>line.StartsWith("Feedback item",StringComparison.Ordinal))==3&&!text.Contains("Missed: Where")&&lines.Count(line=>line.StartsWith("Missed · ",StringComparison.Ordinal))==2
+                &&text.Contains("Missed · Next? Right answer: Examine the abdomen")&&text.Contains("Missed · Plan? Right answer: Open appendectomy")&&!text.Contains("Ask where it hurts"),"compact scorecard: three key feedback lines and each missed round with the right answer, nothing else");
+            Check(EncounterContract.Picked(card,"plan")=="Observe overnight"&&EncounterContract.Best(card,"diagnosis")=="Acute appendicitis","plan and diagnosis picks feed the theatre challenge");
+            var wav=QuestJarvisVoice.EncodeWav(new[]{0f,.5f,-.5f,1f},16000);
+            Check(wav.Length==52&&Encoding.ASCII.GetString(wav,0,4)=="RIFF"&&BitConverter.ToInt32(wav,4)==44&&Encoding.ASCII.GetString(wav,8,8)=="WAVEfmt "&&BitConverter.ToInt16(wav,20)==1&&BitConverter.ToInt16(wav,22)==1&&BitConverter.ToInt32(wav,24)==16000&&BitConverter.ToInt16(wav,34)==16&&Encoding.ASCII.GetString(wav,36,4)=="data"&&BitConverter.ToInt32(wav,40)==8&&BitConverter.ToInt16(wav,46)==16384,"spoken answers encode as mono PCM16 RIFF/WAVE");
+            var state=new EncounterState{encounterId="int-test000000",patientId=EncounterContract.FemalePatientId,patientName="Priya Ramaswamy",speaker="patient",speakerName="Priya Ramaswamy",phase="interview"};
             var theo=new EncounterState{patientName="Theo Abernathy",speaker="parent",speakerName="Laura Abernathy"};
-            string[] labels={EncounterContract.SpeakerLabel(state,"patient"),EncounterContract.SpeakerLabel(theo,"patient"),EncounterContract.SpeakerLabel(state,"attending"),EncounterContract.LearnerLabel};
-            Check(labels.SequenceEqual(new[]{"Priya Ramaswamy · Patient","Laura Abernathy · Parent of Theo","Jarvis · Attending","You"}),"patient, parent, attending and learner lines carry distinct speaker labels");
-            Check(labels.All(label=>!EncounterOfficePanel.ResponseHeader(label,0).Contains("Patient / Jarvis"))&&EncounterOfficePanel.ResponseHeader(labels[2],0).StartsWith("Jarvis · Attending",StringComparison.Ordinal),"response header names the actual speaker, never a blended Patient / Jarvis role");
+            string[] labels={EncounterContract.SpeakerLabel(state,"patient"),EncounterContract.SpeakerLabel(theo,"patient"),EncounterContract.LearnerLabel};
+            Check(labels.SequenceEqual(new[]{"Priya Ramaswamy · Patient","Laura Abernathy · Parent of Theo","You"}),"patient, parent and learner lines carry distinct speaker labels");
+            Check(labels.All(label=>!EncounterOfficePanel.ResponseHeader(label,0).Contains("Jarvis")),"no office line is labelled Jarvis");
+        }
+        // Authored answers for fixture runs: the committed interview content, never sent by the client.
+        [Serializable] sealed class AuthoredChoice { public string key, grade; public AuthoredFinding finding; }
+        [Serializable] sealed class AuthoredFinding { public string label, text; }
+        [Serializable] sealed class AuthoredRound { public string id, stage; public AuthoredChoice[] choices; }
+        [Serializable] sealed class AuthoredInterview { public AuthoredRound[] rounds; public string closingLine; }
+        static AuthoredInterview Authored(string patient)
+        {
+            string path=Path.GetFullPath(Path.Combine(Application.dataPath,"../../../services/preop/content/patients/"+patient+"/interview.json"));
+            return File.Exists(path)?JsonUtility.FromJson<AuthoredInterview>(File.ReadAllText(path)):null;
         }
         static void ValidateExchange()
         {
-            Process server=null;GameObject fixture=null,liveVoiceObject=null;QuestJarvisVoice voice=null;object connection=null;var connections=new List<object>();
+            Process server=null;GameObject fixture=null,liveVoiceObject=null;QuestJarvisVoice voice=null;var connections=new List<object>();
             try
             {
                 string repo=Path.GetFullPath(Path.Combine(Application.dataPath,"../../.."));string service=Path.Combine(repo,"services/preop");
                 var info=new ProcessStartInfo("/usr/bin/env","node --import "+Quote(Path.Combine(service,"node_modules/tsx/dist/loader.mjs"))+" "+Quote(Path.Combine(repo,"scripts/quest/native-coach-check/server.ts"))) { WorkingDirectory=service,UseShellExecute=false,RedirectStandardOutput=true,RedirectStandardError=true };
-                server=Process.Start(info);var ready=server.StandardOutput.ReadLineAsync();if(!ready.Wait(15000))throw new InvalidOperationException("Encounter fixture did not become ready");
-                const string marker="SCALPAL_COACH_TEST_ENDPOINT=";string line=ready.Result??"";if(!line.StartsWith(marker,StringComparison.Ordinal))throw new InvalidOperationException("Encounter fixture failed startup");
+                server=Process.Start(info);var ready=server.StandardOutput.ReadLineAsync();if(!ready.Wait(15000))throw new InvalidOperationException("Interview fixture did not become ready");
+                const string marker="SCALPAL_COACH_TEST_ENDPOINT=";string line=ready.Result??"";if(!line.StartsWith(marker,StringComparison.Ordinal))throw new InvalidOperationException("Interview fixture failed startup");
                 string endpoint=line.Substring(marker.Length);Check(new Uri(endpoint).Host=="127.0.0.1","actual service fixture is isolated loopback with external fetch disabled");
                 fixture=new GameObject("EncounterOfficeFixture");fixture.SetActive(false);
                 var session=fixture.AddComponent<NativeEncounterSession>();session.baseUrl=endpoint;
                 session.patient=UnityEngine.Object.FindFirstObjectByType<EncounterPatientPresentation>();
                 var dialogue=Scalpal.Shell.DialogueBox.Create(Scalpal.Shell.DialogueBoxStyle.Load(),null);dialogue.transform.SetParent(fixture.transform,false);
                 var dialogueFeed=dialogue.gameObject.AddComponent<Scalpal.Shell.DialogueFeed>();dialogueFeed.box=dialogue;dialogueFeed.BindOffice(session);
-                session.LoadPatients();var list=Drain(session);list.Run();
+                var all=new List<Exchange>();
+                Pump Run(){var pump=Drain(session);pump.Run();all.AddRange(pump.exchanges);return pump;}
+                session.LoadPatients();var list=Run();
                 Check(list.exchanges.Count==1&&list.exchanges[0].path=="/patients"&&session.Patients.Length==12,"actual patient list returns all twelve synthetic scenarios through the production coroutine");
                 var available=session.Patients.Where(entry=>(entry.status=="ready"||entry.status=="needs_review")&&!string.IsNullOrEmpty(entry.patientId)&&!string.IsNullOrEmpty(entry.procedureId)).ToArray();
                 Check(available.Length==8,"patient list exposes all eight available canonical synthetic subjects");
                 // An active transport so the production auto-connect can begin (its HTTP is never pumped: no provider).
                 liveVoiceObject=new GameObject("EncounterAutoVoiceFixture");var liveVoice=liveVoiceObject.AddComponent<QuestJarvisVoice>();session.voice=liveVoice;
-                var patientLabels=new HashSet<string>();
+                var patientLabels=new HashSet<string>();int interviews=0;
                 foreach(var entry in available)
                 {
-                    session.StartPatient(entry.patientId);var started=Drain(session);started.Run();
-                    Check(started.exchanges.Count==2&&started.exchanges[0].path=="/patients/"+entry.patientId+"/case"&&started.exchanges[1].path=="/encounters"&&started.exchanges[1].body==JsonUtility.ToJson(new PatientRequest{patientId=entry.patientId}),"canonical case eligibility is checked before exact subject encounter creation: "+entry.patientId);
-                    Check(session.State!=null&&session.State.patientId==entry.patientId&&session.State.phase=="interview"&&session.AuthoredProcedureId==entry.procedureId,"actual encounter adopts each available selected subject and authored procedure: "+entry.patientId);
+                    session.StartPatient(entry.patientId);var started=Run();
+                    Check(started.exchanges.Count==2&&started.exchanges[0].path=="/patients/"+entry.patientId+"/case"&&started.exchanges[1].path=="/interviews"&&started.exchanges[1].body==JsonUtility.ToJson(new PatientRequest{patientId=entry.patientId}),"case eligibility is checked before the exact subject's interview is created: "+entry.patientId);
+                    if(Authored(entry.patientId)==null)
+                    {
+                        Check(session.NoInterview&&session.State==null&&session.Status.Contains("Surgery coming soon")&&liveVoice.Status!="connecting","a patient without an authored interview says surgery is coming soon and connects no voice: "+entry.patientId);
+                        continue;
+                    }
+                    interviews++;
+                    Check(session.State!=null&&session.State.patientId==entry.patientId&&session.State.phase=="interview"&&QuestJarvisVoice.ValidInterviewId(session.State.encounterId)&&session.AuthoredProcedureId==entry.procedureId,"actual interview adopts each selected subject and its case surgery: "+entry.patientId);
                     bool parent=session.State.speaker=="parent";
                     string opener=Get<string>(session,"greeting");
-                    if(!string.IsNullOrWhiteSpace(opener))
-                        Check(dialogue.SpeakerLabel==(parent?session.State.speakerName+" · Parent":session.State.patientName+" · Patient")&&dialogue.FullText==opener.Trim(),"dialogue box labels the authored opener of each subject by speaker role: "+entry.patientId+" -> "+dialogue.SpeakerLabel);
+                    Check(!string.IsNullOrWhiteSpace(opener)&&dialogue.SpeakerLabel==(parent?session.State.speakerName+" · Parent":session.State.patientName+" · Patient")&&dialogue.FullText==opener.Trim(),"dialogue box shows the opening line by speaker role: "+entry.patientId+" -> "+dialogue.SpeakerLabel);
                     if(entry.patientId=="patient-demo-pediatric-asthma")
-                        Check(parent&&session.State.patientName=="Theo Abernathy"&&session.State.speakerName=="Laura Abernathy"&&dialogue.SpeakerLabel=="Laura Abernathy · Parent","pediatric encounter retains Laura as the parent speaker for Theo, in the dialogue box too");
-                    // Requirement: every playable patient is seated as soon as the encounter starts, from service demographics.
+                        Check(parent&&session.State.patientName=="Theo Abernathy"&&session.State.speakerName=="Laura Abernathy"&&dialogue.SpeakerLabel=="Laura Abernathy · Parent","pediatric interview keeps Laura as the parent speaker for Theo, in the dialogue box too");
+                    // Requirement: every playable patient is seated as soon as the interview starts, from service demographics.
                     var seated=session.patient;
-                    Check(session.State.patientAge>0&&(session.State.patientSex=="female"||session.State.patientSex=="male")&&session.State.speakerAge>=18&&(session.State.speakerSex=="female"||session.State.speakerSex=="male"),"service state carries seated patient and speaker demographics: "+entry.patientId);
-                    Check(seated.Patient&&seated.Patient.activeSelf&&seated.Speaker&&seated.Speaker.activeSelf&&seated.Patient==(session.State.patientSex=="female"?seated.female:seated.male)||parent&&seated.Patient&&seated.Patient.activeSelf,"a seated patient avatar appears when the encounter starts: "+entry.patientId);
+                    Check(session.State.patientAge>0&&(session.State.patientSex=="female"||session.State.patientSex=="male")&&session.State.speakerAge>=18&&(session.State.speakerSex=="female"||session.State.speakerSex=="male"),"interview start carries seated patient and speaker demographics: "+entry.patientId);
+                    Check(seated.Patient&&seated.Patient.activeSelf&&seated.Speaker&&seated.Speaker.activeSelf&&(parent||seated.Patient==(session.State.patientSex=="female"?seated.female:seated.male)),"a seated patient avatar appears when the interview starts: "+entry.patientId);
                     if(parent)
-                        Check(seated.Companion&&seated.Companion.activeSelf&&seated.Speaker==seated.Companion&&seated.Patient.transform.localScale.x<seated.Companion.transform.localScale.x*.85f,"pediatric encounter seats a scaled child with the speaking parent beside them: "+entry.patientId);
+                        Check(seated.Companion&&seated.Companion.activeSelf&&seated.Speaker==seated.Companion&&seated.Patient.transform.localScale.x<seated.Companion.transform.localScale.x*.85f,"pediatric interview seats a scaled child with the speaking parent beside them: "+entry.patientId);
                     else Check(!seated.Companion&&seated.Speaker==seated.Patient,"adult patient speaks for themself from the patient chair: "+entry.patientId);
-                    // Voice auto-connects for the patient role, with output bound to the speaker's mouth as a 3D source.
-                    Check(liveVoice.Status=="connecting"&&liveVoice.CoachSessionId==session.State.encounterId&&Get<string>(liveVoice,"encounterRole")=="patient"&&Get<string>(liveVoice,"prompt")==Get<string>(session,"prompt")&&!string.IsNullOrEmpty(Get<string>(session,"prompt")),"encounter start auto-connects the patient voice with the server persona prompt: "+entry.patientId);
+                    // Voice auto-connects through the interview's own connection route, microphone muted.
+                    Check(liveVoice.Status=="connecting"&&liveVoice.CoachSessionId==session.State.encounterId&&Get<bool>(liveVoice,"interviewMode")&&Get<string>(liveVoice,"encounterRole")=="patient"&&liveVoice.MicrophoneMuted,"interview start auto-connects the patient voice with the microphone muted: "+entry.patientId);
+                    Check(session.AwaitingPatient&&session.Round==null,"round 1 waits for the patient's opening line: "+entry.patientId);
                     var mouth=liveVoice.Speaker;
                     Check(mouth&&mouth==seated.MouthSource&&mouth.transform.IsChildOf(seated.Speaker.transform)&&mouth.transform.parent.name=="JawPivot"&&mouth.spatialBlend==1&&!mouth.mute&&mouth.volume>0&&mouth.enabled&&mouth.gameObject.activeInHierarchy,"patient voice AudioSource is a spatial, audible source at the speaking avatar's mouth: "+entry.patientId);
                     string label=EncounterContract.SpeakerLabel(session.State,"patient");
-                    Check(session.LastSpeaker==label&&label!=EncounterContract.AttendingLabel&&!label.Contains("Jarvis")&&!label.Contains("/")&&label.StartsWith(parent?session.State.speakerName:session.State.patientName,StringComparison.Ordinal),"greeting is labelled with the actual patient or parent speaker: "+entry.patientId);
+                    Check(session.LastSpeaker==label&&!label.Contains("Jarvis")&&!label.Contains("/")&&label.StartsWith(parent?session.State.speakerName:session.State.patientName,StringComparison.Ordinal),"opening line is labelled with the actual patient or parent speaker: "+entry.patientId);
                     patientLabels.Add(label);
-                    if(entry.patientId=="patient-demo-pediatric-asthma")Check(label=="Laura Abernathy · Parent of Theo","Theo's history is labelled as coming from his mother Laura");
+                    if(entry.patientId=="patient-demo-pediatric-asthma")Check(label=="Laura Abernathy · Parent of Theo","Theo's interview is labelled as coming from his mother Laura");
                 }
-                Check(patientLabels.Count==available.Length,"each encounter speaker has a distinct label");
+                Check(interviews>=7&&patientLabels.Count==interviews,"each authored interview has a distinct speaker label ("+interviews+" interviews)");
                 session.ToggleVoice();Check(!session.VoiceEnabled&&liveVoice.Status=="disconnected","explicit Voice off disconnects the patient voice");
-                session.StartPatient(available[0].patientId);Drain(session).Run();
-                Check(session.State!=null&&liveVoice.Status!="connecting"&&!session.VoiceEnabled,"with Voice off a new encounter does not connect");
-                session.ToggleVoice();Check(session.VoiceEnabled&&liveVoice.Status=="connecting","Voice on reconnects the current encounter's patient voice");
+                session.StartPatient(EncounterContract.MalePatientId);Run();
+                Check(session.State!=null&&liveVoice.Status!="connecting"&&!session.VoiceEnabled&&(session.RoundVisible||liveVoice.PlaybackActive&&session.AwaitingPatient),"with Voice off a new interview does not connect; round 1 shows at once or after a bundled opener: "+liveVoice.Status);
+                liveVoice.Disconnect();Call(session,"Update");
+                Check(session.RoundVisible&&session.Round.number==1,"with no voice playing, round 1 shows");
+                session.ToggleVoice();Check(session.VoiceEnabled&&liveVoice.Status=="connecting","Voice on reconnects the current interview's patient voice");
                 liveVoice.Disconnect();session.voice=null;
                 var unavailable=session.Patients.Where(entry=>entry.status!="connect"&&entry.status!="ready"&&entry.status!="needs_review").ToArray();
                 Check(unavailable.Length==2,"patient list keeps both unavailable synthetic record cases visible as unavailable");
                 foreach(var entry in unavailable)
                 {
-                    session.StartPatient(entry.patientId);var rejected=Drain(session);rejected.Run();
-                    Check(rejected.exchanges.Count==1&&rejected.exchanges[0].path=="/patients/"+entry.patientId+"/case"&&session.State==null,"unavailable case is rejected before encounter POST: "+entry.patientId);
+                    session.StartPatient(entry.patientId);var rejected=Run();
+                    Check(rejected.exchanges.Count==1&&rejected.exchanges[0].path=="/patients/"+entry.patientId+"/case"&&session.State==null,"unavailable case is rejected before interview POST: "+entry.patientId);
                 }
                 var connect=session.Patients.Where(entry=>entry.status=="connect").ToArray();
                 Check(connect.Length==2&&connect.All(entry=>string.IsNullOrEmpty(entry.patientId)),"Connect scenarios retain no canonical subject before consent");
                 foreach(var entry in connect)
                 {
-                    session.StartPatient(entry.patientId);var rejected=Drain(session);rejected.Run();
-                    Check(rejected.exchanges.Count==0&&session.State==null,"subjectless Connect scenario cannot issue a case lookup or encounter POST: "+entry.scenarioId);
+                    session.StartPatient(entry.patientId);var rejected=Run();
+                    Check(rejected.exchanges.Count==0&&session.State==null,"subjectless Connect scenario cannot issue a case lookup or interview POST: "+entry.scenarioId);
                 }
-                session.StartPatient(EncounterContract.FemalePatientId);Drain(session).Run();
-                Check(session.State!=null&&session.State.patientId==EncounterContract.FemalePatientId&&session.State.patientName=="Priya Ramaswamy"&&session.State.phase=="interview","actual create response binds female40 catalog persona; status="+session.Status+" name="+session.State?.patientName+" id="+session.State?.patientId+" phase="+session.State?.phase);
-                Check(EncounterPatientSpeech.Find(session.State.patientId,"greeting","",Get<string>(session,"greeting")),"actual authoritative patient opener resolves exact bundled greeting");
-                string femaleId=session.State.encounterId;
-                session.Ask("allergies");var allergy=Drain(session);allergy.Run();
-                Check(allergy.exchanges.Single().path=="/encounters/"+femaleId+"/tools/answer"&&allergy.exchanges.Single().body=="{\"topic\":\"allergies\"}","fallback question uses exact authoritative encounter route and body");
-                Check(session.State.historyAsked.Any(item=>item.id=="allergies")&&session.LastResponse.IndexOf("latex",StringComparison.OrdinalIgnoreCase)>=0&&!session.LastResponse.Contains("FACT for you"),"visual fallback receives case fact without provider instruction wrapper");
-                Check(dialogue.SpeakerLabel=="Priya Ramaswamy · Patient"&&dialogue.FullText.IndexOf("latex",StringComparison.OrdinalIgnoreCase)>=0&&!dialogue.FullText.Contains("FACT for you"),"visual answer reaches the dialogue box as the named patient");
-                session.Examine("abdomen_palpation");Drain(session).Run();
-                Check(session.State.exams.Any(item=>item.id=="abdomen_palpation"&&item.finding.Contains("right lower")),"actual examination state populates findings chart");
-                string beforeTest=dialogue.FullText;session.OrderTest("pregnancy_test");Drain(session).Run();
-                Check(dialogue.FullText==beforeTest,"chart-only test acknowledgements are not spoken dialogue");
-                Check(session.State.tests.Any(item=>item.id=="pregnancy_test"&&item.result.Contains("negative")),"actual authored pregnancy result appears only after order");
-                voice=fixture.AddComponent<QuestJarvisVoice>();session.voice=voice;Set(voice,"generation",70);Property(voice,"Status","connected");connection=NewConnection(voice,70);connections.Add(connection);
-                Call(session,"Transcript","user","Please perform ultrasound, then CT.");
-                Check(dialogue.SpeakerLabel=="You"&&dialogue.FullText=="Please perform ultrasound, then CT.","learner voice transcript reaches the dialogue box as You");
-                var firstTool=new QuestJarvisVoice.ToolRequest{ToolName="order_test",ToolCallId="fifo-ultrasound",ConnectionGeneration=70,ParametersJson="{\"test\":\"ultrasound\"}"};
-                var secondTool=new QuestJarvisVoice.ToolRequest{ToolName="order_test",ToolCallId="fifo-ct",ConnectionGeneration=70,ParametersJson="{\"test\":\"ct_abdomen_pelvis\"}"};
-                Get<HashSet<string>>(voice,"pendingTools").Add(firstTool.ToolCallId);Get<HashSet<string>>(voice,"pendingTools").Add(secondTool.ToolCallId);
-                Call(session,"VoiceTool",firstTool);Call(session,"VoiceTool",secondTool);var ordered=Drain(session);ordered.Run();
-                Check(ordered.exchanges.Count==3&&ordered.exchanges[0].body==firstTool.ParametersJson&&ordered.exchanges[1].body==secondTool.ParametersJson&&ordered.exchanges[2].path.EndsWith("/transcript",StringComparison.Ordinal),"priority queue preserves ultrasound then CT FIFO before transcript bookkeeping");
-                Check(session.State.tests.Select(item=>item.id).SequenceEqual(new[]{"pregnancy_test","ultrasound","ct_abdomen_pelvis"}),"authoritative engine receives learner tests in the same order as provider calls");
-                voice.Disconnect();session.voice=null;
-                int version=session.State.version;
-                session.Ask("unknown_topic");Drain(session).Run();
-                Check(session.State.version==version&&session.Status.Length>0,"actual HTTP400 is visible and cannot invent or adopt new findings");
-                // Simulate a lost successful transition response: service advances, local state remains interview.
-                Direct(endpoint,"POST","/encounters/"+femaleId+"/attending","{}");
-                session.RefreshState();var failedRecovery=Drain(session);Check(failedRecovery.Step(),"recovery GET starts before fixture transient POST failure");session.baseUrl=endpoint+"/missing";failedRecovery.Run();
-                Check(session.State.phase=="attending"&&session.Role=="patient","failed attending prompt recovery does not adopt attending role with stale patient persona");
-                session.voice=voice;session.StartVoice();Check(voice.Status=="disconnected"&&session.Status.Contains("correct conversation role"),"voice start is gated until the matching role prompt is loaded");session.voice=null;
-                session.baseUrl=endpoint;session.RefreshState();var recovered=Drain(session);recovered.Run();
-                Check(session.Role=="attending"&&session.State.phase=="attending"&&Get<string>(session,"prompt").Contains("attending")&&recovered.exchanges.Count==2,"refresh recovers lost attending response, role and prompt via idempotent transition");
-                Check(dialogue.SpeakerLabel=="Jarvis · Attending"&&dialogue.FullText==Get<string>(session,"greeting").Trim(),"attending opener reaches the dialogue box as Jarvis · Attending");
-                session.Draft=new EncounterAssessment{diagnosis="Gastroenteritis",differential=new[]{"Ectopic pregnancy","Ureteric stone"},procedure="Observation and reassessment",urgency="elective"};
-                session.SubmitAssessment();var assessment=Drain(session);assessment.Run();
-                Check(assessment.exchanges.Count==2&&assessment.exchanges[0].path.EndsWith("/tools/record_assessment",StringComparison.Ordinal)&&assessment.exchanges[1].path.EndsWith("/score",StringComparison.Ordinal),"assessment and score use same service encounter; score fetch follows successful assessment only");
-                Check(session.State.phase=="scored"&&session.Score!=null&&session.Score.total<100&&session.State.assessment.diagnosis=="Gastroenteritis","service evaluates learner's actual imperfect assessment; no local score engine");
-                Check(string.IsNullOrWhiteSpace(session.Score.spoken)||dialogue.SpeakerLabel=="Jarvis · Attending"&&dialogue.FullText.StartsWith(session.Score.spoken.Trim().Substring(0,Math.Min(40,session.Score.spoken.Trim().Length)),StringComparison.Ordinal),"Jarvis spoken feedback reaches the dialogue box");
-                Property(session,"Score",null);session.RefreshState();var recoveredScore=Drain(session);recoveredScore.Run();
-                Check(session.Score!=null&&recoveredScore.exchanges.Count==2&&session.State.phase=="scored","refresh recovers scored card without repeating assessment mutation");
-                session.StartPatient(EncounterContract.MalePatientId);Drain(session).Run();Check(session.State.patientName=="Jonah Okoye"&&session.State.patientId==EncounterContract.MalePatientId,"male30 persona binds its own synthetic case");
-                Check(EncounterPatientSpeech.Find(session.State.patientId,"greeting","",Get<string>(session,"greeting")),"actual male authoritative patient opener resolves its own bundled greeting");
-                string maleId=session.State.encounterId;
-                session.Ask("onset");var stale=Drain(session);Check(stale.Step(),"old-case actual HTTP request begins");
-                session.StartPatient(EncounterContract.FemalePatientId);stale.Run();Drain(session).Run();
-                Check(session.State.patientId==EncounterContract.FemalePatientId&&session.State.encounterId!=femaleId&&session.State.encounterId!=maleId&&session.State.historyAsked.Length==0,"new-case generation rejects stale pending request response and resets gathered state");
-                voice.ConfigureEndpoint(endpoint);
-                session.voice=voice;Property(voice,"Status","connecting");Set(voice,"permissionPending",true);int permissionGeneration=Get<int>(voice,"generation");
-                Call(session,"OnApplicationPause",true);Call(session,"OnApplicationFocus",false);Call(voice,"OnApplicationPause",true);Call(voice,"OnApplicationFocus",false);
-                Check(Get<int>(voice,"generation")==permissionGeneration,"explicit permission-dialog pending state preserves first-use voice permission flow across focus/pause");
-                Set(voice,"permissionPending",false);Call(session,"OnApplicationPause",false);Call(session,"OnApplicationFocus",true);Call(voice,"OnApplicationPause",false);Call(voice,"OnApplicationFocus",true);session.voice=null;
-                VoiceConfiguration(voice,session.State.encounterId,session.State.patientId,"patient","female-voice");
+                // Full interviews against the actual service: an adult whose plan pick is wrong, then the pediatric parent case.
+                voice=fixture.AddComponent<QuestJarvisVoice>();
+                RunInterview(session,voice,dialogue,endpoint,EncounterContract.FemalePatientId,true,connections,Run);
+                RunInterview(session,voice,dialogue,endpoint,"patient-demo-pediatric-asthma",false,connections,Run);
+                RunSkip(session,voice,endpoint,Run);
+                // Stale responses from an abandoned patient never reach the next one.
+                session.voice=null;session.StartPatient(EncounterContract.MalePatientId);Run();string maleId=session.State.encounterId;
+                session.Choose("A");var stale=Drain(session);Check(stale.Step(),"old-patient answer request begins");
+                session.StartPatient(EncounterContract.FemalePatientId);stale.Run();Run();
+                Check(session.State.patientId==EncounterContract.FemalePatientId&&session.State.encounterId!=maleId&&session.Round!=null&&session.Round.number==1&&session.Findings.Count==0,"a new patient rejects the stale answer and starts at round 1");
+                // Voice transport for the interview: identity, then the interview's own connection route; never Jarvis.
+                voice.Disconnect();voice.ConfigureEndpoint(endpoint);
+                Set(voice,"encounterMode",true);Set(voice,"interviewMode",true);Set(voice,"encounterRole","patient");Set(voice,"patientId",session.State.patientId);Property(voice,"CoachSessionId",session.State.encounterId);
+                var begin=new Pump((IEnumerator)Call(voice,"BeginConversation",Get<int>(voice,"generation")));begin.Run();all.AddRange(begin.exchanges);
+                Check(begin.exchanges.Count==2&&begin.exchanges[0].path=="/interviews/"+session.State.encounterId&&begin.exchanges[1].path=="/interviews/"+session.State.encounterId+"/connection"&&voice.Status=="error"&&voice.LastError.Contains("voice_unconfigured"),"interview voice validates the interview then requests its patient connection; missing credentials fail visibly before WSS");
+                Set(voice,"prompt","server prompt");Set(voice,"firstMessage","server opening");Set(voice,"encounterVoiceId","patient-voice");Set(voice,"encounterMode",true);Set(voice,"patientId",session.State.patientId);Property(voice,"CoachSessionId",session.State.encounterId);
                 var init=JsonUtility.FromJson<VoiceInit>((string)Call(voice,"BuildInitiation","patient"));
-                Check(init.dynamic_variables.encounter_id==session.State.encounterId&&init.dynamic_variables.session_id==session.State.encounterId&&init.dynamic_variables.coach_session_id==""&&init.dynamic_variables.patient_id==EncounterContract.FemalePatientId&&init.dynamic_variables.mode=="patient","serialized patient voice initiation uses exact encounter identity and distinct role");
-                Check(init.conversation_config_override.tts.voice_id=="female-voice"&&init.conversation_config_override.agent.prompt.prompt=="authored prompt","patient voice selects returned voice and authored prompt");
-                var begin=new Pump((IEnumerator)Call(voice,"BeginConversation",Get<int>(voice,"generation")));begin.Run();
-                Check(begin.exchanges.Count==2&&begin.exchanges[0].path=="/encounters/"+session.State.encounterId&&begin.exchanges[1].path=="/jarvis/connection"&&begin.exchanges[1].query=="?encounterId="+session.State.encounterId&&voice.Status=="error"&&voice.LastError.Contains("jarvis_unconfigured"),"production voice HTTP validates encounter then requests the encounter-bound agent; missing credentials fail visibly with the service reason before WSS");
-                string patientLabel=session.LastSpeaker;
-                session.SeeAttending();Drain(session).Run();
-                Check(session.Role=="attending"&&session.LastSpeaker==EncounterContract.AttendingLabel&&session.LastSpeaker!=patientLabel&&patientLabel.EndsWith("· Patient",StringComparison.Ordinal),"Present to Jarvis switches the speaker label from the patient to Jarvis · Attending");
-                VoiceConfiguration(voice,session.State.encounterId,session.State.patientId,"attending","");
-                var attendingJson=(string)Call(voice,"BuildInitiation","attending");Check(!attendingJson.Contains("\"tts\"")&&attendingJson.Contains("\"mode\":\"attending\""),"attending keeps Jarvis default voice and separate role");
-                var attendBegin=new Pump((IEnumerator)Call(voice,"BeginConversation",Get<int>(voice,"generation")));attendBegin.Run();
-                Check(attendBegin.exchanges.Count==2&&attendBegin.exchanges[1].query=="?encounterId="+session.State.encounterId,"attending connection is bound to the encounter so the service selects Jarvis for the attending phase");
-                VoiceConfiguration(voice,session.State.encounterId,EncounterContract.MalePatientId,"attending","");
-                var mismatch=new Pump((IEnumerator)Call(voice,"BeginConversation",Get<int>(voice,"generation")));mismatch.Run();
-                Check(mismatch.exchanges.Count==1&&voice.Status=="error","voice patient identity mismatch never reaches provider connection route");
-                // Native session tool guard: old provider connection cannot mutate a current encounter.
-                session.voice=voice;Set(voice,"generation",90);Property(voice,"Status","connected");connection=NewConnection(voice,90);connections.Add(connection);
-                var request=new QuestJarvisVoice.ToolRequest{ToolName="record_assessment",ToolCallId="old-tool",ConnectionGeneration=90,ParametersJson="{\"diagnosis\":\"wrong\"}"};
-                Get<HashSet<string>>(voice,"pendingTools").Add(request.ToolCallId);Call(session,"VoiceTool",request);
-                voice.Disconnect();var abandoned=Drain(session);abandoned.Run();
-                Check(abandoned.exchanges.Count==0&&session.State.phase=="attending","disconnected queued voice call emits no stale HTTP mutation");
-                session.voice=null;
+                Check(init.conversation_config_override.agent.prompt.prompt=="server prompt"&&init.conversation_config_override.agent.first_message=="server opening"&&init.conversation_config_override.tts.voice_id=="patient-voice"&&init.dynamic_variables.encounter_id==session.State.encounterId&&init.dynamic_variables.mode=="patient","the patient agent starts with the interview's prompt, opening line and voice overrides");
+                // No attending connection, encounter or Jarvis route is attempted anywhere in the office.
+                Check(all.Count>40&&!all.Any(exchange=>exchange.path.Contains("/attending")||exchange.path.StartsWith("/encounters",StringComparison.Ordinal)||exchange.path.StartsWith("/jarvis",StringComparison.Ordinal)),"the office never calls /encounters, an attending route or a Jarvis connection ("+all.Count+" exchanges)");
             }
             finally
             {
@@ -530,21 +543,176 @@ namespace Scalpal.EncounterOffice.Editor
                 if(server!=null){if(!server.HasExited)server.Kill();server.WaitForExit(5000);server.Dispose();}
             }
         }
-        static void Direct(string endpoint,string method,string path,string body)
+        // One full interview through the production session: opening line gated on speech end, an unclear spoken answer,
+        // a recognised spoken answer, taps for the rest, a direction + clinician turn sent after every pick and the next
+        // round withheld until the patient finishes, then the scorecard, the coach session and the handoff ticket.
+        static void RunInterview(NativeEncounterSession session,QuestJarvisVoice voice,Scalpal.Shell.DialogueBox dialogue,string endpoint,string patient,bool wrongPlan,List<object> connections,Func<Pump> run)
+        {
+            var authored=Authored(patient);Check(authored!=null&&authored.rounds.Length>=6,"committed interview content exists: "+patient);
+            session.voice=null;session.StartPatient(patient);run();
+            session.voice=voice;voice.MicrophoneMuted=false;Call(session,"ConnectVoice");
+            Check(voice.MicrophoneMuted&&Get<bool>(voice,"interviewMode"),"connecting the interview voice mutes the microphone: "+patient);
+            // A live patient connection, with no provider: messages queue on the fixture socket.
+            int epoch=Get<int>(voice,"generation")+1;voice.Disconnect();Set(voice,"generation",epoch);Property(voice,"Status","connected");
+            var connection=NewConnection(voice,epoch);connections.Add(connection);
+            var outgoing=(ConcurrentQueue<string>)connection.GetType().GetField("Outgoing").GetValue(connection);
+            Call(session,"AwaitPatient");
+            float now=Time.realtimeSinceStartup;
+            Check(!(bool)Call(session,"PatientDone",now)&&session.Round==null,"the round waits while the patient has not spoken yet: "+patient);
+            Speak(session,voice);
+            Check(session.RoundVisible&&session.Round.number==1&&session.Round.of==authored.rounds.Length,"round 1 appears once the opening line has been spoken: "+patient);
+            Call(dialogue.GetComponent<Scalpal.Shell.DialogueFeed>(),"Update");
+            Check(dialogue.ChoicesVisible&&dialogue.ChoiceRows.Count==4&&dialogue.ChoiceHeader=="1/"+authored.rounds.Length,"the dialogue box shows round 1's four choices with a small 1/"+authored.rounds.Length+" counter: "+patient);
+            // Hold-to-answer, unclear: the fixture hears silence as "um I'm not sure".
+            Call(session,"SubmitRecordedAnswer",new float[16000],16000);var unclear=run();
+            Check(unclear.exchanges.Single().path=="/interviews/"+session.State.encounterId+"/answer"&&session.Round.number==1&&session.AnswerNote.StartsWith("Say A, B, C or D, or tap one.",StringComparison.Ordinal)&&session.AnswerNote.Contains("um I'm not sure")&&outgoing.IsEmpty,"422 unclear_answer re-asks with what was heard and sends the patient nothing: "+patient);
+            Call(dialogue.GetComponent<Scalpal.Shell.DialogueFeed>(),"Update");
+            Check(dialogue.ChoiceNote==session.AnswerNote,"the re-ask note shows under the choices: "+patient);
+            int findings=0;var keys=new List<string>();
+            for(int i=0;i<authored.rounds.Length;i++)
+            {
+                var round=session.Round;var spec=authored.rounds.Single(item=>item.id==round.roundId);
+                Check(round.number==i+1&&voice.MicrophoneMuted,"round "+(i+1)+" is current and the microphone is muted: "+patient);
+                string key=spec.stage=="plan"&&wrongPlan?spec.choices.First(choice=>choice.grade=="wrong").key:spec.choices.Single(choice=>choice.grade=="correct").key;
+                var chosen=spec.choices.Single(choice=>choice.key==key);if(chosen.finding!=null&&!string.IsNullOrEmpty(chosen.finding.text))findings++;
+                int turns=session.TurnsSent;
+                Pump answered;
+                if(i==0&&key=="B") { Call(session,"SubmitRecordedAnswer",Tone(16000,1f,.5f),16000);answered=run(); }
+                else if(i==0) { Call(session,"SubmitRecordedAnswer",Tone(16000,1f,.5f),16000);var spoken=run();
+                    Check(spoken.exchanges.Single().body.Contains("\"mimeType\":\"audio/wav\"")&&session.Round.number==2&&session.TurnsSent==turns+1,"a recognised spoken answer (\"option b\") picks B: "+patient);
+                    keys.Add("B");Drop(outgoing);Speak(session,voice);continue; }
+                else { session.Choose(key);answered=run(); }
+                keys.Add(key);
+                Check(answered.exchanges.Single().path=="/interviews/"+session.State.encounterId+"/answer"&&(i==0||answered.exchanges.Single().body=="{\"key\":\""+key+"\"}"),"pick "+(i+1)+" posts to the interview answer route: "+patient);
+                Check(dialogue.SpeakerLabel=="You"&&dialogue.FullText.StartsWith(key+") ",StringComparison.Ordinal),"the pick is shown as the learner's line: "+patient+" got "+dialogue.SpeakerLabel+": "+dialogue.FullText+" key "+key+" round "+(i+1)+" status "+session.Status+" note "+session.AnswerNote+" exch "+answered.exchanges.Count);
+                var messages=outgoing.ToArray();
+                var direction=JsonUtility.FromJson<TextFrame>(messages[0]);var clinician=JsonUtility.FromJson<TextFrame>(messages[1]);
+                bool last=i==authored.rounds.Length-1;
+                Check(messages.Length==2&&session.TurnsSent==turns+1&&direction.type=="contextual_update"&&direction.text.StartsWith("[DIRECTION] ",StringComparison.Ordinal)&&clinician.type=="user_message"&&clinician.text=="[CLINICIAN] "+round.choices.Single(choice=>choice.key==key).text,"pick "+(i+1)+" sends [DIRECTION] as a contextual update, then [CLINICIAN] as the user message: "+patient);
+                if(last&&!string.IsNullOrEmpty(authored.closingLine))Check(direction.text.Contains("Then close with")&&direction.text.Contains(authored.closingLine.Trim()),"the last direction carries the closing line: "+patient);
+                Drop(outgoing);
+                Check(session.Round==null&&session.AwaitingPatient&&!session.SurgeryReady,"after pick "+(i+1)+" nothing more is shown until the patient finishes: "+patient);
+                Speak(session,voice);
+            }
+            Check(session.Findings.Count==findings&&!session.Findings.Any(finding=>dialogue.FullText.Contains(finding.text)),"exam and test results go to the findings panel, not the dialogue: "+findings+" findings: "+patient);
+            var score=session.Score;
+            Check(session.SurgeryReady&&session.State.phase=="scored"&&score.kind=="interview"&&score.max==100&&score.rounds.Length==authored.rounds.Length&&score.sections.Length>0&&score.feedback.Length>0&&string.IsNullOrEmpty(score.spoken),"the scorecard (total, sections, rounds, feedback) is on screen only: "+patient);
+            Check(score.procedureChosenCorrectly==!wrongPlan&&score.procedureId==session.AuthoredProcedureId&&score.rounds.Select(r=>r.picked.key).SequenceEqual(keys),"scorecard rounds record the picks and the case surgery stays authored: "+patient);
+            Call(session,"Transcript","agent","Okay, thank you.");var mirrored=run();
+            Check(mirrored.exchanges.Single().path=="/interviews/"+session.State.encounterId+"/transcript"&&mirrored.exchanges.Single().body.Contains("\"speaker\":\"patient\""),"the patient's lines are mirrored to the interview transcript: "+patient);
+            // Scrub in: the coach session carries the interview; the handoff ticket is built from its scorecard.
+            Check(session.TryPrepareHandoff(out var handoff,out var reason),"scored interview prepares the OR handoff: "+reason);
+            var liveCase=JsonUtility.FromJson<Scalpal.Exercises.Data.SurgicalCase>(DirectText(endpoint,"GET","/patients/"+patient+"/case",null));
+            var liveInterview=EncounterContract.ReadOffice(DirectText(endpoint,"GET",EncounterContract.OfficePath(handoff.encounterId),null),handoff.encounterId);
+            var liveScore=EncounterContract.ReadOffice(DirectText(endpoint,"GET",EncounterContract.OfficePath(handoff.encounterId)+"/score",null),handoff.encounterId);
+            Check(EncounterSurgeryBinding.Validate(handoff,liveCase,liveInterview,liveScore,out reason),"the live interview and score confirm the handoff: "+reason);
+            var tampered=JsonUtility.FromJson<EncounterReply>(JsonUtility.ToJson(liveScore));tampered.scorecard.total++;
+            Check(!EncounterSurgeryBinding.Validate(handoff,liveCase,liveInterview,tampered,out _),"a changed live interview score refuses the handoff");
+            string create=EncounterSurgeryBinding.CoachCreateJson(handoff,"virtual");
+            Check(create.Contains("\"encounterId\":\""+session.State.encounterId+"\"")&&create.Contains("\"mode\":\"virtual\""),"scrub in posts the interview id as encounterId");
+            var coach=JsonUtility.FromJson<CoachCreated>(DirectText(endpoint,"POST","/coach/sessions",create));
+            Check(coach.sessionId.StartsWith("coach-",StringComparison.Ordinal)&&coach.systemPrompt.Contains("Pre-op interview score "+score.total+"/100")&&coach.snapshot.procedureId==score.procedureId,"the coach session is created with encounterId=interviewId and carries the interview result");
+            var ticket=Scalpal.Handoff.HandoffRun.Begin(session.State,score,endpoint);
+            try
+            {
+                Check(ticket.encounterId==session.State.encounterId&&ticket.procedureId==score.procedureId&&ticket.scorecard.carryoverItems==score.carryoverItems&&ticket.escalated==wrongPlan
+                    &&ticket.learnerProcedure==EncounterContract.Picked(score,"plan"),"the handoff ticket carries the interview's procedure, carryover risks and (for a wrong plan) the escalation: "+patient);
+            }
+            finally { Scalpal.Handoff.HandoffRun.Clear(); }
+            voice.Disconnect();
+        }
+        // Skip to surgery from the explore card (selection flag -> case -> Theatre card, no interview) and from the office pause
+        // (leave a running interview): the case's procedure, chart-flag Time-Out risks, a coach session without encounterId,
+        // and a recap that reads Skipped.
+        static void RunSkip(NativeEncounterSession session,QuestJarvisVoice voice,string endpoint,Func<Pump> run)
+        {
+            var flowObject=new GameObject("SkipHandoffFlowFixture");GameObject nativeObject=null;
+            var previousTicket=Scalpal.Handoff.HandoffRun.Current;
+            try
+            {
+                var flow=flowObject.AddComponent<Scalpal.Handoff.HandoffFlow>();
+                var card=UnityEngine.Object.Instantiate(Resources.Load<Scalpal.Handoff.HandoffCard>("HandoffCard"),flowObject.transform);
+                Set(flow,"card",card);Set(flow,"nextHealth",float.MaxValue);Set(flow,"focused",true);
+                const string patient=EncounterContract.FemalePatientId;
+                var kase=JsonUtility.FromJson<Scalpal.Exercises.Data.SurgicalCase>(DirectText(endpoint,"GET","/patients/"+patient+"/case",null));
+                // Explore: the detail card's Skip to surgery stages the selection with the skip flag for the office scene.
+                Check(Scalpal.Shell.ShellTransition.TryStageSelection(patient,endpoint,true)&&Scalpal.Shell.ShellTransition.TryConsumeSelection(out var selection)&&selection.skipToSurgery&&selection.patientId==patient,"explore's Skip to surgery stages the patient with the skip flag");
+                session.voice=null;session.StartPatient(patient,true);var skipped=run();
+                Check(skipped.exchanges.Count==1&&skipped.exchanges[0].path=="/patients/"+patient+"/case"&&session.Skipped&&session.State.encounterId==""&&session.Round==null,"skip from explore loads only the case: no interview is created");
+                // The isolated fixture has no paired bridge; give the run the office's captured shared attempt, as production does.
+                Set(session,"sharedSessionId","skip-session");Set(session,"sharedAttemptId","skip-attempt");
+                Check(Scalpal.Handoff.HandoffFlow.OpenSkipped(session),"the skipped run opens the theatre handoff");
+                var ticket=Scalpal.Handoff.HandoffRun.Current;
+                Check(ticket.skipped&&ticket.encounterId==""&&ticket.procedureId==kase.procedureId&&ticket.patientId==patient&&EncounterContract.IsSkipped(ticket.scorecard)&&ticket.scorecard.diagnosisResult=="skipped"&&!ticket.escalated,"the skipped ticket targets the case's procedure with no interview and diagnosis skipped");
+                var risks=Scalpal.Handoff.HandoffFlow.ReviewRisks(ticket.scorecard);
+                Check(risks.Length>0&&risks.Length==kase.brief.flags.Select(flag=>flag.type).Distinct().Count()&&risks.All(risk=>risk.status=="chart"),"Time-Out still reviews the case's chart risks: "+risks.Length);
+                Set(flow,"nextRefresh",0f);Call(flow,"Update");
+                Check(Get<string>(flow,"phase")=="theatre"&&Get<string>(card,"heading")=="To theatre"&&Get<string[]>(card,"actions")[1]=="Virtual OR (VR)","skip reaches the Theatre card (AR/VR choice)");
+                // Coach session: no encounterId at all.
+                nativeObject=new GameObject("SkipCoachFixture");nativeObject.SetActive(false);
+                var native=nativeObject.AddComponent<Scalpal.Quest.NativeCaseSession>();
+                string coachJson=native.CoachRequestJson();
+                Check(!coachJson.Contains("encounterId")&&coachJson.Contains("\"patientId\":\""+patient+"\"")&&coachJson.Contains("\"mode\":\"virtual\""),"the skipped coach request carries patient and mode and no encounterId: "+coachJson);
+                var coach=JsonUtility.FromJson<CoachCreated>(DirectText(endpoint,"POST","/coach/sessions",coachJson));
+                Check(coach.sessionId.StartsWith("coach-",StringComparison.Ordinal)&&coach.snapshot.procedureId==kase.procedureId&&!coach.systemPrompt.Contains("Pre-op interview score"),"the coach session is created for the case's procedure without interview carryover");
+                // Recap: Clinical reasoning reads Skipped, not zero and not missing data.
+                Check(ticket.sharedSessionId=="skip-session"&&ticket.attemptId=="skip-attempt","the skipped run keeps the office's shared attempt");
+                var result=Scalpal.Recap.RecapSessionIntegration.FromHandoff(ticket,kase,"skip-session","skip-attempt");
+                string clinical=Scalpal.Recap.RecapPanel.Clinical(result);
+                Check(result.diagnosisSkipped&&!result.diagnosisAvailable&&clinical.Contains("Skipped")&&!clinical.Contains("Not available")&&!clinical.Contains("0 / "),"recap shows Clinical reasoning: Skipped");
+                Scalpal.Handoff.HandoffRun.Clear();
+                // Office pause: Skip to surgery leaves a running interview for the same Theatre card.
+                session.StartPatient(patient);run();
+                Check(session.State.phase=="interview"&&session.RoundVisible,"precondition: an interview is running");
+                Set(session,"sharedSessionId","skip-session");Set(session,"sharedAttemptId","skip-attempt");
+                int before=0;
+                Check(session.SkipToSurgery()&&session.Skipped&&session.Round==null&&!session.AwaitingPatient&&Scalpal.Handoff.HandoffRun.Current!=null&&Scalpal.Handoff.HandoffRun.Current.skipped
+                    &&Scalpal.Handoff.HandoffRun.Current.procedureId==kase.procedureId&&Get<string>(flow,"phase")=="theatre","skip from the office pause leaves the interview for the Theatre card");
+                Check(Drain(session).exchanges.Count==before,"skipping sends nothing more to the interview");
+            }
+            finally
+            {
+                Scalpal.Handoff.HandoffRun.Clear();if(previousTicket!=null)typeof(Scalpal.Handoff.HandoffRun).GetProperty("Current").GetSetMethod(true).Invoke(null,new object[]{previousTicket});
+                UnityEngine.Object.DestroyImmediate(flowObject);if(nativeObject)UnityEngine.Object.DestroyImmediate(nativeObject);
+            }
+        }
+        // The patient speaks one reply: agent response, audio, then drained playback; the round gate then opens.
+        static void Speak(NativeEncounterSession session,QuestJarvisVoice voice)
+        {
+            float now=Time.realtimeSinceStartup;
+            Call(voice,"SetMode","speaking");Property(voice,"AgentResponses",voice.AgentResponses+1);
+            Check(!(bool)Call(session,"PatientDone",now),"the round stays hidden while the patient is speaking");
+            Call(voice,"SetMode","listening");
+            Check(!(bool)Call(session,"PatientDone",now+.1f),"a brief gap between audio chunks does not reveal the round");
+            Check((bool)Call(session,"PatientDone",now+1f),"the round is released once the reply has finished and playback drained");
+            Call(session,"ReleaseRound");
+        }
+        static void Drop(ConcurrentQueue<string> queue){while(queue.TryDequeue(out _)){}}
+        [Serializable] sealed class TextFrame { public string type, text; }
+        [Serializable] sealed class CoachCreated { public string sessionId, systemPrompt; public CoachSnapshot snapshot; }
+        [Serializable] sealed class CoachSnapshot { public string procedureId; }
+        static string DirectText(string endpoint,string method,string path,string body)
         {
             using(var request=new UnityWebRequest(endpoint+path,method))
             {
-                request.downloadHandler=new DownloadHandlerBuffer();request.timeout=4;
-                request.uploadHandler=new UploadHandlerRaw(Encoding.UTF8.GetBytes(body));request.SetRequestHeader("Content-Type","application/json");
+                request.downloadHandler=new DownloadHandlerBuffer();request.timeout=6;
+                if(body!=null){request.uploadHandler=new UploadHandlerRaw(Encoding.UTF8.GetBytes(body));request.SetRequestHeader("Content-Type","application/json");}
                 var operation=request.SendWebRequest();var clock=Stopwatch.StartNew();
-                while(!operation.isDone){if(clock.ElapsedMilliseconds>6000)throw new InvalidOperationException("Direct fixture HTTP timed out");Thread.Sleep(5);}
-                if(request.result!=UnityWebRequest.Result.Success)throw new InvalidOperationException("Direct fixture HTTP status="+request.responseCode);
+                while(!operation.isDone){if(clock.ElapsedMilliseconds>8000)throw new InvalidOperationException("Direct fixture HTTP timed out");Thread.Sleep(5);}
+                if(request.result!=UnityWebRequest.Result.Success)throw new InvalidOperationException("Direct fixture HTTP "+method+" "+path+" status="+request.responseCode+" "+request.downloadHandler.text);
+                return request.downloadHandler.text;
             }
         }
-        static void VoiceConfiguration(QuestJarvisVoice voice,string id,string patient,string role,string voiceId)
-        {
-            voice.Disconnect();voice.ConfigureEncounterConversation("authored prompt","authored greeting",voiceId,role);Set(voice,"encounterMode",true);Set(voice,"patientId",patient);Property(voice,"CoachSessionId",id);
-        }
+        static InterviewRoundView FixtureRound(int number)=>new InterviewRoundView{roundId="round"+number,number=number,of=7,stage="history",prompt="What do you do next?",choices=new[]{"A","B","C","D"}.Select(key=>new InterviewChoiceView{key=key,text="Choice "+key}).ToArray()};
+        static float[] Tone(int rate,float seconds,float amplitude)=>Enumerable.Range(0,(int)(rate*seconds)).Select(i=>amplitude*Mathf.Sin(2*Mathf.PI*220*i/rate)).ToArray();
+        static EncounterScore InterviewScore(int feedback)=>new EncounterScore{kind="interview",total=64,max=100,grade="Developing",patientId=EncounterContract.FemalePatientId,procedureId="open_appendectomy",
+            sections=new[]{new EncounterScoreSection{id="history",label="History",score=20,max=30},new EncounterScoreSection{id="plan",label="Plan",score=0,max=15}},
+            rounds=new[]{
+                new InterviewRoundResult{stage="history",prompt="Where to start?",points=10,max=10,picked=new InterviewPickedChoice{key="A",text="Ask where it hurts",grade="correct"},best=new InterviewPickedChoice{key="A",text="Ask where it hurts"}},
+                new InterviewRoundResult{stage="exam",prompt="Next?",points=0,max=15,picked=new InterviewPickedChoice{key="B",text="Order a CT first",grade="wrong"},best=new InterviewPickedChoice{key="C",text="Examine the abdomen"}},
+                new InterviewRoundResult{stage="diagnosis",prompt="Diagnosis?",points=25,max=25,picked=new InterviewPickedChoice{key="C",text="Acute appendicitis",grade="correct"},best=new InterviewPickedChoice{key="C",text="Acute appendicitis"}},
+                new InterviewRoundResult{stage="plan",prompt="Plan?",points=0,max=15,picked=new InterviewPickedChoice{key="D",text="Observe overnight",grade="wrong"},best=new InterviewPickedChoice{key="A",text="Open appendectomy"}}},
+            carryoverItems=new EncounterCarryoverItem[0],feedback=Enumerable.Range(0,feedback).Select(n=>"Feedback item "+n).ToArray()};
         static Pump Drain(NativeEncounterSession session)=>new Pump((IEnumerator)Call(session,"Drain"));
         static object NewConnection(QuestJarvisVoice voice,int epoch)
         {
@@ -553,6 +721,7 @@ namespace Scalpal.EncounterOffice.Editor
         static object Call(object target,string name,params object[] args)=>target.GetType().GetMethod(name,Private).Invoke(target,args);
         static void Set(object target,string name,object value)=>target.GetType().GetField(name,Private).SetValue(target,value);
         static T Get<T>(object target,string name)=>(T)target.GetType().GetField(name,Private).GetValue(target);
+        static T FieldOf<T>(object target,string name)=>(T)target.GetType().GetField(name,BindingFlags.Instance|BindingFlags.Public|BindingFlags.NonPublic).GetValue(target);
         static void Property(object target,string name,object value)=>target.GetType().GetProperty(name).GetSetMethod(true).Invoke(target,new[]{value});
         static string Quote(string path)=>"\""+path.Replace("\"","\\\"")+"\"";
         static void Check(bool value,string reason){if(!value)throw new InvalidOperationException("Encounter office validation: "+reason);checks++;}

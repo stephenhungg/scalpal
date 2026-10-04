@@ -1,6 +1,8 @@
 using System;
 using System.Linq;
 using System.Text;
+using Scalpal.Brand;
+using TMPro;
 using UnityEngine;
 
 namespace Scalpal.Recap
@@ -8,7 +10,7 @@ namespace Scalpal.Recap
     public sealed class RecapPanel : MonoBehaviour
     {
         public RecapController controller;
-        public TextMesh title, subtitle, status, leftCard, rightCard, reflection, feedback, timeline, sourceLabel, robotLabel, demoLabel;
+        public TextMeshPro title, subtitle, status, leftCard, rightCard, reflection, feedback, timeline, sourceLabel, robotLabel, demoLabel;
         public GameObject videoRoot, scoreRoot, reflectionRoot, sourcePlaceholder;
         public RecapButton[] errors;
         public RecapButton continueButton, exploreButton, retryButton, errorsNext;
@@ -26,7 +28,7 @@ namespace Scalpal.Recap
                 exploreButton.gameObject.SetActive(true); retryButton.gameObject.SetActive(false); errorsNext.gameObject.SetActive(false);
                 foreach (var error in errors) error.gameObject.SetActive(false);
                 demoLabel.text = "Sample demo: select explicitly";
-                foreach (var fit in GetComponentsInChildren<Scalpal.EncounterOffice.EncounterOfficeText>(true)) fit.Fit();
+                foreach (var fit in GetComponentsInChildren<ScalpalTextFit>(true)) fit.Fit();
                 return;
             }
             bool replay = controller.Phase == "replay", scores = controller.Phase == "scores";
@@ -37,7 +39,7 @@ namespace Scalpal.Recap
             if (replay && !string.IsNullOrEmpty(controller.Notice)) status.text += "\n" + controller.Notice;
             if (replay && !string.IsNullOrEmpty(controller.replay.PlaybackError)) status.text += "\n" + controller.replay.PlaybackError;
             sourcePlaceholder.SetActive(controller.replay.SourceUnavailable || controller.replay.Fallback || string.IsNullOrEmpty(r.replay.sourceVideoUrl));
-            sourceLabel.text = controller.replay.Fallback ? "Your recording · unavailable in sample mode" : controller.replay.SourceUnavailable || string.IsNullOrEmpty(r.replay.sourceVideoUrl) ? "Source recording unavailable" : r.replay.source == "learner" ? "Your recorded segment" : r.replay.source == "rehearsal" ? "Rehearsal recording · not this attempt" : "Synthetic source · not your recording";
+            sourceLabel.text = controller.replay.Fallback ? "Your recording · none in sample mode" : controller.replay.SourceUnavailable || string.IsNullOrEmpty(r.replay.sourceVideoUrl) ? "Source recording unavailable" : r.replay.source == "learner" ? "Your recorded segment" : r.replay.source == "rehearsal" ? "Rehearsal recording · not this attempt" : "Synthetic source · not your recording";
             robotLabel.text = controller.replay.Fallback ? "Shadow hand · SYNTHETIC SAMPLE" : "Shadow hand · " + r.replay.source.ToUpperInvariant();
             reflection.text = controller.Phase == "reaction" ? "Jarvis\n\n" + controller.ReactionQuestion + "\n\nReflect silently, or say your answer aloud.\nYour reaction is not scored." : "Your reflection\n\n" + controller.SelfAssessmentQuestion + "\n\nChoose one moment to carry into your next run.\nYour answer is not scored.";
             leftCard.text = Clinical(r); rightCard.text = Procedural(r);
@@ -58,11 +60,12 @@ namespace Scalpal.Recap
                 bool aligned = !controller.replay.Fallback && RunResultContract.TryClipTime(r, items[index], out var seconds) && seconds >= controller.replay.WindowStart && seconds <= controller.replay.WindowEnd;
                 errors[i].label.text = (items[index].timeKnown ? items[index].atSeconds.ToString("0.0") + " s" : "Time unavailable") + " · " + items[index].label + (aligned ? " · seek" : " · outside playback / unaligned");
             }
-            foreach (var fit in GetComponentsInChildren<Scalpal.EncounterOffice.EncounterOfficeText>(true)) fit.Fit();
+            foreach (var fit in GetComponentsInChildren<ScalpalTextFit>(true)) fit.Fit();
         }
         public static string Clinical(RunResult r)
         {
             var s = r.diagnosis;
+            if (r.diagnosisSkipped) return "CLINICAL REASONING\n\nSkipped\nYou went straight to surgery; the diagnosis office was not scored.";
             if (!r.diagnosisAvailable || s == null) return "CLINICAL REASONING\n\nNot available\nThe encounter has not supplied its scorecard.";
             var b = new StringBuilder("CLINICAL REASONING\n" + (r.isSample ? "SAMPLE · not your run\n" : "") + (r.demo?.enabled == true ? "DEMO-ASSISTED RUN\n" : "") + s.total + " / " + s.max + "  ·  " + s.grade + "\n");
             foreach (var section in s.sections ?? Array.Empty<ScoreSection>()) b.AppendLine(section.label + "  " + section.score + "/" + section.max);

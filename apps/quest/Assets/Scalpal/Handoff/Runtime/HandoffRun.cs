@@ -28,6 +28,8 @@ namespace Scalpal.Handoff
         public string sharedSessionId = "", attemptId = "", serviceUrl, issuedAt, learnerProcedure;
         public EncounterSurgeryHandoff sourceOffice;
         public EncounterScore scorecard;
+        // Skip to surgery: no interview; scorecard is the case's run context (kind "skipped") and encounterId is empty.
+        public bool skipped;
         public bool demoMode; // Snapshot at canonical run creation; recap cannot change assistance after the run.
         public bool escalated, challengeSeen, consequenceSeen, practiceStarted, timeOutConfirmed, revisedAfterPrompt;
         public bool patientConfirmed, procedureConfirmed, siteConfirmed, risksConfirmed, antibioticsReviewed, imagingReviewed;
@@ -60,6 +62,16 @@ namespace Scalpal.Handoff
             Current = new HandoffTicket { runId = Guid.NewGuid().ToString("N"), encounterId = state.encounterId,
                 patientId = state.patientId, procedureId = score.procedureId, procedureTitle = score.procedureTitle,
                 scorecard = score, learnerProcedure = state.assessment?.procedure ?? "", escalated = NeedsEscalation(score), serviceUrl = endpoint.TrimEnd('/'),
+                demoMode = Preflight.demoMode, presentationMode = Preflight.DefaultMode, issuedAt = DateTime.UtcNow.ToString("O") };
+            return Current;
+        }
+        // Skip to surgery: the case's procedure and chart risks, no interview or scorecard.
+        public static HandoffTicket BeginSkipped(EncounterScore context, string endpoint)
+        {
+            if (!EncounterContract.IsSkipped(context) || !EncounterContract.ValidPatientId(context.patientId) || string.IsNullOrEmpty(context.procedureId) || context.carryoverItems == null)
+                throw new ArgumentException("Skipping to surgery needs the patient's case and its chart risks.");
+            Current = new HandoffTicket { runId = Guid.NewGuid().ToString("N"), encounterId = "", patientId = context.patientId, procedureId = context.procedureId,
+                procedureTitle = context.procedureTitle, scorecard = context, learnerProcedure = "", escalated = false, skipped = true, serviceUrl = endpoint.TrimEnd('/'),
                 demoMode = Preflight.demoMode, presentationMode = Preflight.DefaultMode, issuedAt = DateTime.UtcNow.ToString("O") };
             return Current;
         }

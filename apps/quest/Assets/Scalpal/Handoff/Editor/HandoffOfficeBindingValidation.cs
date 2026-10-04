@@ -5,7 +5,8 @@ using UnityEngine;
 
 namespace Scalpal.Handoff.Editor
 {
-    // Production snapshot/matcher/office producer with synthetic captured IDs; no reducer evidence.
+    // Production snapshot/matcher/office producer with synthetic captured IDs; no reducer evidence. The office source is
+    // a scored choice interview (int-...) whose plan pick was wrong: the OR still loads the case's surgery.
     public static class HandoffOfficeBindingValidation
     {
         const BindingFlags Private = BindingFlags.Instance | BindingFlags.NonPublic;
@@ -17,9 +18,12 @@ namespace Scalpal.Handoff.Editor
             var fixture = new GameObject("HandoffOfficeSourceFixture"); fixture.SetActive(false);
             try
             {
-                var state = new EncounterState { patientId = "patient-office-fixture", encounterId = "enc-officebinding123", phase = "scored",
+                var state = new EncounterState { patientId = "patient-office-fixture", encounterId = "int-officebinding123", phase = "scored",
                     assessment = new EncounterAssessment { procedure = "wrong proposed procedure", differential = new[] { "fixture differential" } } };
-                var score = new EncounterScore { patientId = state.patientId, procedureId = "lap_appendectomy", total = 78, max = 100, grade = "B",
+                var score = new EncounterScore { kind = "interview", patientId = state.patientId, procedureId = "lap_appendectomy", total = 78, max = 100, grade = "Solid",
+                    procedureChosenCorrectly = false, diagnosisResult = "correct",
+                    rounds = new[] { new InterviewRoundResult { stage = "plan", prompt = "What is the plan?", points = 0, max = 15,
+                        picked = new InterviewPickedChoice { key = "B", text = "wrong proposed procedure", grade = "wrong" }, best = new InterviewPickedChoice { key = "A", text = "Laparoscopic appendectomy" } } },
                     carryoverItems = new[] { new EncounterCarryoverItem { flagId = "latex", label = "Latex allergy", status = "found", historyTopics = new[] { "allergies" } } } };
                 var office = fixture.AddComponent<NativeEncounterSession>();
                 Property(office, "State", state); Property(office, "Score", score); Property(office, "AuthoredProcedureId", score.procedureId);
@@ -30,6 +34,8 @@ namespace Scalpal.Handoff.Editor
                 Assert(!EncounterOfficeRoute.TakeSurgery(out _), "producer consumes legacy transport pointer exactly once");
                 var ticket = HandoffRun.Begin(state, score, office.baseUrl);
                 HandoffRun.BindOfficeSource(ticket, source);
+                Assert(ticket.encounterId == "int-officebinding123" && ticket.escalated && ticket.procedureId == "lap_appendectomy" && ticket.learnerProcedure == "wrong proposed procedure",
+                    "a wrong plan pick escalates (challenge and consequence) yet still routes to the case's surgery");
                 Assert(HandoffRun.CanChoose("mixed_reality", new TheatrePreflight
                     { volunteerConsented = true, cameraGranted = true, sceneGranted = true, poseServiceOk = true, coachServiceOk = true }),
                     "office source permits AR when every operator preflight gate is green");
@@ -69,9 +75,9 @@ namespace Scalpal.Handoff.Editor
                 }
                 Throws(() => HandoffRun.BindOfficeSource(ticket, null), "null office source rejected");
                 Throws(() => HandoffRun.BindOfficeSource(null, ticket.sourceOffice), "null target ticket rejected");
-                Set(office, "working", true);
+                Set(office, "blocking", 1);
                 Assert(!office.TryPrepareHandoff(out _, out reason) && reason.Length > 0, "busy office cannot produce handoff");
-                Set(office, "working", false); state.phase = "attending";
+                Set(office, "blocking", 0); state.phase = "interview";
                 Assert(!office.TryPrepareHandoff(out _, out reason), "unscored office cannot produce handoff");
                 state.phase = "scored"; Property(office, "AuthoredProcedureId", "lap_cholecystectomy");
                 Assert(!office.TryPrepareHandoff(out _, out reason), "mismatched authored surgery cannot produce handoff");
