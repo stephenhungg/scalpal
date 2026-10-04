@@ -1,4 +1,5 @@
 import { Pill, ToastHost } from './components/ui';
+import { DitherLogo } from './components/DitherLogo';
 import { useLive } from './data/live';
 import { Link, match, usePath } from './lib/router';
 import Home from './pages/Home';
@@ -21,7 +22,8 @@ export default function App() {
     <>
       <header className="topbar">
         <Link to="/" className="brand">
-          SCALPAL <small>companion</small>
+          <DitherLogo />
+          <span className="brand-dot" aria-hidden>.</span>
         </Link>
         <div className="spacer" />
         {connected ? (
