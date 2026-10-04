@@ -47,11 +47,14 @@ export function RollButton({ label, hoverLabel = label, variant = "primary", hre
   );
 }
 
-// Secondary buttons carry small registration crosses at each corner.
+// Secondary buttons carry small registration crosses at each corner; on hover they turn into x's.
 function Crosshairs() {
   const arm = "absolute bg-[var(--cross)]";
   const corner = (pos: string) => (
-    <span aria-hidden className={`pointer-events-none absolute h-[13px] w-[13px] ${pos}`}>
+    <span
+      aria-hidden
+      className={`pointer-events-none absolute h-[13px] w-[13px] transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] group-hover:rotate-45 ${pos}`}
+    >
       <span className={`${arm} left-1/2 top-0 h-full w-px -translate-x-1/2`} />
       <span className={`${arm} left-0 top-1/2 h-px w-full -translate-y-1/2`} />
     </span>
