@@ -134,3 +134,23 @@ Material grips retain the 35 mm support radius and partition eligible active nod
 The finer wall exposed an incorrect welded muscle/membrane interface: forceps acquired the posterior28mm face instead of the anterior27mm face, and the unchanged Surgery tenting test failed. The new finite `SplitMaterialSweep` releases that local material interface without counting it as a peritoneum cut. The native split facade invokes it for the underlying authored layer; material laws, body reducers and milestone thresholds are preserved. It is an authored tissue-plane approximation, not calibrated adhesion or continuous contact.
 
 At the verified component checkpoint on `b712713` plus these changes, `verify_session.py --suite player` passed. The actual consumer sweep passed all33 authored placements (30 valid paired-contact openings, two unavailable end contacts and one outside-wall rejection). The unchanged92-check Surgery coupling passed in default VR and re-posed AR frames: split40mm, accepted tent15mm in both. Interface12,405 and managed/Burst-floor42,558 checks passed. The wound has at most1,278 active nodes and530 cut faces in this sweep; its total cut+release budget is asserted independently. Editor loaded-volume p9543.140ms/max258.474ms, solver p9542.416ms, surface p950.889ms, input+volume p9543.530ms. Retries/backtracking remain possible (sampled maxima4/8). These are Mono Editor CPU measurements, not a Quest frame-rate pass; actual native cost remains required.
+
+
+## Sequential Contact Projection Checkpoint
+
+The gathered contact batch formerly reused each probe's initial depth after previous projections had already moved its cage. `TissueContactSolver` now stores a frozen material-plane goal and recomputes the current material-point separation before each projection. A satisfied plane is skipped. Candidate safety, posterior pins, displacement caps, authored rest-overlap allowances, 128 probes, two passes and next-pass BVH/normal refresh remain unchanged. This adds no per-constraint surface query. It fixes a local overprojection error; it does not establish complete separation, sliding contact or continuous collision detection.
+
+`NativeContactMotionValidation` uses the actual projection method with two production cages and independent accepted-point geometry. Sixteen repeated samples approach a 2 mm goal without exceeding it (accepted 1.999754 mm); a satisfied plane must leave positions unchanged. Replacing only the current-gap expression with the old depth causes the geometric nonovershoot assertion to fail. The original source was restored byte-for-byte afterward. Submicrometer correction-floor refusal must also preserve both cages atomically.
+
+The validator additionally moves all three actual imported bodies (appendix, mesoappendix and appendicular artery) through inward and lateral synthetic grasp paths in a rotated, scaled common frame. It checks positive cells, exact pins, real accepted motion, continuing grip, source-asset preservation, display/collider agreement, registration freeze, release and reset. Its 53,097 structural assertions passed. The motion fixtures measure residual contact; they do not assert that every sampled or unsampled intersection resolves.
+
+| Imported body / path | Peak sampled excess | Held-end excess | After-release excess |
+| --- | ---: | ---: | ---: |
+| Appendix / inward 6 mm target | 8.241 mm | 0.669 mm | 0.000 mm |
+| Appendix / lateral 6 mm | 1.741 mm | 1.741 mm | 0.229 mm |
+| Mesoappendix / inward 6 mm | 7.439 mm | 5.227 mm | 0.000 mm |
+| Mesoappendix / lateral 6 mm | 7.225 mm | 1.020 mm | 0.000 mm |
+| Appendicular artery / inward 4 mm | 1.618 mm | 0.306 mm | 0.000 mm |
+| Appendicular artery / lateral 4 mm | 1.685 mm | 0.421 mm | 0.000 mm |
+
+These are sampled excess over authored attachment allowances, not a physiological clearance measurement. Earlier runs measured peaks only: artery peaks decreased from 7.979/5.203 mm, while appendix inward increased from 2.600 mm. No overall contact-quality improvement is inferred from that mixed result. Held mesoappendix penetration remains unresolved. Pair refusals include tiny corrections as well as possible cap/geometry refusals. Editor mean contact solve was 7.6–9.8 ms per synthetic substep; Quest timing remains unmeasured. The next contact investigation should isolate the held mesoappendix attachment/cap and surface-to-cage embedding, rather than claim that more generic iterations solve it.
