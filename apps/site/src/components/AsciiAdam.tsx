@@ -1,6 +1,6 @@
 "use client";
 
-// From MatthewKim323/adam (src/components/AsciiAdam.tsx), unchanged apart from this header and both arms set to white.
+// From MatthewKim323/adam (src/components/AsciiAdam.tsx), unchanged apart from this header, both arms set to white, and the onTouch / introSpeed props.
 import { useEffect, useRef } from 'react'
 
 /*
@@ -246,11 +246,21 @@ function aim(arm: Arm, base: Xf, pointer: Vec | null, dt: number): Xf {
   return [base[0], base[1] + arm.lift, base[2]]
 }
 
-type Props = { playing?: boolean; time?: number }
+// Scalpal site additions: onTouch fires once when the fingertips first meet (spark fully lit),
+// and introSpeed speeds up only that first approach so it can work as a loader.
+const TOUCH = 6.6
 
-export function AsciiAdam({ playing = true, time }: Props) {
+type Props = { playing?: boolean; time?: number; onTouch?: () => void; introSpeed?: number }
+
+export function AsciiAdam({ playing = true, time, onTouch, introSpeed = 1 }: Props) {
   const ref = useRef<HTMLCanvasElement>(null)
   const playingRef = useRef(playing)
+  const onTouchRef = useRef(onTouch)
+  const introSpeedRef = useRef(introSpeed)
+  useEffect(() => {
+    onTouchRef.current = onTouch
+    introSpeedRef.current = introSpeed
+  }, [onTouch, introSpeed])
   useEffect(() => {
     playingRef.current = playing
   }, [playing])
@@ -365,6 +375,7 @@ export function AsciiAdam({ playing = true, time }: Props) {
       ro.observe(canvas)
 
       let clock = 0
+      let touched = false
       let last = performance.now()
       let drawn = false
       const frame = (now: number) => {
@@ -380,6 +391,10 @@ export function AsciiAdam({ playing = true, time }: Props) {
 
         // ping-pong: touch, hold, then ease back apart instead of restarting
         const t0 = time ?? (reduced ? LOOP - 0.5 : clock < LOOP ? clock : 2 * LOOP - clock)
+        if (!touched && t0 >= TOUCH) {
+          touched = true
+          onTouchRef.current?.()
+        }
         const k = smooth(0, 6.8, t0)
         const baseL = SCENE.leftA.map((v, i) => lerp(v, SCENE.leftB[i], k)) as Xf
         const baseR = SCENE.rightA.map((v, i) => lerp(v, SCENE.rightB[i], k)) as Xf
@@ -388,7 +403,8 @@ export function AsciiAdam({ playing = true, time }: Props) {
         const rush = live && pointer ? smooth(REACH.gap, REACH.gap * 0.25, dist(pointer, SCENE.spark as Vec)) : 0
         // pointer in the gap: hurry them together, and hold them there on the way back
         const speed = clock < LOOP ? 1 + REACH.rush * rush : 1 - rush
-        if (live) clock = (clock + dt * speed) % (2 * LOOP)
+        const intro = touched ? 1 : introSpeedRef.current
+        if (live) clock = (clock + dt * speed * intro) % (2 * LOOP)
 
         const lx = aim(leftArm, baseL, live ? pointer : null, dt)
         const rx = aim(rightArm, baseR, live ? pointer : null, dt)
