@@ -1,20 +1,70 @@
-# scalpal
+# Scalpal
 
-**AI-guided VR surgical practice that can become demonstrations for robots.**
+**Practice surgery in VR with an AI attending, then watch a robot learn from your hands.**
 
-> **Current scope:** launch → explore patients → full-VR diagnosis office → operating room chosen as AR on a reclining volunteer or VR with a virtual patient → recap → controller-motion robot replay. Both OR modes share one surgery core. See the [latest operation flow](docs/operation-flow.md) and [AR implementation audit](docs/ar-surgery-audit.md) for implemented routes, gaps and physical acceptance limits. Conversational case selection and the rotating selection preview are historical.
+Scalpal is a Meta Quest 3S app built at MHacks 2026. You pick a patient with a real synthetic health record, interview them in a doctor's office, study the anatomy, then operate. An AI coach called Scalpal talks you through it out loud. A teammate on a laptop can join as your scrub nurse. When you finish, you get a scored debrief and a simulated robot arm that tries the same move.
 
-Scalpal is an MHacks project for Meta Quest 3S. The learner browses synthetic FinchNode cases, interviews the patient in a full-VR doctor's office, and chooses an AR volunteer overlay or virtual OR for the operation. Controller motion and inputs supply the robot demonstration; passthrough video is not replay input. Physical end-to-end verification remains pending.
+[**Download the APK**](https://github.com/stephenhungg/scalpal/releases/latest/download/scalpal.apk) · [**Live OR dashboard**](https://dashboard.scalpal.tech) · [**Site**](https://scalpal.tech) · [**Docs**](https://docs.scalpal.tech)
 
-The long-term thesis is that human learning can supply useful robot demonstrations. The proposed demo proves a smaller chain: **one guided exercise → feedback → one controller-motion demonstration → one simulated robot replay.** Replay is not autonomous robot learning.
+![Live OR: the headset's actions arriving through SpacetimeDB](docs/readme/spacetime-split.jpg)
 
-**Latest direction: Solana and monetary completion rewards are removed. Nathan owns the companion website + SpacetimeDB/routing lane; Matthew continues to own Scalpal.** Read [current direction](docs/current-direction.md) and the [system integration map](docs/system-integration.md) first. They supersede older payout work and the prior blanket wait instruction for this assigned lane.
+## The run
 
-The backend uses SpacetimeDB for shared state and separate storage/worker routes for robot artifacts. Main includes the native session, anatomy sources, Scalpal service, companion/realtime/gateway and motion worker. The current controller capture and replay adapters exist, with unresolved AR coordinates, delivery and physical acceptance. The [integration map](docs/system-integration.md) records the actual source snapshots and gaps; older video-storage proposals are historical.
+| | |
+|---|---|
+| ![Patient board](docs/readme/patients.jpg) | **1. Pick a patient.** Every chart is a real FinchNode synthetic health record, with risks flagged from the chart. |
+| ![Diagnosis office](docs/readme/office.jpg) | **2. Interview them.** A voiced patient answers your questions in a full-VR office. The risks you catch count toward your score. |
+| ![Anatomy briefing](docs/readme/briefing.jpg) | **3. Brief on the anatomy.** Peel the body from skin to muscle to organs to the operative region. |
+| ![Open appendectomy](docs/readme/surgery.jpg) | **4. Operate.** Open appendectomy in VR, or AR on a reclining volunteer. Real instruments, cuts, bleeding and live vitals. Scalpal coaches you by voice and can swap or highlight your tools. |
+| ![Robot replay](docs/readme/robot.jpg) | **5. Recap.** Your score, the mistakes you made, a spoken debrief, and a simulated robot replaying the marking step, graded by the same checks as you. |
+
+## Built with our sponsors
+
+### SpacetimeDB: the operating room lives in the database
+
+SpacetimeDB is not storage for us. It is the shared room that every participant plays in.
+
+- **The patient runs inside the database.** A scheduled reducer ticks the patient's physiology once a second. Bleeding and mistakes change the vitals for every client at once, whether or not anyone is watching.
+- **Humans and AI are peers.** The headset, the browser scrub nurse, the viewer and the Scalpal coach are roles checked inside reducers. The AI can hand you an instrument only through the same reducer a human uses, and the module rejects it if the move isn't legal yet ("not practicing yet").
+- **One log feeds everything.** `sim_log`, `command`, `patient_condition` and `robot_result` drive the Live OR dashboard, the timeline, the debrief and the robot pipeline. Nothing is stitched together afterwards.
+- **Private tables, public views.** 25 tables, 23 views and 52 reducers in `services/realtime`. Clients subscribe to views, so a viewer can't read or write what it shouldn't.
+- **Hosted on Maincloud**, with a local instance as the demo fallback. The coach falls back to local physiology and tags `condition.source` if the database is unreachable.
+
+In a recorded session, headset actions landed in the database in 42–429 ms, and one run logged 1,930 events. On Maincloud, our end-to-end suites pass 41/41: scrub nurse 17, sim log 5, realtime 7 and patient condition 12.
+
+![Live OR dashboard](docs/readme/live-or.jpg)
+
+### ElevenLabs: every voice in the app
+
+- **Scalpal, the coach**, is an ElevenLabs Conversational AI agent. You talk to it with push-to-talk on Y. It has client tools (`swap_instrument`, `highlight_instrument`) that act on the operating room through SpacetimeDB, and an urgent-alert queue so it never talks over itself.
+- **The patient** in the diagnosis office is a second voiced agent.
+- **Speech to text** (Scribe) transcribes the learner's spoken answers in the office; Claude matches them to a choice.
+- **Text to speech** (Flash v2.5) speaks instant coach reflexes and the end-of-run debrief.
+
+### Anthropic Claude: eyes, answers and patients
+
+- **Vision.** Claude (Haiku 4.5) looks at the learner's point of view on request ("what am I looking at?") and summarizes it in the background, so Scalpal knows what is in view. Labeled boxes from the scene (and an OWLv2 detector on camera frames) are trusted over the model's own guesses.
+- **Spoken answers.** In the office interview, Claude matches what the learner says to one of the four choices, or asks again when it is unclear.
+- **Patients.** Claude (Opus) wrote each patient's `patient.md` (the voice agent's character), `patient_status.md` (Scalpal's clinical context) and the fixed interview from the FinchNode chart and an authored case, checked by the repo's validators and reviewed before commit.
+- **The coach's brain.** Both ElevenLabs agents run on Claude Sonnet.
+
+### FinchNode: real synthetic charts, cited risks
+
+- Every patient comes from FinchNode's demo API (`/scenarios`, `/users/:subject/records`): demographics, meds, conditions, labs, vitals and allergies.
+- **Deterministic, cited risk rules.** No model decides what counts as a risk. Anticoagulants, antiplatelets, glucose-lowering drugs, SGLT2 inhibitors and eGFR by LOINC code each raise a flag that points back to the chart entry behind it.
+- The learner is scored on whether they catch those risks in the interview before surgery.
+- **FinchNode Connect admission.** The patient consents on FinchNode's hosted page, and the headset polls until consent is recorded.
+- The acute surgical story on top of each chart is authored and labeled as such, because FinchNode's records have no acute problem.
+
+### Presage: vitals from a camera
+
+- In AR mode, `services/vitals` measures a real volunteer's pulse and breathing with Presage SmartSpectra from a phone camera.
+- It freezes a measured baseline before surgery. The OR monitor then shows that baseline plus the simulated blood loss, labeled `simulated from baseline 72 (measured)`.
+- A quota guard caps live minutes and ends sessions with no face in view.
 
 ## Architecture
 
-SpacetimeDB is the shared operating room. The left side writes into it through role-checked reducers; the right side reads it live through subscriptions. The patient's vitals tick inside the database every second.
+SpacetimeDB is the shared operating room. The left side writes into it through role-checked reducers. The right side reads it live through subscriptions.
 
 ```mermaid
 flowchart LR
@@ -54,46 +104,40 @@ flowchart LR
   STDB --> Recap
 ```
 
-Runs locally on the demo laptop (SpacetimeDB `:3000`, Quest over USB) with a hosted mirror on Maincloud (`scalpal-live`).
+The Quest app is Unity 6000.0.66f2 (`apps/quest`). The coach and case service is Hono/TypeScript (`services/preop`). The robot learner is a behavior-cloned policy for a Franka Panda with a Shadow hand in MuJoCo (`services/motion`), and it uses the same milestone grader as the learner. The Live OR dashboard is Vite + React (`apps/companion`).
 
-## Start Here
+## Run it
 
-Main contains documentation, the complete source atlas and team services, a native Quest tool workbench and an assembled single-case full-VR session. Open `apps/quest` in Unity 6000.0.66f2; see [project setup](apps/quest/README.md). Start with the [system integration map](docs/system-integration.md): actual contents, routes, shared scene bindings and shipping checks. Then read these:
+```sh
+# realtime
+spacetime start                       # :3000
+cd services/realtime && npm ci && npm run publish:local
+# coach + cases
+cd services/preop && npm ci && npm start   # :8787
+# Live OR dashboard
+cd apps/companion && npm ci && npm run dev
+# headset: install the APK, then route the Quest to the laptop over USB
+adb install scalpal.apk && adb reverse tcp:8787 tcp:8787 && adb reverse tcp:3000 tcp:3000
+```
 
-1. [Thesis and scope](docs/thesis.md): What we are building, for whom, and what the demo must establish.
-2. [End-to-end experience](docs/demo-flow.md): Current target journey (explore, diagnosis office, full-VR surgery), with live observing and the required video-derived replay.
-3. [Decisions and open questions](docs/decisions.md): Current user direction, superseded ideas, and choices still needed.
-4. [Architecture](docs/architecture.md): Proposed components, responsibilities, and failure handling.
-5. [Hardware baseline](docs/hardware-baseline.md): What was actually demonstrated on the physical Quest 3S.
-6. [Implementation plan](docs/implementation-plan.md): Bounded workstreams, ordering, and evidence required to proceed.
-7. [Integration contracts](docs/integration-contracts.md): Proposed shared identifiers and records so parallel components can connect.
-8. [Research](docs/research/README.md) and [sponsor alignment](docs/sponsors.md): Primary sources and conditional event integrations.
-9. [Folder structure and team split](docs/team-plan.md): Stephen, Matthew, Silas, and Nathan's lanes, parallel checkpoints, and copyable agent briefs.
-10. [Data storage and realtime](docs/data-and-realtime.md): Latest proposed storage split, Nathan's backend lane, and the distinction between session sync and video processing.
-11. [Nathan's implementation plan](docs/nathan-plan.md): Assigned companion website, SpacetimeDB, live-video, storage, and integration milestones.
+API keys (ElevenLabs, Presage, optional FinchNode sandbox) go in each service's `.env`, which is never committed. See [project setup](apps/quest/README.md) and the [scripts](scripts/README.md) for the full session gate.
 
-The new [native appendectomy session](docs/native-session.md) assembles the working Quest rig, selected anatomy, authored case, coach and real session adapter. Start with `Assets/Scalpal/Quest/Scenes/NativeSession.unity`; use the component workbench for isolated tool checks. Verification and unconnected media/MR/robot interfaces are listed in that document.
+## Honest limits
 
-The separate [floral diagnosis office](docs/diagnosis-office.md) uses original Blender office art and CC0 MakeHuman characters representing fictional adult patients with Matthew's authoritative interview/attending encounter engine. Its dedicated native scene includes visual questions, examinations, test results and editable diagnosis/differential/plan fallback. It preserves the surgical scene and tool path; headset comfort/performance and live spoken provider conversation remain separate verification checkpoints.
+- The robot is a **simulated policy rollout** in MuJoCo. It doesn't drive real hardware. Its learning curve was trained on synthetic demonstrations.
+- Patients are synthetic. Charts are real FinchNode data; acute stories are authored.
+- AR placement on a volunteer is an approximate overlay, not measured anatomy.
+- This is a teaching simulator, not clinical guidance or evidence of surgical competence.
 
-## Status
+## Team
 
-As of October 3, 2026, native camera acquisition, Unity sample deployment, desktop mirroring, and an immersive bottle-detection overlay have been demonstrated on the headset. The native workbench combines the shared tools, tracked head/controllers and operating-room/patient art. USB installation, XR tracking and held-tool telemetry were exercised on Quest; the user reported tool-motion lag, then confirmed the corrected build keeps up with hand movement. See [native workbench evidence](docs/native-workbench.md). Teammate branches contain anatomy, case/coach, realtime/companion and motion implementations. Native torso registration, capture and their complete integration have not been demonstrated; see the audited map.
+| | |
+|---|---|
+| Stephen | The Quest app, Unity, body registration and integration |
+| Matthew | Scalpal coach, the pre-op service with FinchNode, anatomy and the diagnosis office |
+| Nathan | The dashboard, SpacetimeDB and the gateway |
+| Silas | The motion pipeline, Presage vitals, the landing site and the dashboard's look |
 
-The conversational selection experience was accepted during earlier product exploration and has since been replaced by the explore → diagnosis office → full-VR operating room flow. Robotics and recording were subsequent additions; the onchain reward idea was subsequently removed. The architecture, demo flow and integration contracts now reflect the current scope; older research and planning notes preserve historical proposals with scope notices. No expanded specification or application acceptance checks have been completed.
+## For contributors
 
-## Collaboration
-
-Follow [AGENTS.md](AGENTS.md) and the [team plan](docs/team-plan.md). The Quest folder includes the standalone native workbench; the preop, realtime, gateway and companion implementations are now included. Reconcile the actual feature-branch contracts and select one shared authored exercise before overlapping integration. Work on one measurable technical question at a time. Update the integration map when routes, contracts or verification change; distinguish a proposal from a verified result.
-
-Keep credentials, participant footage, device identifiers, and raw datasets out of Git. This is an illustrative simulator, not clinical guidance or evidence of surgical competence. Actual recording, processing, sharing, and training rights must be established for each data source and use.
-
-## Instrument Prototype
-
-The [Unity project](apps/quest/README.md) includes committed scenes, assets, package configuration and project settings. The [instrument kit](assets/instruments/README.md) contains fourteen catalog tools plus a scalpel: Blender sources, previews, optimized runtime FBX models, Unity pickup/action prefabs and an authored practice sandbox. The native session connects the selected case/coach and anatomy bindings. Read [runtime integration](docs/instrument-runtime.md) before adding action or scoring adapters.
-
-Our earlier physical camera experiment is preserved as [pinned upstream source plus local changes](experiments/quest-camera-baseline/README.md). Unity caches, captured footage and build outputs are excluded; all authored instrument environment source is committed. Run the [repeatable session gate](scripts/README.md) after changes to the affected boundaries.
-
-## Two Demo Modes (Superseded)
-
-The main flow now runs in full VR only; the real-person mixed-reality overlay stays in the repository off the main path. The earlier direction added a full-VR virtual patient/operating room alongside that overlay, both sharing organs, tools and the coach/exercise core. [Mode engineering](docs/environment-modes.md) separates surface perception from body registration. [Reusable environment art](assets/environments/README.md) supplies the room/patient. Selected anatomy bindings are assembled in the native session; MR registration and mode switching remain pending. The [comprehensive anatomy research](docs/research/comprehensive-anatomy.md) describes how a reusable library can support additional cases; [TAPNet research](docs/research/tapnet.md) evaluates video point tracking.
+Follow [AGENTS.md](AGENTS.md). Start with the [system integration map](docs/system-integration.md), [operation flow](docs/operation-flow.md), [native session](docs/native-session.md), [data and realtime](docs/data-and-realtime.md) and [AR surgery audit](docs/ar-surgery-audit.md). Keep credentials, participant footage, device identifiers and raw datasets out of Git.
