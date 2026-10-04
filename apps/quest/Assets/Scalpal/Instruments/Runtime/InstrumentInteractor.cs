@@ -7,6 +7,7 @@ namespace Scalpal.Instruments
     {
         [Min(0.01f)] public float pickupRadius = 0.14f;
         public LayerMask pickupLayers = ~0;
+        [Min(0)] public float trackingGraceSeconds = 0.2f;
         public InstrumentBehaviour HeldInstrument { get; private set; }
         public bool TrackingValid { get; private set; }
         readonly Collider[] contacts = new Collider[48];
@@ -14,21 +15,75 @@ namespace Scalpal.Instruments
         Rigidbody heldBody;
         bool previousKinematic, previousGravity;
         RigidbodyInterpolation previousInterpolation;
-        bool gripPressed, requireGripRelease;
+        bool gripPressed, requireGripRelease, requireTriggerRelease, trackingSuspended;
+        double trackingLostAt;
+        Vector3 trackingLostPosition;
+        Quaternion trackingLostRotation;
+        Vector3 heldLocalPosition;
+        Quaternion heldLocalRotation;
+
+        void Update() => AdvanceTrackingLoss(Time.unscaledTimeAsDouble);
 
         public void SetTrackedPose(Vector3 position, Quaternion rotation, bool valid)
+            => SetTrackedPose(position, rotation, valid, Time.unscaledTimeAsDouble);
+
+        // The explicit clock also lets deterministic tests exercise the real loss/recovery path.
+        public void SetTrackedPose(Vector3 position, Quaternion rotation, bool valid, double monotonicSeconds)
         {
-            if (!valid && (gripPressed || HeldInstrument != null)) requireGripRelease = true;
+            if (!valid)
+            {
+                if (!trackingSuspended)
+                {
+                    trackingLostAt = monotonicSeconds; trackingSuspended = true;
+                    trackingLostPosition = transform.position;
+                    trackingLostRotation = transform.rotation;
+                    // World freeze also survives a tracking-origin/recenter change during the pause.
+                    if (HeldInstrument) HeldInstrument.transform.SetParent(null, true);
+                }
+                if (!HeldInstrument) requireGripRelease = true;
+                requireTriggerRelease = true;
+                TrackingValid = false;
+                if (HeldInstrument) HeldInstrument.SetTrackingValid(false);
+                AdvanceTrackingLoss(monotonicSeconds);
+                return;
+            }
+            AdvanceTrackingLoss(monotonicSeconds);
+            // A recenter or discontinuous recovery must not teleport a held blade across anatomy.
+            if (trackingSuspended && HeldInstrument &&
+                ((position - trackingLostPosition).sqrMagnitude > 0.15f * 0.15f || Quaternion.Angle(rotation, trackingLostRotation) > 60))
+                ReturnHeldToRest();
+            trackingSuspended = false;
             TrackingValid = valid;
-            if (valid) transform.SetPositionAndRotation(position, rotation);
-            if (HeldInstrument != null) HeldInstrument.SetTrackingValid(valid);
-            // Lost tracking immediately drops simulation actions; no stale-pose cutting or scoring.
-            if (!valid) Release();
+            transform.SetPositionAndRotation(position, rotation);
+            if (HeldInstrument != null)
+            {
+                HeldInstrument.transform.SetParent(transform, false);
+                HeldInstrument.transform.SetLocalPositionAndRotation(heldLocalPosition, heldLocalRotation);
+                HeldInstrument.SetTrackingValid(valid);
+            }
+        }
+
+        public void AdvanceTrackingLoss(double monotonicSeconds)
+        {
+            if (!trackingSuspended || monotonicSeconds - trackingLostAt < trackingGraceSeconds) return;
+            requireGripRelease = true;
+            ReturnHeldToRest();
+        }
+
+        public void ReturnHeldToRest()
+        {
+            var tool = HeldInstrument;
+            requireGripRelease = true;
+            requireTriggerRelease = true;
+            gripPressed = false;
+            Release();
+            if (tool) tool.ReturnToRestPose();
         }
 
         public void SetGrip(float value)
         {
-            if (!TrackingValid) { gripPressed = false; return; }
+            // Invalid XR input reports zero; that is not evidence of a physical grip release.
+            if (!TrackingValid) return;
             if (requireGripRelease)
             {
                 if (value < 0.25f) requireGripRelease = false;
@@ -43,7 +98,13 @@ namespace Scalpal.Instruments
 
         public void SetActivation(float value)
         {
-            if (HeldInstrument != null) HeldInstrument.SetActivation(TrackingValid ? value : 0);
+            if (!TrackingValid) return;
+            if (requireTriggerRelease)
+            {
+                if (value <= 0.2f) requireTriggerRelease = false;
+                value = 0;
+            }
+            if (HeldInstrument != null) HeldInstrument.SetActivation(value);
         }
 
         public bool TryPickupNearest()
@@ -69,6 +130,7 @@ namespace Scalpal.Instruments
             Vector3 gripPosition = instrument.gripAnchor != null ? instrument.gripAnchor.position : instrument.transform.position;
             if ((gripPosition - transform.position).sqrMagnitude > pickupRadius * pickupRadius) return false;
             HeldInstrument = instrument;
+            instrument.CaptureRestPose();
             previousParent = instrument.transform.parent;
             heldBody = instrument.GetComponent<Rigidbody>();
             if (heldBody != null)
@@ -87,6 +149,8 @@ namespace Scalpal.Instruments
             var anchor = instrument.gripAnchor != null ? instrument.gripAnchor : instrument.transform;
             instrument.transform.rotation = transform.rotation * Quaternion.Inverse(Quaternion.Inverse(instrument.transform.rotation) * anchor.rotation);
             instrument.transform.position += transform.position - anchor.position;
+            heldLocalPosition = instrument.transform.localPosition;
+            heldLocalRotation = instrument.transform.localRotation;
             instrument.SetTrackingValid(true);
             instrument.SetHeld(true);
             return true;
@@ -110,6 +174,6 @@ namespace Scalpal.Instruments
             heldBody = null;
         }
 
-        void OnDisable() => Release();
+        void OnDisable() => ReturnHeldToRest();
     }
 }

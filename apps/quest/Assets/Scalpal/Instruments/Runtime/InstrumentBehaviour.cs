@@ -47,6 +47,30 @@ namespace Scalpal.Instruments
         TrainingTarget grasped;
         Vector3 previousPoint;
         bool previousPointValid;
+        Transform restParent;
+        Vector3 restPosition;
+        Quaternion restRotation;
+        bool restPoseCaptured;
+
+        public void CaptureRestPose()
+        {
+            if (restPoseCaptured) return;
+            restPoseCaptured = true;
+            restParent = transform.parent;
+            restPosition = transform.position;
+            restRotation = transform.rotation;
+        }
+
+        public void ReturnToRestPose()
+        {
+            if (!restPoseCaptured) return;
+            transform.SetParent(restParent, true);
+            transform.SetPositionAndRotation(restPosition, restRotation);
+            var body = GetComponent<Rigidbody>();
+            if (!body) return;
+            body.position = restPosition; body.rotation = restRotation;
+            if (!body.isKinematic) { body.linearVelocity = Vector3.zero; body.angularVelocity = Vector3.zero; }
+        }
 
         void Awake() => InitializeArticulation();
         void Update() => SimulateStep(Time.deltaTime);

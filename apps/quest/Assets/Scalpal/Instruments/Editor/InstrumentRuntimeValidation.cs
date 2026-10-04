@@ -45,6 +45,8 @@ namespace Scalpal.Instruments.Editor
                 var interactor = hand.AddComponent<InstrumentInteractor>();
                 var toolObject = UnityEngine.Object.Instantiate(AssetDatabase.LoadAssetAtPath<GameObject>(Root + "inst_scalpel.prefab"), scope.transform);
                 var tool = toolObject.GetComponent<InstrumentBehaviour>();
+                var toolRestPosition = tool.transform.position;
+                var toolRestRotation = tool.transform.rotation;
                 interactor.SetTrackedPose(Vector3.zero, Quaternion.identity, true);
                 Physics.SyncTransforms();
                 interactor.SetGrip(1);
@@ -76,8 +78,38 @@ namespace Scalpal.Instruments.Editor
                 }
                 Require(patch.IsCut && cuts == 1, "active tracked scalpel separates authored seam and publishes once");
                 Require((patch.leftHalf.localPosition - patch.rightHalf.localPosition).magnitude > 0.06f, "cut visibly separates halves");
-                interactor.SetTrackedPose(hand.transform.position, hand.transform.rotation, false);
-                Require(!tool.Held && !tool.TrackingValid && interactor.HeldInstrument == null, "lost tracking releases held tool and disables effects");
+                var frozenPosition = tool.transform.position;
+                var frozenRotation = tool.transform.rotation;
+                var recoveryPosition = hand.transform.position;
+                var recoveryRotation = hand.transform.rotation;
+                double clock = Time.unscaledTimeAsDouble;
+                interactor.SetTrackedPose(Vector3.one * 100, Quaternion.identity, false, clock);
+                interactor.SetGrip(0); // Missing XR button data must not masquerade as a grip release.
+                interactor.SetActivation(1);
+                interactor.AdvanceTrackingLoss(clock + 0.1);
+                Require(tool.Held && interactor.HeldInstrument == tool && !tool.TrackingValid && tool.Activation == 0,
+                    "brief tracking loss keeps held equipment but blocks every action");
+                Require(toolObject.GetComponent<Rigidbody>().isKinematic && !toolObject.GetComponent<Rigidbody>().useGravity,
+                    "tracking grace freezes a kinematic tool rather than dropping it");
+                hand.transform.position += Vector3.one; // Simulate tracking-origin movement while paused.
+                Require((tool.transform.position - frozenPosition).sqrMagnitude < 0.000001f && Quaternion.Angle(tool.transform.rotation, frozenRotation) < 0.001f,
+                    "world-frozen equipment ignores invalid pose and parent movement");
+                interactor.SetTrackedPose(recoveryPosition, recoveryRotation, true, clock + 0.1);
+                interactor.SetGrip(1);
+                interactor.SetActivation(1);
+                Require(tool.Held && tool.TrackingValid && tool.Activation == 0 &&
+                    (tool.transform.position - frozenPosition).sqrMagnitude < 0.000001f,
+                    "brief recovery retains calibrated pose and requires deliberate trigger rearm");
+                interactor.SetActivation(0);
+                interactor.SetActivation(1);
+                Require(tool.Activation == 1, "observed trigger release enables subsequent actions");
+                interactor.SetTrackedPose(recoveryPosition, recoveryRotation, false, clock + 0.2);
+                interactor.AdvanceTrackingLoss(clock + 0.39);
+                Require(interactor.HeldInstrument == tool, "tracking grace does not expire early");
+                interactor.AdvanceTrackingLoss(clock + 0.401);
+                Require(!tool.Held && !tool.TrackingValid && interactor.HeldInstrument == null, "sustained loss returns held equipment and disables effects");
+                Require((tool.transform.position - toolRestPosition).sqrMagnitude < 0.000001f && Quaternion.Angle(tool.transform.rotation, toolRestRotation) < 0.001f,
+                    "sustained loss restores the tool's captured rest pose");
                 Require(!toolObject.GetComponent<Rigidbody>().isKinematic && toolObject.GetComponent<Rigidbody>().useGravity, "release restores physics");
                 Require(toolObject.GetComponent<Rigidbody>().interpolation == RigidbodyInterpolation.Interpolate, "release restores the original interpolation policy");
                 interactor.SetTrackedPose(tool.gripAnchor.position, Quaternion.identity, true);
@@ -87,6 +119,13 @@ namespace Scalpal.Instruments.Editor
                 Physics.SyncTransforms();
                 interactor.SetGrip(1);
                 Require(interactor.HeldInstrument == tool, "explicit release and new grip reenable pickup after tracking recovery");
+                interactor.SetActivation(0);
+                interactor.SetTrackedPose(hand.transform.position, hand.transform.rotation, false, clock + 1);
+                interactor.SetTrackedPose(hand.transform.position + Vector3.right, hand.transform.rotation, true, clock + 1.1);
+                Require(interactor.HeldInstrument == null && (tool.transform.position - toolRestPosition).sqrMagnitude < 0.000001f,
+                    "discontinuous tracking recovery cannot teleport a held blade across the patient");
+                interactor.SetGrip(0);
+                interactor.SetActivation(0);
                 interactor.Release();
                 patch.ResetTeachingTarget();
                 Require(!patch.IsCut && patch.ClipCount == 0 && patch.FluidRemaining == 1, "target reset restores authored state");

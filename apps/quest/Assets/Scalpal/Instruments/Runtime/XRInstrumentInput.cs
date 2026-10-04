@@ -22,12 +22,9 @@ namespace Scalpal.Instruments
 
         void Update()
         {
-            var device = InputDevices.GetDeviceAtXRNode(controller);
-            bool valid = UpdatePose(device);
-            device.TryGetFeatureValue(CommonUsages.grip, out float grip);
-            device.TryGetFeatureValue(CommonUsages.trigger, out float trigger);
-            interactor.SetGrip(valid ? grip : 0);
-            interactor.SetActivation(valid ? trigger : 0);
+            bool valid = UpdatePose();
+            interactor.SetGrip(valid ? XRInput.Grip(controller) : 0);
+            interactor.SetActivation(valid ? XRInput.Trigger(controller) : 0);
         }
 
         [BeforeRenderOrder(-100)]
@@ -36,19 +33,15 @@ namespace Scalpal.Instruments
             // Match the head's late pose refresh so a held tool does not remain
             // at its earlier Update pose while the camera follows a newer pose.
             // Buttons and simulation effects run only in Update.
-            UpdatePose(InputDevices.GetDeviceAtXRNode(controller));
+            UpdatePose();
         }
 
-        bool UpdatePose(InputDevice device)
+        bool UpdatePose()
         {
             if (interactor == null) interactor = GetComponent<InstrumentInteractor>();
-            Vector3 position = Vector3.zero;
-            Quaternion rotation = Quaternion.identity;
-            bool valid = device.isValid && device.TryGetFeatureValue(CommonUsages.devicePosition, out position)
-                && device.TryGetFeatureValue(CommonUsages.deviceRotation, out rotation);
-            if (device.TryGetFeatureValue(CommonUsages.isTracked, out bool tracked)) valid &= tracked;
-            Vector3 worldPosition = trackingOrigin != null ? trackingOrigin.TransformPoint(position) : position;
-            Quaternion worldRotation = trackingOrigin != null ? trackingOrigin.rotation * rotation : rotation;
+            bool valid = XRInput.TryPose(controller, out var pose);
+            Vector3 worldPosition = trackingOrigin != null ? trackingOrigin.TransformPoint(pose.position) : pose.position;
+            Quaternion worldRotation = trackingOrigin != null ? trackingOrigin.rotation * pose.rotation : pose.rotation;
             interactor.SetTrackedPose(worldPosition, worldRotation, valid);
             return valid;
         }
