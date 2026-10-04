@@ -24,6 +24,7 @@ const PRIMITIVES: Record<string, (v: unknown) => boolean> = {
   string: (v) => typeof v === "string",
   int: (v) => Number.isInteger(v),
   float: (v) => typeof v === "number",
+  double: (v) => typeof v === "number",
   bool: (v) => typeof v === "boolean",
 };
 

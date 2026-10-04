@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Scalpal.Anatomy;
 using Scalpal.Anatomy.Tissue;
+using Scalpal.Exercises.Data;
 using Scalpal.Exercises.Engine;
 using Scalpal.Instruments;
 using Scalpal.Quest;
@@ -13,7 +14,7 @@ namespace Scalpal.Surgery
     // same scored event path. Semantic rates are disabled per tissue after the initial snapshot.
     public sealed class OpenBodyBleeding : MonoBehaviour
     {
-        sealed class Source { public string id; public VesselBleeding fluid = new VesselBleeding(); public bool initialized; }
+        sealed class Source { public string id; public VesselBleeding fluid = new VesselBleeding(); public bool initialized; public BodyAction published; }
         readonly List<Source> sources = new List<Source>();
         OpenBodyInteraction input;
         AnatomyExerciseBinding exercise;
@@ -83,8 +84,9 @@ namespace Scalpal.Surgery
                 var suction=input.CreateMeasurement(tool.instrumentId,"suction",sources[0].id,tool.actionPoint.position,"pool-tool-"+Math.Abs(tool.GetInstanceID()));
                 if(suction!=null){suction.durationMs=duration*1000;suction.choice="pool_suction";input.SubmitMeasured(suction);} suctionTimes[tool]=0;
             }
-            snapshotClock += seconds; bool publish = snapshotClock >= .25f;
-            if (publish) snapshotClock %= .25f;
+            // Measured fluid is telemetry, not a scored action: at most 1 Hz and only when a value changed.
+            snapshotClock += seconds; bool publish = snapshotClock >= 1;
+            if (publish) snapshotClock %= 1;
             PoolMl = 0;
             foreach (var source in sources)
             {
@@ -104,10 +106,14 @@ namespace Scalpal.Surgery
         {
             var action = input.CreateMeasurement("assistant","fluid",source.id,wound.position,"vessel-model");
             if (action == null) return false;
-            action.bloodLostMl = (float)source.fluid.CumulativeLossMilliliters;
-            action.poolMl = (float)source.fluid.PooledMilliliters;
-            action.flowMlPerSecond = (float)source.fluid.FlowMillilitersPerSecond;
-            return input.SubmitMeasured(action);
+            action.bloodLostMl = source.fluid.CumulativeLossMilliliters;
+            action.poolMl = source.fluid.PooledMilliliters;
+            action.flowMlPerSecond = source.fluid.FlowMillilitersPerSecond;
+            action.Quantize();
+            var last = source.published;
+            if (last != null && last.bloodLostMl == action.bloodLostMl && last.poolMl == action.poolMl && last.flowMlPerSecond == action.flowMlPerSecond) return true;
+            if (!input.SubmitMeasured(action)) return false;
+            source.published = action.Copy(); return true;
         }
         static void Release(UnityEngine.Object value){if(!value)return;if(Application.isPlaying)Destroy(value);else DestroyImmediate(value);}
         void OnDisable() { if(pool)pool.SetActive(false); }

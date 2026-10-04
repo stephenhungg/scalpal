@@ -37,6 +37,9 @@ namespace Scalpal.Surgery.Editor
             VerifyOffPath(bundle, procedure);
             VerifyRetractionAndChoice(bundle, procedure);
             VerifyRoughHandling(bundle, procedure);
+            VerifyStrokeGuardrails(bundle, procedure);
+            VerifyClampRelease(bundle, procedure);
+            VerifyTelemetryRate(bundle, procedure);
             VerifyFluid(procedure);
             int fixtureChecks = checks;
             // Actual native-scene atlas: mobilize, deliver, then measure the base on the moved anatomy.
@@ -112,6 +115,11 @@ namespace Scalpal.Surgery.Editor
                 foreach (var step in procedure.steps.Take(steps)) foreach (var e in CaseRunner.PerfectEvents(step))
                     Require(binding.Submit(e, out _, out var reason), "precondition goes through real score binding: " + reason);
             }
+            // The trigger is released for one frame: the blade leaves the tissue and the stroke ends.
+            public void EndStroke(int index)
+            {
+                tools[index].SetActivation(0); input.Simulate(.02f); tools[index].SetActivation(1);
+            }
             public void Dispose() { UnityEngine.Object.DestroyImmediate(root); }
         }
         static void VerifyStroke(ScalpalBundle bundle, Procedure procedure)
@@ -123,6 +131,9 @@ namespace Scalpal.Surgery.Editor
                 for (int i=0; i<8; i++) f.input.Simulate(.02f);
                 Require(f.binding.Body.Get("skin", "opened") == 0 && !f.submitted.Any(r => r.action.verb == "cut"), "stationary active blade contact does not cut");
                 for (int i=1; i<=12; i++) { f.Move(0, new Vector3(-.03f + i*.005f,0,0)); f.input.Simulate(.02f); }
+                Require(!f.submitted.Any(r => r.action.verb == "cut"), "a stroke in progress is not committed millimetre by millimetre");
+                f.EndStroke(0);
+                Require(f.submitted.Count(r => r.action.verb == "cut") == 1, "one continuous stroke commits exactly one cut");
                 var cut = f.submitted.Last(r => r.action.verb == "cut");
                 Require(f.binding.Body.Get("skin", "opened") == 1 && cut.action.lengthMm > 55, "finite measured stroke opens skin");
                 Require(cut.action.distanceMm < .1f && cut.action.angleDegrees < .1f, "on-line stroke reports measured position and angle");
@@ -152,13 +163,13 @@ namespace Scalpal.Surgery.Editor
             {
                 f.Move(0, new Vector3(-.025f, 0, 0)); f.input.Simulate(.02f);
                 f.Move(0, new Vector3(-.020f, 0, 0)); f.input.Simulate(.02f);
-                int cuts = f.submitted.Count(r => r.action.verb == "cut");
-                Require(cuts > 0, "transform regression begins with a real scored stroke");
+                Require(!f.submitted.Any(r => r.action.verb == "cut"), "transform regression begins with a real stroke in progress");
                 Vector3 stationaryController = f.tools[0].actionPoint.position;
                 f.wound.position += f.wound.right * .012f; Physics.SyncTransforms();
                 f.input.Simulate(.02f); f.input.Simulate(.02f);
-                Require(f.tools[0].actionPoint.position == stationaryController && f.submitted.Count(r => r.action.verb == "cut") == cuts,
-                    "wound fit correction cannot turn a stationary controller into a cut");
+                int cuts = f.submitted.Count(r => r.action.verb == "cut");
+                Require(f.tools[0].actionPoint.position == stationaryController && cuts == 1 && f.submitted.Last(r => r.action.verb == "cut").action.lengthMm == 5,
+                    "wound fit correction commits the stroke measured before it once and cannot turn a stationary controller into a cut");
                 f.tools[0].transform.SetParent(null, true);
                 try
                 {
@@ -167,10 +178,17 @@ namespace Scalpal.Surgery.Editor
                     Vector3 fixedWound = f.wound.position;
                     f.root.transform.position += f.root.transform.right * .008f;
                     f.wound.position = fixedWound; Physics.SyncTransforms();
-                    f.input.Simulate(.02f); f.input.Simulate(.02f);
+                    f.input.Simulate(.02f);
+                    // The 4 mm already travelled before the correction is committed once; nothing after it.
+                    Require(f.submitted.Count(r => r.action.verb == "cut") == cuts + 1 && f.submitted.Last(r => r.action.verb == "cut").action.lengthMm == 4,
+                        "torso-only correction commits the stroke measured before it");
+                    cuts++; f.input.Simulate(.02f); f.input.Simulate(.02f);
                     Require(f.tools[0].actionPoint.position == stationaryController && f.submitted.Count(r => r.action.verb == "cut") == cuts,
                         "torso-only correction does not score stationary controllers");
+                    // The committed strokes opened the centre gap, so resume on the intact skin lip beside it.
+                    f.tools[0].transform.position += f.wound.up * .01f; Physics.SyncTransforms(); f.input.Simulate(.02f);
                     f.tools[0].transform.position += f.wound.right * .005f; Physics.SyncTransforms(); f.input.Simulate(.02f);
+                    f.EndStroke(0);
                     var resumed = f.submitted.Last(r => r.action.verb == "cut");
                     Require(resumed.action.lengthMm > 4 && resumed.action.lengthMm < 6,
                         "new motion after torso correction starts a fresh measured stroke");
@@ -212,7 +230,7 @@ namespace Scalpal.Surgery.Editor
                 // establishes contact before we test a real stroke in the release frame.
                 f.input.Simulate(.02f);
                 f.tools[1].SetHeld(false);
-                f.Move(0, new Vector3(-.005f, 0, .027f)); f.input.Simulate(.02f);
+                f.Move(0, new Vector3(-.005f, 0, .027f)); f.input.Simulate(.02f); f.EndStroke(0);
                 var release = f.submitted.FindLastIndex(r => r.action.choice == "release");
                 var cut = f.submitted.FindLastIndex(r => r.action.verb == "cut");
                 Require(release >= 0 && cut > release && f.submitted[release].action.depthMm == 0,
@@ -305,6 +323,7 @@ namespace Scalpal.Surgery.Editor
             using (var f = new Fixture(bundle, procedure, "scalpel"))
             {
                 for (int i=0; i<=12; i++) { f.Move(0,new Vector3(-.03f+i*.005f,.02f,0)); f.input.Simulate(.02f); }
+                f.EndStroke(0);
                 Require(f.binding.Body.Get("skin","opened") == 1 && f.binding.Body.Get("skin","cutErrorMm") > 19,
                     "off-line cut remains a real consequence with measured error");
             }
@@ -312,6 +331,8 @@ namespace Scalpal.Surgery.Editor
             {
                 f.Expose(procedure,5);
                 for (int i=0; i<=6; i++) { f.Move(0,new Vector3(.094f+i*.002f,0,.05f)); f.input.Simulate(.02f); }
+                f.EndStroke(0);
+                Require(f.submitted.Count(r=>r.action.tissueId=="terminal_ileum" && r.outcomes.Contains("hollow_leak")) == 1, "one stroke through bowel is one injury, not one per millimetre");
                 Require(f.binding.Body.Get("","contamination") == 1, "actual off-wall collider stroke injures bowel");
                 Require(f.submitted.Any(r=>r.action.tissueId=="terminal_ileum" && r.outcomes.Contains("hollow_leak")), "adapter emits structured off-path bowel consequence");
             }
@@ -338,6 +359,65 @@ namespace Scalpal.Surgery.Editor
                     "authored choice follows the existing scored event path");
                 f.anatomy.SetRegistrationValid(false);
                 Require(!f.input.Choose("appendix","appendix_tip"), "invalid registration blocks decision submission");
+            }
+        }
+        static void VerifyStrokeGuardrails(ScalpalBundle bundle, Procedure procedure)
+        {
+            using (var f = new Fixture(bundle, procedure, "scalpel"))
+            {
+                Require(f.input.SetLandmarks(f.wound.TransformPoint(new Vector3(-.06f,0,0)), f.wound.TransformPoint(new Vector3(.12f,0,0)), f.wound.right), "landmarks accepted");
+                var mistakes = new List<string>(); f.binding.MistakeMade += (_, mistake) => mistakes.Add(mistake.id);
+                for (int i = 0; i <= 12; i++) { f.Move(0, new Vector3(-.03f + i * .005f, .006f, 0)); f.input.Simulate(.02f); }
+                f.EndStroke(0);
+                Require(f.submitted.Count(r => r.action.verb == "cut") == 1 && mistakes.Count(id => id == "off_mark") == 1,
+                    "a 60 mm stroke 6 mm off the line is one cut and one off_mark");
+            }
+            using (var f = new Fixture(bundle, procedure, "skin_marker"))
+            {
+                Require(f.input.SetLandmarks(f.wound.TransformPoint(new Vector3(-.06f,0,0)), f.wound.TransformPoint(new Vector3(.12f,0,0)), f.wound.right), "landmarks accepted");
+                var mistakes = new List<string>(); f.binding.MistakeMade += (_, mistake) => mistakes.Add(mistake.id);
+                for (int i = 0; i <= 12; i++) { f.Move(0, new Vector3(-.03f + i * .005f, 0, 0)); f.input.Simulate(.02f); }
+                f.EndStroke(0);
+                Require(f.submitted.Count(r => r.action.verb == "mark") == 1 && mistakes.Count == 0 && f.binding.Body.Get("skin", "markErrorMm") == 0,
+                    "a perfect mark is one mark action with no mark_far");
+            }
+        }
+        static void VerifyClampRelease(ScalpalBundle bundle, Procedure procedure)
+        {
+            using (var f = new Fixture(bundle, procedure, "hemostat"))
+            {
+                f.Expose(procedure, 5);
+                f.Move(0, new Vector3(0, .01f, .019f)); f.input.Simulate(.02f); f.input.Simulate(.02f);
+                Require(f.binding.Body.Get("muscle", "clampCount") == 1, "hemostat clamps the exposed muscle lip");
+                f.Move(0, new Vector3(.10f, 0, .05f)); for (int i = 0; i < 3; i++) f.input.Simulate(.02f);
+                Require(f.binding.Body.Get("terminal_ileum", "clampCount") == 1 && f.binding.Body.Get("muscle", "clampCount") == 0 &&
+                    f.submitted.Any(r => r.action.verb == "release" && r.action.tissueId == "muscle"), "applying one physical clamp elsewhere first releases its previous tissue");
+                f.tools[0].SetHeld(false); f.input.ClearPlacements(); f.input.Simulate(.02f);
+                Require(f.binding.Body.Get("terminal_ileum", "clampCount") == 0 && f.submitted.Last().action.verb == "release",
+                    "putting a placed clamp away releases it in the body");
+            }
+        }
+        static void VerifyTelemetryRate(ScalpalBundle bundle, Procedure procedure)
+        {
+            using (var f = new Fixture(bundle, procedure, "scalpel"))
+            {
+                f.Expose(procedure, 5); // Synthetic exposure is stamped at time 0, so it precedes the clocked samples.
+                var vessels = f.root.AddComponent<OpenBodyBleeding>(); vessels.Initialize(f.input, f.binding, f.wound);
+                int perfused = f.binding.Body.Tissues.Count(t => t.perfused);
+                int start = f.binding.Body.Log.Count;
+                for (int i = 0; i < 100; i++) { f.input.Simulate(.02f); vessels.Simulate(.02f); }
+                Require(f.binding.Body.Log.Count - start == perfused && f.binding.Body.Log.Skip(start).All(r => r.action.verb == "fluid"),
+                    "while nothing bleeds: one zero fluid snapshot per vessel, then no ticks and no unchanged snapshots");
+                var cut = f.input.CreateMeasurement("scalpel", "cut", "mesoappendix", f.wound.position); cut.lengthMm = 4; cut.distanceMm = 10;
+                Require(f.input.SubmitMeasured(cut) && f.binding.Body.Get("", "activeBleeds") == 1, "unsecured cut starts a bleed");
+                start = f.binding.Body.Log.Count;
+                for (int i = 0; i < 105; i++) { f.input.Simulate(.02f); vessels.Simulate(.02f); } // 2.1 s
+                var bleeding = f.binding.Body.Log.Skip(start).ToArray();
+                Require(bleeding.Count(r => r.action.verb == "tick") == 2 && bleeding.Count(r => r.action.verb == "fluid") >= 2 &&
+                    bleeding.Where(r => r.action.verb == "fluid").Zip(bleeding.Where(r => r.action.verb == "fluid").Skip(1), (a, b) => b.action.timeMs - a.action.timeMs).All(gap => gap >= 990) &&
+                    bleeding.All(r => r.action.verb == "tick" || (r.action.verb == "fluid" && r.action.tissueId == "mesoappendix")),
+                    "a bleed ticks at 1 Hz and only the changing vessel publishes, at 1 Hz: " + string.Join(",", bleeding.Select(r => r.action.verb + ":" + r.action.tissueId + "@" + r.action.timeMs)));
+                UnityEngine.Object.DestroyImmediate(vessels);
             }
         }
         static void VerifyRoughHandling(ScalpalBundle bundle, Procedure procedure)

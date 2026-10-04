@@ -533,6 +533,9 @@ namespace Scalpal.Quest
         void EventHandled(CaseEvent action, CaseResult result)
         {
             RecordLocalCoachEvent(action, result.stepId);
+            // Body ticks and fluid snapshots must not overwrite the learner's message or flood the shared event log.
+            if (action.type == CaseEventType.Surgery && BodyState.IsTelemetry(action.evidence) && result.mistake == null && !result.advanced && !result.completed)
+            { Publish(); return; }
             if (result.mistake != null)
             {
                 mistakes++; Message = result.mistake.feedback;

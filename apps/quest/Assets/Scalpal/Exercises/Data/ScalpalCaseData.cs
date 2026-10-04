@@ -148,7 +148,7 @@ namespace Scalpal.Exercises.Data
         public bool hollow;
         public bool critical;
         public bool tentable;
-        public float flowMlPerSecond;
+        public double flowMlPerSecond; // Double: a float .3 rate made C# blood loss differ from TypeScript.
         // Axis the fibers run along ("" = none); "incision_line" is the registered incision reference line.
         public string fiberAxis;
         public string[] structureIds;
@@ -160,7 +160,7 @@ namespace Scalpal.Exercises.Data
         public string tissueId;
         public string fact;
         public string op;
-        public float value;
+        public double value; // Double, like the TS reducer: (double)0.8f > 0.8 broke 48/60 coverage.
     }
 
     [Serializable]

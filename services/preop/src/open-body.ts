@@ -34,6 +34,8 @@ export const TOOL_VERBS: Record<string, string[]> = {
   suture_tie: ['tie','place'], hook_cautery: ['seal'], vessel_sealer: ['seal'],
   suction_irrigator: ['suction','inspect'], decision: ['decide'], assistant: ['close','tick','fluid'],
 };
+// Assistant clock ticks and measured fluid snapshots keep the body current; they are not learner actions.
+export function isBodyTelemetry(e: BodyAction): boolean { return e.instrumentId==='assistant'&&(e.verb==='tick'||e.verb==='fluid'); }
 export function validBodyAction(e: BodyAction): boolean {
   return !!e && [e.actionId,e.instrumentId,e.instrumentInstanceId,e.secondaryInstanceId,e.verb,e.tissueId,e.layer,e.coordinateFrame,e.choice].every(v=>typeof v==='string') &&
     !!e.actionId && e.coordinateFrame==='registered_torso_m' && typeof e.registered==='boolean' && !!e.position &&

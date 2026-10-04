@@ -46,6 +46,7 @@ namespace Scalpal.Surgery.Editor
             VerifyBase(procedure);
             VerifySpatialControl(procedure);
             VerifyPositionalHemostasis(procedure);
+            VerifyGoldenLog(procedure);
             VerifyFinish(procedure);
             Debug.Log("SCALPAL_OPEN_BODY_VALIDATION_OK: " + checks + " synthetic body, case, off-path, timing and reset assertions; no physical headset test");
         }
@@ -274,6 +275,35 @@ namespace Scalpal.Surgery.Editor
             { off = Action("off-" + instance, "release", "mesoappendix", "hemostat"); off.instrumentInstanceId = instance; tidy.Handle(CaseEvent.Surgery(off)); }
             var divide = procedure.openBody.milestones.First(m => m.id == "divide_mesoappendix");
             Require(tidy.Body.Get("mesoappendix", "clampCount") == 0 && divide.predicates.All(tidy.Body.Test), "removing clamps after tying both sides keeps the mesoappendix milestone");
+        }
+
+        [Serializable] class GoldenFact { public string key; public double value; }
+        [Serializable] class GoldenExpected { public string[] outcomes; public GoldenFact[] facts; public string[] milestones; public string[] mistakes; public bool completed; public string currentStep; }
+        [Serializable] class GoldenLog { public string procedureId; public BodyAction[] actions; public GoldenExpected expected; }
+        // Shared with services/preop/test/open-body-golden.test.ts: the TypeScript and C# reducers must
+        // reproduce the same exact facts, outcomes, milestones and guardrails from one event log.
+        static void VerifyGoldenLog(Procedure procedure)
+        {
+            var path = System.IO.Path.GetFullPath(System.IO.Path.Combine(Application.dataPath, "../../../services/preop/test/fixtures/open-body-golden.json"));
+            Require(System.IO.File.Exists(path), "shared golden log exists at " + path);
+            var golden = JsonUtility.FromJson<GoldenLog>(System.IO.File.ReadAllText(path));
+            Require(golden.procedureId == procedure.id && golden.actions.Length == golden.expected.outcomes.Length, "golden log targets the packaged procedure");
+            var runner = new CaseRunner(procedure);
+            for (int i = 0; i < golden.actions.Length; i++)
+            {
+                var action = golden.actions[i];
+                runner.Handle(CaseEvent.Surgery(action));
+                var last = runner.Body.Log.Count > 0 ? runner.Body.Log[runner.Body.Log.Count - 1] : null;
+                string outcomes = last != null && last.action.actionId == action.actionId ? string.Join(",", last.outcomes) : "REJECTED";
+                Require(outcomes == golden.expected.outcomes[i], $"golden action {i} ({action.verb} {action.tissueId}) outcomes '{outcomes}' match TypeScript '{golden.expected.outcomes[i]}'");
+            }
+            var mismatched = golden.expected.facts.Where(f => !runner.Body.Facts.TryGetValue(f.key, out var v) || v != f.value)
+                .Select(f => f.key + "=" + (runner.Body.Facts.TryGetValue(f.key, out var v) ? v.ToString("R") : "missing") + " (ts " + f.value.ToString("R") + ")").ToArray();
+            Require(mismatched.Length == 0 && runner.Body.Facts.Count == golden.expected.facts.Length,
+                "golden facts identical to TypeScript: " + string.Join("; ", mismatched) + $" [{runner.Body.Facts.Count} vs {golden.expected.facts.Length}]");
+            Require(runner.Achieved.OrderBy(id => id, StringComparer.Ordinal).SequenceEqual(golden.expected.milestones), "golden milestones identical to TypeScript");
+            Require(runner.Mistakes.Select(m => m.id).SequenceEqual(golden.expected.mistakes), "golden guardrails identical to TypeScript");
+            Require(runner.Completed == golden.expected.completed && (runner.Current?.id ?? "") == golden.expected.currentStep, "golden live step identical to TypeScript");
         }
 
         static void VerifyFinish(Procedure procedure)

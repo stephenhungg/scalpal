@@ -29,6 +29,14 @@ describe('explicit end and deterministic body grade', () => {
     expect(engine.grade!.durationMs).toBe(1000);
     expect(engine.grade!.missingMetrics).toContain('leftHandPathLengthM');
   });
+  it('assistant ticks and fluid snapshots are not counted as learner actions', () => {
+    const engine = harmed(), learner = engine.body!.log.length;
+    engine.handle({type:'surgery', evidence:bodyAction('tick','skin',{instrumentId:'assistant',actionId:'tick-1',timeMs:2000})});
+    engine.handle({type:'surgery', evidence:bodyAction('fluid','muscle',{instrumentId:'assistant',actionId:'fluid-1',timeMs:2000})});
+    engine.handle({type:'finish'});
+    expect(engine.body!.log.length).toBe(learner + 2);
+    expect(engine.grade!.actionCount).toBe(learner);
+  });
   it('finish is idempotent and later scorer events cannot resume or rewrite the final record', () => {
     const engine = harmed(); engine.handle({type:'finish'});
     const grade = engine.grade, facts = [...engine.body!.facts], log = JSON.stringify(engine.body!.log);

@@ -24,8 +24,8 @@ namespace Scalpal.Exercises.Engine
         readonly Dictionary<string, double> facts = new Dictionary<string, double>();
         readonly List<BodyRecord> log = new List<BodyRecord>();
         readonly HashSet<string> seen = new HashSet<string>();
-        readonly Dictionary<string, Dictionary<string, float>> clamps = new Dictionary<string, Dictionary<string, float>>();
-        readonly Dictionary<string, List<float>> ties = new Dictionary<string, List<float>>();
+        readonly Dictionary<string, Dictionary<string, double>> clamps = new Dictionary<string, Dictionary<string, double>>();
+        readonly Dictionary<string, List<double>> ties = new Dictionary<string, List<double>>();
         readonly Dictionary<string, HashSet<string>> looseClamps = new Dictionary<string, HashSet<string>>(); // No longitudinal measurement.
         readonly Dictionary<string, int> looseControls = new Dictionary<string, int>(); // Unmeasured ties and seals.
         readonly Dictionary<string, List<double>> seals = new Dictionary<string, List<double>>();
@@ -57,6 +57,8 @@ namespace Scalpal.Exercises.Engine
             ["hook_cautery"] = new[]{"seal"}, ["vessel_sealer"] = new[]{"seal"},
             ["suction_irrigator"] = new[]{"suction","inspect"}, ["decision"] = new[]{"decide"}, ["assistant"] = new[]{"close","tick","fluid"},
         };
+        // Assistant clock ticks and measured fluid snapshots keep the body current; they are not learner actions.
+        public static bool IsTelemetry(BodyAction e) => e != null && e.instrumentId == "assistant" && (e.verb == "tick" || e.verb == "fluid");
         static bool Finite(double v) => !double.IsNaN(v) && !double.IsInfinity(v);
         public static bool ValidBodyAction(BodyAction e)
         {
@@ -82,8 +84,8 @@ namespace Scalpal.Exercises.Engine
             Set("", "activeBleedSeconds", Get("", "activeBleedSeconds") + (active > 0 ? dt : 0));
             var outcomes = new List<string>();
             void Put(string fact, double value = 1) => Set(tissue.id, fact, value);
-            if (!clamps.TryGetValue(tissue.id, out var clamp)) clamp = new Dictionary<string, float>();
-            if (!ties.TryGetValue(tissue.id, out var tied)) tied = new List<float>();
+            if (!clamps.TryGetValue(tissue.id, out var clamp)) clamp = new Dictionary<string, double>();
+            if (!ties.TryGetValue(tissue.id, out var tied)) tied = new List<double>();
             bool blocked = Tissues.Any(t => t.order >= 0 && (tissue.order < 0 || t.order < tissue.order) && Get(t.id, "opened") == 0);
             if (blocked && e.verb != "decide" && e.verb != "tick" && e.verb != "close" && e.verb != "fluid") outcomes.Add("not_exposed");
             else switch (e.verb)
@@ -189,8 +191,8 @@ namespace Scalpal.Exercises.Engine
         int LooseControls(string tissueId) => looseControls.TryGetValue(tissueId, out var count) ? count : 0;
         bool Controlled(string tissueId, Injury injury)
         {
-            var clamped = clamps.TryGetValue(tissueId, out var c) ? c.Values.Select(v => (double)v).ToList() : new List<double>();
-            if (ties.TryGetValue(tissueId, out var t)) clamped.AddRange(t.Select(v => (double)v));
+            var clamped = clamps.TryGetValue(tissueId, out var c) ? c.Values.ToList() : new List<double>();
+            if (ties.TryGetValue(tissueId, out var t)) clamped.AddRange(t);
             var sealedAt = seals.TryGetValue(tissueId, out var s) ? s : new List<double>();
             // Without injury geometry, any control on the structure is the best available evidence.
             if (!injury.measured)
