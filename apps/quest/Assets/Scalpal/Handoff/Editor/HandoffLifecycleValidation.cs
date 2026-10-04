@@ -122,7 +122,7 @@ namespace Scalpal.Handoff.Editor
         {
             var flow = Flow(out var card);
             var ticket = Ticket("virtual"); HandoffRun.Preflight.volunteerConsented = true;
-            var office = Office(flow.gameObject, new EncounterState { encounterId = "enc-patientbfixture", patientId = "patient-b-fixture", phase = "interview" }, null);
+            var office = Office(flow.gameObject, new EncounterState { encounterId = "int-patientbfixture", patientId = "patient-b-fixture", phase = "interview" }, null);
             Set(flow, "office", office); Set(flow, "phase", "theatre");
             Tick(flow);
             Assert(HandoffRun.Current == null && Phase(flow) == "office", "a different office encounter drops the previous patient's ticket");
@@ -175,7 +175,7 @@ namespace Scalpal.Handoff.Editor
         {
             var flow = Flow(out _); var native = Native(flow.gameObject);
             var ticket = Ticket("virtual"); Confirm(ticket);
-            Set(flow, "surgery", native); Set(flow, "phase", "timeout"); Set(flow, "failure", "Complete Jarvis feedback before entering the OR.");
+            Set(flow, "surgery", native); Set(flow, "phase", "timeout"); Set(flow, "failure", "Finish the interview before entering the OR.");
             var routine = (IEnumerator)Call(flow, "ConfirmTimeOut");
             Assert(routine.MoveNext() && Get<string>(flow, "failure") == "", "a new Begin practice clears the previous error");
             HandoffRun.Clear();
@@ -185,9 +185,9 @@ namespace Scalpal.Handoff.Editor
         static void NewRunResetsState()
         {
             var flow = Flow(out _);
-            var office = Office(flow.gameObject, new EncounterState { encounterId = "enc-officefixture1", patientId = "patient-office-fixture", phase = "scored",
+            var office = Office(flow.gameObject, new EncounterState { encounterId = "int-officefixture1", patientId = "patient-office-fixture", phase = "scored",
                 assessment = new EncounterAssessment { procedure = "colectomy" } }, Score("patient-office-fixture"));
-            Set(flow, "failure", "Complete Jarvis feedback before entering the OR."); Set(flow, "coachTried", true); Set(flow, "realigns", 2);
+            Set(flow, "failure", "Finish the interview before entering the OR."); Set(flow, "coachTried", true); Set(flow, "realigns", 2);
             Assert((bool)Call(flow, "ImportOffice", office) && HandoffRun.Current != null, "positive control: scored office imports a ticket");
             Assert(Get<string>(flow, "failure") == "" && !Get<bool>(flow, "coachTried") && Get<int>(flow, "realigns") == 0,
                 "the new run does not inherit an old error or coach-retry state");
@@ -207,7 +207,7 @@ namespace Scalpal.Handoff.Editor
             var go = Fixture("LegacyOfficeRouteFixture");
             var native = go.AddComponent<NativeCaseSession>();
             native.presentation = go.AddComponent<NativePresentation>(); native.presentation.passthrough = true;
-            var state = new EncounterState { encounterId = "enc-legacyroute1", patientId = "patient-legacy-fixture", phase = "scored",
+            var state = new EncounterState { encounterId = "int-legacyroute1", patientId = "patient-legacy-fixture", phase = "scored",
                 assessment = new EncounterAssessment { procedure = "colectomy" } };
             Assert(EncounterOfficeRoute.PrepareSurgery(state, Score(state.patientId), "lap_appendectomy", "http://localhost:8787", out var reason, "legacy-session", "legacy-attempt"),
                 "positive control: legacy producer prepared: " + reason);
@@ -233,7 +233,7 @@ namespace Scalpal.Handoff.Editor
             var flow = Flow(out var card);
             var ticket = Ticket("virtual"); ticket.escalated = ticket.challengeSeen = ticket.consequenceSeen = true;
             Set(flow, "phase", "score"); Tick(flow);
-            Assert(Heading(card).StartsWith("Clinical reasoning", StringComparison.Ordinal), "scorecard renders");
+            Assert(Heading(card).StartsWith("Interview score · 70/100", StringComparison.Ordinal) && Get<string>(card, "copy").Contains("Missed · What is the plan? Right answer: Laparoscopic appendectomy") && Actions(card).SequenceEqual(new[] { "To theatre" }), "compact interview scorecard: score, missed rounds with the right answer, one To theatre button");
             Select(card, 0);
             Assert(Phase(flow) == "theatre", "To theatre after a completed challenge goes straight to Theatre (was " + Phase(flow) + ")");
             ticket.consequenceSeen = false; Set(flow, "phase", "score"); Tick(flow); Select(card, 0);
@@ -245,9 +245,9 @@ namespace Scalpal.Handoff.Editor
         static void WaitingCardReturnsAndThrottles()
         {
             var flow = Flow(out var card);
-            var office = Office(flow.gameObject, new EncounterState { encounterId = "enc-waitingfixture", patientId = "patient-office-fixture", phase = "scored",
+            var office = Office(flow.gameObject, new EncounterState { encounterId = "int-waitingfixture", patientId = "patient-office-fixture", phase = "scored",
                 assessment = new EncounterAssessment { procedure = "colectomy" } }, Score("patient-office-fixture"));
-            Set(office, "working", true); // Jarvis feedback still pending: import must refuse.
+            Set(office, "blocking", 1); // an interview request is still pending: import must refuse.
             Set(flow, "office", office); Set(flow, "phase", "office");
             Tick(flow);
             var actions = Actions(card);
@@ -339,12 +339,16 @@ namespace Scalpal.Handoff.Editor
             Set(office, "sharedSessionId", "office-session"); Set(office, "sharedAttemptId", "office-attempt");
             return office;
         }
-        static EncounterScore Score(string patient) => new EncounterScore { patientId = patient, patientName = "Fixture", procedureId = "lap_appendectomy",
-            procedureTitle = "Laparoscopic appendectomy", total = 70, max = 100, grade = "C", spoken = "Fixture score.", site = "Abdomen", urgency = "urgent",
+        static EncounterScore Score(string patient) => new EncounterScore { kind = "interview", patientId = patient, patientName = "Fixture", procedureId = "lap_appendectomy",
+            procedureTitle = "Laparoscopic appendectomy", total = 70, max = 100, grade = "Solid", spoken = "", site = "Abdomen", urgency = "urgent",
+            sections = new[] { new EncounterScoreSection { id = "plan", label = "Plan", score = 0, max = 15 } },
+            rounds = new[] { new InterviewRoundResult { stage = "plan", prompt = "What is the plan?", max = 15,
+                picked = new InterviewPickedChoice { key = "B", text = "Observe overnight", grade = "wrong" }, best = new InterviewPickedChoice { key = "A", text = "Laparoscopic appendectomy" } } },
+            feedback = new[] { "The surgery this patient needs is a laparoscopic appendectomy." },
             carryoverItems = Array.Empty<EncounterCarryoverItem>() };
         static HandoffTicket Ticket(string mode)
         {
-            var state = new EncounterState { encounterId = "enc-lifecyclefixture", patientId = "patient-lifecycle-fixture", phase = "scored" };
+            var state = new EncounterState { encounterId = "int-lifecyclefixture", patientId = "patient-lifecycle-fixture", phase = "scored" };
             var ticket = HandoffRun.Begin(state, Score(state.patientId), "http://localhost:8787");
             ticket.presentationMode = mode; ticket.attemptId = "lifecycle-attempt"; ticket.sharedSessionId = "lifecycle-session";
             ticket.verifiedCase = new SurgicalCase { patientId = ticket.patientId, caseId = "lifecycle-case", urgency = "urgent" };

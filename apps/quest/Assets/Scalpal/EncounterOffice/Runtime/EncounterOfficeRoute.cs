@@ -55,7 +55,8 @@ namespace Scalpal.EncounterOffice
         {
             surgery = null;
             if (state == null || state.phase != "scored" || !EncounterContract.ValidPatientId(state.patientId)
-                || !QuestJarvisVoice.ValidEncounterId(state.encounterId) || state.assessment == null
+                || !EncounterContract.ValidOfficeId(state.encounterId) || state.assessment == null
+                || EncounterContract.IsInterview(state.encounterId) && (score.kind != "interview" || score.carryoverItems == null)
                 || score == null || score.patientId != state.patientId || score.max != 100 || score.total < 0 || score.total > 100 || string.IsNullOrEmpty(score.grade)
                 || string.IsNullOrEmpty(sharedSessionId) != string.IsNullOrEmpty(attemptId)
                 || string.IsNullOrEmpty(score.procedureId) || score.procedureId != authoredProcedureId || !ValidEndpoint(endpoint))

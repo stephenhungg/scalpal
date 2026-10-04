@@ -22,9 +22,7 @@ namespace Scalpal.EncounterOffice
         void Update()
         {
             if (!surface) return;
-            bool selected = panel && (command == "page" && panel.Page == argument || command == "field" && panel.Field == argument ||
-                command == "patient" && panel.session.State?.patientId == argument ||
-                command == "option" && panel.Page == "assessment" && panel.Field == "differential" && System.Array.IndexOf(panel.session.Draft.differential ?? new string[0], argument) >= 0);
+            bool selected = panel && (command == "page" && panel.Page == argument || command == "patient" && panel.session.State?.patientId == argument);
             bool hover = Time.unscaledTime < hovered;
             int next = !enabledAction ? 0 : hover ? 3 : selected ? 2 : 1;
             if (next == appearance) return;

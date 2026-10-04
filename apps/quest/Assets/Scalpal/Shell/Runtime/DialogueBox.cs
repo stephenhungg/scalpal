@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Text;
 using Scalpal.Brand;
@@ -41,6 +42,15 @@ namespace Scalpal.Shell
         public float CardWidth => style ? style.width : .8f;
         public float BodyGlyphHeight { get; private set; }
         public float TargetPitch { get; private set; }
+        // Interview choices (office): a panel under the card with the round header, the prompt, four selectable rows
+        // (A-D) and an optional note such as "Say A, B, C or D, or tap one". Rows are ray/pinch targets.
+        public event Action<string> ChoicePicked;
+        public bool ChoicesVisible => choiceRoot && choiceRoot.activeSelf && choiceKeys.Count > 0;
+        public string ChoiceHeader { get; private set; } = "";
+        public string ChoicePrompt { get; private set; } = "";
+        public string ChoiceNote { get; private set; } = "";
+        public float ChoicesHeight { get; private set; }
+        public IReadOnlyList<DialogueChoice> ChoiceRows => choiceRows;
 
         GameObject content;
         TextMeshPro body, previous, nameText, initial, indicatorText;
@@ -59,6 +69,15 @@ namespace Scalpal.Shell
         float metersPerPixel = 1, bodyLinePitch, textWidth, bodyEm;
         string indicatorName = "";
         Color roleColor;
+        GameObject choiceRoot;
+        TextMeshPro choiceHeaderText, choicePromptText, choiceNoteText, choiceResultText;
+        Renderer choiceCard;
+        readonly List<DialogueChoice> choiceRows = new List<DialogueChoice>();
+        readonly List<Renderer> choiceSurfaces = new List<Renderer>();
+        readonly List<TextMeshPro> choiceTexts = new List<TextMeshPro>();
+        float choiceGlyph, choiceLinePitch;
+        int hoveredChoice = -1;
+        static readonly Color ChoiceRest = new Color(1, 1, 1, .07f);
         const int MaxCharacters = 600;
         static readonly string[] ListeningFrames = { "listening", "listening.", "listening..", "listening..." };
         static readonly string[] ThinkingFrames = { "thinking", "thinking.", "thinking..", "thinking..." };
@@ -269,8 +288,157 @@ namespace Scalpal.Shell
             if (state == DialogueIndicator.None && indicatorText) indicatorText.text = "";
         }
 
+        public const string ChoiceHint = "Point and pull trigger · hold B to speak";
+        readonly List<string> choiceKeys = new List<string>(), choiceBodies = new List<string>();
+        public string ChoiceResult { get; private set; } = "";
+
+        // Shows a round's choices under the card: a small "2/8" counter, the prompt, rows A-D and one hint line (or a
+        // re-ask note). keys and texts pair up. Replaces any earlier round; a result line, if set, stays above.
+        public void ShowChoices(string counter, string prompt, IList<string> keys, IList<string> texts, string note = "")
+        {
+            if (keys == null || texts == null || keys.Count != texts.Count) throw new ArgumentException("Choice keys and texts must pair up.");
+            ChoiceHeader = counter ?? ""; ChoicePrompt = prompt ?? ""; ChoiceNote = (note ?? "").Trim();
+            choiceKeys.Clear(); choiceBodies.Clear();
+            for (int i = 0; i < keys.Count; i++) { choiceKeys.Add(keys[i]); choiceBodies.Add(texts[i] ?? ""); }
+            LayoutChoices();
+        }
+
+        // One short "Result: ..." line for an exam or test finding, shown in the box (also while the patient speaks).
+        public void SetResult(string result) { ChoiceResult = (result ?? "").Trim(); LayoutChoices(); }
+
+        public void SetChoiceNote(string note)
+        {
+            ChoiceNote = (note ?? "").Trim();
+            if (!choiceNoteText) return;
+            choiceNoteText.text = Ellipsize(ChoiceNote.Length == 0 ? ChoiceHint : ChoiceNote, style.width - .056f, choiceNoteText);
+            ApplyColors();
+        }
+
+        public void HideChoices()
+        {
+            ChoiceHeader = ChoicePrompt = ChoiceNote = ""; choiceKeys.Clear(); choiceBodies.Clear();
+            LayoutChoices();
+        }
+
+        void LayoutChoices()
+        {
+            Build(); BuildChoices();
+            foreach (var row in choiceRows) if (row) Discard(row.gameObject);
+            choiceRows.Clear(); choiceSurfaces.Clear(); choiceTexts.Clear(); hoveredChoice = -1;
+            if (choiceCard) { Discard(choiceCard.gameObject); choiceCard = null; }
+            bool round = choiceKeys.Count > 0;
+            if (!round && ChoiceResult.Length == 0) { choiceRoot.SetActive(false); ChoicesHeight = 0; return; }
+            float pad = .028f, left = -style.width / 2 + pad, width = style.width - 2 * pad;
+            float y = -.014f;
+            choiceResultText.gameObject.SetActive(ChoiceResult.Length > 0);
+            if (ChoiceResult.Length > 0)
+            {
+                choiceResultText.text = Ellipsize(ChoiceResult, width, choiceResultText);
+                choiceResultText.transform.localPosition = new Vector3(left, y, -.008f);
+                y -= choiceLinePitch + .006f;
+            }
+            choiceHeaderText.gameObject.SetActive(round); choicePromptText.gameObject.SetActive(round); choiceNoteText.gameObject.SetActive(round);
+            if (round)
+            {
+                choiceHeaderText.text = ChoiceHeader;
+                choiceHeaderText.transform.localPosition = new Vector3(style.width / 2 - pad, y, -.008f);
+                choicePromptText.text = WrapTo(ChoicePrompt, width - .07f, choicePromptText, 2, out int promptLines);
+                choicePromptText.transform.localPosition = new Vector3(left, y, -.008f);
+                y -= promptLines * choiceLinePitch + .010f;
+                for (int i = 0; i < choiceKeys.Count; i++)
+                {
+                    var text = Text("Choice" + choiceKeys[i], style.bodyFont, style.bodyText, TextAnchor.UpperLeft);
+                    text.fontSize = choicePromptText.fontSize;
+                    string body = WrapTo(choiceKeys[i] + ")  " + choiceBodies[i].Trim(), width - .024f, text, 3, out int lines);
+                    float height = lines * choiceLinePitch + .016f;
+                    var surface = Rounded(choiceRoot.transform, "ChoiceRow" + choiceKeys[i], new Vector2(width, height), new Vector3(0, y - height / 2, -.003f), 2);
+                    surface.gameObject.AddComponent<BoxCollider>().size = new Vector3(width, height, .012f);
+                    var choice = surface.gameObject.AddComponent<DialogueChoice>(); choice.box = this; choice.key = choiceKeys[i];
+                    text.transform.SetParent(surface.transform, false);
+                    text.text = body; text.transform.localPosition = new Vector3(-width / 2 + .012f, height / 2 - .008f, -.005f);
+                    choiceRows.Add(choice); choiceSurfaces.Add(surface); choiceTexts.Add(text);
+                    y -= height + .006f;
+                }
+                // One line is always reserved for the hint or a re-ask note, so a note never moves the rows.
+                choiceNoteText.transform.localPosition = new Vector3(left, y - .002f, -.008f);
+                SetChoiceNote(ChoiceNote);
+                y -= choiceLinePitch + .004f;
+            }
+            ChoicesHeight = -y + .010f;
+            // Quantised so ShellView's rounded-mesh cache stays small.
+            var cardSize = new Vector2(style.width, Mathf.Ceil(ChoicesHeight * 100) / 100);
+            choiceCard = Rounded(choiceRoot.transform, "ChoiceGlass", cardSize, new Vector3(0, -cardSize.y / 2, 0), 1);
+            choiceRoot.transform.localPosition = new Vector3(0, -CardHeight / 2 - .012f, 0);
+            choiceRoot.SetActive(true); idle = 0;
+            Show(); ApplyColors();
+        }
+
+        // Called by DialogueChoice.Press (ray trigger or pinch). Ignored while the box is hidden or fading in.
+        public void Pick(string key)
+        {
+            if (!ChoicesVisible || alpha < .5f || string.IsNullOrEmpty(key)) return;
+            ChoicePicked?.Invoke(key);
+        }
+
+        void BuildChoices()
+        {
+            if (choiceRoot) return;
+            choiceRoot = new GameObject("Choices");
+            choiceRoot.transform.SetParent(content.transform, false);
+            choiceHeaderText = Text("ChoiceCounter", style.nameFont, style.nameText, TextAnchor.UpperRight);
+            choiceHeaderText.transform.SetParent(choiceRoot.transform, false);
+            choicePromptText = Text("ChoicePrompt", style.bodyFont, style.bodyText, TextAnchor.UpperLeft);
+            choicePromptText.transform.SetParent(choiceRoot.transform, false);
+            choiceNoteText = Text("ChoiceNote", style.bodyFont, style.bodyText, TextAnchor.UpperLeft);
+            choiceNoteText.transform.SetParent(choiceRoot.transform, false);
+            choiceResultText = Text("ChoiceResult", style.bodyFont, style.bodyText, TextAnchor.UpperLeft);
+            choiceResultText.transform.SetParent(choiceRoot.transform, false);
+            choiceGlyph = Calibrate(choicePromptText, style.bodyLineHeight * .72f);
+            Calibrate(choiceHeaderText, style.bodyLineHeight * .66f);
+            Calibrate(choiceNoteText, style.bodyLineHeight * .66f);
+            Calibrate(choiceResultText, style.bodyLineHeight * .72f);
+            choicePromptText.text = "Hg\nHg"; choiceLinePitch = Measure(choicePromptText).y - choiceGlyph; choicePromptText.text = "";
+            choiceRoot.SetActive(false);
+        }
+
+        static void Discard(GameObject value) { if (Application.isPlaying) Destroy(value); else DestroyImmediate(value); }
+
+        Renderer Rounded(Transform parent, string name, Vector2 size, Vector3 position, int order)
+        {
+            var panel = ShellView.Panel(parent, name, position, size);
+            var renderer = panel.GetComponent<MeshRenderer>(); renderer.sharedMaterial = style.glass; renderer.sortingOrder = order;
+            return renderer;
+        }
+
+        // Word-wraps to at most maxLines lines of the given width for this text's size; the last line ellipsizes.
+        string WrapTo(string value, float meters, TextMeshPro target, int maxLines, out int count)
+        {
+            float scale = target.fontSize / Mathf.Max(body.fontSize, 1e-6f);
+            float limit = meters / Mathf.Max(metersPerPixel * scale, 1e-7f), space = Width(' ');
+            var wrapped = new List<string>(); var line = new StringBuilder(); float lineWidth = 0;
+            foreach (var word in (value ?? "").Split(' '))
+            {
+                if (word.Length == 0) continue;
+                float wordWidth = 0; foreach (char c in word) wordWidth += Width(c);
+                if (line.Length > 0 && lineWidth + space + wordWidth > limit) { wrapped.Add(line.ToString()); line.Clear(); lineWidth = 0; }
+                if (line.Length > 0) { line.Append(' '); lineWidth += space; }
+                line.Append(word); lineWidth += wordWidth;
+            }
+            if (line.Length > 0) wrapped.Add(line.ToString());
+            if (wrapped.Count > maxLines)
+            {
+                string rest = string.Join(" ", wrapped.GetRange(maxLines - 1, wrapped.Count - maxLines + 1));
+                wrapped.RemoveRange(maxLines - 1, wrapped.Count - maxLines + 1);
+                wrapped.Add(Ellipsize(rest + " …", meters, target));
+            }
+            for (int i = 0; i < wrapped.Count; i++) wrapped[i] = Ellipsize(wrapped[i], meters, target);
+            count = Mathf.Max(1, wrapped.Count);
+            return string.Join("\n", wrapped);
+        }
+
         public void Clear()
         {
+            ChoiceResult = ""; HideChoices();
             FullText = ""; PreviousText = ""; SpeakerLabel = ""; lines.Clear(); lineEnds.Clear(); revealed = 0; revealTotal = 0;
             Indicator = DialogueIndicator.None; summoned = false;
             if (content) { body.text = previous.text = nameText.text = initial.text = indicatorText.text = ""; content.SetActive(false); }
@@ -381,7 +549,7 @@ namespace Scalpal.Shell
             }
             else if (!summoned) idle += deltaTime;
             float dismissAfter = Mathf.Clamp(minimumIdleSeconds + FullText.Length * .03f, minimumIdleSeconds, maximumIdleSeconds);
-            bool wanted = summoned || Typing || (FullText.Length > 0 || Indicator != DialogueIndicator.None) && idle < dismissAfter;
+            bool wanted = summoned || Typing || ChoicesVisible || ChoiceResult.Length > 0 && choiceRoot.activeSelf || (FullText.Length > 0 || Indicator != DialogueIndicator.None) && idle < dismissAfter;
             float target = wanted ? 1 : 0;
             if (alpha != target || previousAlpha > .42f)
             {
@@ -391,6 +559,7 @@ namespace Scalpal.Shell
                 if (alpha <= 0 && !wanted) { content.SetActive(false); return; }
             }
             UpdateIndicator(deltaTime);
+            UpdateChoiceHover();
             Follow(deltaTime);
         }
 
@@ -403,6 +572,14 @@ namespace Scalpal.Shell
             indicatorPhase = phase;
             var frames = Indicator == DialogueIndicator.Listening ? ListeningFrames : ThinkingFrames;
             indicatorText.text = Indicator == DialogueIndicator.Thinking && indicatorName.Length > 0 ? indicatorName + " · " + frames[phase] : frames[phase];
+        }
+
+        void UpdateChoiceHover()
+        {
+            if (!ChoicesVisible) return;
+            int hovered = -1;
+            for (int i = 0; i < choiceRows.Count; i++) if (choiceRows[i] && choiceRows[i].Hovered) { hovered = i; break; }
+            if (hovered != hoveredChoice) { hoveredChoice = hovered; ApplyColors(); }
         }
 
         void ApplyColors()
@@ -422,6 +599,19 @@ namespace Scalpal.Shell
             initial.color = new Color(style.chipInk.r, style.chipInk.g, style.chipInk.b, a);
             indicatorText.color = new Color(style.mutedInk.r, style.mutedInk.g, style.mutedInk.b, a);
             previous.color = new Color(style.mutedInk.r, style.mutedInk.g, style.mutedInk.b, a * previousAlpha);
+            if (!choiceRoot) return;
+            if (choiceCard) { block.SetColor(ColorId, new Color(style.cardTint.r, style.cardTint.g, style.cardTint.b, style.cardTint.a * a)); choiceCard.SetPropertyBlock(block); }
+            choiceHeaderText.color = new Color(style.mutedInk.r, style.mutedInk.g, style.mutedInk.b, a);
+            choicePromptText.color = new Color(style.ink.r, style.ink.g, style.ink.b, a);
+            var note = ChoiceNote.Length > 0 ? style.warning : style.mutedInk;
+            choiceNoteText.color = new Color(note.r, note.g, note.b, a);
+            choiceResultText.color = new Color(style.ink.r, style.ink.g, style.ink.b, a);
+            for (int i = 0; i < choiceSurfaces.Count; i++)
+            {
+                var tint = i == hoveredChoice ? new Color(style.you.r, style.you.g, style.you.b, .34f) : ChoiceRest;
+                block.SetColor(ColorId, new Color(tint.r, tint.g, tint.b, tint.a * a)); choiceSurfaces[i].SetPropertyBlock(block);
+                choiceTexts[i].color = new Color(style.ink.r, style.ink.g, style.ink.b, a);
+            }
         }
 
         void Follow(float deltaTime)
