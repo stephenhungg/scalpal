@@ -16,11 +16,12 @@ import json
 import socket
 import sys
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
 
+from .coach import CoachPoller, attempt_summary
 from .learning.demos import APPROACH, CARRY, CLOSE, PRESHAPE, RELEASE, RETREAT, Demo
 from .learning.env import DT, FINGER_ACTUATORS, HANDLE_RADIUS, HOME_GRIP, MAX_STEPS, Scene, TransferEnv, sample_scene, wrap
 from .paths import MOTION_ROOT
@@ -122,26 +123,43 @@ class Episode:
     closure: list
     obj: list
     success: bool = False
+    # Measured robot state before each command (wrist x, y, z, yaw; the 22 finger joint angles), the
+    # elapsed time of each control frame, and the coach label it was stamped with (None when unlabeled).
+    wrist: list = field(default_factory=list)
+    joints: list = field(default_factory=list)
+    t: list = field(default_factory=list)
+    coach: list = field(default_factory=list)
+    started_at: str = ""
+    max_lift_m: float = 0.0
 
     def to_dict(self) -> dict:
         return {
             "schema": "scalpal.teleop_episode.v1",
             "scene": self.scene.to_dict(),
             "control_dt_s": DT,
+            "started_at": self.started_at,
             "grip": np.round(self.grip, 5).tolist(),
             "finger": np.round(self.finger, 4).tolist(),
             "closure": np.round(self.closure, 3).tolist(),
             "object": np.round(self.obj, 5).tolist(),
+            "wrist": np.round(self.wrist, 5).tolist(),
+            "joints": np.round(self.joints, 4).tolist(),
+            "t": np.round(self.t, 3).tolist(),
+            "coach": self.coach,
+            "max_lift_m": round(float(self.max_lift_m), 4),
             "success": bool(self.success),
-            "source": "Quest controller teleoperation (grip pose from controller pose, fingers from grip/trigger)",
+            "source": "Quest controller teleoperation (grip pose from controller pose, fingers per glove mapping)",
         }
 
 
 class TeleopSession:
     """One controller drives the hand; call step() once per control period with the newest frame."""
 
-    def __init__(self, hand: str = "right", seed: int = 0, env: TransferEnv | None = None):
+    def __init__(self, hand: str = "right", seed: int = 0, env: TransferEnv | None = None,
+                 coach: CoachPoller | None = None, clock=time.monotonic):
         self.hand = hand
+        self.coach = coach
+        self.clock = clock
         self.env = env or TransferEnv()
         self.rng = np.random.default_rng(seed)
         self.open, self.closed = grasp_shapes()
@@ -153,7 +171,8 @@ class TeleopSession:
         self.env.reset(self.scene, self.open)
         # The controller's starting pose maps to this scene's hand home.
         self.mapper = ControllerMapper(self.scene.home)
-        self.ep = Episode(self.scene, [], [], [], [])
+        self.ep = Episode(self.scene, [], [], [], [], started_at=time.strftime("%Y-%m-%dT%H:%M:%S%z"))
+        self.t0 = None
 
     def step(self, frame: dict | None) -> dict:
         sample = pick_controller(frame, self.hand) if frame else None
@@ -166,6 +185,14 @@ class TeleopSession:
             grip = self.mapper(sample)
             c = closure(sample)
             finger = self.open + curl_vector(finger_curls(sample)) * (self.closed - self.open)
+        now = self.clock()
+        if self.t0 is None:
+            self.t0 = now
+        self.ep.t.append(now - self.t0)
+        self.ep.wrist.append(self.env.grip_pose())
+        self.ep.joints.append(self.env.d.qpos[self.env.finger_qadr].copy())
+        label = self.coach.latest() if self.coach else None
+        self.ep.coach.append(label)
         self.env.set_command(grip, finger)
         self.ep.grip.append(grip)
         self.ep.finger.append(finger)
@@ -173,15 +200,21 @@ class TeleopSession:
         self.ep.obj.append(self.env.obj_pose())
         done = self.env.success() or len(self.ep.grip) >= TELEOP_MAX_STEPS
         return {"tracked": sample is not None, "closure": c, "success": self.env.success(), "done": done,
-                "lift_m": float(self.env.obj_pose()[2] - HANDLE_RADIUS), "steps": len(self.ep.grip)}
+                "lift_m": float(self.env.obj_pose()[2] - HANDLE_RADIUS), "steps": len(self.ep.grip),
+                "step_title": (label or {}).get("stepTitle", "")}
 
     def finish(self, out_dir: Path | None = None) -> Episode:
         self.ep.success = bool(self.env.success())
+        self.ep.max_lift_m = float(self.env.max_lift)
         self.episodes.append(self.ep)
         if out_dir:
             out_dir.mkdir(parents=True, exist_ok=True)
             path = out_dir / f"{time.strftime('%Y%m%dT%H%M%S')}-{len(self.episodes):03d}.json"
-            path.write_text(json.dumps(self.ep.to_dict()))
+            data = self.ep.to_dict()
+            path.write_text(json.dumps(data))
+            # Dashboard hook: optional, fire-and-forget, never blocks or fails the attempt.
+            if self.coach:
+                self.coach.post_attempt(attempt_summary(data, path.stem))
         ep = self.ep
         self.new_scene()
         return ep
@@ -230,15 +263,23 @@ def load_teleop_demos(folder: Path) -> list[Demo]:
 
 
 def run_teleop(port: int = 9124, hand: str = "right", out_dir: Path | None = None, show: bool = True,
-               max_seconds: float | None = None, seed: int = 0) -> list[Episode]:
-    """Window: the robot hand following the controller. n = new scene (saves the attempt), a = re-anchor, q = quit."""
+               max_seconds: float | None = None, seed: int = 0, coach_url: str | None = None,
+               coach_session: str | None = None, coach_patient: str | None = None,
+               report: bool = True) -> list[Episode]:
+    """Window: the robot hand following the controller. n = new scene (saves the attempt), a = re-anchor, q = quit.
+    With coach_url, every control frame is stamped with the coach's current surgery step (polled ~4 Hz) and,
+    when report is on, each saved attempt is POSTed to the coach as a summary."""
     import cv2
     import mujoco
+
+    coach = CoachPoller(coach_url, coach_session, coach_patient).start() if coach_url else None
+    if coach and not report:
+        coach.post_attempt = lambda summary: None
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.bind(("0.0.0.0", port))
     sock.setblocking(False)
-    session = TeleopSession(hand, seed)
+    session = TeleopSession(hand, seed, coach=coach)
     renderer = cam = None
     if show:
         renderer = mujoco.Renderer(session.env.m, 480, 640)
@@ -275,6 +316,7 @@ def run_teleop(port: int = 9124, hand: str = "right", out_dir: Path | None = Non
                 lines = [
                     f"controller {'tracked' if status['tracked'] else 'LOST (holding pose)'}   grip {status['closure']:.2f}",
                     f"lift {100 * status['lift_m']:.1f} cm   attempt {len(session.episodes) + 1}   successes {sum(e.success for e in session.episodes)}",
+                    f"step: {status['step_title'] or ('no coach' if not coach else 'waiting for coach')}",
                     "n new scene   a re-anchor   q quit",
                 ]
                 for i, line in enumerate(lines):
@@ -290,6 +332,8 @@ def run_teleop(port: int = 9124, hand: str = "right", out_dir: Path | None = Non
                     session.mapper.reanchor()
     finally:
         sock.close()
+        if coach:
+            coach.stop()
         if show:
             cv2.destroyAllWindows()
     return session.episodes

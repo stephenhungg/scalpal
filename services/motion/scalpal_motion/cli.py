@@ -130,7 +130,9 @@ def cmd_teleop(args: argparse.Namespace) -> None:
     if args.record and not args.consented:
         raise SystemExit("--record saves the participant's motion; pass --consented once they agreed")
     out = Path(args.record) if args.record else (TELEOP_DIR if args.consented else None)
-    episodes = run_teleop(args.port, args.hand, out, show=not args.headless, max_seconds=args.seconds, seed=args.seed)
+    episodes = run_teleop(args.port, args.hand, out, show=not args.headless, max_seconds=args.seconds, seed=args.seed,
+                          coach_url=args.coach, coach_session=args.session, coach_patient=args.patient,
+                          report=not args.no_report)
     print(json.dumps({"attempts": len(episodes), "successes": sum(e.success for e in episodes), "saved_to": str(out) if out else None}))
 
 
@@ -211,6 +213,10 @@ def main() -> None:
     p.add_argument("--headless", action="store_true", help="no window (checks)")
     p.add_argument("--seconds", type=float, default=None, help="stop after this many seconds")
     p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--coach", default=None, help="Scalpal coach URL (e.g. http://127.0.0.1:8787): stamp frames with the surgery step")
+    p.add_argument("--session", default=None, help="coach session id to follow (default: newest via GET /coach/current)")
+    p.add_argument("--patient", default=None, help="with no --session, follow the newest session for this patient")
+    p.add_argument("--no-report", action="store_true", help="do not POST attempt summaries to the coach")
     p.set_defaults(func=cmd_teleop)
 
     p = sub.add_parser("send-controller", help="stand-in headset: replay controller frames.jsonl, or a scripted reach-and-place")
