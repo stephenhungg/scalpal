@@ -2,6 +2,7 @@ import "../src/env.js";
 import { writeFileSync } from "node:fs";
 import { createApp } from "../src/app.js";
 import { EXAM_MANEUVERS, HISTORY_TOPICS, TESTS } from "../src/catalog/encounters.js";
+import { bodyAction, type BodyAction } from "../src/open-body.js";
 import { NOW, fixtureClient } from "../test/helpers.js";
 
 // ElevenLabs native evaluation suite for Jarvis (surgery coach and attending) and the patient agent.
@@ -15,7 +16,7 @@ import { NOW, fixtureClient } from "../test/helpers.js";
 //
 // Prompts and tool outputs are not hand-written: they are recorded from the real service code
 // (buildSystemPrompt, the coach engine, the encounter engine) running in-process on the FinchNode
-// fixtures, for Theo Abernathy's appendectomy. Change a prompt or a tool and the next run tests the change.
+// fixtures, for Theo Abernathy's open appendectomy. Change a prompt or a tool and the next run tests the change.
 // Tests run against the live agents with the per-case prompt sent as agent_config_override, the same
 // way the /jarvis page overrides the prompt at session start.
 
@@ -74,22 +75,26 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 interface Fixtures {
   surgeryPrompt: string;
   surgeryFirst: string;
-  ctxFind: string;
-  hintFind: string;
-  highlightFind: string;
-  explainCystic: string;
-  brief: string;
-  stepCompleteEvent: string;
-  ctxInspect: string;
-  ctxDivide: string;
-  staleEvent: string;
+  // Session A: split muscle with the scalpel in hand, then an untented peritoneum cut.
+  ctxSplitScalpel: string;
+  ctxPeritoneum: string;
   mistakeEvent: string;
   ctxAfterMistake: string;
   jarvisSaid: string;
   mistakeReflex: string;
-  ctxStaple: string;
+  // Session B: the expected path.
+  ctxFind: string;
+  hintFind: string;
+  highlightAppendix: string;
+  highlightCecum: string;
+  explainCystic: string;
+  brief: string;
+  staleEvent: string;
+  stepCompleteEvent: string;
+  ctxMeso: string;
   trackingEvent: string;
   ctxPaused: string;
+  ctxBaseUntied: string;
   patientPrompt: string;
   patientFirst: string;
   answers: Record<string, string>;
@@ -110,67 +115,103 @@ async function recordFixtures(): Promise<Fixtures> {
     return json;
   };
 
-  // Surgery coach, Theo's appendectomy.
-  const s = await j("POST", "/coach/sessions", { patientId: THEO, mode: "mixed_reality" });
-  const sid = s.sessionId as string;
-  const state = async () => j("GET", `/coach/sessions/${sid}`);
-  const ctx = async () => (await state()).context as string;
-  const sim = (kind: string) => j("POST", `/coach/sessions/${sid}/simulate`, { kind });
-  const tool = async (name: string, params: object = {}) => (await j("POST", `/coach/sessions/${sid}/tools/${name}`, params)).result as string;
-  let seq = 0;
-  const newAlerts = async () => {
-    const a = await j("GET", `/coach/sessions/${sid}/alerts?after=${seq}`);
-    seq = a.latestSeq;
-    return a.alerts as { kind: string; simEvent: string; reflexText: string }[];
-  };
-  const stepTitle = async () => (await state()).snapshot.step.title as string;
-  const tag = async () => {
-    const snap = (await state()).snapshot;
-    return `v${snap.version} step ${snap.stepNumber}/${snap.stepCount} "${snap.step.title}"`;
+  // Surgery coach, Theo's open appendectomy. Open surgery is free-form: sim("complete_step") plays the
+  // ideal body actions for the suggested milestone, and anything else is sent as a raw surgery event.
+  const coach = async () => {
+    const s = await j("POST", "/coach/sessions", { patientId: THEO, mode: "mixed_reality" });
+    const sid = s.sessionId as string;
+    const state = async () => j("GET", `/coach/sessions/${sid}`);
+    let seq = 0;
+    const api = {
+      s,
+      sid,
+      ctx: async () => (await state()).context as string,
+      sim: (kind: string) => j("POST", `/coach/sessions/${sid}/simulate`, { kind }),
+      tool: async (name: string, params: object = {}) => (await j("POST", `/coach/sessions/${sid}/tools/${name}`, params)).result as string,
+      event: (event: object) => j("POST", `/coach/sessions/${sid}/events`, { event }),
+      hold: (instrumentId: string, hand: "left" | "right", held = true) => api.event({ type: "instrument", instrumentId, hand, held }),
+      surgery: (verb: string, tissue: string, values: Partial<BodyAction>) => api.event({ type: "surgery", evidence: bodyAction(verb, tissue, values) }),
+      newAlerts: async () => {
+        const a = await j("GET", `/coach/sessions/${sid}/alerts?after=${seq}`);
+        seq = a.latestSeq;
+        return a.alerts as { kind: string; tier: string; simEvent: string; reflexText: string }[];
+      },
+      expectStep: async (id: string) => {
+        const got = (await state()).snapshot.step.id as string;
+        if (got !== id) throw new Error(`fixture: expected suggested milestone ${id}, got ${got}`);
+      },
+      tag: async () => {
+        const snap = (await state()).snapshot;
+        return `v${snap.version} step ${snap.stepNumber}/${snap.stepCount} "${snap.step.title}"`;
+      },
+    };
+    return api;
   };
 
-  await sim("complete_step");
-  await sim("complete_step");
-  if ((await stepTitle()) !== "Locate the appendix") throw new Error(`fixture: expected Locate the appendix, got ${await stepTitle()}`);
-  await newAlerts();
-  const ctxFind = await ctx();
-  const hintFind = await tool("get_hint");
+  // Session A: the learner reaches split muscle holding the scalpel with its tip on the muscle, puts it
+  // down and splits correctly, then nicks the peritoneum without tenting it (guardrail lift_first, high).
+  const a = await coach();
+  for (let i = 0; i < 3; i++) await a.sim("complete_step");
+  await a.expectStep("split_muscle");
+  await a.hold("scalpel", "right");
+  await a.event({ type: "contact", instrumentId: "scalpel", structureId: "muscle" });
+  const ctxSplitScalpel = await a.ctx();
+  await a.hold("scalpel", "right", false);
+  await a.sim("complete_step");
+  await a.expectStep("open_peritoneum");
+  await a.hold("scalpel", "right");
+  await a.newAlerts();
+  const ctxPeritoneum = await a.ctx();
+  await a.surgery("cut", "peritoneum", { instrumentId: "scalpel", lengthMm: 4, actionId: "peritoneum-untented-cut" });
+  const mistake = (await a.newAlerts()).find((x) => x.kind === "mistake" && x.tier === "warning");
+  if (!mistake) throw new Error("fixture: an untented peritoneum cut did not raise an urgent mistake alert");
+  const ctxAfterMistake = await a.ctx();
+  const jarvisSaid = `[JARVIS SAID ${await a.tag()}] "${mistake.reflexText}"`;
+
+  // Session B: the expected path, with a rough grasp while delivering the appendix that arrives late.
+  const b = await coach();
+  for (let i = 0; i < 5; i++) await b.sim("complete_step");
+  await b.expectStep("deliver_appendix");
+  await b.newAlerts();
+  const ctxFind = await b.ctx();
+  const hintFind = await b.tool("get_hint");
   // The headset acks the highlight, as CoachRelay does.
-  const pendingHighlight = tool("highlight_structure", { structure: "cecum" });
-  for (let i = 0; i < 20; i++) {
-    const { commands } = await j("GET", `/coach/sessions/${sid}/commands`);
-    if (commands.length) {
-      await j("POST", `/coach/sessions/${sid}/commands/${commands[0].commandId}/ack`, { status: "applied" });
-      break;
+  const highlight = async (structure: string) => {
+    const pending = b.tool("highlight_structure", { structure });
+    for (let i = 0; i < 20; i++) {
+      const { commands } = await j("GET", `/coach/sessions/${b.sid}/commands`);
+      if (commands.length) {
+        await j("POST", `/coach/sessions/${b.sid}/commands/${commands[0].commandId}/ack`, { status: "applied" });
+        break;
+      }
+      await sleep(50);
     }
-    await sleep(50);
-  }
-  const highlightFind = await pendingHighlight;
-  const explainCystic = await tool("explain_structure", { structure: "cystic duct" });
-  const brief = await tool("get_patient_brief");
-  await newAlerts();
-
-  await sim("complete_step");
-  const stepCompleteEvent = (await newAlerts()).find((a) => a.kind === "step_complete")?.simEvent ?? "";
-  const ctxInspect = await ctx();
-  await sim("complete_step");
-  await sim("complete_step");
-  if ((await stepTitle()) !== "Divide the mesoappendix") throw new Error(`fixture: expected Divide the mesoappendix, got ${await stepTitle()}`);
-  await newAlerts();
-  const ctxDivide = await ctx();
-  await sim("wrong_instrument");
-  const staleEvent = (await newAlerts()).find((a) => a.kind === "wrong_instrument")?.simEvent ?? "";
-  await j("POST", `/coach/sessions/${sid}/events`, { event: { type: "touch", structureId: "terminal_ileum", instrumentId: "vessel_sealer" } });
-  const mistake = (await newAlerts()).find((a) => a.kind === "mistake");
-  if (!mistake) throw new Error("fixture: sealer on the terminal ileum did not raise a mistake alert");
-  const ctxAfterMistake = await ctx();
-  const jarvisSaid = `[JARVIS SAID ${await tag()}] "${mistake.reflexText}"`;
-  await sim("complete_step");
-  const ctxStaple = await ctx();
-  await newAlerts();
-  await sim("tracking_lost");
-  const trackingEvent = (await newAlerts()).find((a) => a.kind === "tracking_lost")?.simEvent ?? "";
-  const ctxPaused = await ctx();
+    return pending;
+  };
+  const highlightAppendix = await highlight("appendix");
+  const highlightCecum = await highlight("cecum");
+  const explainCystic = await b.tool("explain_structure", { structure: "cystic duct" });
+  const brief = await b.tool("get_patient_brief");
+  await b.newAlerts();
+  await b.surgery("grasp", "appendix", { instrumentId: "babcock", depthMm: 5, speedMps: 0.3, actionId: "appendix-rough-grasp" });
+  const staleEvent = (await b.newAlerts()).find((x) => x.kind === "mistake")?.simEvent ?? "";
+  await b.sim("complete_step");
+  await b.expectStep("divide_mesoappendix");
+  const stepCompleteEvent = (await b.newAlerts()).find((x) => x.kind === "step_complete")?.simEvent ?? "";
+  const ctxMeso = await b.ctx();
+  await b.sim("tracking_lost");
+  const trackingEvent = (await b.newAlerts()).find((x) => x.kind === "tracking_lost")?.simEvent ?? "";
+  const ctxPaused = await b.ctx();
+  await b.sim("tracking_restored");
+  await b.sim("complete_step");
+  await b.expectStep("ligate_base");
+  // Base identified and crushed, no tie yet; the scalpel is in hand.
+  await b.surgery("decide", "appendix", { instrumentId: "decision", choice: "true_base", actionId: "base-decision" });
+  await b.surgery("clamp", "appendix", { instrumentId: "right_angle_clamp", distanceMm: 3, instrumentInstanceId: "clamp-r", actionId: "base-crush" });
+  await b.hold("scalpel", "right");
+  await b.newAlerts();
+  const ctxBaseUntied = await b.ctx();
+  if (/Achieved milestones:[^\n]*ligate_base/.test(ctxBaseUntied)) throw new Error("fixture: ligate_base should not be achieved yet");
 
   // Patient interview: record every tool output so mocks match what the service returns.
   const enc = await j("POST", "/encounters", { patientId: THEO });
@@ -201,12 +242,12 @@ async function recordFixtures(): Promise<Fixtures> {
   })).result as string;
 
   const f: Fixtures = {
-    surgeryPrompt: s.systemPrompt,
-    surgeryFirst: s.firstMessage,
-    ctxFind, hintFind, highlightFind, explainCystic, brief,
-    stepCompleteEvent, ctxInspect, ctxDivide, staleEvent,
+    surgeryPrompt: a.s.systemPrompt,
+    surgeryFirst: a.s.firstMessage,
+    ctxSplitScalpel, ctxPeritoneum,
     mistakeEvent: mistake.simEvent, ctxAfterMistake, jarvisSaid, mistakeReflex: mistake.reflexText,
-    ctxStaple, trackingEvent, ctxPaused,
+    ctxFind, hintFind, highlightAppendix, highlightCecum, explainCystic, brief,
+    staleEvent, stepCompleteEvent, ctxMeso, trackingEvent, ctxPaused, ctxBaseUntied,
     patientPrompt: enc.patientPrompt, patientFirst: enc.patientFirstMessage,
     answers, exams, tests,
     attendingPrompt: att.attendingPrompt, attendingFirst: att.attendingFirstMessage,
@@ -293,8 +334,16 @@ function defineTests(f: Fixtures, toolIds: Record<string, string>): TestDef[] {
     tool_mock_overrides: toolMocks,
   });
 
+  // Suggested milestones on Theo's open appendectomy: 4 split muscle, 5 open peritoneum, 6 deliver appendix,
+  // 7 secure mesoappendix, 8 identify and secure base.
   const findAppendix = coachStart(f.ctxFind);
-  const divide = coachStart(f.ctxDivide);
+  const peritoneum = coachStart(f.ctxPeritoneum);
+  const meso = coachStart(f.ctxMeso);
+  const highlightMocks = [
+    { when: { path: "structure", value: "appendix" }, result: f.highlightAppendix },
+    { when: { path: "structure", value: "cecum" }, result: f.highlightCecum },
+    { result: "That structure is not part of this case's anatomy." },
+  ];
 
   const tests: TestDef[] = [
     // ---- surgery coach ----
@@ -317,9 +366,9 @@ function defineTests(f: Fixtures, toolIds: Record<string, string>): TestDef[] {
       name: "coach-other-surgery-refusal",
       checks: "cystic duct during an appendectomy: says it is not part of this procedure, redirects",
       body: llm(
-        "The agent says the cystic duct is not part of this procedure (this is an appendectomy) and points the learner back to a structure of the current step, such as the cecum or appendix. It must NOT describe where the cystic duct is or how to find it in this patient, and must not claim to highlight it. Under about 40 words.",
+        "The agent says the cystic duct is not part of this procedure (this is an open appendectomy) and points the learner back to a structure of the current step, such as the appendix, the cecum, or its taenia. It must NOT describe where the cystic duct is or how to find it in this patient, and must not claim to highlight it. Under about 40 words.",
         [...findAppendix, { role: "user", message: "Where's the cystic duct? Can you show me the cystic duct?" }],
-        ["The cystic duct isn't part of an appendectomy. Follow the taeniae on the cecum down to the appendix base."],
+        ["The cystic duct isn't part of an appendectomy. Follow the taenia on the cecum to the appendix and lift it out with the Babcock."],
         ["The cystic duct runs from the gallbladder neck to the common bile duct; I've highlighted it for you."],
       ),
     },
@@ -328,16 +377,13 @@ function defineTests(f: Fixtures, toolIds: Record<string, string>): TestDef[] {
       name: "coach-other-surgery-no-highlight",
       checks: "simulation: cystic duct request gets no cystic duct highlight or lookup spam (one redirect highlight is fine)",
       body: simulation(
-        "You are a surgical trainee in the middle of a laparoscopic appendectomy, currently trying to locate the appendix. Say exactly: 'Where's the cystic duct? Can you show me the cystic duct?' Then react briefly to the answer, and ask 'Okay, so what should I be looking at?'",
+        "You are a surgical trainee in the middle of an open appendectomy through a McBurney incision. The peritoneum is open and you are trying to deliver the appendix into the wound. Say exactly: 'Where's the cystic duct? Can you show me the cystic duct?' Then react briefly to the answer, and ask 'Okay, so what should I be looking at?'",
         [
           "The agent never highlights the cystic duct, never describes where the cystic duct is in this patient, and says it is not part of this procedure.",
-          "No tool spam: the agent makes at most one tool call per reply, and never calls the same tool twice in a row for the same request. A single highlight of a structure in this case (cecum or appendix) as a redirect is allowed.",
+          "No tool spam: the agent makes at most one tool call per reply, and never calls the same tool twice in a row for the same request. A single highlight of a structure in this case (appendix or cecum) as a redirect is allowed.",
         ],
         mocks({
-          highlight_structure: [
-            { when: { path: "structure", value: "cecum" }, result: f.highlightFind },
-            { result: "That structure is not part of this case's anatomy." },
-          ],
+          highlight_structure: highlightMocks,
           explain_structure: [{ result: f.explainCystic }],
           get_hint: [{ result: f.hintFind }],
           get_surgery_state: [{ result: f.ctxFind }],
@@ -350,23 +396,23 @@ function defineTests(f: Fixtures, toolIds: Record<string, string>): TestDef[] {
     {
       suite: "coach",
       name: "coach-urgent-mistake-stop",
-      checks: "urgent [SIM EVENT] mistake: reply starts with Stop or Careful and gives the correction",
+      checks: "urgent [SIM EVENT] mistake (peritoneum cut untented): reply starts with Stop or Careful and gives the correction",
       body: llm(
-        "The agent's reply begins with the word 'Stop' or 'Careful' (first spoken word; ignore bracketed delivery tags such as [firm] or [calm]), is one or two short sentences, and tells the learner to get the sealer off the terminal ileum or to seal on the mesoappendix or appendicular artery instead. It must not open with filler or a recap.",
-        [...divide, { role: "user", message: f.mistakeEvent }],
-        ["Stop, you're on the terminal ileum. Back off and seal at the free edge of the mesoappendix."],
-        ["Okay, so it looks like the sealer touched the terminal ileum, which could be a problem.", "Great work so far! Let's talk about the ileum."],
+        "The agent's reply begins with the word 'Stop' or 'Careful' (first spoken word; ignore bracketed delivery tags such as [firm] or [calm]), is one or two short sentences, and tells the learner to lift or tent the peritoneum with the forceps before cutting or nicking it. It must not open with filler or a recap, and must not call a tool instead of speaking.",
+        [...peritoneum, { role: "user", message: f.mistakeEvent }],
+        ["Stop. Tent the peritoneum up with the forceps first, then nick it."],
+        ["Okay, so it looks like you cut the peritoneum without lifting it, which could be a problem.", "Great work so far! Let's talk about the peritoneum."],
       ),
     },
     {
       suite: "coach",
       name: "coach-stale-event-ignored",
-      checks: "stale [SIM EVENT] from the previous step: reply does not mention it",
+      checks: "stale [SIM EVENT] from the previous milestone: reply does not mention it",
       body: llm(
-        "The last [SIM EVENT] belongs to step 6 (Divide the mesoappendix), but the latest [LIVE SURGERY STATE] is on step 7 (Staple the appendix base), so the event is stale. The agent must NOT mention the wrong tool, the vessel sealer, the mesoappendix, or that it is skipping an old event. It replies only with the next action for the stapling step (for example fire the stapler flush with the cecum at the appendix base), in under about 12 words, or says nothing substantive.",
-        [...divide, { role: "user", message: f.ctxStaple }, { role: "user", message: f.staleEvent }],
-        ["Stapler across the appendix base, flush with the cecum."],
-        ["Right spot, wrong tool. This step needs the vessel sealer.", "That event is from the previous step, so I'll skip it. Now staple the base."],
+        "The last [SIM EVENT] belongs to step 6 (Deliver appendix, a rough-handling warning), but the latest [LIVE SURGERY STATE] is on step 7 (Secure mesoappendix), so the event is stale. The agent must NOT mention rough handling, slowing down, lifting gently, the Babcock, or that it is skipping an old event. It replies only with the next action for securing the mesoappendix (for example clamp it twice, cut between the clamps, then tie), in under about 12 words, or says nothing substantive.",
+        [...findAppendix, { role: "user", message: f.ctxMeso }, { role: "user", message: f.staleEvent }],
+        ["Two clamps on the mesoappendix, cut between, then tie."],
+        ["Slow down and lift the appendix gently.", "That warning was from delivering the appendix, so I'll skip it. Now clamp the mesoappendix."],
       ),
     },
     {
@@ -374,9 +420,9 @@ function defineTests(f: Fixtures, toolIds: Record<string, string>): TestDef[] {
       name: "coach-jarvis-said-explains",
       checks: "[JARVIS SAID] then \"what happened\": why plus fix, does not repeat the warning",
       body: llm(
-        `The simulator already played this warning out loud: ${f.mistakeReflex}. The agent answers "what happened" by explaining WHY it was dangerous (thermal spread from the sealer can injure the terminal ileum and leak later) and the FIX (seal on the mesoappendix or appendicular artery, away from the ileum). It must not simply repeat the warning sentence, and should be about two sentences.`,
-        [...divide, { role: "user", message: f.ctxAfterMistake }, { role: "user", message: f.jarvisSaid }, { role: "user", message: "What happened?" }],
-        ["Heat from the sealer can spread into the ileum and cause a leak days later. Move the jaws up onto the mesoappendix, away from the bowel."],
+        `The simulator already played this warning out loud: ${f.mistakeReflex}. The agent answers "what happened" by explaining WHY it was dangerous (cutting the peritoneum without tenting it up risks cutting the bowel or other organs lying right under it) and the FIX (lift or tent the peritoneum with the forceps, then nick it with the blade). It must not simply repeat the warning sentence, and should be about two sentences.`,
+        [...peritoneum, { role: "user", message: f.ctxAfterMistake }, { role: "user", message: f.jarvisSaid }, { role: "user", message: "What happened?" }],
+        ["You cut the peritoneum flat, and the bowel sits right underneath it. Tent it up with the forceps so the blade only catches the membrane, then nick it."],
         [f.mistakeReflex],
       ),
     },
@@ -385,10 +431,10 @@ function defineTests(f: Fixtures, toolIds: Record<string, string>): TestDef[] {
       name: "coach-step-complete-short",
       checks: "step_complete [SIM EVENT]: one short sentence naming the next step, no patient recap",
       body: llm(
-        "The agent replies in one short sentence (under about 20 words) that names the next step, assessing the appendix (look for perforation or abscess, run the terminal ileum). It must NOT recap the patient (Theo, age, asthma, peanut allergy, chart) and must not list several steps.",
-        [...findAppendix, { role: "user", message: f.ctxInspect }, { role: "user", message: f.stepCompleteEvent }],
-        ["Nice. Now assess the appendix: look for perforation, then run the terminal ileum."],
-        ["Great job. Remember Theo is 9 with asthma and a peanut allergy. Next, assess the appendix, then window the mesoappendix, then seal it."],
+        "The agent replies in one short sentence (under about 20 words) that names the next step, securing the mesoappendix (clamp twice, cut between, then tie). It must NOT recap the patient (Theo, age, asthma, peanut allergy, chart) and must not list several steps.",
+        [...findAppendix, { role: "user", message: f.ctxMeso }, { role: "user", message: f.stepCompleteEvent }],
+        ["Nice. Now the mesoappendix: clamp it twice, cut between, then tie."],
+        ["Great job. Remember Theo is 9 with asthma and a peanut allergy. Next, clamp the mesoappendix, then tie the base, then cut the appendix off."],
       ),
     },
     {
@@ -396,10 +442,32 @@ function defineTests(f: Fixtures, toolIds: Record<string, string>): TestDef[] {
       name: "coach-tracking-lost-hold-still",
       checks: "tracking lost: tells the learner to hold still and look back, no procedure coaching",
       body: llm(
-        "Tracking was lost. The agent tells the learner to hold still (or stay still) and look back at the torso or patient, in one or two short sentences. It must NOT coach the procedure step (no stapler, appendix, or mesoappendix instructions).",
-        [...divide, { role: "user", message: f.ctxPaused }, { role: "user", message: f.trackingEvent }],
+        "Tracking was lost. The agent tells the learner to hold still (or stay still) and look back at the torso or patient, in one or two short sentences. It must NOT coach the procedure step (no clamp, tie, cut, scissors, appendix, or mesoappendix instructions).",
+        [...meso, { role: "user", message: f.ctxPaused }, { role: "user", message: f.trackingEvent }],
         ["Hold still and look back at the torso so I can pick tracking back up."],
-        ["Fire the stapler flush with the cecum."],
+        ["Clamp the mesoappendix twice and cut between."],
+      ),
+    },
+    {
+      suite: "coach",
+      name: "coach-no-hallucinated-progress",
+      checks: '"I tied the base, right?" with no tie in the state: does not confirm, says the tie is still needed',
+      body: llm(
+        "The latest [LIVE SURGERY STATE] shows the identify-and-secure-base milestone (ligate_base) NOT achieved: the true base was chosen and the appendix crushed with the right-angle clamp, but no tie is recorded (Still needed lists the tie distance, then the cut above the tie). The learner claims they tied it. The agent must NOT agree that the base is tied and must NOT tell them to cut. It says the tie is not showing or still needed, and that they should tie at the base (within about 5 mm of the cecum) before cutting above the tie. One or two short sentences. Calling get_surgery_state to check is acceptable only if any spoken text does not confirm the tie.",
+        [...coachStart(f.ctxBaseUntied), { role: "user", message: "I tied the base, right? Can I cut it off now?" }],
+        ["Not yet, I don't see a tie on the base. Tie it right at the crush, within five millimeters of the cecum, then cut above it."],
+        ["Yes, the base is tied. Go ahead and cut above your tie.", "Looks good, cut it off."],
+      ),
+    },
+    {
+      suite: "coach",
+      name: "coach-in-hand-right-tool",
+      checks: 'scalpel in hand on split muscle, "right tool?": says no, retractors, split don\'t cut',
+      body: llm(
+        "The latest [LIVE SURGERY STATE] is on the split muscle milestone (instrument: hand retractor) and its In hand line shows the scalpel in the right hand with its tip on the muscle. Asked whether they have the right tool, the agent says no (or tells them to put the scalpel down) and tells them to use the retractors to split the muscle along its fibers rather than cut it. It must NOT say the scalpel is fine or tell them to cut the muscle. One or two short sentences. A reply that only calls a tool without speaking fails.",
+        [...coachStart(f.ctxSplitScalpel), { role: "user", message: "Am I using the right tool here?" }],
+        ["No, put the scalpel down. Use the two retractors and pull the muscle apart along its fibers; don't cut it."],
+        ["Yes, the scalpel works. Cut through the muscle carefully.", "Looks good, keep going."],
       ),
     },
     {
@@ -703,7 +771,7 @@ async function runSuite(agentId: string, override: object, defs: TestDef[], ids:
 }
 
 async function main() {
-  console.log("Recording fixtures from the service code (Theo Abernathy, appendectomy)...");
+  console.log("Recording fixtures from the service code (Theo Abernathy, open appendectomy)...");
   const f = await recordFixtures();
   const [jarvisTools, patientTools] = await Promise.all([toolIdsFor(JARVIS_AGENT), toolIdsFor(PATIENT_AGENT)]);
   const all = defineTests(f, { ...jarvisTools, ...patientTools });

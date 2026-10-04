@@ -2,6 +2,7 @@ import "../src/env.js";
 import { writeFileSync } from "node:fs";
 import { ANATOMY } from "../src/catalog/anatomy.js";
 import { PROCEDURES } from "../src/catalog/procedures.js";
+import { bodyAction, type BodyAction } from "../src/open-body.js";
 
 // Live end-to-end harness: scripted conversations with the real ElevenLabs agents over the
 // conversation websocket (text in, agent text out), with every client tool answered by the running
@@ -252,6 +253,7 @@ interface CaseVocab {
   outOfCaseTerms: { term: string; id: string }[];
   otherStepTitles: string[];
   caseSteps: string[]; // titles in order
+  open: boolean;
 }
 
 function buildVocab(kase: any): CaseVocab {
@@ -265,19 +267,28 @@ function buildVocab(kase: any): CaseVocab {
   }
   const caseSteps: string[] = kase.procedure.steps.map((s: any) => s.title);
   const caseStepSet = new Set(caseSteps.map((t) => t.toLowerCase()));
+  // The same operation by another approach (lap_appendectomy for open_appendectomy) shares ordinary
+  // phrases such as "divide the mesoappendix"; its approach-specific wording is caught by lapWording.
+  const organ = (id: string) => id.replace(/^(lap|open|robotic)_/, "");
+  const others = PROCEDURES.filter((p) => organ(p.id) !== organ(kase.procedure.id));
   // One-word titles ("Close") are ordinary speech, not a grounding claim.
-  const otherStepTitles = PROCEDURES.flatMap((p) => p.steps.map((s) => s.title)).filter((t) => !caseStepSet.has(t.toLowerCase()) && t.includes(" "));
-  return { inCase, outOfCaseTerms, otherStepTitles: [...new Set(otherStepTitles)], caseSteps };
+  const otherStepTitles = others.flatMap((p) => p.steps.map((s) => s.title)).filter((t) => !caseStepSet.has(t.toLowerCase()) && t.includes(" "));
+  return { inCase, outOfCaseTerms, otherStepTitles: [...new Set(otherStepTitles)], caseSteps, open: Boolean(kase.procedure.openBody) };
 }
 
-// Flags any structure outside this case, any step title from another procedure, and any step of this
-// case more than one step ahead of the live state. Terms the learner or the sim event used in the same
+// Laparoscopic equipment and moves that do not exist in an open case.
+// Regex sources, matched from a word start.
+const LAP_WORDING = ["trocars?\\b", "ports?\\b", "laparoscop", "insufflat", "pneumoperitoneum", "stapl", "clips?\\b", "endoloop", "endobag", "specimen bag"];
+
+// Flags any structure outside this case, any step title from another procedure, laparoscopic wording in an
+// open case, and any step of this case more than one step ahead of the live state. Terms the learner or the sim event used in the same
 // turn do not count (the agent may echo what it was asked about).
 function groundingViolations(reply: string, sent: string, vocab: CaseVocab, stepNumber: number): string[] {
   const out: string[] = [];
   const echo = (t: string) => mentions(sent, t);
   for (const { term, id } of vocab.outOfCaseTerms) if (mentions(reply, term) && !echo(term)) out.push(`structure not in case: "${term}" (${id})`);
   for (const t of vocab.otherStepTitles) if (mentions(reply, t) && !echo(t)) out.push(`step from another procedure: "${t}"`);
+  if (vocab.open) for (const w of LAP_WORDING) if (new RegExp(`\\b${w}`, "i").test(reply) && !new RegExp(`\\b${w}`, "i").test(sent)) out.push(`laparoscopic wording in an open case: "${w}"`);
   vocab.caseSteps.forEach((t, i) => {
     if (i + 1 > stepNumber + 1 && t.includes(" ") && mentions(reply, t) && !echo(t)) out.push(`step ahead of live state: "${t}" (step ${i + 1}, live step ${stepNumber})`);
   });
@@ -306,7 +317,7 @@ async function coachScenario(log: (s: string) => void): Promise<ScenarioOutput> 
   const alerts = async () => {
     const a = await http("GET", `/coach/sessions/${sid}/alerts?after=${seq}`);
     seq = a.latestSeq;
-    return a.alerts as { kind: string; simEvent: string; reflexText: string; stepId: string }[];
+    return a.alerts as { kind: string; tier: string; simEvent: string; reflexText: string; stepId: string }[];
   };
   const sim = (kind: string) => http("POST", `/coach/sessions/${sid}/simulate`, { kind });
   const snapshot = async () => (await http("GET", `/coach/sessions/${sid}`)) as { snapshot: any; context: string; contextKey: string };
@@ -366,18 +377,64 @@ async function coachScenario(log: (s: string) => void): Promise<ScenarioOutput> 
     return t;
   };
 
-  // Steps 1 and 2 done; the learner is looking for the appendix.
-  await sim("complete_step");
-  await sim("complete_step");
+  // Open appendectomy: complete_step plays the ideal body actions for the suggested milestone; anything
+  // else is a raw surgery event, as the headset sends it.
+  const surgery = (verb: string, tissueId: string, values: Partial<BodyAction>) => http("POST", `/coach/sessions/${sid}/events`, { event: { type: "surgery", evidence: bodyAction(verb, tissueId, values) } });
+  const hold = (instrumentId: string, hand: "left" | "right", held = true) => http("POST", `/coach/sessions/${sid}/events`, { event: { type: "instrument", instrumentId, hand, held } });
+  const expectStep = async (id: string) => {
+    const got = (await snapshot()).snapshot.step.id;
+    if (got !== id) throw new Error(`coach scenario: expected suggested milestone ${id}, got ${got}`);
+  };
+
+  // Mark, incise, fascia, muscle done; the learner nicks the peritoneum with the scalpel without tenting it.
+  for (let i = 0; i < 4; i++) await sim("complete_step");
+  await expectStep("open_peritoneum");
+  await hold("scalpel", "right");
   await alerts();
   await pushContext();
+  await surgery("cut", "peritoneum", { instrumentId: "scalpel", lengthMm: 4, actionId: "peritoneum-untented-cut" });
+  const mistake = (await alerts()).find((a) => a.kind === "mistake" && a.tier === "warning");
+  await pushContext();
+  if (mistake) {
+    await run("urgent-mistake", "sim", mistake.simEvent, (t) => [
+      check("starts with Stop or Careful", /^(stop|careful)\b/i.test(stripTags(t.reply)), stripTags(t.reply).split(/\s+/).slice(0, 3).join(" ")),
+      check("gives the correction", /lift|tent|forceps|grasp|pick (it )?up/i.test(t.reply), ""),
+      check("no tool before the warning", t.tools.length === 0, toolNames(t.tools).join(",")),
+    ]);
+    // The instant clip played; Jarvis is told, then the learner asks.
+    const s = (await snapshot()).snapshot;
+    convo.context(`[JARVIS SAID v${s.version} step ${s.stepNumber}/${s.stepCount} "${s.step.title}"] "${mistake.reflexText}"`);
+    await sleep(300);
+    const warning = norm(mistake.reflexText.replace(/^(stop|careful)[.,!]?\s*/i, "")).split(" ").slice(0, 7).join(" ");
+    await run("what-happened", "user", "What happened?", (t) => [
+      check("explains why (what lies under the peritoneum)", /bowel|intestin|organ|underneath|beneath|below|under it|injur|perforat/i.test(t.reply), ""),
+      check("gives the fix", /lift|tent|forceps|grasp|pick (it )?up|pull (it )?up/i.test(t.reply), ""),
+      check("does not repeat the warning verbatim", !norm(t.reply).includes(warning), `warning prefix "${warning}"`),
+    ]);
+  }
+
+  // The peritoneum is reopened properly; the step_complete event names delivering the appendix.
+  await hold("scalpel", "right", false);
+  await sim("complete_step");
+  const complete = (await alerts()).find((a) => a.kind === "step_complete");
+  await pushContext();
+  if (complete) {
+    await run("step-complete", "sim", complete.simEvent, (t) => [
+      check("no patient recap", !/theo|asthma|peanut|allerg|year[- ]old|kidney/i.test(t.reply), ""),
+      check("names the next step", /deliver|taeni|babcock|lift|appendix/i.test(t.reply), ""),
+    ]);
+  }
 
   await run("what-now", "user", "Okay, what do I do now?", (t) => [check("calls get_hint", toolNames(t.tools).includes("get_hint"), toolNames(t.tools).join(",") || "no tools")]);
+  // The prompt routes "show me" to get_hint, which highlights the target from hint tier 2, so a highlight
+  // reported in the get_hint result counts. A tier 1 get_hint highlights nothing and fails here.
   await run("show-me", "user", "I can't find it. Show me where to look.", (t) => {
+    const target = /cecum|caecum|appendix|taeni/i;
     const hl = t.tools.filter((x) => x.name === "highlight_structure");
+    const viaHint = t.tools.filter((x) => x.name === "get_hint" && /highlight/i.test(x.result) && target.test(x.result));
     return [
-      check("calls highlight_structure", hl.length > 0, toolNames(t.tools).join(",") || "no tools"),
-      check("highlights a current-step target", hl.some((x) => /cecum|caecum|appendix|taeni/i.test(String(x.params.structure ?? ""))), hl.map((x) => String(x.params.structure)).join(",")),
+      check("calls highlight_structure or a highlighting get_hint", hl.length > 0 || viaHint.length > 0, toolNames(t.tools).join(",") || "no tools"),
+      check("highlights a current-step target", hl.some((x) => target.test(String(x.params.structure ?? ""))) || viaHint.length > 0, [...hl.map((x) => String(x.params.structure)), ...t.tools.filter((x) => x.name === "get_hint").map((x) => x.result.slice(0, 80))].join(" | ")),
     ];
   });
   await run("other-surgery", "user", "Where's the cystic duct? Can you highlight it for me?", (t) => [
@@ -386,51 +443,17 @@ async function coachScenario(log: (s: string) => void): Promise<ScenarioOutput> 
     check("says not part of this procedure", /not (part|in)|isn't (part|in)|no cystic duct|appendectomy|gallbladder (surgery|operation|case)|different (operation|procedure|case)/i.test(t.reply), ""),
   ]);
 
-  await sim("complete_step");
-  const complete = (await alerts()).find((a) => a.kind === "step_complete");
+  // A rough grasp while delivering the appendix (moderate guardrail), then the milestone completes and
+  // the delivery-step event arrives late.
+  await surgery("grasp", "appendix", { instrumentId: "babcock", depthMm: 5, speedMps: 0.3, actionId: "appendix-rough-grasp" });
+  const stale = (await alerts()).find((a) => a.kind === "mistake");
   await pushContext();
-  if (complete) {
-    await run("step-complete", "sim", complete.simEvent, (t) => [
-      check("no patient recap", !/theo|asthma|peanut|allerg|year[- ]old|kidney/i.test(t.reply), ""),
-      check("names the next step", /assess|inspect|perforat|abscess|terminal ileum|look at the appendix|run the/i.test(t.reply), ""),
-    ]);
-  }
-
-  // Through step 5 silently, then a high-severity mistake on step 6.
-  await sim("complete_step");
-  await sim("complete_step");
-  await alerts();
-  await pushContext();
-  await sim("wrong_instrument");
-  const stale = (await alerts()).find((a) => a.kind === "wrong_instrument");
-  await pushContext();
-  await http("POST", `/coach/sessions/${sid}/events`, { event: { type: "touch", structureId: "terminal_ileum", instrumentId: "vessel_sealer" } });
-  const mistake = (await alerts()).find((a) => a.kind === "mistake");
-  await pushContext();
-  if (mistake) {
-    await run("urgent-mistake", "sim", mistake.simEvent, (t) => [
-      check("starts with Stop or Careful", /^(stop|careful)\b/i.test(stripTags(t.reply)), stripTags(t.reply).split(/\s+/).slice(0, 3).join(" ")),
-      check("gives the correction", /ileum|mesoappendix|appendicular|off|back|away|release|open/i.test(t.reply), ""),
-    ]);
-    // The instant clip played; Jarvis is told, then the learner asks.
-    const s = (await snapshot()).snapshot;
-    convo.context(`[JARVIS SAID v${s.version} step ${s.stepNumber}/${s.stepCount} "${s.step.title}"] "${mistake.reflexText}"`);
-    await sleep(300);
-    const warning = norm(mistake.reflexText.replace(/^(stop|careful)[.,!]?\s*/i, "")).split(" ").slice(0, 7).join(" ");
-    await run("what-happened", "user", "What happened?", (t) => [
-      check("explains why (thermal spread or leak)", /therm|heat|burn|leak|perforat|injur/i.test(t.reply), ""),
-      check("gives the fix", /mesoappendix|appendicular|away from|off the|move|reposition|regrasp|seal (on|at|the)/i.test(t.reply), ""),
-      check("does not repeat the warning verbatim", !norm(t.reply).includes(warning), `warning prefix "${warning}"`),
-    ]);
-  }
-
-  // Step 6 completes; a stale step-6 event arrives late.
   await sim("complete_step");
   await alerts();
   await pushContext();
   if (stale) {
     await run("stale-event", "sim", stale.simEvent, (t) => [
-      check("does not mention the stale event", !/wrong (tool|instrument)|vessel sealer|sealer|stale|previous step|skip|old event|ignore/i.test(t.reply), ""),
+      check("does not mention the stale event", !/slow down|gentl|rough|babcock|stale|previous step|skip|old event|ignore/i.test(t.reply), ""),
       check("under 12 words", t.words <= 12, `${t.words} words`),
     ]);
   }
@@ -441,7 +464,7 @@ async function coachScenario(log: (s: string) => void): Promise<ScenarioOutput> 
   if (lost) {
     await run("tracking-lost", "sim", lost.simEvent, (t) => [
       check("says hold still", /hold (still|steady)|stay still|keep still|don't move/i.test(t.reply), ""),
-      check("no procedure coaching", !/stapl|fire|mesoappendix|seal/i.test(t.reply), ""),
+      check("no procedure coaching", !/clamp|tie|mesoappendix|scissors|cut between/i.test(t.reply), ""),
     ]);
   }
   await sim("tracking_restored");
@@ -601,7 +624,7 @@ async function main() {
   for (let run = 1; run <= RUNS; run++) {
     if (RUNS > 1) console.log(`\n=== run ${run}/${RUNS}`);
     if (want("coach")) {
-      console.log("coach (Jarvis, Theo's appendectomy)");
+      console.log("coach (Jarvis, Theo's open appendectomy)");
       all.push(await coachScenario(console.log));
     }
     if (want("patient") || want("attending")) {
