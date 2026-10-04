@@ -55,8 +55,8 @@ namespace Scalpal.Handoff.Editor
                 Assert(HandoffFlow.RiskText(new EncounterScore { carryoverItems = Array.Empty<EncounterCarryoverItem>() }).Contains("No chart risk chips returned"), "empty risk list has an explicit honest state");
                 Identity(ticket, state, score, candidate);
                 SceneBoundary(ticket, candidate);
-                VoiceRoles();
                 HandoffShellValidation.Verify();
+                HandoffLifecycleValidation.Verify();
                 HandoffOfficeBindingValidation.Verify();
                 Debug.Log("SCALPAL_HANDOFF_VALIDATION_OK checks=" + checks + " synthetic DTOs and real scene consumers; no HTTP, reducer commit, voice-provider or headset verification");
             }
@@ -161,6 +161,8 @@ namespace Scalpal.Handoff.Editor
 
             HandoffRun.Preflight.volunteerConsented = HandoffRun.Preflight.cameraGranted = HandoffRun.Preflight.sceneGranted = HandoffRun.Preflight.poseServiceOk = HandoffRun.Preflight.coachServiceOk = true;
             ticket.attemptId = "attempt-before-practice"; ticket.sharedSessionId = "shared-fixture";
+            Call(session.workbench, "Awake"); // Cache authored equipment reset poses without XR Update.
+            Property(session, "Phase", "Confirmed"); // Case verified, before Time-Out/practice.
             var score = ticket.scorecard; string run = ticket.runId, encounter = ticket.encounterId;
             Assert(!HandoffRun.SwitchNeedsNewAttempt(ticket), "pre-practice switch retains attempt policy");
             int voiceGeneration = Get<int>(session.voice, "generation");
@@ -173,30 +175,66 @@ namespace Scalpal.Handoff.Editor
             Assert(session.TryChangePresentation(false) && ticket.attemptId == "attempt-before-practice", "AR failure fallback keeps attempt");
             Assert(!session.TryChangePresentation(true) && !session.presentation.passthrough, "actual red preflight blocks AR");
             HandoffRun.Preflight.poseServiceOk = true;
-            Call(session.workbench, "Awake");
+            StickToggle(session, ticket);
             Set(session, "candidate", candidate); Set(session, "previewScale", session.preview.transform.parent.localScale);
             Set(session, "sharedAttemptReady", true);
             ticket.patientConfirmed = ticket.procedureConfirmed = ticket.siteConfirmed = ticket.risksConfirmed = ticket.antibioticsReviewed = ticket.imagingReviewed = true;
             Assert(ticket.AllConfirmed, "six Time-Out confirmations required");
-            ticket.practiceStarted = true;
+            Assert(session.TryChangePresentation(true) && session.presentation.passthrough && ticket.attemptId == "attempt-before-practice", "learner AR choice before practice keeps attempt");
+            ticket.practiceStarted = true; Property(session, "Phase", "Practicing");
             Assert(HandoffRun.SwitchNeedsNewAttempt(ticket), "post-practice switch needs new attempt");
-            Assert(session.TryChangePresentation(true) && !Get<bool>(session, "sharedAttemptReady") && !ticket.practiceStarted && !ticket.AllConfirmed, "actual post-practice switch invalidates prior attempt and resets Time-Out");
+            Assert(!session.TryChangePresentation(false) && session.presentation.passthrough && ticket.practiceStarted && ticket.attemptId == "attempt-before-practice",
+                "OR core refuses a mid-practice mode change without an explicit new attempt");
+            PausedSwitchToVirtual(session, ticket);
             Assert(Get<bool>(session, "reviewed"), "handoff retry preserves review acknowledgement required by appendectomy cases");
             Call(session, "AttemptStarted", "attempt-after-practice");
             Assert(ticket.attemptId == "attempt-after-practice" && ticket.encounterId == encounter && ticket.runId == run && ReferenceEquals(ticket.scorecard, score), "new attempt acknowledgement preserves diagnosis and run");
             HandoffRecoveryValidation.Verify(session);
         }
 
-        static void VoiceRoles()
+        // A stray right-stick click must never change a theatre ticket's mode; standalone keeps the session's mode rules.
+        static void StickToggle(NativeCaseSession session, HandoffTicket ticket)
         {
-            foreach (string phase in new[] { "score", "challenge", "consequence", "theatre" }) Assert(HandoffFlow.ExpectedRole(phase) == "attending", "attending role: " + phase);
-            foreach (string phase in new[] { "transition", "register" }) Assert(HandoffFlow.ExpectedRole(phase) == "none", "silent transition: " + phase);
-            foreach (string phase in new[] { "timeout", "practice" }) Assert(HandoffFlow.ExpectedRole(phase) == "coach", "coach only after Time-Out: " + phase);
+            var view = session.presentation;
+            Action click = () => { Call(view, "StickToggle", false); Call(view, "StickToggle", true); };
+            Assert(!view.passthrough && session.Phase == "Confirmed", "stick fixture starts in the pre-Time-Out virtual OR");
+            click();
+            Assert(!view.passthrough && ticket.presentationMode == "virtual" && ticket.attemptId == "attempt-before-practice", "right-stick click cannot change a theatre ticket's mode");
+            typeof(HandoffRun).GetProperty(nameof(HandoffRun.Current)).SetValue(null, null);
+            try
+            {
+                Property(session, "Phase", "Selecting"); click();
+                Assert(view.passthrough, "positive control: standalone stick still selects AR during case selection");
+                Property(session, "Phase", "Practicing"); click();
+                Assert(view.passthrough, "standalone stick obeys the no-mode-change-during-practice rule");
+                Property(session, "Phase", "Selecting"); click();
+                Assert(!view.passthrough, "standalone stick returns to VR during selection");
+            }
+            finally { typeof(HandoffRun).GetProperty(nameof(HandoffRun.Current)).SetValue(null, ticket); Property(session, "Phase", "Confirmed"); }
+        }
+
+        // The paused/stopped/fit-loss cards' "Virtual OR (new attempt)" must actually start a new attempt.
+        static void PausedSwitchToVirtual(NativeCaseSession session, HandoffTicket ticket)
+        {
+            var host = new GameObject("HandoffPausedSwitchFixture"); host.SetActive(false);
+            try
+            {
+                var flow = host.AddComponent<HandoffFlow>();
+                Set(flow, "card", UnityEngine.Object.Instantiate(Resources.Load<HandoffCard>("HandoffCard"), host.transform));
+                Set(flow, "surgery", session); Set(flow, "phase", "paused");
+                Call(flow, "SwitchToVirtual");
+                Assert(!session.presentation.passthrough && ticket.presentationMode == "virtual" && ticket.modeChosenBy == "fallback",
+                    "paused-practice Virtual OR switches mode");
+                Assert(!Get<bool>(session, "sharedAttemptReady") && !ticket.practiceStarted && !ticket.AllConfirmed && ticket.attemptId == "" && Get<string>(flow, "phase") == "timeout",
+                    "paused-practice switch requests a fresh attempt and a new Time-Out");
+            }
+            finally { UnityEngine.Object.DestroyImmediate(host); }
         }
 
         static T Get<T>(object instance, string field) => (T)instance.GetType().GetField(field, Private).GetValue(instance);
         static void Set(object instance, string field, object value) => instance.GetType().GetField(field, Private).SetValue(instance, value);
         static void Call(object instance, string method, params object[] args) => instance.GetType().GetMethod(method, Private).Invoke(instance, args);
+        static void Property(object instance, string name, object value) => instance.GetType().GetProperty(name).GetSetMethod(true).Invoke(instance, new[] { value });
         static void AssertThrows(Action action, string message) { try { action(); } catch (ArgumentException) { Assert(true, message); return; } throw new InvalidOperationException("Handoff validation failed: " + message); }
         static void Assert(bool condition, string message) { if (!condition) throw new InvalidOperationException("Handoff validation failed: " + message); checks++; }
     }

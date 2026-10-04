@@ -46,10 +46,14 @@ namespace Scalpal.Quest
             Apply();
         }
 
-        void Update()
+        void Update() => StickToggle(XRInput.Button(XRNode.RightHand, XRInputButton.StickClick));
+
+        // Standalone convenience only. With a theatre ticket the handoff cards own AR/VR choice, so a stray
+        // stick press can never change mode or abandon an attempt. Otherwise the session's mode rules apply
+        // (pre-practice phases only; AR needs green operator preflight for office routes).
+        void StickToggle(bool click)
         {
-            bool click = XRInput.Button(XRNode.RightHand, XRInputButton.StickClick);
-            if (click && !previousClick && session) session.TryChangePresentation(!passthrough);
+            if (click && !previousClick && session && Scalpal.Handoff.HandoffRun.Current == null) session.TryChangePresentation(!passthrough);
             previousClick = click;
         }
 

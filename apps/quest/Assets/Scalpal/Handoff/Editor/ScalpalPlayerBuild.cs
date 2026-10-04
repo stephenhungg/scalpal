@@ -77,14 +77,25 @@ namespace Scalpal.Handoff.Editor
             Debug.Log("SCALPAL_PLAYER_PREPARED package=" + NativeQuestBuild.PackageId);
         }
 
+        // The product order, written independently of PlayerScenes() so a wrong generator cannot validate itself.
+        static readonly string[] RequiredAfterShell = {
+            "Assets/Scalpal/EncounterOffice/Scenes/DiagnosisOffice.unity",
+            "Assets/Scalpal/Quest/Scenes/NativeSession.unity",
+            "Assets/Scalpal/Recap/Scenes/RunEnding.unity"
+        };
+
         [MenuItem("Scalpal/Player/Validate Unified Scene Order")]
-        public static void ValidateSceneOrder()
+        public static void ValidateSceneOrder() => ValidateSceneOrder(EditorBuildSettings.scenes);
+
+        public static void ValidateSceneOrder(EditorBuildSettingsScene[] actual)
         {
-            var expected = PlayerScenes();
-            var actual = EditorBuildSettings.scenes;
-            if (actual.Length != expected.Length || actual.Where((scene, index) =>
-                scene.path != expected[index].path || scene.enabled != expected[index].enabled).Any())
-                throw new InvalidOperationException("Unified scene order must be Shell (reserved if absent), DiagnosisOffice, NativeSession, RunEnding.");
+            const string order = "Unified scene order must be Shell (reserved if absent), DiagnosisOffice, NativeSession, RunEnding.";
+            if (actual == null || actual.Length != RequiredAfterShell.Length + 1 || !actual[0].path.StartsWith(ShellRoot + "/", StringComparison.Ordinal)
+                || !actual.Skip(1).Select(scene => scene.path).SequenceEqual(RequiredAfterShell) || actual.Skip(1).Any(scene => !scene.enabled))
+                throw new InvalidOperationException(order);
+            bool shellExists = AssetDatabase.IsValidFolder(ShellRoot) && AssetDatabase.FindAssets("t:Scene", new[] { ShellRoot }).Length > 0;
+            if (shellExists && (!actual[0].enabled || !AssetDatabase.LoadAssetAtPath<SceneAsset>(actual[0].path)))
+                throw new InvalidOperationException("The Shell launch scene exists, so it must be the enabled first scene. " + order);
             foreach (var scene in actual.Where(scene => scene.enabled))
                 if (!AssetDatabase.LoadAssetAtPath<SceneAsset>(scene.path))
                     throw new InvalidOperationException("Unified player scene missing: " + scene.path);

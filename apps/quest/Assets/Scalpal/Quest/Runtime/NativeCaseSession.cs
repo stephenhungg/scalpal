@@ -102,8 +102,9 @@ namespace Scalpal.Quest
             SelectedPatientId = handoff.patientId;
             SelectedProcedureId = handoff.procedureId;
             coachBaseUrl = handoff.serviceUrl;
-            // The handoff chooses presentation; office provenance does not choose it.
-            if (presentation) presentation.Apply();
+            // This no-ticket office route has no theatre choice or preflight: start in the virtual OR.
+            // AR stays available only through TrySelectOperatingRoomMode's preflight rule.
+            if (presentation) { presentation.passthrough = false; presentation.Apply(); }
         }
 
         void Start()
@@ -420,7 +421,7 @@ namespace Scalpal.Quest
         }
         public bool FinishTimeOut(bool captionsOnly = false)
         {
-            if (!HasHandoff || !HandoffVerified || busy || !SharedMatches || !RegistrationReady || !HandoffRun.Current.AllConfirmed || (!CoachPrepared && !(captionsOnly && CaptionFallbackAllowed))) return false;
+            if (!HasHandoff || !HandoffVerified || busy || HandoffRun.Current.practiceStarted || !SharedMatches || !RegistrationReady || !HandoffRun.Current.AllConfirmed || (!CoachPrepared && !(captionsOnly && CaptionFallbackAllowed))) return false;
             HandoffRun.Current.timeOutConfirmed = true;
             exercise.requireCoachSynchronization = CoachPrepared;
             return BeginReviewedPractice();
@@ -684,7 +685,7 @@ namespace Scalpal.Quest
             if (busy || ending || (Phase != "Selecting" && Phase != "Confirmed" && Phase != "Recap"))
             { reason = "Finish or explicitly retry the current practice before changing mode."; return false; }
             // This is capability/consent gating, not the old office-specific VR policy.
-            if (mode == "mixed_reality" && HasHandoff && !HandoffRun.Preflight.ArAvailable)
+            if (mode == "mixed_reality" && (HasHandoff || OfficeHandoff != null) && !HandoffRun.Preflight.ArAvailable)
             { reason = HandoffRun.Preflight.UnavailableReason; return false; }
             if (mode == "mixed_reality" && !bodyRegistration)
             { reason = "Body-registration bindings are unavailable."; return false; }
@@ -755,7 +756,7 @@ namespace Scalpal.Quest
                     + "\nOffice: " + OfficeHandoff.scorecard.total + "/100 · " + OfficeHandoff.scorecard.grade
                     + "\nLearner proposed: " + OfficeHandoff.assessment.procedure + "\n" + body;
             string registration = presentation && presentation.passthrough ? "\n" + (bodyRegistration ? bodyRegistration.Status : "Body registration missing") : "\nVirtual mannequin fit";
-            status.text = $"SCALPAL | {Phase} | {PresentationMode}\n{body}\n{Message}{registration}\nXR: {(workbench.IsReady ? "ready" : "paused")} | Shared: {realtime.Status}\nCoach: {(exercise.CoachMatches ? "synchronized" : coach.SyncFailureReason)} | Voice: {voice.Status}" + (OfficeHandoff == null ? "\nRight stick: AR/VR in selection" : "\nFull VR office practice");
+            status.text = $"SCALPAL | {Phase} | {PresentationMode}\n{body}\n{Message}{registration}\nXR: {(workbench.IsReady ? "ready" : "paused")} | Shared: {realtime.Status}\nCoach: {(exercise.CoachMatches ? "synchronized" : coach.SyncFailureReason)} | Voice: {voice.Status}" + (HasHandoff ? "\nMode: chosen at the theatre handoff" : OfficeHandoff == null ? "\nRight stick: AR/VR in selection" : "\nRight stick: AR/VR in selection; AR needs green operator preflight");
         }
         IEnumerator Request(string method, string path, string body, Action<string> receive, Action<long> statusCode = null)
         {
