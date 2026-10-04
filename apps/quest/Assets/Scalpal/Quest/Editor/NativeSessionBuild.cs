@@ -396,6 +396,7 @@ namespace Scalpal.Quest.Editor
             Scalpal.Surgery.Editor.OpenBodyValidation.Run();
             NativeBodyAtlasValidation.Run();
             NativeBodyRegistrationValidation.Run();
+            NativeOperatingRoomModeValidation.Run();
             Scalpal.Instruments.Editor.InstrumentRuntimeValidation.Run();
             NativeProcedureInputValidation.Run();
             NativeInteriorContactValidation.Run();

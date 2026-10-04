@@ -1,8 +1,7 @@
 // Test-owned local database + recorded chart fixtures; no provider or participant data.
 import { createRequire } from 'node:module';
 import { writeFileSync } from 'node:fs';
-import { createApp } from '../../../services/preop/src/app.js';
-import { fixtureClient, NOW } from '../../../services/preop/test/helpers.js';
+import { legacyAppendectomyApp } from '../../../services/preop/test/legacy-appendectomy-fixture.js';
 import { publishFresh, connect, eventually, uid, DB, URI } from '../../../services/api/test/harness.js';
 const require = createRequire(new URL('../../../services/preop/package.json', import.meta.url));
 const { serve } = require('@hono/node-server');
@@ -13,7 +12,9 @@ const sessionId = uid('ses_playmode');
 await operator.conn.reducers.createSession({ sessionId, label: 'Native Play Mode fixture', exerciseId: 'lap_appendectomy', exerciseVersion: '0.1.0', displayName: 'fixture operator' });
 const invite = await eventually(() => [...operator.conn.db.sessionInvites.iter()].find(i => i.sessionId === sessionId && i.role === 'headset'), 'owned headset invitation');
 globalThis.fetch = async () => { throw new Error('Provider/external fetch is disabled in the Play Mode fixture'); };
-const app = createApp({ client: fixtureClient(), now: () => NOW, coachTickMs: 0 });
+// Explicit retained port exercise: both-mode lifecycle/PhysX regression evidence.
+// Normal patient routes now select open_appendectomy; do not relabel this as that flow.
+const app = legacyAppendectomyApp();
 app.get('/fixture/state', c => {
  const state = [...operator.conn.db.sessionExerciseState.iter()].find(i => i.sessionId === sessionId);
  return c.json({ attemptId: state?.attemptId, highlighted: state?.highlightedStructureId ?? '', paused: state?.paused, mode: state?.mode });

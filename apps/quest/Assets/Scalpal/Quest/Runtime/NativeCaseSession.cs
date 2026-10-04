@@ -100,7 +100,8 @@ namespace Scalpal.Quest
             SelectedPatientId = handoff.patientId;
             SelectedProcedureId = handoff.procedureId;
             coachBaseUrl = handoff.serviceUrl;
-            if (presentation) { presentation.passthrough = true; presentation.Apply(); }
+            // The handoff chooses presentation; office provenance does not choose it.
+            if (presentation) presentation.Apply();
         }
 
         void Start()
@@ -657,17 +658,52 @@ namespace Scalpal.Quest
 
         public bool TryChangePresentation(bool passthrough)
         {
-            if (!presentation || busy || (!HasHandoff && Phase != "Selecting" && Phase != "Recap")) return false;
-            if (presentation.passthrough == passthrough) return true;
-            if (HasHandoff && !HandoffRun.CanChoose(passthrough ? "mixed_reality" : "virtual", HandoffRun.Preflight)) return false;
-            bool newAttempt = !HasHandoff || HandoffRun.SwitchNeedsNewAttempt(HandoffRun.Current);
-            generation++; voice.Disconnect(); coachSessionId = "";
-            presentation.passthrough = passthrough;
+            bool selected = TrySelectOperatingRoomMode(passthrough ? "mixed_reality" : "virtual", out var reason);
+            if (!selected) Message = reason;
+            return selected;
+        }
+
+        // Presentation selection is deliberately independent of retry/attempt creation.
+        // The handoff UI calls this after the case loads, before Time-Out/practice.
+        public bool TrySelectOperatingRoomMode(string mode, out string reason)
+        {
+            reason = "";
+            if (mode != "mixed_reality" && mode != "virtual")
+            { reason = "Choose mixed_reality or virtual."; return false; }
+            if (!presentation || !exercise || !workbench || !anatomy || !patientFrame || !coach || !voice)
+            { reason = "Operating-room bindings are unavailable."; return false; }
+            if (PresentationMode == mode) return true; // Idempotent: preserve fit, coach and Time-Out.
+            if (busy || ending || (Phase != "Selecting" && Phase != "Confirmed" && Phase != "Recap"))
+            { reason = "Finish or explicitly retry the current practice before changing mode."; return false; }
+            // This is capability/consent gating, not the old office-specific VR policy.
+            if (mode == "mixed_reality" && HasHandoff && !HandoffRun.Preflight.ArAvailable)
+            { reason = HandoffRun.Preflight.UnavailableReason; return false; }
+            if (mode == "mixed_reality" && !bodyRegistration)
+            { reason = "Body-registration bindings are unavailable."; return false; }
+
+            generation++; ResetHandoffRecovery();
+            handoffVoiceAllowed = false; voice.Disconnect(); coachSessionId = "";
+            voicePrompt = voiceGreeting = voiceContext = lastVoiceContextKey = "";
+            CaptionFallbackAllowed = false;
+            coach.Tracking(false); coach.UseSession("");
+            exercise.explicitCoachSessionId = ""; exercise.requireCoachSynchronization = true;
+            anatomy.SetRegistrationValid(false); patientFrame.gameObject.SetActive(false);
+            workbench.ResetTools();
+            if (tissueSimulation) tissueSimulation.ResetTissues();
+            if (volumeSimulation) volumeSimulation.ResetTissues();
+            if (vesselSimulation) vesselSimulation.ResetTissues();
             if (bodyRegistration) bodyRegistration.StopTracking();
+            presentation.passthrough = mode == "mixed_reality";
             presentation.Apply(); exercise.presentationMode = PresentationMode;
-            if (HasHandoff) { HandoffRun.Current.presentationMode = PresentationMode; HandoffRun.Current.ResetTimeOut(); }
-            if (newAttempt) Retry();
-            else { Phase = "Confirmed"; Message = "Mode changed. Office score and attempt kept."; }
+            if (HasHandoff)
+            {
+                HandoffRun.Current.presentationMode = PresentationMode;
+                HandoffRun.Current.modeChosenBy = "learner";
+                HandoffRun.Current.ResetTimeOut(); HandoffRun.Current.preopResult = null;
+            }
+            Message = mode == "mixed_reality" ? "AR selected. Acquire a fresh body fit before practice."
+                : "VR selected. Authored patient restored; confirm setup before practice.";
+            Publish();
             return true;
         }
         public void PauseHandoffPractice()
