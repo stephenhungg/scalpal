@@ -18,7 +18,7 @@ const mono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Scalpal",
   description:
-    "Practice surgery in mixed reality with a voice coach, and turn every rep into motion a robot hand can replay.",
+    "A mixed reality operating room experience guided by Jarvis, your all-knowing assistant.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
