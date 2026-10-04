@@ -77,6 +77,8 @@ const coachActions = (sid: string): Action[] => [
 
 export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
   const sessions = new Map<string, CoachSession>();
+  // Office context for sessions started from a scored encounter, so a later voice connect keeps it.
+  const officeCarryover = new Map<string, string>();
   const frames = new Map<string, Frame>();
   const watching = new Map<string, { inFlight: boolean; lastAt: number }>();
   const watchMs = options.watchMs ?? 4000;
@@ -117,13 +119,18 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
     if (!kase) return bad(c, 404, "patient_not_found", 'Send {"patientId": "<FinchNode subject>"} for a known patient.', [{ id: "choose_patient", label: "Choose a patient", method: "GET", route: "/patients" }]);
     if (!kase.procedureId) return bad(c, 409, "case_unavailable", kase.statusReason, kase.actions);
 
-    if (sessions.size >= MAX_SESSIONS) sessions.delete(sessions.keys().next().value!);
+    if (sessions.size >= MAX_SESSIONS) {
+      const oldest = sessions.keys().next().value!;
+      sessions.delete(oldest);
+      officeCarryover.delete(oldest);
+    }
     const sid = `coach-${crypto.randomUUID().replaceAll("-", "").slice(0, 16)}`;
     const session = new CoachSession(sid, kase, options.now, options.stuckPolicy, mode);
     // Office to operating room: the scored encounter for this patient informs the surgery coaching.
     const office = typeof encounterId === "string" ? options.encounterFor?.(encounterId) : null;
     const preop = office && office.kase.patientId === kase.patientId ? office.carryover() : "";
     sessions.set(sid, session);
+    if (preop) officeCarryover.set(sid, preop);
     const snapshot = session.snapshot();
     return c.json(
       {
@@ -131,7 +138,7 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
         snapshot,
         context: renderContext(snapshot), contextKey: contextKey(snapshot),
         systemPrompt: buildSystemPrompt(kase, mode, preop),
-        firstMessage: firstMessage(kase),
+        firstMessage: firstMessage(kase, Boolean(preop)),
         actions: coachActions(sid),
       },
       201,
@@ -491,7 +498,8 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
       const s = SESSION_ID.test(sessionId) ? sessions.get(sessionId) : undefined;
       if (!s) return missing(c);
       role = "jarvis";
-      bound = { role: "coach", prompt: buildSystemPrompt(s.kase, s.mode), firstMessage: firstMessage(s.kase), voiceId: "" };
+      const preop = officeCarryover.get(sessionId) ?? "";
+      bound = { role: "coach", prompt: buildSystemPrompt(s.kase, s.mode, preop), firstMessage: firstMessage(s.kase, Boolean(preop)), voiceId: "" };
     }
     const agentId = role === "patient" ? el?.patientAgentId : el?.agentId;
     if (!el || !agentId) {

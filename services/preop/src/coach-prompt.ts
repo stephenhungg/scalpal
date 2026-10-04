@@ -103,7 +103,7 @@ ${flags}
 Chart gaps:
 ${gaps}
 
-${preop ? `FROM THE PRE-OP OFFICE\n${preop}\n\n` : ""}PROCEDURE: ${p.title} (${p.approach})
+${preop ? `FROM THE PRE-OP OFFICE\n${preop}\nYou opened with the surgical time-out. Once the learner confirms the patient, procedure, and site, name the chart risks above as anticipated risks in one sentence, say "Good. Let's begin.", and give step 1.\n\n` : ""}PROCEDURE: ${p.title} (${p.approach})
 ${p.summary}
 Ports: ${p.ports.map((x) => `${x.label} (${x.sizeMm} mm)`).join("; ")}.
 Ordered steps. The learner must complete them in this order:
@@ -113,7 +113,11 @@ ANATOMY IN THIS CASE (nothing else exists in this scene)
 ${anatomy}`;
 }
 
-export function firstMessage(kase: SurgicalCase): string {
+// After the office, the coach opens with the WHO surgical Time-Out (docs/office-to-or-handoff.md, beat T1).
+export const TIME_OUT_OPENING = "Scrubbed in with you. Time-out: confirm patient, procedure and site.";
+
+export function firstMessage(kase: SurgicalCase, fromOffice = false): string {
+  if (fromOffice) return TIME_OUT_OPENING;
   const first = kase.procedure.steps[0];
   const indication = kase.indication.charAt(0).toLowerCase() + kase.indication.slice(1);
   return `Jarvis here. ${kase.patient.displayLabel}, ${kase.procedure.title.toLowerCase()} for ${indication}. ${first ? `We start with ${first.title.toLowerCase()}.` : ""} Ask me anything as you go.`;
