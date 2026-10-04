@@ -77,11 +77,16 @@ namespace Scalpal.Voice
         bool localSpeech;
         volatile float playbackLevel;
         long playbackTimestamp;
+        int lastAudioEventId = -1, interruptedThrough = -1;
+        bool awaitingInterruption;
+        bool permissionPending, applicationFocused = true, applicationPaused;
         readonly HashSet<string> pendingTools = new HashSet<string>(StringComparer.Ordinal);
         readonly HashSet<string> seenTools = new HashSet<string>(StringComparer.Ordinal);
 
-        sealed class Connection
+        sealed class Connection : IDisposable
         {
+            readonly object lifetime = new object();
+            bool disposed;
             public readonly int Generation;
             public readonly ClientWebSocket Socket = new ClientWebSocket();
             public readonly CancellationTokenSource Cancel = new CancellationTokenSource();
@@ -91,6 +96,33 @@ namespace Scalpal.Voice
             public volatile string Error;
             public volatile bool Open;
             public Connection(int generation) { Generation = generation; }
+            public void RequestStop()
+            {
+                lock (lifetime)
+                {
+                    if (disposed) return;
+                    Open = false;
+                    Cancel.Cancel();
+                    try { Socket.Abort(); } catch (ObjectDisposedException) { }
+                }
+            }
+            public void Enqueue(string json)
+            {
+                lock (lifetime)
+                {
+                    if (disposed || !Open) return;
+                    Outgoing.Enqueue(json); SendSignal.Release();
+                }
+            }
+            public void Dispose()
+            {
+                lock (lifetime)
+                {
+                    if (disposed) return;
+                    disposed = true; Open = false;
+                    Socket.Dispose(); SendSignal.Dispose(); Cancel.Dispose();
+                }
+            }
         }
 
         public void ConfigureEndpoint(string url)
@@ -123,6 +155,7 @@ namespace Scalpal.Voice
         {
             Disconnect();
             encounterMode = true;
+            if (!applicationFocused || applicationPaused) { Fail("Return to the app and start voice explicitly."); return; }
             if (!isActiveAndEnabled || !ValidEncounterId(encounterId) || string.IsNullOrEmpty(selectedPatientId))
             { Fail("A valid encounter and patient are required."); return; }
             CoachSessionId = encounterId;
@@ -136,6 +169,7 @@ namespace Scalpal.Voice
         {
             Disconnect();
             encounterMode = false;
+            if (!applicationFocused || applicationPaused) { Fail("Return to the app and start voice explicitly."); return; }
             if (!isActiveAndEnabled || !ValidSessionId(coachSessionId)) { Fail("A valid coach session is required."); return; }
             CoachSessionId = coachSessionId;
             LastError = "";
@@ -153,19 +187,28 @@ namespace Scalpal.Voice
                 var callbacks = new UnityEngine.Android.PermissionCallbacks();
                 callbacks.PermissionGranted += _ => { answered = true; granted = true; };
                 callbacks.PermissionDenied += _ => answered = true;
-                UnityEngine.Android.Permission.RequestUserPermission(UnityEngine.Android.Permission.Microphone, callbacks);
-                while (!answered && epoch == generation) yield return null;
+                permissionPending = true;
+                try
+                {
+                    UnityEngine.Android.Permission.RequestUserPermission(UnityEngine.Android.Permission.Microphone, callbacks);
+                    while (!answered && epoch == generation) yield return null;
+                }
+                finally { if (epoch == generation) permissionPending = false; }
                 if (epoch != generation) yield break;
                 if (!granted) { Fail("Microphone permission was denied."); yield break; }
             }
 #else
             if (!Application.HasUserAuthorization(UserAuthorization.Microphone))
             {
-                yield return Application.RequestUserAuthorization(UserAuthorization.Microphone);
+                permissionPending = true;
+                try { yield return Application.RequestUserAuthorization(UserAuthorization.Microphone); }
+                finally { if (epoch == generation) permissionPending = false; }
                 if (epoch != generation) yield break;
                 if (!Application.HasUserAuthorization(UserAuthorization.Microphone)) { Fail("Microphone permission was denied."); yield break; }
             }
 #endif
+            while (epoch == generation && (!applicationFocused || applicationPaused)) yield return null;
+            if (epoch != generation) yield break;
             yield return BeginConversation(epoch);
         }
 
@@ -207,12 +250,28 @@ namespace Scalpal.Voice
             var variables = new DynamicVariables { coach_session_id = encounterMode ? "" : CoachSessionId,
                 encounter_id = encounterMode ? CoachSessionId : "", session_id = CoachSessionId,
                 patient_id = patientId, mode = mode, context = initialContext };
-            // Separate schemas keep the original coach/default voice free of an empty TTS override.
-            if (string.IsNullOrEmpty(prompt)) return JsonUtility.ToJson(new BasicInitiation { dynamic_variables = variables });
+            // JsonUtility invents default objects for null Serializable fields. Schemas must omit optional keys themselves.
+            bool hasPrompt = !string.IsNullOrWhiteSpace(prompt), hasGreeting = !string.IsNullOrWhiteSpace(firstMessage);
+            var tts = encounterMode && !string.IsNullOrWhiteSpace(encounterVoiceId) ? new TtsOverride { voice_id = encounterVoiceId } : null;
+            if (!hasPrompt && !hasGreeting)
+                return tts == null ? JsonUtility.ToJson(new BasicInitiation { dynamic_variables = variables }) :
+                    JsonUtility.ToJson(new TtsInitiation { dynamic_variables = variables, conversation_config_override = new TtsOverrides { tts = tts } });
+            if (!hasGreeting)
+            {
+                var onlyPrompt = new PromptAgent { prompt = new Prompt { prompt = prompt } };
+                return tts == null ? JsonUtility.ToJson(new PromptInitiation { dynamic_variables = variables, conversation_config_override = new PromptOverrides { agent = onlyPrompt } }) :
+                    JsonUtility.ToJson(new VoicedPromptInitiation { dynamic_variables = variables, conversation_config_override = new VoicedPromptOverrides { agent = onlyPrompt, tts = tts } });
+            }
+            if (!hasPrompt)
+            {
+                var onlyGreeting = new GreetingAgent { first_message = firstMessage };
+                return tts == null ? JsonUtility.ToJson(new GreetingInitiation { dynamic_variables = variables, conversation_config_override = new GreetingOverrides { agent = onlyGreeting } }) :
+                    JsonUtility.ToJson(new VoicedGreetingInitiation { dynamic_variables = variables, conversation_config_override = new VoicedGreetingOverrides { agent = onlyGreeting, tts = tts } });
+            }
             var agent = new AgentOverride { prompt = new Prompt { prompt = prompt }, first_message = firstMessage };
-            if (encounterMode && !string.IsNullOrEmpty(encounterVoiceId))
+            if (tts != null)
                 return JsonUtility.ToJson(new VoicedInitiation { dynamic_variables = variables,
-                    conversation_config_override = new VoicedOverrides { agent = agent, tts = new TtsOverride { voice_id = encounterVoiceId } } });
+                    conversation_config_override = new VoicedOverrides { agent = agent, tts = tts } });
             return JsonUtility.ToJson(new Initiation { dynamic_variables = variables,
                 conversation_config_override = new Overrides { agent = agent } });
         }
@@ -254,10 +313,9 @@ namespace Scalpal.Voice
             finally
             {
                 connection.Open = false;
-                connection.Cancel.Cancel();
-                connection.Socket.Abort();
+                connection.RequestStop();
                 if (send != null) { try { await send.ConfigureAwait(false); } catch (Exception) { } }
-                connection.Socket.Dispose();
+                connection.Dispose(); // Send/receive have finished before their token and signal are disposed.
             }
         }
 
@@ -278,7 +336,7 @@ namespace Scalpal.Voice
             catch (Exception exception)
             {
                 connection.Error = "Voice send failed (" + exception.GetType().Name + ").";
-                connection.Cancel.Cancel();
+                connection.RequestStop();
             }
         }
 
@@ -324,6 +382,10 @@ namespace Scalpal.Voice
                     break;
                 case "audio":
                     if (!Connected || message.audio_event == null) break;
+                    lastAudioEventId = Math.Max(lastAudioEventId, message.audio_event.event_id);
+                    if (awaitingInterruption)
+                    { interruptedThrough = Math.Max(interruptedThrough, message.audio_event.event_id); break; }
+                    if (message.audio_event.event_id <= interruptedThrough) break;
                     var decoded = DecodePcm(Convert.FromBase64String(message.audio_event.audio_base_64));
                     lock (audioLock)
                     {
@@ -333,10 +395,15 @@ namespace Scalpal.Voice
                     SetMode("speaking");
                     break;
                 case "interruption":
+                    int interruptionId = message.interruption_event?.event_id ?? 0;
+                    interruptedThrough = Math.Max(interruptedThrough, interruptionId > 0 ? interruptionId : lastAudioEventId);
+                    // A missing/empty payload cannot establish an ordered server boundary for a local barge-in.
+                    if (interruptionId > 0) awaitingInterruption = false;
                     ClearAudio();
                     SetMode("listening");
                     break;
                 case "user_transcript":
+                    if (!string.IsNullOrWhiteSpace(message.user_transcription_event?.user_transcript)) awaitingInterruption = false;
                     Transcript?.Invoke("user", message.user_transcription_event?.user_transcript ?? "");
                     break;
                 case "agent_response":
@@ -384,7 +451,7 @@ namespace Scalpal.Voice
         // It does not start a microphone, socket or a second conversation engine.
         public bool PlayLocalSpeech(AudioClip clip)
         {
-            if (!clip || clip.length > 30 || clip.channels < 1) return false;
+            if (!applicationFocused || applicationPaused || !clip || clip.length > 30 || clip.channels < 1) return false;
             var samples = new float[clip.samples * clip.channels];
             if (!clip.GetData(samples, 0)) return false;
             Disconnect();
@@ -415,6 +482,12 @@ namespace Scalpal.Voice
 
         public void InterruptPlayback()
         {
+            // A held talk action stops this response locally. VAD/user transcript supplies the server turn boundary.
+            if (Connected && AgentOutputPending())
+            {
+                interruptedThrough = Math.Max(interruptedThrough, lastAudioEventId);
+                awaitingInterruption = true;
+            }
             if (localSpeech) StopLocalSpeech();
             ClearAudio(); SetMode("listening");
         }
@@ -441,7 +514,7 @@ namespace Scalpal.Voice
                 microphoneCursor = (microphoneCursor + microphoneChunk) % microphoneClip.samples;
                 available -= microphoneChunk;
                 // Keep the audio clock/VAD running during hold-to-talk silence; never send captured muted speech.
-                Queue(JsonUtility.ToJson(new AudioInput { user_audio_chunk = Convert.ToBase64String(EncodeMicrophonePcm(samples, microphoneClip.channels, MicrophoneMuted)) }));
+                Queue(JsonUtility.ToJson(new AudioInput { user_audio_chunk = Convert.ToBase64String(EncodeMicrophonePcm(samples, microphoneClip.channels, MicrophoneMuted, AgentOutputPending())) }));
                 if (!Connected) return;
             }
         }
@@ -455,6 +528,11 @@ namespace Scalpal.Voice
                 playbackLevel = MeasurePlaybackLevel(samples);
                 Interlocked.Exchange(ref playbackTimestamp, System.Diagnostics.Stopwatch.GetTimestamp());
             }
+        }
+
+        bool AgentOutputPending()
+        {
+            lock (audioLock) return Mode == "speaking" || outputSamples.Count > 0 || PlaybackLevel > 0;
         }
 
         public static float MeasurePlaybackLevel(float[] samples)
@@ -566,22 +644,18 @@ namespace Scalpal.Voice
             var connection = active;
             if (connection == null || !connection.Open) return;
             if (connection.Outgoing.Count >= 100) { Fail("Voice connection cannot keep up with microphone audio."); return; }
-            connection.Outgoing.Enqueue(json);
-            connection.SendSignal.Release();
+            connection.Enqueue(json);
         }
 
         public void Disconnect()
         {
             localSpeech = false;
+            permissionPending = false;
             generation++;
             StopAllCoroutines();
             var connection = active;
             active = null;
-            if (connection != null)
-            {
-                connection.Cancel.Cancel();
-                try { connection.Socket.Abort(); } catch (ObjectDisposedException) { }
-            }
+            if (connection != null) connection.RequestStop();
             if (microphoneClip != null)
             {
                 Microphone.End(microphoneDevice);
@@ -592,6 +666,7 @@ namespace Scalpal.Voice
             if (playbackClip != null) { Destroy(playbackClip); playbackClip = null; }
             lock (audioLock) { outputSamples.Clear(); ResetPlaybackLevel(); }
             pendingTools.Clear(); seenTools.Clear(); lastContext = "";
+            lastAudioEventId = interruptedThrough = -1; awaitingInterruption = false;
             patientId = ""; CoachSessionId = "";
             SetMode("listening");
             SetStatus("disconnected");
@@ -606,9 +681,17 @@ namespace Scalpal.Voice
         void SetStatus(string value) { if (Status != value) { Status = value; StatusChanged?.Invoke(value); } }
         void SetMode(string value) { if (Mode != value) { Mode = value; ModeChanged?.Invoke(value); } }
         void OnDisable() => Disconnect();
-        // Android's permission dialog may pause the app during Begin. Do not cancel that prompt.
-        void OnApplicationPause(bool paused) { if (paused && (active != null || localSpeech)) Disconnect(); }
-        void OnApplicationFocus(bool focused) { if (!focused && PlaybackActive) Disconnect(); }
+        // Only an actual outstanding OS permission request survives its permission-dialog suspension.
+        void OnApplicationPause(bool paused)
+        {
+            applicationPaused = paused;
+            if (paused && !permissionPending && (Status == "connecting" || active != null || localSpeech)) Disconnect();
+        }
+        void OnApplicationFocus(bool focused)
+        {
+            applicationFocused = focused;
+            if (!focused && !permissionPending && (Status == "connecting" || active != null || PlaybackActive)) Disconnect();
+        }
 
         public static bool TryPcmRate(string format, out int rate)
         {
@@ -631,9 +714,10 @@ namespace Scalpal.Voice
             return bytes;
         }
 
-        public static byte[] EncodeMicrophonePcm(float[] samples, int channels, bool muted)
+        public static byte[] EncodeMicrophonePcm(float[] samples, int channels, bool muted, bool agentSpeaking = false)
         {
-            return EncodePcm(muted ? new float[samples.Length] : samples, channels);
+            // Half duplex suppresses captured speaker echo; this does not configure acoustic echo cancellation.
+            return EncodePcm(muted || agentSpeaking ? new float[samples.Length] : samples, channels);
         }
         public static float[] DecodePcm(byte[] bytes)
         {
@@ -673,10 +757,11 @@ namespace Scalpal.Voice
             return "{}";
         }
 
-        [Serializable, UnityEngine.Scripting.Preserve] sealed class Incoming { public string type; public Metadata conversation_initiation_metadata_event; public Ping ping_event; public AudioEvent audio_event; public UserEvent user_transcription_event; public AgentEvent agent_response_event; public ToolCall client_tool_call; }
+        [Serializable, UnityEngine.Scripting.Preserve] sealed class Incoming { public string type; public Metadata conversation_initiation_metadata_event; public Ping ping_event; public AudioEvent audio_event; public Interruption interruption_event; public UserEvent user_transcription_event; public AgentEvent agent_response_event; public ToolCall client_tool_call; }
         [Serializable, UnityEngine.Scripting.Preserve] sealed class Metadata { public string user_input_audio_format, agent_output_audio_format; }
         [Serializable, UnityEngine.Scripting.Preserve] sealed class Ping { public int event_id; }
-        [Serializable, UnityEngine.Scripting.Preserve] sealed class AudioEvent { public string audio_base_64; }
+        [Serializable, UnityEngine.Scripting.Preserve] sealed class AudioEvent { public string audio_base_64; public int event_id; }
+        [Serializable, UnityEngine.Scripting.Preserve] sealed class Interruption { public int event_id; }
         [Serializable, UnityEngine.Scripting.Preserve] sealed class UserEvent { public string user_transcript; }
         [Serializable, UnityEngine.Scripting.Preserve] sealed class AgentEvent { public string agent_response; }
         [Serializable, UnityEngine.Scripting.Preserve] sealed class ToolCall { public string tool_name, tool_call_id; public bool expects_response; public ToolParameters parameters; }
@@ -698,5 +783,17 @@ namespace Scalpal.Voice
         [Serializable, UnityEngine.Scripting.Preserve] sealed class TtsOverride { public string voice_id; }
         [Serializable, UnityEngine.Scripting.Preserve] sealed class AgentOverride { public Prompt prompt; public string first_message; }
         [Serializable, UnityEngine.Scripting.Preserve] sealed class Prompt { public string prompt; }
+        [Serializable, UnityEngine.Scripting.Preserve] sealed class PromptAgent { public Prompt prompt; }
+        [Serializable, UnityEngine.Scripting.Preserve] sealed class GreetingAgent { public string first_message; }
+        [Serializable, UnityEngine.Scripting.Preserve] sealed class PromptOverrides { public PromptAgent agent; }
+        [Serializable, UnityEngine.Scripting.Preserve] sealed class VoicedPromptOverrides { public PromptAgent agent; public TtsOverride tts; }
+        [Serializable, UnityEngine.Scripting.Preserve] sealed class GreetingOverrides { public GreetingAgent agent; }
+        [Serializable, UnityEngine.Scripting.Preserve] sealed class VoicedGreetingOverrides { public GreetingAgent agent; public TtsOverride tts; }
+        [Serializable, UnityEngine.Scripting.Preserve] sealed class TtsOverrides { public TtsOverride tts; }
+        [Serializable, UnityEngine.Scripting.Preserve] sealed class PromptInitiation { public string type = "conversation_initiation_client_data"; public DynamicVariables dynamic_variables; public PromptOverrides conversation_config_override; }
+        [Serializable, UnityEngine.Scripting.Preserve] sealed class VoicedPromptInitiation { public string type = "conversation_initiation_client_data"; public DynamicVariables dynamic_variables; public VoicedPromptOverrides conversation_config_override; }
+        [Serializable, UnityEngine.Scripting.Preserve] sealed class GreetingInitiation { public string type = "conversation_initiation_client_data"; public DynamicVariables dynamic_variables; public GreetingOverrides conversation_config_override; }
+        [Serializable, UnityEngine.Scripting.Preserve] sealed class VoicedGreetingInitiation { public string type = "conversation_initiation_client_data"; public DynamicVariables dynamic_variables; public VoicedGreetingOverrides conversation_config_override; }
+        [Serializable, UnityEngine.Scripting.Preserve] sealed class TtsInitiation { public string type = "conversation_initiation_client_data"; public DynamicVariables dynamic_variables; public TtsOverrides conversation_config_override; }
     }
 }
