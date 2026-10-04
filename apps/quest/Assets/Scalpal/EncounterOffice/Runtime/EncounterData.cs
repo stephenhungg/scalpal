@@ -1,5 +1,6 @@
 using System;
 using System.Text;
+using Scalpal.Exercises.Data;
 using UnityEngine;
 
 namespace Scalpal.EncounterOffice
@@ -9,16 +10,40 @@ namespace Scalpal.EncounterOffice
     [Serializable] public sealed class EncounterState
     {
         public string encounterId, phase, patientId, patientName, speakerName, speaker;
+        public string patientSex, speakerSex;
+        public int patientAge, speakerAge;
         public int version, elapsedSeconds;
         public EncounterItem[] historyAsked, exams, tests;
         public EncounterAssessment assessment;
     }
-    [Serializable] public sealed class EncounterScore { public int total, max; public string grade, spoken, diagnosisGiven, diagnosisExpected; public string[] feedback; }
+    [Serializable] public sealed class EncounterCarryoverItem
+    {
+        public string flagId, type, severity, label, detail, status;
+        public string[] historyTopics, testIds, stepIds;
+    }
+    [Serializable] public sealed class EncounterFoundItem { public string kind, id, label, why; }
+    [Serializable] public sealed class EncounterScoreSection { public string id, label; public int score, max; public string[] found, missed; }
+    [Serializable] public sealed class EncounterScore
+    {
+        public int total, max;
+        public string patientId, patientName, urgency, site, grade, spoken, diagnosisGiven, diagnosisExpected, diagnosisResult, procedureId, procedureTitle;
+        public bool procedureChosenCorrectly;
+        public string[] feedback;
+        public string[] differentialNamed, differentialSuggestions;
+        public EncounterCarryoverItem[] carryoverItems;
+        public EncounterFoundItem[] criticalFound, criticalMissed;
+        public EncounterScoreSection[] sections;
+    }
     [Serializable] public sealed class EncounterError { public string code, message; }
     [Serializable] public sealed class EncounterReply
     {
         public string encounterId, patientName, speakerName, speaker, voiceId, patientPrompt, patientFirstMessage;
         public string attendingPrompt, attendingFirstMessage, result, display;
+        // GET /patients and GET /patients/:id/case metadata; the office never reconstructs a clinical case locally.
+        public PatientListEntry[] patients;
+        public string patientId, procedureId, status, statusReason;
+        public PatientSummary patient;
+        public PreopBrief brief;
         public EncounterState state;
         public EncounterScore scorecard;
         public EncounterError error;
@@ -32,9 +57,15 @@ namespace Scalpal.EncounterOffice
     public static class EncounterContract
     {
         public const string FemalePatientId = "patient-demo-multi-source", MalePatientId = "patient-demo-sparse";
+        public static bool ValidPatientId(string id)
+        {
+            if (string.IsNullOrEmpty(id) || id.Length > 128) return false;
+            foreach (char c in id) if (!(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-' || c == '_')) return false;
+            return true;
+        }
         public static readonly string[] History = { "chief_complaint", "onset", "location", "migration", "character", "severity", "aggravating_relieving", "nausea_vomiting", "appetite", "fever", "bowel", "urinary", "menstrual_pregnancy", "last_meal", "past_medical", "past_surgical", "medications", "allergies", "social", "family", "recent_illness" };
         public static readonly string[] Exams = { "general_appearance", "vitals", "abdomen_inspection", "abdomen_palpation", "mcburney_point", "rebound", "guarding_rigidity", "rovsing", "psoas", "obturator", "murphy", "cva_tenderness", "chest_lungs", "genitourinary", "pelvic" };
-        public static readonly string[] Tests = { "cbc", "crp", "bmp", "lactate", "lipase", "urinalysis", "pregnancy_test", "ultrasound", "ct_abdomen_pelvis", "type_and_screen" };
+        public static readonly string[] Tests = { "cbc", "crp", "bmp", "lactate", "lipase", "lfts", "urinalysis", "pregnancy_test", "ultrasound", "ct_abdomen_pelvis", "type_and_screen" };
         public static bool ToolAllowed(string role, string phase, string tool) =>
             role == "patient" && phase == "interview" && (tool == "answer" || tool == "examine" || tool == "order_test") ||
             role == "attending" && (tool == "get_encounter_summary" || phase == "attending" && tool == "record_assessment");

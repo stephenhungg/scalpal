@@ -6,6 +6,7 @@ namespace Scalpal.EncounterOffice
     {
         public EncounterOfficePanel panel;
         public string command, argument;
+        public bool enabledAction = true;
         public TextMesh label;
         public Color normalColor = new Color(.26f,.36f,.33f,.78f), hoverColor = new Color(.39f,.53f,.47f,.94f);
         Renderer surface;
@@ -13,7 +14,7 @@ namespace Scalpal.EncounterOffice
         MaterialPropertyBlock colors;
         void Awake() { surface = GetComponent<Renderer>(); colors = new MaterialPropertyBlock(); }
         public void Highlight() { hovered = Time.unscaledTime + .08f; }
-        public void Press() { if (panel && gameObject.activeInHierarchy) panel.Act(command, argument); }
+        public void Press() { if (enabledAction && panel && gameObject.activeInHierarchy) panel.Act(command, argument); }
         void Update()
         {
             if (!surface) return;

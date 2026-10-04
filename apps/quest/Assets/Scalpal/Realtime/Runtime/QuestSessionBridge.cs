@@ -105,7 +105,7 @@ namespace Scalpal.Realtime
                 if (!(ctx.Event.Status is SpacetimeDB.Status.Committed)) { SetStatus("Pairing rejected: check headset invite"); return; }
                 subscription = conn.SubscriptionBuilder().OnApplied(context => subscribed = true)
                     .OnError((context, error) => { subscribed = false; Paired = false; SetStatus("Session subscription unavailable"); })
-                    .Subscribe(new[] { "SELECT * FROM my_sessions", "SELECT * FROM my_memberships", "SELECT * FROM session_exercise_state", "SELECT * FROM session_commands" });
+                    .Subscribe(new[] { "SELECT * FROM my_sessions", "SELECT * FROM my_memberships", "SELECT * FROM session_exercise_state", "SELECT * FROM session_commands", "SELECT * FROM session_encounters" });
             };
             conn.Reducers.OnStartAttempt += (ctx, session, exercise, version) =>
             {
@@ -212,6 +212,17 @@ namespace Scalpal.Realtime
                 AttemptStarted?.Invoke(AttemptId);
             }
             if (Paired && (changed || Status.StartsWith("Connected:", StringComparison.Ordinal))) SetStatus("Paired");
+        }
+
+        public bool TryGetEncounterBinding(string id, out string sessionId, out string attemptId, out string patientId, out string phase)
+        {
+            sessionId = attemptId = patientId = phase = "";
+            if (!Connected || !Paired || string.IsNullOrEmpty(id)) return false;
+            var encounter = connection.Db.SessionEncounters.EncounterId.Find(id);
+            if (encounter == null) return false;
+            sessionId = encounter.SessionId; attemptId = encounter.AttemptId;
+            patientId = encounter.PatientId; phase = encounter.Phase;
+            return true;
         }
 
         public bool BeginAttempt(string exerciseId, string version)

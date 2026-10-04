@@ -138,9 +138,29 @@ static class BridgeCheck
         f.Bridge.ReportAttemptResult(10, 10, 1, 0, "fixture"); f.Connection.Reducers.AckResult(true);
         Check("committed result callback fires only after actual reducer callback", committed == 1);
     }
+    static void EncounterBinding()
+    {
+        var unavailable = new QuestSessionBridge { autoConnect = false };
+        Check("unavailable bridge cannot invent encounter provenance", !unavailable.TryGetEncounterBinding("enc-fixture123", out var sid, out var aid, out var patient, out var phase)
+            && sid == "" && aid == "" && patient == "" && phase == "");
+        var f = new Fixture();
+        Check("paired bridge rejects a missing encounter", !f.Bridge.TryGetEncounterBinding("enc-fixture123", out sid, out aid, out patient, out phase));
+        f.Connection.Db.SessionEncounters.Rows.Add(new Encounter { EncounterId = "enc-fixture123", SessionId = "fixture", AttemptId = "fixture-a1", PatientId = "u_fixture_patient", Phase = "scored" });
+        Check("exact encounter row supplies recorded shared attempt and patient", f.Bridge.TryGetEncounterBinding("enc-fixture123", out sid, out aid, out patient, out phase)
+            && sid == "fixture" && aid == "fixture-a1" && patient == "u_fixture_patient" && phase == "scored");
+        Check("encounter lookup cannot use another ID", !f.Bridge.TryGetEncounterBinding("enc-other123", out sid, out aid, out patient, out phase)
+            && sid == "" && aid == "" && patient == "" && phase == "");
+        f.Session.CurrentAttemptId = f.State.AttemptId = "fixture-a2"; f.Tick();
+        Check("recorded encounter provenance does not silently move to a newer attempt", f.Bridge.TryGetEncounterBinding("enc-fixture123", out sid, out aid, out patient, out phase)
+            && aid == "fixture-a1" && aid != f.Bridge.AttemptId && f.Connection.Reducers.Attempts.Count == 0);
+        f.Connection.IsActive = false;
+        Check("disconnected cache cannot authorize an office handoff", !f.Bridge.TryGetEncounterBinding("enc-fixture123", out sid, out aid, out patient, out phase)
+            && sid == "" && aid == "" && patient == "" && phase == "");
+    }
+
     public static int Main()
     {
-        AcknowledgementOrdering(); CommandBoundaries(); ReconnectAndReset(); Results();
+        AcknowledgementOrdering(); CommandBoundaries(); ReconnectAndReset(); Results(); EncounterBinding();
         Console.WriteLine("SCALPAL_NATIVE_BRIDGE_CHECK checks=" + checks + " passed=" + (checks - failures) + " failed=" + failures + "; production bridge with deterministic transport/cache doubles, no Unity or live reducer validation");
         return failures == 0 ? 0 : 1;
     }

@@ -9,18 +9,18 @@ namespace Scalpal.EncounterOffice
         public NativeEncounterSession session;
         public TextMesh heading, status, response, chart, draft;
         public EncounterOfficeButton[] options;
-        public EncounterOfficeButton microphoneMode;
+        public EncounterOfficeButton microphoneMode, surgery;
         public Transform keyboard, assessment;
-        public string Page { get; private set; } = "history";
+        public string Page { get; private set; } = "patients";
         public int Offset { get; private set; }
         public string Field { get; private set; } = "diagnosis";
         int chartOffset, responseOffset, draftOffset;
         string lastDraftValue;
         bool feedbackVisible = true;
-        string lastResponse;
+        string lastResponse, lastPatientId = "";
         EncounterScore lastScore;
-        readonly string[] diagnoses = { "Acute appendicitis", "Perforated appendicitis", "Gastroenteritis", "Ectopic pregnancy", "Ovarian torsion", "Urinary tract infection", "Diverticulitis", "Small bowel obstruction", "Mesenteric ischemia", "Ureteric stone", "Perforated peptic ulcer", "Crohn's disease" };
-        readonly string[] plans = { "Laparoscopic appendectomy", "Appendectomy and washout", "Fluids and antibiotics before surgery", "Observation and reassessment", "Further diagnostic evaluation", "Nonoperative treatment" };
+        readonly string[] diagnoses = { "Acute cholecystitis", "Symptomatic cholelithiasis", "Sigmoid diverticulitis", "Acute appendicitis", "Perforated appendicitis", "Gastroenteritis", "Ectopic pregnancy", "Ovarian torsion", "Urinary tract infection", "Diverticulitis", "Small bowel obstruction", "Mesenteric ischemia", "Ureteric stone", "Perforated peptic ulcer", "Crohn's disease" };
+        readonly string[] plans = { "Laparoscopic cholecystectomy", "Laparoscopic sigmoid colectomy", "Laparoscopic appendectomy", "Appendectomy and washout", "Fluids and antibiotics before surgery", "Observation and reassessment", "Further diagnostic evaluation", "Nonoperative treatment" };
         readonly string[] timing = { "Emergency / immediately", "Urgent / within hours", "Elective / outpatient" };
         void OnEnable() { if (session) session.Changed += Refresh; Refresh(); }
         void OnDisable() { if (session) session.Changed -= Refresh; }
@@ -28,8 +28,11 @@ namespace Scalpal.EncounterOffice
         {
             switch (command)
             {
-                case "patient": session.StartPatient(argument); chartOffset = 0; break;
-                case "page": Page = argument; Offset = 0; break;
+                case "patient": session.StartPatient(argument); Page = "history"; Offset = 0; chartOffset = 0; break;
+                case "reload_patients":
+                case "patients": session.LoadPatients(); Page = "patients"; Offset = 0; break;
+                case "surgery": session.ContinueToSurgery(); break;
+                case "page": Page = argument; Offset = 0; if (Page == "patients" && session.Patients.Length == 0) session.LoadPatients(); break;
                 case "next": Offset += options.Length; break;
                 case "previous": Offset = Mathf.Max(0, Offset - options.Length); break;
                 case "response_next": responseOffset += 6; break;
@@ -57,6 +60,10 @@ namespace Scalpal.EncounterOffice
         {
             switch (Page)
             {
+                case "patients":
+                    var entry = Array.Find(session.Patients, item => item != null && item.patientId == value);
+                    if (EncounterOfficeRoute.CanEnter(entry)) { session.StartPatient(value); Page = "history"; Offset = 0; }
+                    break;
                 case "history": session.Ask(value); break;
                 case "exam": session.Examine(value); break;
                 case "tests": session.OrderTest(value); break;
@@ -89,8 +96,10 @@ namespace Scalpal.EncounterOffice
         public void Refresh()
         {
             if (!session) return;
+            if (lastPatientId != session.SelectedPatientId) { lastPatientId = session.SelectedPatientId; Page = "history"; Offset = 0; }
             if (heading) heading.text = "Scalpal\n" + (session.State?.patientName ?? "Practice a patient encounter");
             if (status) status.text = Wrap((session.Busy ? "Working… " : "") + session.Status, 42);
+            if (surgery) surgery.gameObject.SetActive(session.SurgeryReady);
             if (microphoneMode && microphoneMode.label) microphoneMode.label.text = session.OpenMicrophone ? "Hold grip" : "Open mic";
             if (lastResponse != session.LastResponse) { lastResponse = session.LastResponse; responseOffset = 0; }
             if (lastScore != session.Score) { lastScore = session.Score; chartOffset = 0; feedbackVisible = true; }
@@ -111,13 +120,16 @@ namespace Scalpal.EncounterOffice
             }
             if(assessment)assessment.gameObject.SetActive(Page=="assessment"||session.State?.phase=="attending"||session.State?.phase=="scored");
             foreach(var fit in GetComponentsInChildren<EncounterOfficeText>(true))fit.Fit();
-            string[] items = Page == "history" ? EncounterContract.History : Page == "exam" ? EncounterContract.Exams : Page == "tests" ? EncounterContract.Tests : Field == "procedure" ? plans : Field == "urgency" ? timing : diagnoses;
+            string[] items = Page == "patients" ? Array.ConvertAll(session.Patients, item => item?.patientId ?? "") : Page == "history" ? EncounterContract.History : Page == "exam" ? EncounterContract.Exams : Page == "tests" ? EncounterContract.Tests : Field == "procedure" ? plans : Field == "urgency" ? timing : diagnoses;
             if (Offset >= items.Length) Offset = 0;
             for (int i = 0; i < options.Length; i++)
             {
                 var button = options[i]; int index = i + Offset; button.gameObject.SetActive(index < items.Length);
                 if (index >= items.Length) continue;
-                button.argument = items[index]; if (button.label) { button.label.text = EncounterContract.Label(items[index]);button.label.GetComponent<EncounterOfficeText>()?.Fit(); }
+                button.argument = items[index];
+                var entry = Page == "patients" ? session.Patients[index] : null;
+                button.enabledAction = Page != "patients" || EncounterOfficeRoute.CanEnter(entry);
+                if (button.label) { button.label.text = Page == "patients" ? (entry?.displayLabel ?? entry?.title ?? "Connect patient") + (button.enabledAction ? "" : " · unavailable") : EncounterContract.Label(items[index]);button.label.GetComponent<EncounterOfficeText>()?.Fit(); }
             }
         }
         public static string Wrap(string text, int width)

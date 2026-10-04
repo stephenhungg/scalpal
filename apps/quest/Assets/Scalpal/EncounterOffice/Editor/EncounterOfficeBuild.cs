@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using Scalpal.Voice;
+using Scalpal.Realtime;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEditor.Build.Reporting;
@@ -15,6 +16,7 @@ namespace Scalpal.EncounterOffice.Editor
     {
         public const string Root = "Assets/Scalpal/EncounterOffice";
         public const string ScenePath = Root + "/Scenes/DiagnosisOffice.unity";
+        public const string SurgeryScenePath = "Assets/Scalpal/Quest/Scenes/NativeSession.unity";
         static Material lilac, glass, glassBorder, glassButton;
         static readonly Color InkColor = new Color(.94f,.97f,.95f);
         [MenuItem("Scalpal/Encounter Office/Prepare Diagnosis Office")]
@@ -29,10 +31,11 @@ namespace Scalpal.EncounterOffice.Editor
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             var office = Art("DoctorOffice", "BotanicalDoctorOffice");
             office.transform.position = Vector3.zero;
-            var female = Art("PatientFemale", "PriyaRamaswamy40_Synthetic"); var male = Art("PatientMale", "JonahOkoye30_Synthetic");
-            male.SetActive(false);
-            var systems = new GameObject("EncounterOfficeSystems");
+            var female = Art("PatientFemale", "GenericAdultFemaleTemplate"); var male = Art("PatientMale", "GenericAdultMaleTemplate");
+            female.SetActive(false);male.SetActive(false);
+            var systems = new GameObject("EncounterOfficeSystems");systems.SetActive(false);
             var session = systems.AddComponent<NativeEncounterSession>();
+            var realtime = systems.AddComponent<QuestSessionBridge>();realtime.autoConnect=false;session.realtime=realtime;
             var voice = systems.AddComponent<QuestJarvisVoice>(); var speaker = systems.AddComponent<AudioSource>();
             speaker.playOnAwake = false; speaker.spatialBlend = 0;
             var voiceProps = new SerializedObject(voice); voiceProps.FindProperty("speaker").objectReferenceValue = speaker; voiceProps.ApplyModifiedPropertiesWithoutUndo();
@@ -57,8 +60,8 @@ namespace Scalpal.EncounterOffice.Editor
             var right = Panel("FindingsConsole", new Vector3(-.94f,1.48f,-.20f), new Vector3(0,1.2f,1.75f), new Vector2(.88f,1.1f)); right.SetParent(ui.transform,true);
             ui.heading = Text(left,"Title","Scalpal",new Vector3(-.38f,.49f,-.026f),.034f);
             ui.status = Text(left,"Status","Choose a synthetic patient.",new Vector3(-.38f,.35f,-.026f),.024f);
-            Button(left,ui,"Priya · 40","patient",EncounterContract.FemalePatientId,-.21f,.20f,.39f);
-            Button(left,ui,"Jonah · 30","patient",EncounterContract.MalePatientId,.21f,.20f,.39f);
+            Button(left,ui,"Patients","page","patients",-.21f,.20f,.39f);
+            Button(left,ui,"Reload list","reload_patients","",.21f,.20f,.39f);
             Button(left,ui,"History","page","history",-.28f,.10f,.25f); Button(left,ui,"Examine","page","exam",0,.10f,.25f); Button(left,ui,"Tests","page","tests",.28f,.10f,.25f);
             ui.options = new EncounterOfficeButton[4];
             for (int i=0;i<4;i++) ui.options[i] = Button(left,ui,"Question","option","",0,-i*.09f,.80f);
@@ -70,7 +73,7 @@ namespace Scalpal.EncounterOffice.Editor
             Button(right,ui,"Back","chart_previous","",-.28f,-.09f,.25f); Button(right,ui,"More","chart_next","",0,-.09f,.25f); Button(right,ui,"Findings / score","chart_toggle","",.28f,-.09f,.25f);
             ui.response = Text(right,"Response","Patient response appears here.",new Vector3(-.38f,-.17f,-.026f),.024f);
             Button(right,ui,"Back","response_previous","",-.21f,-.42f,.39f); Button(right,ui,"More","response_next","",.21f,-.42f,.39f);
-            Text(right,"EvidenceNotice","Synthetic teaching cases",new Vector3(-.38f,-.50f,-.026f),.017f).GetComponent<EncounterOfficeText>().maximumWidth=.48f;
+            Button(right,ui,"Summary","summary","",-.21f,-.51f,.39f);
             ui.microphoneMode=Button(right,ui,"Open mic","mic_mode","",.28f,-.51f,.25f);
             var assessment = Panel("AssessmentConsole",new Vector3(0,.70f,.22f),new Vector3(0,1.2f,1.75f),new Vector2(1.15f,.40f)); assessment.SetParent(ui.transform,true);ui.assessment=assessment;
             ui.draft = Text(assessment,"Draft","Your assessment",new Vector3(-.52f,.16f,-.026f),.025f);
@@ -78,7 +81,8 @@ namespace Scalpal.EncounterOffice.Editor
             string[] fields={"diagnosis","differential","procedure","urgency"};
             for(int i=0;i<4;i++) Button(assessment,ui,fields[i],"field",fields[i],-.42f+i*.28f,-.02f,.25f);
             Button(assessment,ui,"Options","page","assessment",-.42f,-.12f,.25f); Button(assessment,ui,"Keyboard","keyboard","",-.14f,-.12f,.25f);
-            Button(assessment,ui,"Summary","summary","",.14f,-.12f,.25f); Button(assessment,ui,"Submit","submit","",.42f,-.12f,.25f);
+            ui.surgery=Button(assessment,ui,"Enter OR","surgery","",.14f,-.12f,.25f);ui.surgery.gameObject.SetActive(false);
+            Button(assessment,ui,"Submit","submit","",.42f,-.12f,.25f);
             var keys = Panel("RayKeyboard",new Vector3(0,.31f,.22f),new Vector3(0,1.2f,1.75f),new Vector2(1.5f,.45f)); keys.SetParent(ui.transform,true); ui.keyboard=keys;
             string alphabet="abcdefghijklmnopqrstuvwxyz";
             for(int i=0;i<alphabet.Length;i++) Button(keys,ui,alphabet[i].ToString(),"key",alphabet[i].ToString(),-.66f+(i%10)*.146f,.16f-(i/10)*.105f,.13f);
@@ -97,14 +101,15 @@ namespace Scalpal.EncounterOffice.Editor
             if (Mathf.Abs(faceZ) < .02f) throw new InvalidOperationException("Imported patient face direction is ambiguous.");
             if (faceZ < 0) foreach (var art in new[]{office,female,male}) art.transform.rotation = Quaternion.Euler(0,180,0) * art.transform.rotation;
             Debug.Log("SCALPAL_ENCOUNTER_ART_FACING importedNoseOffsetZ="+faceZ+" clinician=positiveZ artYawCorrection="+(faceZ<0?180:0));
-            patients.Select(EncounterContract.FemalePatientId);ui.Refresh();
+            systems.SetActive(true);patients.Select(null);ui.Refresh();
             foreach(var fit in UnityEngine.Object.FindObjectsByType<EncounterOfficeText>(FindObjectsInactive.Include,FindObjectsSortMode.None))fit.Fit();
             EditorSceneManager.SaveScene(scene,ScenePath);AssetDatabase.SaveAssets();
             CleanupUnusedGeneratedAssets();
             Debug.Log("SCALPAL_ENCOUNTER_OFFICE_PREPARED scene="+ScenePath+" globalBuildSettingsUnchanged=true");
         }
         [MenuItem("Scalpal/Encounter Office/Verify Diagnosis Office")]
-        public static void Verify() => EncounterOfficeValidation.Run();
+        public static void Verify() { EncounterOfficeValidation.Run(); EncounterRouteValidation.Run(); }
+        public static void PrepareAndVerify() { Prepare(); Verify(); }
 
         static void ForegroundPanel(Transform panel,Vector3 position,float scale)
         {
@@ -146,6 +151,7 @@ namespace Scalpal.EncounterOffice.Editor
         {
             string output = Environment.GetEnvironmentVariable("SCALPAL_ENCOUNTER_APK");
             if (string.IsNullOrWhiteSpace(output) || !Path.IsPathRooted(output)) throw new InvalidOperationException("SCALPAL_ENCOUNTER_APK must be an absolute output path.");
+            if (!File.Exists(SurgeryScenePath)) throw new InvalidOperationException("Missing existing native surgery scene: "+SurgeryScenePath);
             Verify();
             var package = PlayerSettings.GetApplicationIdentifier(NamedBuildTarget.Android);
             string product = PlayerSettings.productName, version = PlayerSettings.bundleVersion;
@@ -159,7 +165,7 @@ namespace Scalpal.EncounterOffice.Editor
                 PlayerSettings.productName="Scalpal Botanical Clinic";PlayerSettings.bundleVersion="0.1.0-office";PlayerSettings.Android.bundleVersionCode=1;
                 PlayerSettings.insecureHttpOption=InsecureHttpOption.DevelopmentOnly;EditorUserBuildSettings.buildAppBundle=false;
                 Directory.CreateDirectory(Path.GetDirectoryName(output));
-                var report=BuildPipeline.BuildPlayer(new BuildPlayerOptions{scenes=new[]{ScenePath},locationPathName=output,target=BuildTarget.Android,options=BuildOptions.Development});
+                var report=BuildPipeline.BuildPlayer(new BuildPlayerOptions{scenes=new[]{ScenePath,SurgeryScenePath},locationPathName=output,target=BuildTarget.Android,options=BuildOptions.Development});
                 if(report.summary.result!=BuildResult.Succeeded)throw new InvalidOperationException("Encounter office Android build failed: "+report.summary.result);
                 Debug.Log("SCALPAL_ENCOUNTER_APK_OK bytes="+report.summary.totalSize+" package=com.scalpal.encounteroffice");
             }

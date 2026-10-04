@@ -32,6 +32,8 @@ namespace SpacetimeDB.Types
     public sealed class Membership { public string Role, SessionId; }
     public sealed class ExerciseState
     { public string SessionId, AttemptId; public ulong StepVersion = 1; }
+    public sealed class Encounter
+    { public string EncounterId, SessionId, AttemptId, PatientId, Phase; }
     public sealed class Command
     { public string CommandId, SessionId, AttemptId, Status = "pending"; public ulong ExpectedStepVersion = 1; public DateTimeOffset RequestedAt = DateTimeOffset.UtcNow; }
     public sealed class Index<T>
@@ -43,10 +45,10 @@ namespace SpacetimeDB.Types
     public sealed class Table<T> where T : class
     {
         public readonly List<T> Rows = new List<T>();
-        public Index<T> SessionId, CommandId;
+        public Index<T> SessionId, CommandId, EncounterId;
         public IEnumerable<T> Iter() => Rows;
         public Table(Func<T, string> key)
-        { SessionId = CommandId = new Index<T>(value => Rows.Find(row => key(row) == value)); }
+        { SessionId = CommandId = EncounterId = new Index<T>(value => Rows.Find(row => key(row) == value)); }
     }
     public sealed class Cache
     {
@@ -54,6 +56,7 @@ namespace SpacetimeDB.Types
         public readonly Table<Membership> MyMemberships = new Table<Membership>(row => row.SessionId);
         public readonly Table<ExerciseState> SessionExerciseState = new Table<ExerciseState>(row => row.SessionId);
         public readonly Table<Command> SessionCommands = new Table<Command>(row => row.CommandId);
+        public readonly Table<Encounter> SessionEncounters = new Table<Encounter>(row => row.EncounterId);
     }
     public sealed class SubscriptionHandle { public int UnsubscribeCount; public void Unsubscribe() { UnsubscribeCount++; } }
     public sealed class SubscribeBuilder

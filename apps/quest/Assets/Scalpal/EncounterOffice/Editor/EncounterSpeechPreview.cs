@@ -25,7 +25,8 @@ namespace Scalpal.EncounterOffice.Editor
             EditorSceneManager.OpenScene(EncounterOfficeBuild.ScenePath, OpenSceneMode.Single);
             var session = UnityEngine.Object.FindFirstObjectByType<NativeEncounterSession>();
             var patient = session.patient;
-            patient.Select(EncounterContract.FemalePatientId);
+            patient.Select(new EncounterState { patientId = EncounterContract.FemalePatientId, patientName = "Priya Ramaswamy",
+                speaker = "patient", patientSex = "female", patientAge = 40, speakerName = "Priya Ramaswamy", speakerSex = "female", speakerAge = 40 });
             patient.SetState("speaking");
             patient.stateLabel.gameObject.SetActive(false);
             var clip = Resources.Load<AudioClip>("EncounterSpeech/Priya/greeting");

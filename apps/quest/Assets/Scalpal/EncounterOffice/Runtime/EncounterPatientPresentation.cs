@@ -14,13 +14,35 @@ namespace Scalpal.EncounterOffice
         Quaternion headRest, jawRest, chestRest;
         float mouth;
         bool focused = true, paused;
+        string speakerLabel = "No encounter selected", avatarLabel = "Avatar unavailable";
 
-        public void Select(string patientId)
+        public void Select(EncounterState state)
         {
             RestorePose();
-            if (female) female.SetActive(patientId == EncounterContract.FemalePatientId);
-            if (male) male.SetActive(patientId == EncounterContract.MalePatientId);
-            var active = patientId == EncounterContract.MalePatientId ? male : female;
+            if (female) female.SetActive(false);
+            if (male) male.SetActive(false);
+            GameObject active = null;
+            string role = Normalize(state?.speaker);
+            bool isPatient = role == "patient", isParent = role == "parent";
+            string sex = Normalize(isPatient ? state.patientSex : isParent ? state.speakerSex : null);
+            int age = isPatient ? state.patientAge : isParent ? state.speakerAge : 0;
+            if (isParent)
+                speakerLabel = Name(state.speakerName, "Unnamed parent") + " · parent speaking for " + Name(state.patientName, "unnamed patient");
+            else if (isPatient)
+                speakerLabel = Name(state.patientName, "Unnamed patient") + " · patient";
+            else
+                speakerLabel = state == null ? "No encounter selected" : Name(state.speakerName, "Unknown speaker") + " · speaker role unavailable";
+
+            if (!isPatient && !isParent) avatarLabel = "Avatar unavailable";
+            else if (age <= 0) avatarLabel = "Avatar unavailable · speaker age unknown";
+            else if (age < 18) avatarLabel = "Avatar unavailable · no child model";
+            else if (sex != "female" && sex != "male") avatarLabel = "Avatar unavailable · speaker sex unsupported or unknown";
+            else
+            {
+                active = sex == "female" ? female : male;
+                avatarLabel = active ? "Generic adult " + sex + " avatar" : "Avatar unavailable · adult model missing";
+                if (active) active.SetActive(true);
+            }
             head = jaw = chest = null;
             if (active) foreach (var node in active.GetComponentsInChildren<Transform>(true))
             {
@@ -34,10 +56,13 @@ namespace Scalpal.EncounterOffice
             SetState("waiting");
         }
 
+        static string Normalize(string value) => string.IsNullOrWhiteSpace(value) ? "" : value.Trim().ToLowerInvariant();
+        static string Name(string value, string fallback) => string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
+
         public void SetState(string value)
         {
             State = value;
-            if (stateLabel) stateLabel.text = "Patient · " + value;
+            if (stateLabel) stateLabel.text = speakerLabel + "\n" + avatarLabel + " · " + value;
             if (value != "speaking") { mouth = 0; if (jaw) jaw.localRotation = jawRest; }
         }
 
