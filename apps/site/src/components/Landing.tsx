@@ -85,7 +85,7 @@ export function Landing() {
             <div className="mt-[26px] min-h-[50px] min-[810px]:mt-9">
               {titled && (
                 <FadeIn delay={0.4} instant={skip}>
-                  <RollButton href="/explore" label="Explore" hoverLabel="Watch the demo" />
+                  <RollButton href="/explore" label="Scrub in" hoverStyle="invert" />
                 </FadeIn>
               )}
             </div>
