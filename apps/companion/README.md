@@ -117,3 +117,25 @@ These were checked locally with headless Chromium on Oct 3, not on the Quest. Th
 - **Edge states:** viewers cannot see invites or send actions; source stop is shown; the 390 px layout has no horizontal scroll.
 
 Not yet measured: the real Quest mirror window, cross-network viewing through TURN, and end-to-end video delay.
+
+## Judge recap
+
+`/recap` previews an explicitly labeled sample run. The session page links to
+`/s/<sessionId>/recap`, which starts empty and accepts only an imported
+`scalpal.run_result.v1` JSON document for that session. Import is local to the tab;
+the file is not uploaded or persisted. There is currently no live RunResult
+publisher, and the viewer does not reconstruct a surgery grade from old attempt
+counters. It displays the supplied encounter and surgery grades separately.
+
+The two reflection prompts precede the scorecard reveal. Feedback selects at most
+two strengths and two improvements from critical interview facts, milestones and
+guardrail violations, matching the Unity contract. The companion does not run a
+second Jarvis voice agent. Source/replay videos share playback and scrubbing;
+error markers require learner provenance, verified clock alignment and clip bounds.
+Queued, processing and failed states retain their real status when the operator
+chooses the clearly labeled bundled synthetic fallback. Imported demo flags limit
+the replay highlight to 20 seconds; they do not mutate the headset run context.
+
+`npm run test:recap` (Node 22+) checks parsing, both scorecards, gateway states,
+failed reasons, fact-only feedback, marker gates, session scoping, video URLs and
+the actual shared Unity sample JSON. `npm ci && npm run build` builds this view.
