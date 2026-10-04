@@ -26,6 +26,8 @@ namespace Scalpal.Surgery
         float captionUntil;
         bool warningPlaying, safetyPlaying;
         public string LastCaption { get; private set; } = "";
+        // Shared dialogue presenter (say, warning). With a listener, the coach draws no head-locked caption of its own.
+        public event Action<string, bool> Captioned;
 
         public void Initialize(CoachRelay source, AnatomyExerciseBinding binding, QuestJarvisVoice jarvis = null, TextMesh text = null)
         {
@@ -107,7 +109,8 @@ namespace Scalpal.Surgery
             StopPulse();
             if (alert.kind == "stuck" && alert.highlight != null && alert.highlight.Length > 0)
                 pulse = StartCoroutine(PulseTarget(alert, generation));
-            if (!caption && Camera.main)
+            Captioned?.Invoke(alert.say, alert.tier == "warning");
+            if (!caption && Captioned == null && Camera.main)
             {
                 ownedCaption = new GameObject("Open surgery coach caption");
                 ownedCaption.transform.SetParent(Camera.main.transform, false);

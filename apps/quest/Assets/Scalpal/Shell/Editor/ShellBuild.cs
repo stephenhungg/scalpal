@@ -39,6 +39,7 @@ namespace Scalpal.Shell.Editor
             RenderSettings.fog=true;RenderSettings.fogColor=new Color(.83f,.76f,.83f);RenderSettings.fogMode=FogMode.Linear;RenderSettings.fogStartDistance=4;RenderSettings.fogEndDistance=15;
             var sun=new GameObject("SoftDaylight").AddComponent<Light>();sun.type=LightType.Directional;sun.intensity=.65f;sun.color=new Color(1,.93f,.83f);sun.shadows=LightShadows.None;sun.transform.rotation=Quaternion.Euler(40,-25,0);
             Decor(content);
+            DialogueBoxBuild.PrepareStyle();
             EditorSceneManager.SaveScene(scene,ScenePath);
             EnsureSceneOrder();
             // EXT hand interaction drives our pointer/pinch actions; preserve all other feature settings.

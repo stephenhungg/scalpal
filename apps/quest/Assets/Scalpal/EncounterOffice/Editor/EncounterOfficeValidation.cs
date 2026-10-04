@@ -45,7 +45,7 @@ namespace Scalpal.EncounterOffice.Editor
             Check(session.realtime&&!session.realtime.autoConnect&&session.realtime.gameObject==session.gameObject&&session.State==null,"office binds pairing bridge without automatic networking or automatic case selection");
             Check(rig.head.transform.parent==rig.origin&&rig.left.parent==rig.origin&&rig.right.parent==rig.origin,"head and controllers share one floor tracking origin");
             Check(rig.session==session&&rig.talkHint&&panel&&panel.microphoneMode&&panel.microphoneMode.command=="mic_mode","tracked hold-to-talk rig, first-use hint and explicit microphone mode bind the encounter");
-            Check(panel&&panel.session==session&&panel.options.Length==4&&panel.keyboard&&panel.assessment&&panel.chart&&panel.response&&panel.draft,"visual fallback has paged questions, findings and editable assessment");
+            Check(panel&&panel.session==session&&panel.options.Length==4&&panel.keyboard&&panel.assessment&&panel.chart&&panel.suggestions&&panel.draft,"visual fallback has paged questions, findings and editable assessment");
             Check(session.patient.female&&session.patient.male&&!session.patient.female.activeSelf&&!session.patient.male.activeSelf,"both generic adult presentations bind and remain hidden until authoritative demographics arrive");
             foreach(var patient in new[]{session.patient.female,session.patient.male})
                 Check(patient.GetComponentsInChildren<Transform>(true).Any(t=>t.name=="HeadPivot")&&patient.GetComponentsInChildren<Transform>(true).Any(t=>t.name=="JawPivot"),"licensed weighted human head and jaw animation nodes exist");
@@ -95,9 +95,15 @@ namespace Scalpal.EncounterOffice.Editor
             string finalDraftPage=panel.draft.text;Check(finalDraftPage.Split('\n').Length<=4&&finalDraftPage.Contains("step"),"400-character typed plan is paged into a readable three-line field region");
             panel.Act("draft_previous","");Check(panel.draft.text!=finalDraftPage&&panel.draft.text.Split('\n').Length<=4,"draft back exposes earlier long assessment text without truncating stored plan");
             for(int i=0;i<6;i++)panel.Act("draft_previous","");Check(panel.draft.text.Contains("stepa")&&session.Draft.procedure.Length==400,"learner can review beginning of full stored 400-character plan");
-            Property(session,"LastResponse",string.Join("\n",Enumerable.Range(0,28).Select(n=>"Authored response line "+n)));panel.Refresh();
-            Check(panel.response.text.Split('\n').Length<=7&&!panel.response.text.Contains("line 20"),"long returned patient/summary text stays within paged response region");panel.Act("response_next","");
-            Check(panel.response.text.Contains("line 6")&&!panel.response.text.Contains("line 0"),"ray paging exposes next returned response lines");
+            // The conversation lives in the shared DialogueBox; the findings panel no longer pages a duplicate transcript.
+            Check(panel.suggestions.command=="suggestions"&&!buttons.Any(button=>button.command=="response_next"||button.command=="response_previous")&&!UnityEngine.Object.FindObjectsByType<TextMesh>(FindObjectsInactive.Include,FindObjectsSortMode.None).Any(text=>text.name=="Response"),"office panels carry no duplicate transcript region");
+            panel.Act("page","history");
+            Check(panel.suggestions.gameObject.activeSelf&&panel.options.All(option=>!option.gameObject.activeSelf),"history topics start collapsed behind Suggestions for a voice-first interview");
+            panel.Act("suggestions","");
+            Check(!panel.suggestions.gameObject.activeSelf&&panel.options.All(option=>option.gameObject.activeSelf&&option.command=="option"),"Suggestions expands the paged history questions");
+            panel.Act("page","exam");
+            Check(!panel.suggestions.gameObject.activeSelf&&panel.options.Any(option=>option.gameObject.activeSelf),"examinations stay directly available without the suggestions step");
+            panel.Act("page","assessment");panel.Act("field","procedure");
             Property(session,"Score",new EncounterScore{total=23,max=100,grade="Needs practice",feedback=Enumerable.Range(0,26).Select(n=>"Feedback item "+n).ToArray()});panel.Refresh();
             Check(panel.chart.text.Split('\n').Length<=11&&panel.draft.text.Split('\n').Length<=3,"full score feedback is paged and assessment panel does not overflow controls");
             var fittedTexts=UnityEngine.Object.FindObjectsByType<EncounterOfficeText>(FindObjectsInactive.Include,FindObjectsSortMode.None);
@@ -108,7 +114,35 @@ namespace Scalpal.EncounterOffice.Editor
                 Check(measured.x<=fit.maximumWidth+.002f&&measured.y<=fit.maximumHeight+.002f,"actual generated TextMesh bounds fit their world-space region: "+fit.name);
                 Check(fit.GetComponent<Renderer>().sharedMaterial.shader.name=="Scalpal/Encounter Office/World Text"&&fit.GetComponent<Renderer>().sharedMaterial.renderQueue==3020,"depth-tested text renders above glass and buttons");
             }
+            ValidateDialoguePlacement(session,rig,panel);
             Check(before.SequenceEqual(EditorBuildSettings.scenes.Select(s=>s.path+s.enabled)),"validation preserves surgery build scene settings");
+        }
+        // The shared dialogue box in the real office layout: lower middle, below the patient's face, clear of the consoles.
+        static void ValidateDialoguePlacement(NativeEncounterSession session,EncounterOfficeRig rig,EncounterOfficePanel panel)
+        {
+            session.patient.Select(AdultFixtures()[0]);panel.Act("page","history");
+            var feed=Scalpal.Shell.DialogueFeed.Attach();
+            try
+            {
+                Check(feed&&feed.Office==session&&feed.box.viewer==rig.head.transform&&feed.box.avoid.Count==2,"office dialogue feed binds the encounter, tracked head and both lower consoles");
+                Check(feed.box.protectedFace&&feed.box.protectedFace.name=="NoseTip"&&feed.box.protectedFace.gameObject.activeInHierarchy,"office dialogue box protects the visible patient's face");
+                var eye=rig.head.transform.position;var nose=feed.box.protectedFace.position;
+                float Elevation(Vector3 point)=>Mathf.Asin((point.y-eye.y)/(point-eye).magnitude)*Mathf.Rad2Deg;
+                float BoxTop()=>Elevation(feed.box.transform.position+feed.box.transform.up*feed.box.CardHeight/2);
+                float BoxBottom()=>Elevation(feed.box.transform.position-feed.box.transform.up*feed.box.CardHeight/2);
+                feed.box.Say(Scalpal.Shell.DialogueSpeaker.Patient,"Priya Ramaswamy","It started around my belly button.");feed.box.Tick(0);
+                float centre=-Elevation(feed.box.transform.position),distance=(feed.box.transform.position-eye).magnitude;
+                Check(centre>=19.5f&&centre<=25.5f&&distance>.95f&&distance<1.05f,"interview box sits about 1 m ahead and 20-25 degrees below eye level: "+centre+" deg, "+distance+" m");
+                Check(BoxTop()<Elevation(nose)-6,"interview box stays well below the patient's face: top "+BoxTop()+" nose "+Elevation(nose));
+                panel.Act("page","assessment");Check(panel.assessment.gameObject.activeSelf,"precondition: assessment console visible");
+                feed.box.Recenter();
+                var console=panel.assessment.GetComponentInChildren<Renderer>().bounds;
+                float consoleBottom=Elevation(new Vector3(console.center.x,console.min.y,console.center.z));
+                Check(BoxTop()<=consoleBottom+.1f&&BoxTop()<Elevation(nose)-6,"box moves below the assessment console and still clears the face: box top "+BoxTop()+" console bottom "+consoleBottom);
+                Check(BoxBottom()>-50,"box remains within a comfortable downward glance: "+BoxBottom());
+                UnityEngine.Debug.Log("SCALPAL_DIALOGUE_OFFICE_PLACEMENT interviewCentreDeg=-"+centre.ToString("F1")+" noseDeg="+Elevation(nose).ToString("F1")+" assessmentBoxTopDeg="+BoxTop().ToString("F1")+" consoleBottomDeg="+consoleBottom.ToString("F1"));
+            }
+            finally { if(feed)UnityEngine.Object.DestroyImmediate(feed.gameObject);panel.Act("page","history");session.patient.Select(null); }
         }
         static bool WeightedBone(SkinnedMeshRenderer[] skins,Transform bone)
         {
@@ -357,6 +391,8 @@ namespace Scalpal.EncounterOffice.Editor
                 fixture=new GameObject("EncounterOfficeFixture");fixture.SetActive(false);
                 var session=fixture.AddComponent<NativeEncounterSession>();session.baseUrl=endpoint;
                 session.patient=UnityEngine.Object.FindFirstObjectByType<EncounterPatientPresentation>();
+                var dialogue=Scalpal.Shell.DialogueBox.Create(Scalpal.Shell.DialogueBoxStyle.Load(),null);dialogue.transform.SetParent(fixture.transform,false);
+                var dialogueFeed=dialogue.gameObject.AddComponent<Scalpal.Shell.DialogueFeed>();dialogueFeed.box=dialogue;dialogueFeed.BindOffice(session);
                 session.LoadPatients();var list=Drain(session);list.Run();
                 Check(list.exchanges.Count==1&&list.exchanges[0].path=="/patients"&&session.Patients.Length==12,"actual patient list returns all twelve synthetic scenarios through the production coroutine");
                 var available=session.Patients.Where(entry=>(entry.status=="ready"||entry.status=="needs_review")&&!string.IsNullOrEmpty(entry.patientId)&&!string.IsNullOrEmpty(entry.procedureId)).ToArray();
@@ -370,8 +406,11 @@ namespace Scalpal.EncounterOffice.Editor
                     Check(started.exchanges.Count==2&&started.exchanges[0].path=="/patients/"+entry.patientId+"/case"&&started.exchanges[1].path=="/encounters"&&started.exchanges[1].body==JsonUtility.ToJson(new PatientRequest{patientId=entry.patientId}),"canonical case eligibility is checked before exact subject encounter creation: "+entry.patientId);
                     Check(session.State!=null&&session.State.patientId==entry.patientId&&session.State.phase=="interview"&&session.AuthoredProcedureId==entry.procedureId,"actual encounter adopts each available selected subject and authored procedure: "+entry.patientId);
                     bool parent=session.State.speaker=="parent";
+                    string opener=Get<string>(session,"greeting");
+                    if(!string.IsNullOrWhiteSpace(opener))
+                        Check(dialogue.SpeakerLabel==(parent?session.State.speakerName+" · Parent":session.State.patientName+" · Patient")&&dialogue.FullText==opener.Trim(),"dialogue box labels the authored opener of each subject by speaker role: "+entry.patientId+" -> "+dialogue.SpeakerLabel);
                     if(entry.patientId=="patient-demo-pediatric-asthma")
-                        Check(parent&&session.State.patientName=="Theo Abernathy"&&session.State.speakerName=="Laura Abernathy","pediatric encounter retains Laura as the parent speaker for Theo");
+                        Check(parent&&session.State.patientName=="Theo Abernathy"&&session.State.speakerName=="Laura Abernathy"&&dialogue.SpeakerLabel=="Laura Abernathy · Parent","pediatric encounter retains Laura as the parent speaker for Theo, in the dialogue box too");
                     // Requirement: every playable patient is seated as soon as the encounter starts, from service demographics.
                     var seated=session.patient;
                     Check(session.State.patientAge>0&&(session.State.patientSex=="female"||session.State.patientSex=="male")&&session.State.speakerAge>=18&&(session.State.speakerSex=="female"||session.State.speakerSex=="male"),"service state carries seated patient and speaker demographics: "+entry.patientId);
@@ -415,12 +454,15 @@ namespace Scalpal.EncounterOffice.Editor
                 session.Ask("allergies");var allergy=Drain(session);allergy.Run();
                 Check(allergy.exchanges.Single().path=="/encounters/"+femaleId+"/tools/answer"&&allergy.exchanges.Single().body=="{\"topic\":\"allergies\"}","fallback question uses exact authoritative encounter route and body");
                 Check(session.State.historyAsked.Any(item=>item.id=="allergies")&&session.LastResponse.IndexOf("latex",StringComparison.OrdinalIgnoreCase)>=0&&!session.LastResponse.Contains("FACT for you"),"visual fallback receives case fact without provider instruction wrapper");
+                Check(dialogue.SpeakerLabel=="Priya Ramaswamy · Patient"&&dialogue.FullText.IndexOf("latex",StringComparison.OrdinalIgnoreCase)>=0&&!dialogue.FullText.Contains("FACT for you"),"visual answer reaches the dialogue box as the named patient");
                 session.Examine("abdomen_palpation");Drain(session).Run();
                 Check(session.State.exams.Any(item=>item.id=="abdomen_palpation"&&item.finding.Contains("right lower")),"actual examination state populates findings chart");
-                session.OrderTest("pregnancy_test");Drain(session).Run();
+                string beforeTest=dialogue.FullText;session.OrderTest("pregnancy_test");Drain(session).Run();
+                Check(dialogue.FullText==beforeTest,"chart-only test acknowledgements are not spoken dialogue");
                 Check(session.State.tests.Any(item=>item.id=="pregnancy_test"&&item.result.Contains("negative")),"actual authored pregnancy result appears only after order");
                 voice=fixture.AddComponent<QuestJarvisVoice>();session.voice=voice;Set(voice,"generation",70);Property(voice,"Status","connected");connection=NewConnection(voice,70);connections.Add(connection);
                 Call(session,"Transcript","user","Please perform ultrasound, then CT.");
+                Check(dialogue.SpeakerLabel=="You"&&dialogue.FullText=="Please perform ultrasound, then CT.","learner voice transcript reaches the dialogue box as You");
                 var firstTool=new QuestJarvisVoice.ToolRequest{ToolName="order_test",ToolCallId="fifo-ultrasound",ConnectionGeneration=70,ParametersJson="{\"test\":\"ultrasound\"}"};
                 var secondTool=new QuestJarvisVoice.ToolRequest{ToolName="order_test",ToolCallId="fifo-ct",ConnectionGeneration=70,ParametersJson="{\"test\":\"ct_abdomen_pelvis\"}"};
                 Get<HashSet<string>>(voice,"pendingTools").Add(firstTool.ToolCallId);Get<HashSet<string>>(voice,"pendingTools").Add(secondTool.ToolCallId);
@@ -438,10 +480,12 @@ namespace Scalpal.EncounterOffice.Editor
                 session.voice=voice;session.StartVoice();Check(voice.Status=="disconnected"&&session.Status.Contains("correct conversation role"),"voice start is gated until the matching role prompt is loaded");session.voice=null;
                 session.baseUrl=endpoint;session.RefreshState();var recovered=Drain(session);recovered.Run();
                 Check(session.Role=="attending"&&session.State.phase=="attending"&&Get<string>(session,"prompt").Contains("attending")&&recovered.exchanges.Count==2,"refresh recovers lost attending response, role and prompt via idempotent transition");
+                Check(dialogue.SpeakerLabel=="Jarvis · Attending"&&dialogue.FullText==Get<string>(session,"greeting").Trim(),"attending opener reaches the dialogue box as Jarvis · Attending");
                 session.Draft=new EncounterAssessment{diagnosis="Gastroenteritis",differential=new[]{"Ectopic pregnancy","Ureteric stone"},procedure="Observation and reassessment",urgency="elective"};
                 session.SubmitAssessment();var assessment=Drain(session);assessment.Run();
                 Check(assessment.exchanges.Count==2&&assessment.exchanges[0].path.EndsWith("/tools/record_assessment",StringComparison.Ordinal)&&assessment.exchanges[1].path.EndsWith("/score",StringComparison.Ordinal),"assessment and score use same service encounter; score fetch follows successful assessment only");
                 Check(session.State.phase=="scored"&&session.Score!=null&&session.Score.total<100&&session.State.assessment.diagnosis=="Gastroenteritis","service evaluates learner's actual imperfect assessment; no local score engine");
+                Check(string.IsNullOrWhiteSpace(session.Score.spoken)||dialogue.SpeakerLabel=="Jarvis · Attending"&&dialogue.FullText.StartsWith(session.Score.spoken.Trim().Substring(0,Math.Min(40,session.Score.spoken.Trim().Length)),StringComparison.Ordinal),"Jarvis spoken feedback reaches the dialogue box");
                 Property(session,"Score",null);session.RefreshState();var recoveredScore=Drain(session);recoveredScore.Run();
                 Check(session.Score!=null&&recoveredScore.exchanges.Count==2&&session.State.phase=="scored","refresh recovers scored card without repeating assessment mutation");
                 session.StartPatient(EncounterContract.MalePatientId);Drain(session).Run();Check(session.State.patientName=="Jonah Okoye"&&session.State.patientId==EncounterContract.MalePatientId,"male30 persona binds its own synthetic case");

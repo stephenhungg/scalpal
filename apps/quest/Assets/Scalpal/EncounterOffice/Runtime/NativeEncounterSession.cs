@@ -41,6 +41,8 @@ namespace Scalpal.EncounterOffice
         public bool TalkHeld { get; private set; }
         public bool OpenMicrophone { get; private set; }
         public event Action Changed;
+        // One spoken or displayed dialogue line for the shared dialogue box. speaker: learner | patient | parent | attending.
+        public event Action<string, string> Line;
         public EncounterAssessment Draft = new EncounterAssessment();
         string encounterId = "", patientId = "", prompt = "", greeting = "", voiceId = "";
         int generation;
@@ -178,7 +180,7 @@ namespace Scalpal.EncounterOffice
                     { SetStatus("Encounter identity mismatch. Choose a patient again."); return; }
                     encounterId = reply.encounterId; State = reply.state; prompt = reply.patientPrompt; greeting = reply.patientFirstMessage; voiceId = reply.voiceId;
                     if (patient) { patient.Select(State); patient.SetState("listening"); if (voice) patient.BindVoice(voice, true); }
-                    Say(EncounterContract.SpeakerLabel(State, "patient"), greeting);
+                    Say(PatientSpeaker(), greeting);
                     SetStatus("Interview ready. Hold grip to talk, or select questions.");
                     // The patient greets the learner out loud as the encounter starts. A failed connection plays the
                     // bundled greeting from VoiceStatus; with voice off the bundled greeting plays directly.
@@ -237,7 +239,7 @@ namespace Scalpal.EncounterOffice
             if (reply.state?.phase != "attending" || string.IsNullOrEmpty(reply.attendingPrompt) || string.IsNullOrEmpty(reply.attendingFirstMessage))
             { SetStatus("Attending conversation context is incomplete. Refresh state."); return; }
             Role = "attending"; prompt = reply.attendingPrompt; greeting = reply.attendingFirstMessage; voiceId = "";
-            Say(EncounterContract.SpeakerLabel(State, "attending"), greeting); if (patient) patient.SetState("resting"); SetStatus("Present your diagnosis, differential, plan and timing to Jarvis.");
+            Say("attending", greeting); if (patient) patient.SetState("resting"); SetStatus("Present your diagnosis, differential, plan and timing to Jarvis.");
             if (patient && voice) patient.BindVoice(voice, false);
             if (VoiceEnabled) ConnectVoice(); // the patient agent is disconnected; Jarvis joins as attending to hear the presentation
         }
@@ -246,7 +248,7 @@ namespace Scalpal.EncounterOffice
             if (reply.scorecard == null || string.IsNullOrEmpty(reply.scorecard.grade) || reply.scorecard.max != 100 || reply.scorecard.total < 0 || reply.scorecard.total > 100)
             { SetStatus("Assessment score reply is incomplete. Refresh state."); return; }
             if (reply.scorecard.patientId != patientId || reply.scorecard.procedureId != AuthoredProcedureId) { SetStatus("Reviewed procedure does not match this patient. Refresh state."); return; }
-            Score = reply.scorecard; Say(EncounterContract.SpeakerLabel(State, "attending"), Score.spoken); SetStatus(status + " Review the feedback, then enter the OR for " + Score.procedureTitle + ".");
+            Score = reply.scorecard; Say("attending", Score.spoken); SetStatus(status + " Review the feedback, then enter the OR for " + Score.procedureTitle + ".");
         }
         public void SubmitAssessment()
         {
@@ -332,7 +334,7 @@ namespace Scalpal.EncounterOffice
         {
             if (string.IsNullOrWhiteSpace(text) || State == null) return;
             string speaker = source == "user" ? "learner" : Role == "patient" ? "patient" : "coach";
-            Say(source == "user" ? EncounterContract.LearnerLabel : EncounterContract.SpeakerLabel(State, Role), text);
+            Say(source == "user" ? "learner" : Role == "patient" ? PatientSpeaker() : "attending", text);
             Enqueue("POST", "/encounters/" + Uri.EscapeDataString(encounterId) + "/transcript", JsonUtility.ToJson(new TranscriptRequest { speaker = speaker, text = text }), false, null);
             Notify();
         }
@@ -354,7 +356,9 @@ namespace Scalpal.EncounterOffice
             if (request == null && Busy) return;
             Enqueue("POST", "/encounters/" + Uri.EscapeDataString(encounterId) + "/tools/" + Uri.EscapeDataString(name), string.IsNullOrEmpty(body) ? "{}" : body, true, reply =>
             {
-                Say(EncounterContract.SpeakerLabel(State, Role), reply.display ?? reply.result);
+                // Voice-originated tools are already spoken by the agent and arrive as its transcript.
+                // Test orders only point at the chart; their results live in the findings panel.
+                Say(Role == "patient" ? PatientSpeaker() : "attending", reply.display ?? reply.result, request == null && name != "order_test");
                 SetStatus("Recorded by the encounter service.");
                 if (request == null && name == "answer")
                 {
@@ -434,8 +438,16 @@ namespace Scalpal.EncounterOffice
             if (patient) patient.SetState("resting");
             SetStatus("Voice paused. Hold grip or select Voice to resume this encounter.");
         }
-        void Say(string speaker, string text) { LastSpeaker = speaker; LastResponse = text ?? ""; }
         void SetStatus(string text) { Status = text; Notify(); }
+        string PatientSpeaker() => State?.speaker == "parent" ? "parent" : "patient";
+        // One path for every spoken line: the panel's labeled last line and the dialogue box (role keys:
+        // patient, parent, attending, learner).
+        void Say(string role, string text, bool show = true)
+        {
+            LastSpeaker = role == "learner" ? EncounterContract.LearnerLabel : EncounterContract.SpeakerLabel(State, role == "attending" ? "attending" : "patient");
+            LastResponse = text ?? "";
+            if (show && !string.IsNullOrWhiteSpace(text)) Line?.Invoke(role, text);
+        }
         void Notify() => Changed?.Invoke();
     }
 }

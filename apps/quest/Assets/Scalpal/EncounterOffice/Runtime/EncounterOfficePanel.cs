@@ -7,17 +7,20 @@ namespace Scalpal.EncounterOffice
     public sealed class EncounterOfficePanel : MonoBehaviour
     {
         public NativeEncounterSession session;
-        public TextMesh heading, status, response, chart, draft;
+        // The conversation itself is shown by the shared Shell DialogueBox; these panels hold controls and findings.
+        public TextMesh heading, status, chart, draft;
         public EncounterOfficeButton[] options;
-        public EncounterOfficeButton microphoneMode, surgery;
+        public EncounterOfficeButton microphoneMode, surgery, suggestions;
+        // History questions are suggestions for a voice-first interview: collapsed until asked for.
+        public bool SuggestionsOpen { get; private set; }
         public Transform keyboard, assessment;
         public string Page { get; private set; } = "patients";
         public int Offset { get; private set; }
         public string Field { get; private set; } = "diagnosis";
-        int chartOffset, responseOffset, draftOffset;
+        int chartOffset, draftOffset;
         string lastDraftValue;
         bool feedbackVisible = true;
-        string lastResponse, lastPatientId = "";
+        string lastPatientId = "";
         EncounterScore lastScore;
         EncounterOfficeButton voiceToggle;
         readonly string[] diagnoses = { "Acute cholecystitis", "Symptomatic cholelithiasis", "Sigmoid diverticulitis", "Acute appendicitis", "Perforated appendicitis", "Gastroenteritis", "Ectopic pregnancy", "Ovarian torsion", "Urinary tract infection", "Diverticulitis", "Small bowel obstruction", "Mesenteric ischemia", "Ureteric stone", "Perforated peptic ulcer", "Crohn's disease" };
@@ -33,11 +36,10 @@ namespace Scalpal.EncounterOffice
                 case "reload_patients":
                 case "patients": session.LoadPatients(); Page = "patients"; Offset = 0; break;
                 case "surgery": session.ContinueToSurgery(); break;
-                case "page": Page = argument; Offset = 0; if (Page == "patients" && session.Patients.Length == 0) session.LoadPatients(); break;
+                case "page": Page = argument; Offset = 0; SuggestionsOpen = false; if (Page == "patients" && session.Patients.Length == 0) session.LoadPatients(); break;
                 case "next": Offset += options.Length; break;
                 case "previous": Offset = Mathf.Max(0, Offset - options.Length); break;
-                case "response_next": responseOffset += 6; break;
-                case "response_previous": responseOffset = Mathf.Max(0, responseOffset - 6); break;
+                case "suggestions": SuggestionsOpen = !SuggestionsOpen; Offset = 0; break;
                 case "chart_toggle": feedbackVisible = !feedbackVisible; chartOffset = 0; break;
                 case "chart_next": chartOffset += 10; break;
                 case "chart_previous": chartOffset = Mathf.Max(0, chartOffset - 10); break;
@@ -65,7 +67,7 @@ namespace Scalpal.EncounterOffice
                     var entry = Array.Find(session.Patients, item => item != null && item.patientId == value);
                     if (EncounterOfficeRoute.CanEnter(entry)) { session.StartPatient(value); Page = "history"; Offset = 0; }
                     break;
-                case "history": session.Ask(value); break;
+                case "history": session.Ask(value); SuggestionsOpen = false; break;
                 case "exam": session.Examine(value); break;
                 case "tests": session.OrderTest(value); break;
                 case "assessment":
@@ -104,11 +106,7 @@ namespace Scalpal.EncounterOffice
             if (microphoneMode && microphoneMode.label) microphoneMode.label.text = session.OpenMicrophone ? "Hold grip" : "Open mic";
             if (!voiceToggle) foreach (var button in GetComponentsInChildren<EncounterOfficeButton>(true)) if (button.command == "voice") voiceToggle = button;
             if (voiceToggle && voiceToggle.label) voiceToggle.label.text = session.VoiceEnabled && session.VoiceLive ? "Voice off" : "Voice on";
-            if (lastResponse != session.LastResponse) { lastResponse = session.LastResponse; responseOffset = 0; }
             if (lastScore != session.Score) { lastScore = session.Score; chartOffset = 0; feedbackVisible = true; }
-            var responseLines = Wrap(session.LastResponse, 42).Split('\n');
-            if (responseOffset >= responseLines.Length) responseOffset = 0;
-            if (response) response.text = ResponseHeader(session.LastSpeaker, responseOffset) + "\n" + string.Join("\n", responseLines, responseOffset, Math.Min(6, responseLines.Length - responseOffset));
             var chartContent = session.Score != null && feedbackVisible ? "Attending feedback · " + session.Score.total + "/" + session.Score.max + " " + session.Score.grade + "\n" + string.Join("\n", session.Score.feedback ?? new string[0]) : EncounterContract.Chart(session.State);
             var lines = Wrap(chartContent, 42).Split('\n');
             if (chartOffset >= lines.Length) chartOffset = Mathf.Max(0, lines.Length - 10);
@@ -125,9 +123,11 @@ namespace Scalpal.EncounterOffice
             foreach(var fit in GetComponentsInChildren<EncounterOfficeText>(true))fit.Fit();
             string[] items = Page == "patients" ? Array.ConvertAll(session.Patients, item => item?.patientId ?? "") : Page == "history" ? EncounterContract.History : Page == "exam" ? EncounterContract.Exams : Page == "tests" ? EncounterContract.Tests : Field == "procedure" ? plans : Field == "urgency" ? timing : diagnoses;
             if (Offset >= items.Length) Offset = 0;
+            bool collapsed = Page == "history" && !SuggestionsOpen && suggestions;
+            if (suggestions) suggestions.gameObject.SetActive(collapsed);
             for (int i = 0; i < options.Length; i++)
             {
-                var button = options[i]; int index = i + Offset; button.gameObject.SetActive(index < items.Length);
+                var button = options[i]; int index = i + Offset; button.gameObject.SetActive(index < items.Length && !collapsed);
                 if (index >= items.Length) continue;
                 button.argument = items[index];
                 var entry = Page == "patients" ? session.Patients[index] : null;

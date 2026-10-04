@@ -33,6 +33,7 @@ namespace Scalpal.Shell.Editor
             ValidateModel();
             ValidateExchange();
             ValidateScene();
+            DialogueBoxValidation.Run();
             UnityEngine.Debug.Log("SCALPAL_SHELL_VERIFY_OK checks=" + checks + " actualCoroutineHttp=true provider=false headset=false");
         }
 
