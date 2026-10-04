@@ -1,0 +1,42 @@
+# Open Surgery Visual Audit — October 4, 2026
+
+## Scope and Evidence
+
+The actual `NativeSession` was driven through all ten open-appendectomy milestones using synthetic tracked tool poses, the registered wall volume, actual atlas assets and the production body-event path. Each stage was rendered from a learner-height view and a close view; additional captures show membrane tenting, clamps before division, divided mesentery before ties and the retained base tie before division. These are graphics-backed Editor images, not a physical Quest playthrough or clinical validation. No participant imagery was acquired.
+
+The reference criteria and simulator research are in [Open Appendectomy Visual Acceptance](research/open-appendectomy-visuals.md). The original source comparison uses `0ff88d1` plus the focused `fbb6067` closure correction. The ten-stage fixture originated as completed unpublished work in the Shell worktree; it was adopted into main with additional action refreshes and sub-action captures. The fixture invokes the production trigger-hint update after parking tools: the old captured captions did not establish a physical headset obstruction.
+
+## Audit and Changes
+
+| Stage | Observed defect | Implemented change or remaining boundary |
+| --- | --- | --- |
+| 0. Mark | Intact skin and RLQ guide worked; ink later floated across the opened field. | Marker ink remains on intact skin and is concealed after incision. The measured marker center/direction drives the wound view. |
+| 1. Incise skin/fat | Rectangular coupon, oversized shader aperture, yellow/skin floor without coherent local exposure. | A finite measured incision ellipse, two skin edges projected to the curved VR skin, and a lobular yellow fat appearance. Short strokes have shorter geometry. |
+| 2. Open fascia | Almost identical to skin/fat. | Ordered pale fascia and red muscle exposure; authored fiber appearance uses the existing wound-local +X mechanical axis. A readable resting aperture is an art approximation. |
+| 3. Split muscle | Coarse fractured slab and rigid-looking layer bands. | Semantic muscle lips respond to the accepted measured split width. Actual volume, contact and fracture evidence remain active but the raw coupon draw is suppressed. This is not exact fracture-mesh rendering. |
+| 4. Tent/nick membrane | Whole-layer movement and room visible through the empty body. | Local tent centered on an accepted membrane grip, thin wet membrane surface and a bounded dark cavity lining after entry. The lining has no collider or anatomical identity; its120 mm depth is illustrative. |
+| 5. Deliver appendix | Smooth schematic cecum obscured the base. | Render-only haustral/taenia cues within the original source envelope. **The rigid group and source layout still obscure the base from this learner angle.** |
+| 6. Mesoappendix | Clamp/cut/tie actions produced almost identical body pictures. | Accepted ties produce source-section ligatures; accepted measured divisions produce capped retained/distal source-mesh views. |
+| 7. Base/specimen | Original whole organ remained visible after removal. | Accepted division produces a retained stump and a20 mm-separated specimen, explicitly labeled assisted display. It is not an independently grabbable specimen; original contact geometry remains. |
+| 8. Inspect/clean | Blood could disappear when interaction paused, and old marks were overwritten. | Cuts and stains persist for the attempt; pause preserves registered blood, loss of fit hides without clearing, recovery restores. Control stops flow and dries the cut; suction lowers cavity pool without erasing cumulative loss. |
+| 9. Close | Open slab, organs and placed instruments protruded through closed skin. | Explicit assistant closure conceals the operative contents and adds a skin-projected seam and six interrupted sutures. Underlying fractured physics is not healed or reset. |
+
+## Persistent Injury Contract
+
+Elapsed time, inspection, temporary tracking loss, hide/show and rebinding the same Body identity cannot heal wounds or clear stains. Accepted hemostatic control changes wetness and emission, not the stored cut. A genuinely new attempt clears injury presentation. Explicit assisted closure adds a seam rather than silently pretending no operation happened. Off-field injuries remain visible after closure.
+
+The fixed64-segment/64-stain budgets preserve earlier marks when saturated. Nearby stains can still grow, but additional disconnected marks beyond the budget are not represented. This avoids apparent regeneration without claiming an unlimited decal backend. Off-field incision/drop/stain presentation applies to the virtual patient; AR retains the registered in-field wound and cavity pool and does not paint virtual wounds onto the real person's passthrough skin.
+
+## Verification and Limits
+
+The retained Resources material directly references the tissue shader. Appearance checks cover finite bounds/indices/tangents, ordered exposure, actual curved-collider skin projection, local tenting, dark closed cavity sightlines and caching. Actual imported organ checks retain mesh/collider identities, source envelopes, contact availability, body logs and transformed registration. Division tests require both clipped sides and caps at the measured station; rejected/unmeasured actions create no invented view. Closure checks require the actual nonempty mobile group, concealment, seam/suture geometry and unchanged source/contact poses. Persistence checks use real skin strokes and accepted control, a60-second simulation, hidden/restored display, overflow and real new-attempt reset. The existing wall coupling test additionally requires unchanged cut faces/topology across a pause.
+
+The complete rendering sequence must also be inspected visually: terminal markers alone do not establish realism. Headset stereo appearance, aliasing, controller-driven operative completion, voice, physical AR fit and frame time remain physical acceptance work. The mannequin is still low polygon; the cecum is still a schematic source ellipsoid; mesenteric attachments, hollow lumen, free specimen dynamics and layered physical suturing remain approximations. The clinical content and material parameters have not received a qualified surgeon's review.
+
+## Committed Render Evidence
+
+![Ten stages before](../experiments/open-surgery-visual-audit/before-close.jpg)
+
+![Ten stages after](../experiments/open-surgery-visual-audit/after-close.jpg)
+
+[Capture provenance and regeneration](../experiments/open-surgery-visual-audit/README.md). Both grids are synthetic Editor views. The new cavity closes the background; later ties/divisions and seam are visible states, but the base remains obscured from the fixed patient-right camera. The smaller view does not demonstrate readable stereo detail.

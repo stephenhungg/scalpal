@@ -44,26 +44,33 @@ namespace Scalpal.Surgery
         Transform torso, wound;
         Func<bool> virtualBody;
         BodyState cachedBody;
+        BodyState attemptBody;
         int cachedLog, splatHead, splatCount, splatBudget;
         bool splatsDirty;
+        bool initialized;
         double clock;
         public IReadOnlyList<Flow> Flows => flows;
         public long Emitted { get; private set; }
         public long EmittedFor(string id) => emitted.TryGetValue(id, out var value) ? value : 0;
         public int SplatCount => splatCount;
         public int ParticleCount => drops ? drops.particleCount : 0;
+        public int VisibleParticleCount => Visible && isActiveAndEnabled ? ParticleCount : 0;
         public ParticleSystem Drops => drops;
         public Mesh SplatMesh => splatMesh;
-        public bool Visible => torso && (virtualBody == null || virtualBody());
+        public Func<bool> PresentationVisible;
+        public bool Visible => torso && (virtualBody == null || virtualBody()) && (PresentationVisible == null || PresentationVisible());
 
         public void Initialize(OpenBodyInteraction interaction, PatientIncisions cuts, AnatomyExerciseBinding binding, Transform torsoFrame,
             Transform woundFrame, Func<bool> showsVirtualBody, NativePatientMonitor patientMonitor)
         {
+            var nextBody = binding ? binding.Body : null;
+            bool fresh = !initialized || !ReferenceEquals(attemptBody, nextBody) || input != interaction || torso != torsoFrame;
             if (input) input.RegionInjured -= Injured;
             input = interaction; incisions = cuts; exercise = binding; torso = torsoFrame; wound = woundFrame;
             virtualBody = showsVirtualBody; monitor = patientMonitor;
+            attemptBody = nextBody; initialized = true;
             if (input) input.RegionInjured += Injured;
-            Build(); Clear();
+            Build(); if (fresh) Clear(); else RebuildSplats();
         }
         // A new attempt starts with no blood anywhere.
         public void Clear()
@@ -84,7 +91,8 @@ namespace Scalpal.Surgery
             flows.Clear(); splatBudget = SplatsPerFrame;
             bool visible = Visible;
             if (splatRenderer) splatRenderer.enabled = visible && splatCount > 0;
-            if (!visible) { if (drops && drops.particleCount > 0) drops.Clear(); return; }
+            SetDropPresentation(visible);
+            if (!visible) return;
             if (splatsDirty) RebuildSplats();
             if (!input || !input.Ready || exercise?.Body == null || !float.IsFinite(seconds) || seconds <= 0 || seconds > .1f) return;
             Collect(exercise.Body);
@@ -133,7 +141,10 @@ namespace Scalpal.Surgery
             var condition = monitor ? monitor.Condition : null;
             if (condition?.regions != null)
                 foreach (var region in condition.regions)
-                    if (region != null && region.region == Regions[index]) return region.bleeding ? region.rawBleedMlPerMin : 0;
+                    // Collect already requires the interaction's accepted injury to be uncontrolled. A
+                    // delayed coach sample from before the injury cannot silently erase a local source.
+                    if (region != null && region.region == Regions[index] && region.bleeding && region.rawBleedMlPerMin > 0)
+                        return region.rawBleedMlPerMin;
             return AuthoredRegionMlPerMin[index];
         }
         void Emit(Flow flow, float seconds, float heartRate)
@@ -185,6 +196,9 @@ namespace Scalpal.Surgery
                 if ((splat.point - point).sqrMagnitude > splat.radius * splat.radius * .64f || Vector3.Dot(splat.normal, normal) < .7f) continue;
                 splat.radius = Mathf.Min(.03f, splat.radius + .0012f); splatsDirty = true; return true;
             }
+            // Do not make old stains disappear as new drops land. Existing nearby stains can still grow;
+            // new disconnected stains beyond the bounded mesh budget are intentionally not represented.
+            if (splatCount == MaxSplats) return false;
             splats[splatHead] = new Splat { point = point, normal = normal, radius = UnityEngine.Random.Range(.004f, .009f), seed = UnityEngine.Random.Range(0, 1000) };
             splatHead = (splatHead + 1) % MaxSplats; splatCount = Mathf.Min(splatCount + 1, MaxSplats); splatsDirty = true;
             return true;
@@ -257,7 +271,16 @@ namespace Scalpal.Surgery
             return mesh;
         }
         static void Release(UnityEngine.Object value) { if (!value) return; if (Application.isPlaying) Destroy(value); else DestroyImmediate(value); }
-        void OnDisable() { if (drops) drops.Clear(); if (splatRenderer) splatRenderer.enabled = false; }
+        void SetDropPresentation(bool visible)
+        {
+            if (!drops) return;
+            var renderer = drops.GetComponent<ParticleSystemRenderer>();
+            if (renderer) renderer.enabled = visible;
+            if (!visible) { if (!drops.isPaused) drops.Pause(); }
+            else if (drops.isPaused) drops.Play();
+        }
+        void OnEnable() { if (torso) { SetDropPresentation(Visible); if (splatRenderer) splatRenderer.enabled = Visible && splatCount > 0; } }
+        void OnDisable() { SetDropPresentation(false); if (splatRenderer) splatRenderer.enabled = false; }
         void OnDestroy()
         {
             if (input) input.RegionInjured -= Injured;

@@ -251,6 +251,18 @@ namespace Scalpal.Surgery.Editor
             s.Step(75);
             pool = s.Fact("", "poolMl"); float level = s.bleeding.PoolLevelMeters; double shown = s.bleeding.ShownPoolMl;
             Require(Math.Abs(shown - pool) <= Math.Max(.01, pool * .02), $"once flow stops the pool settles on poolMl ({shown:F2} vs {pool:F2})");
+            var poolView=s.bleeding.transform.Find("ScoredTeachingBloodPool");
+            if(!poolView)poolView=s.Wound.Find("ScoredTeachingBloodPool");
+            Require(poolView&&poolView.gameObject.activeSelf,"nonempty pool exists before inspection pause");
+            var priorDisplay=s.bleeding.PresentationVisible;
+            s.bleeding.PresentationVisible=()=>true;s.gate=false;s.bleeding.Simulate(0);
+            Require(poolView.gameObject.activeSelf&&s.bleeding.ShownPoolMl==shown&&s.Fact("","poolMl")==pool,
+                "inspection pause freezes fluid but preserves its visible pool and authoritative volume");
+            s.bleeding.PresentationVisible=()=>false;s.bleeding.Simulate(0);
+            Require(!poolView.gameObject.activeSelf&&s.bleeding.ShownPoolMl==shown,"invalid display hides blood without deleting it");
+            s.bleeding.PresentationVisible=()=>true;s.bleeding.Simulate(0);
+            Require(poolView.gameObject.activeSelf&&s.bleeding.ShownPoolMl==shown,"display recovery restores the same accumulated blood");
+            s.bleeding.PresentationVisible=priorDisplay;s.gate=true;
             var suction = s.Input.CreateMeasurement("suction_irrigator", "suction", "appendicular_artery", s.Wound.TransformPoint(new Vector3(0, 0, .025f)), "validation-suction");
             suction.durationMs = Math.Min(1000, pool * 50); suction.choice = "pool_suction";
             Require(s.Input.SubmitMeasured(suction), "pool suction is accepted at the visible pool");
@@ -306,14 +318,14 @@ namespace Scalpal.Surgery.Editor
             Require(s.blood.ParticleCount == SurgeryBlood.MaxParticles, "a flood of drops fills the system to its cap and no further: " + s.blood.ParticleCount);
             for (int i = 0; i < 300; i++) s.blood.AddSplat(s.Torso.position + new Vector3(i * .05f, -1, 0), Vector3.up);
             s.Step();
-            Require(s.blood.SplatCount == SurgeryBlood.MaxSplats && s.blood.SplatMesh.vertexCount == SurgeryBlood.MaxSplats * 11, "splats recycle a ring of " + SurgeryBlood.MaxSplats);
+            Require(s.blood.SplatCount == SurgeryBlood.MaxSplats && s.blood.SplatMesh.vertexCount == SurgeryBlood.MaxSplats * 11, "persistent splats stop allocating at the cap of " + SurgeryBlood.MaxSplats);
             int splats = s.blood.SplatCount;
             int vertices = s.blood.SplatMesh.vertexCount;
-            Require(s.blood.AddSplat(s.Torso.position + new Vector3(299 * .05f, -1, 0), Vector3.up) && s.blood.SplatCount == splats, "a drop landing on an existing splat grows it instead");
+            Require(s.blood.AddSplat(s.Torso.position + new Vector3(0, -1, 0), Vector3.up) && s.blood.SplatCount == splats, "a drop landing on an existing splat grows it instead");
             s.Step();
             Require(s.blood.SplatMesh.vertexCount == vertices, "a grown splat reuses its vertices");
             for (int i = 0; i < 6; i++) s.Stroke(-.12f, -.06f, -.35f - i * .04f, "right_leg");
-            Require(s.incisions.Count == PatientIncisions.Capacity && PatientIncisions.ShaderCount == PatientIncisions.Capacity, "incisions recycle a ring of " + PatientIncisions.Capacity);
+            Require(s.incisions.Count == PatientIncisions.Capacity && PatientIncisions.ShaderCount == PatientIncisions.Capacity, "persistent incisions preserve history at the cap of " + PatientIncisions.Capacity);
         }
 
         // AR: the volunteer is real, so nothing is drawn on the body: no incisions, drops or splats, even while regions bleed.
@@ -330,11 +342,11 @@ namespace Scalpal.Surgery.Editor
                 s.Step();
                 Require(PatientIncisions.ShaderCount == 0, "AR feeds the skin shader no incisions");
                 int count = s.incisions.Count; long emitted = s.blood.Emitted;
-                Require(s.blood.ParticleCount == 0 && !s.blood.GetComponentInChildren<MeshRenderer>().enabled, "AR shows no drops or splats");
+                Require(s.blood.VisibleParticleCount == 0 && !s.blood.Drops.GetComponent<ParticleSystemRenderer>().enabled && !s.blood.GetComponentInChildren<MeshRenderer>().enabled, "AR shows no drops or splats");
                 s.Hold(s.scalpel);
                 for (int i = 0; i <= 10; i++) { s.TipAt(s.scalpel, chest[i], depth); s.Step(); }
                 s.Lift(s.scalpel); s.Step(50);
-                Require(s.incisions.Count == count && s.blood.Emitted == emitted && s.blood.ParticleCount == 0 && PatientIncisions.ShaderCount == 0,
+                Require(s.incisions.Count == count && s.blood.Emitted == emitted && s.blood.VisibleParticleCount == 0 && PatientIncisions.ShaderCount == 0,
                     "AR blade strokes and region bleeds add no incisions or drops");
             }
             finally { presentation.passthrough = false; presentation.Apply(); }

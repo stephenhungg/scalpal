@@ -270,7 +270,8 @@ namespace Scalpal.Surgery
             wound.Concealed = concealed;
             if (concealed && volume && volume.Wall) { var wall = volume.Wall.GetComponent<MeshRenderer>(); if (wall) wall.enabled = false; }
             if (inkOnPatient != concealed) { inkOnPatient = concealed; Project(ink, inkPoints); liveInk.positionCount = 0; }
-            inkRoot.SetActive(ready && !closed);
+            // The marked strip has been incised; do not leave ink floating across open air.
+            inkRoot.SetActive(ready && !opened && !closed);
             ink.enabled = ink.positionCount >= 2 && body != null && body.Get("skin", "marked") > 0 && body.Get("skin", "closed") == 0;
             bool wanted = ready && !opened && !closed && !Accepted;
             if (closed) alpha = 0;

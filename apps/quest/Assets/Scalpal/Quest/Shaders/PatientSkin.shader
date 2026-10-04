@@ -1,7 +1,7 @@
 Shader "Scalpal/PatientSkin"
 {
     // Opaque VR mannequin skin. While an open-body teaching wound is live, the skin inside the wound's
-    // 160 x 100 mm wall footprint and depth slab is cut away so the layered wall and the organs under
+    // finite measured incision aperture is cut away so the local wound and the organs under
     // it stay visible; everywhere else the patient is solid. The wound owner sets the globals.
     // Outside the field, blade strokes on the skin (Scalpal.Surgery.PatientIncisions) are drawn here from a
     // fixed ring of segments in registered torso metres: a dark parted cut, a reddened margin, a bead of
@@ -25,6 +25,8 @@ Shader "Scalpal/PatientSkin"
         half _Glossiness;
         float4x4 _ScalpalWoundWorldToLocal;
         float _ScalpalWoundWindow;
+        float4 _ScalpalWoundOpening; // centreXY, half length, half width (wound metres)
+        float4 _ScalpalWoundAxis; // normalized incision direction XY
         float4x4 _ScalpalIncisionWorldToLocal;
         float4 _ScalpalIncisionGravity;            // torso-local unit downhill direction
         float _ScalpalIncisionCount;
@@ -40,7 +42,11 @@ Shader "Scalpal/PatientSkin"
             // Wound-local metres: +X along the incision, +Z inward. The slab runs from just outside the
             // wall top to below its 28 mm floor, so distant skin under a lateral wall edge is kept.
             float3 p = mul(_ScalpalWoundWorldToLocal, float4(IN.worldPos, 1)).xyz;
-            float inside = step(abs(p.x), 0.08) * step(abs(p.y), 0.05) * step(-0.012, p.z) * step(p.z, 0.03);
+            float2 axis=_ScalpalWoundAxis.xy;
+            axis/=max(length(axis),1e-6);
+            float2 delta=p.xy-_ScalpalWoundOpening.xy;
+            float2 aperture=float2(dot(delta,axis),dot(delta,float2(-axis.y,axis.x)))/max(_ScalpalWoundOpening.zw,float2(.001,.001));
+            float inside=step(dot(aperture,aperture),1)*step(-.012,p.z)*step(p.z,.045);
             clip(0.5 - _ScalpalWoundWindow * inside);
             float3 albedo = _Color.rgb;
             half smoothness = _Glossiness;

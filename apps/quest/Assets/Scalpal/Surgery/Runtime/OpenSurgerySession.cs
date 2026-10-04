@@ -32,6 +32,11 @@ namespace Scalpal.Surgery
         SurgeryBlood blood;
         SurgeryTriggerHint triggerHint;
         MarkingGuide guide;
+        SurgicalOrganAppearance organAppearance;
+        SurgicalActionAppearance actionAppearance;
+        SurgicalClosureAppearance closureAppearance;
+        Collider patientSkin;
+        bool skinProjectionVirtual;
         readonly List<GameObject> hiddenPorts = new List<GameObject>();
         GameObject toolTable;
         OpenSurgeryPanel panel;
@@ -68,6 +73,8 @@ namespace Scalpal.Surgery
             if (!session || !session.exercise || session.exercise.SelectedCase?.procedure?.openBody?.version != 1) { ShowPorts(); return; }
             if (session.exercise.Body != body) ConfigureAttempt();
             if (body == null || !interaction) return;
+            bool virtualSkin=VirtualBody();
+            if(virtualSkin!=skinProjectionVirtual){skinProjectionVirtual=virtualSkin;wound.BindSkinSurface(virtualSkin?patientSkin:null);}
             ReportHands();
             // The separate tool table holds nothing in the open case: the instrument stand is the tool surface in both modes.
             if (toolTable && toolTable.activeSelf) toolTable.SetActive(false);
@@ -89,6 +96,8 @@ namespace Scalpal.Surgery
         void ConfigureAttempt()
         {
             body = session.exercise.Body; if (body == null) return;
+            // Release presentation-only closure overrides before resetting the shared attempt.
+            if (closureAppearance) closureAppearance.Dispose();
             premarked = false; closedLayers = 0; closingClock = 0; inHand.Clear();
             if (!kit)
             {
@@ -125,6 +134,8 @@ namespace Scalpal.Surgery
                 wound = woundFrame.gameObject.AddComponent<OpenWoundView>(); wound.Build();
             }
             var plan = session.exercise.SelectedCase.procedure.openBody;
+            patientSkin=PatientSkinCollider();skinProjectionVirtual=VirtualBody();
+            wound.BindSkinSurface(skinProjectionVirtual ? patientSkin : null);
             if (plan.decisions != null && plan.decisions.Length > 0) wound.SetDecisionChoices(plan.decisions[0].choices);
             interaction = GetComponent<OpenBodyInteraction>() ?? gameObject.AddComponent<OpenBodyInteraction>();
             interaction.Submitted -= Applied; interaction.MarkerChanged -= Marked; interaction.Contacted -= Touched; interaction.RegionInjured -= Injured;
@@ -134,6 +145,7 @@ namespace Scalpal.Surgery
             bool anatomyBound = OpenSurgeryAnatomy.Bind(session.anatomy,interaction);
             var volume = GetComponent<NativeVolumeSimulation>();
             if(volume)volume.Initialize(woundFrame,session.workbench,()=>Ready,true);
+            if(volume)volume.PhysicsSurfaceVisible=()=>!wound||!wound.RenderingWound;
             // Wall layer contact, grips, tent lift, muscle split and cut evidence come from this volume.
             interaction.BindWall(volume);
             session.workbench.ToolsReset-=ClearPlacements; session.workbench.ToolsReset+=ClearPlacements;
@@ -156,6 +168,7 @@ namespace Scalpal.Surgery
             delivery.Initialize(session.coach,session.exercise,session.voice);
             bleeding = GetComponent<OpenBodyBleeding>() ?? gameObject.AddComponent<OpenBodyBleeding>();
             bleeding.Initialize(interaction,session.exercise,woundFrame);
+            bleeding.PresentationVisible=CanDisplayOpenField;
             // Incisions off the field and visible blood flow follow the same attempt; a retry clears both.
             if (!blood)
             {
@@ -164,6 +177,17 @@ namespace Scalpal.Surgery
             }
             incisions.Initialize(interaction,session.patientFrame,woundFrame,PatientSkinCollider(),VirtualBody);
             blood.Initialize(interaction,incisions,session.exercise,session.patientFrame,woundFrame,VirtualBody,GetComponent<NativePatientMonitor>());
+            incisions.PresentationVisible=CanDisplayPatient;
+            blood.PresentationVisible=CanDisplayPatient;
+            organAppearance = GetComponent<SurgicalOrganAppearance>();
+            if (!organAppearance) organAppearance = gameObject.AddComponent<SurgicalOrganAppearance>();
+            organAppearance.Initialize(session, interaction);
+            actionAppearance = GetComponent<SurgicalActionAppearance>();
+            if (!actionAppearance) actionAppearance = gameObject.AddComponent<SurgicalActionAppearance>();
+            actionAppearance.Initialize(session, interaction, woundFrame);
+            closureAppearance = GetComponent<SurgicalClosureAppearance>();
+            if (!closureAppearance) closureAppearance = gameObject.AddComponent<SurgicalClosureAppearance>();
+            closureAppearance.Initialize(session, interaction, woundFrame);
             Status = rightAsis && umbilicus ? "Registered landmarks bound" : "Authored landmark proxies; ASIS/umbilicus calibration pending";
             if(!anatomyBound)Status+="; one or more surgical base references missing";
             if(!mobile)Status+="; organ mobilization unavailable: "+mobility;
@@ -174,6 +198,8 @@ namespace Scalpal.Surgery
                 Status+=$"; delivery needs {needed:F1} mm, cage bound {maximum:F1} mm, mobilization tether {tether:F1} mm";Debug.Log("SCALPAL_OPEN_DELIVERY_BOUND "+Status);
             }
         }
+        bool CanDisplayPatient()=>session&&session.anatomy&&session.anatomy.RegistrationValid&&session.anatomy.CanDisplay;
+        bool CanDisplayOpenField()=>CanDisplayPatient()&&body!=null&&body.Get("peritoneum","opened")>0&&body.Get("skin","closed")<=0;
         // The open expected path (docs/surgery-procedure.md), in step order. Two rows on the theatre's instrument
         // stand: the first six nearest the learner with their grips toward them, the rest facing back.
         public static readonly string[] OpenToolSet = {
@@ -251,7 +277,7 @@ namespace Scalpal.Surgery
             }
         }
         // The marking guide draws the recorded ink on the skin the learner sees (and the live stroke before it).
-        void Marked(IReadOnlyList<Vector3> points) => guide.SetInk(points);
+        void Marked(IReadOnlyList<Vector3> points) { guide.SetInk(points); wound.SetMarker(points); }
         // Laparoscopic port targets mean nothing in the open case and would sit on the belly button; restored for other cases.
         void HidePorts()
         {

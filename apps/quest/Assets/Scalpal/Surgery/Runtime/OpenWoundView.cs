@@ -1,7 +1,9 @@
+using System;
 using System.Collections.Generic;
 using Scalpal.Anatomy.Tissue;
 using Scalpal.Exercises.Engine;
 using UnityEngine;
+using Object = UnityEngine.Object;
 
 namespace Scalpal.Surgery
 {
@@ -14,11 +16,65 @@ namespace Scalpal.Surgery
         readonly List<Material> materials = new List<Material>();
         readonly List<Mesh> meshes = new List<Mesh>();
         readonly Mesh[,] lips = new Mesh[5, 2];
-        readonly float[] depths = { 0, .004f, .014f, .019f, .027f };
-        readonly Color[] colors = { new Color(.52f,.26f,.20f), new Color(.72f,.48f,.12f), new Color(.69f,.62f,.50f), new Color(.38f,.055f,.047f), new Color(.58f,.28f,.27f) };
+        readonly float[] depths = { 0, .002f, .014f, .019f, .027f };
+        readonly GameObject[,] layerObjects = new GameObject[5,2];
+        readonly bool[] visibleLayers = new bool[5];
+        Vector2 incisionCenter, incisionAxis = Vector2.right, tentCenter;
+        float halfLength = .03f;
+        bool skinOpened, hasTentPoint;
+        Collider skinSurface;
+        Matrix4x4 previousSkinToWound;
+        bool previousSkinAvailable, skinBindingChanged;
+        // Presentation-only projection onto the virtual patient's physics copy. Never moves
+        // the registered wound/volume or queries a real participant surface in AR.
+        public void BindSkinSurface(Collider surface)
+        {
+            if (skinSurface == surface) return;
+            skinSurface = surface; skinBindingChanged = true;
+        }
+        bool SkinAvailable => skinSurface && skinSurface.enabled && skinSurface.gameObject.activeInHierarchy;
+        bool SkinFrameChanged()
+        {
+            bool available = SkinAvailable;
+            Matrix4x4 relative = available ? transform.worldToLocalMatrix * skinSurface.transform.localToWorldMatrix : Matrix4x4.identity;
+            bool changed = skinBindingChanged || available != previousSkinAvailable;
+            for (int i = 0; i < 16 && !changed; i++) changed = Mathf.Abs(relative[i] - previousSkinToWound[i]) > 1e-5f;
+            previousSkinToWound = relative; previousSkinAvailable = available; skinBindingChanged = false;
+            return changed;
+        }
+        float SkinDepth(Vector2 local)
+        {
+            if (!SkinAvailable) return 0;
+            Vector3 inward = transform.forward, world = transform.TransformPoint(new Vector3(local.x, local.y, 0));
+            bool backfaces = Physics.queriesHitBackfaces;
+            Physics.queriesHitBackfaces = true;
+            try
+            {
+                if (skinSurface.Raycast(new Ray(world - inward * .25f, inward), out var hit, .5f))
+                {
+                    float depth = transform.InverseTransformPoint(hit.point).z;
+                    if (!float.IsNaN(depth) && !float.IsInfinity(depth)) return depth;
+                }
+            }
+            finally { Physics.queriesHitBackfaces = backfaces; }
+            return 0;
+        }
+        public bool HasSkinOpening => skinOpened;
+        public bool RenderingWound => isActiveAndEnabled && registered && !concealed && skinOpened && surfaces && surfaces.activeInHierarchy;
+        public Vector4 SkinOpeningLocal => new Vector4(incisionCenter.x,incisionCenter.y,halfLength+.002f,Mathf.Max(0,previousWidths[0])*.5f+.0035f);
+        public Vector2 IncisionAxisLocal => incisionAxis;
+        readonly Color[] colors = { new Color(.65f,.44f,.34f), new Color(.94f,.72f,.30f), new Color(.84f,.80f,.72f), new Color(.50f,.13f,.105f), new Color(.79f,.65f,.60f) };
         readonly float[] previousWidths = { -1,-1,-1,-1,-1 };
         readonly float[] previousLifts = { -1,-1,-1,-1,-1 };
-        GameObject surfaces, decisions;
+        readonly float[] previousOuterWidths = { -1,-1,-1,-1,-1 };
+        Vector2 previousCenter,previousAxis,previousTent;
+        float previousLength=-1;
+        BodyState previousBody;
+        int lastBodyLog;
+        GameObject surfaces, decisions, cavity;
+        Mesh cavityMesh;
+        float previousCavityWidth = -1;
+        public bool RenderingCavity => RenderingWound && cavity && cavity.activeInHierarchy;
         LineRenderer mark;
         Material inkMaterial;
         bool built, registered = true, marked, showDecision, concealed;
@@ -34,15 +90,29 @@ namespace Scalpal.Surgery
             surfaces = new GameObject("MeasuredWoundSurfaces"); surfaces.transform.SetParent(transform, false);
             for (int layer = 0; layer < 5; layer++) for (int side = 0; side < 2; side++)
             {
-                var go = new GameObject(layerIds[layer] + (side == 0 ? "LeftLip" : "RightLip"));
+                var go = new GameObject(layerIds[layer] + (side == 0 ? "LeftLip" : "RightLip"));layerObjects[layer,side]=go;
                 go.transform.SetParent(surfaces.transform, false);
                 var mesh = new Mesh { name = go.name + "AuthoredSurface" }; mesh.MarkDynamic(); meshes.Add(mesh); lips[layer,side] = mesh;
                 go.AddComponent<MeshFilter>().sharedMesh = mesh;
-                var material = TissueRuntimeMaterial.Create(go.name, colors[layer]);
-                material.SetFloat("_Glossiness", layer == 0 ? .32f : .62f); material.SetFloat("_Metallic", 0); materials.Add(material);
-                go.AddComponent<MeshRenderer>().sharedMaterial = material;
-                Shape(mesh, layer, side, 0, 0);
+                var template=Resources.Load<Material>("OpenTissueSurface");
+                if(!template||!template.shader)throw new InvalidOperationException("Missing serialized OpenTissueSurface material/shader");
+                var material=new Material(template){name=go.name+"Surface",color=colors[layer]};
+                material.SetFloat("_Layer",layer);material.SetFloat("_Glossiness",layer==0?.30f:layer==4?.84f:.56f);materials.Add(material);
+                var renderer=go.AddComponent<MeshRenderer>();renderer.sharedMaterial=material;
+                renderer.shadowCastingMode=UnityEngine.Rendering.ShadowCastingMode.Off;
+                Shape(mesh, layer, side, 0, 0, 0);go.SetActive(false);
             }
+            // A finite illustrative cavity prevents seeing the room through the patient.
+            // It is presentation only: no collider, tissue identity, event or hidden-organ
+            // estimate. Existing organ geometry remains in front of its deep lining.
+            cavity = new GameObject("IllustrativeCavityLining");cavity.transform.SetParent(surfaces.transform,false);
+            cavityMesh = new Mesh { name = "IllustrativeClosedCavity" };cavityMesh.MarkDynamic();meshes.Add(cavityMesh);
+            cavity.AddComponent<MeshFilter>().sharedMesh = cavityMesh;
+            var cavityTemplate = Resources.Load<Material>("OpenTissueSurface");
+            var cavityMaterial = new Material(cavityTemplate) { name = "IllustrativeWetCavity", color = new Color(.16f,.038f,.032f) };
+            cavityMaterial.SetFloat("_Layer",4);cavityMaterial.SetFloat("_Glossiness",.8f);materials.Add(cavityMaterial);
+            var cavityRenderer = cavity.AddComponent<MeshRenderer>();cavityRenderer.sharedMaterial = cavityMaterial;
+            cavityRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;cavity.SetActive(false);
             var ink = new GameObject("MeasuredMarkerInk"); ink.transform.SetParent(surfaces.transform, false);
             mark = ink.AddComponent<LineRenderer>(); mark.useWorldSpace = false; mark.positionCount = 0;
             mark.startWidth = mark.endWidth = .0012f; mark.numCapVertices = 3;
@@ -51,7 +121,7 @@ namespace Scalpal.Surgery
             decisions = new GameObject("BaseDecisionLocations"); decisions.transform.SetParent(surfaces.transform, false);
             var basePoint = new GameObject("AnatomicalBasePoint"); basePoint.transform.SetParent(surfaces.transform, false);
             basePoint.transform.localPosition = new Vector3(-.022f,0,-.024f); BasePoint = basePoint.transform;
-            decisions.SetActive(false);
+            decisions.SetActive(false);PublishOpening();
         }
         // The active case supplies the labels; the wound renderer never decides the correct answer.
         public void SetDecisionChoices(string[] choices)
@@ -74,39 +144,91 @@ namespace Scalpal.Surgery
             Build();
             if (points == null || points.Count < 2) { mark.positionCount = 0; return; }
             foreach (var point in points) if (!OpenSurgeryStroke.Finite(point)) return;
+            Vector2 start=new Vector2(points[0].x,points[0].y),end=new Vector2(points[points.Count-1].x,points[points.Count-1].y);
+            if((end-start).sqrMagnitude>1e-8f){incisionCenter=(start+end)*.5f;incisionAxis=(end-start).normalized;halfLength=Mathf.Clamp(Vector2.Distance(start,end)*.5f,.003f,.045f);}
             mark.positionCount = points.Count;
             for (int i = 0; i < points.Count; i++) mark.SetPosition(i, points[i] + Vector3.back*.0007f);
         }
-        static readonly int WoundWorldToLocal = Shader.PropertyToID("_ScalpalWoundWorldToLocal"), WoundWindow = Shader.PropertyToID("_ScalpalWoundWindow");
+        static readonly int WoundWorldToLocal = Shader.PropertyToID("_ScalpalWoundWorldToLocal"), WoundWindow = Shader.PropertyToID("_ScalpalWoundWindow"),
+            WoundOpening=Shader.PropertyToID("_ScalpalWoundOpening"),WoundAxis=Shader.PropertyToID("_ScalpalWoundAxis");
+        void PublishOpening()
+        {
+            Shader.SetGlobalMatrix(WoundWorldToLocal,transform.worldToLocalMatrix);
+            Shader.SetGlobalVector(WoundOpening,SkinOpeningLocal);
+            Shader.SetGlobalVector(WoundAxis,new Vector4(incisionAxis.x,incisionAxis.y,0,0));
+            Shader.SetGlobalFloat(WoundWindow,RenderingWound?1:0);
+        }
         public void SetRegistrationValid(bool valid)
         {
             registered = valid; if (surfaces) surfaces.SetActive(valid && !concealed);
             // The VR patient skin opens over this wound only while its wall is live (Scalpal/PatientSkin).
-            Shader.SetGlobalMatrix(WoundWorldToLocal, transform.worldToLocalMatrix);
-            Shader.SetGlobalFloat(WoundWindow, valid && !concealed ? 1 : 0);
+            PublishOpening();
         }
         void OnDisable() => Shader.SetGlobalFloat(WoundWindow, 0);
         public void Apply(BodyState body)
         {
-            Build(); surfaces.SetActive(registered && body != null && !concealed); if (body == null) return;
-            for (int layer = 0; layer < 5; layer++)
+            Build();surfaces.SetActive(registered&&body!=null&&!concealed);
+            if(body==null){skinOpened=false;PublishOpening();return;}
+            if(previousBody!=null&&!ReferenceEquals(previousBody,body))
+            {incisionCenter=Vector2.zero;incisionAxis=Vector2.right;halfLength=.03f;mark.positionCount=0;}
+            skinOpened=body.Get(layerIds[0],"opened")>0&&body.Get(layerIds[0],"closed")<=0;
+            float measuredLength=(float)body.Get(layerIds[0],"cutLengthMm")*.001f;
+            if(measuredLength>0)halfLength=Mathf.Clamp(measuredLength*.5f,.003f,.045f);
+            float retraction=Mathf.Clamp((float)body.Get(layerIds[3],"splitWidthMm")*.001f,0,.045f);
+            // Authored resting presentation aperture; not a measurement of a cut's
+            // physical separation. Measured retraction expands it during later work.
+            float parentWidth=skinOpened?Mathf.Clamp(retraction+.018f,.018f,.049f):0;
+            bool exposed=skinOpened;
+            // Only inspect newly appended authoritative records; do not scan or
+            // rebuild every surface on each headset frame when the facts are unchanged.
+            if(!ReferenceEquals(previousBody,body)||lastBodyLog>body.Log.Count)
+            {previousBody=body;lastBodyLog=0;hasTentPoint=false;}
+            for(int i=lastBodyLog;i<body.Log.Count;i++)
             {
-                string id = layerIds[layer];
-                bool closed = body.Get(id, "closed") > 0;
-                float width = closed || body.Get(id,"opened") <= 0 ? 0 :
-                    Mathf.Clamp(Mathf.Max((float)body.Get(id,"splitWidthMm")*.001f, .034f-layer*.005f), 0, .055f);
-                float lift = !closed && body.Get(id,"tented") > 0 ? Mathf.Clamp((float)body.Get(id,"liftMm")*.001f, 0, .025f) : 0;
-                if (Mathf.Abs(previousWidths[layer]-width) < .00001f && Mathf.Abs(previousLifts[layer]-lift) < .00001f) continue;
-                for (int side = 0; side < 2; side++) Shape(lips[layer,side], layer, side, width, lift);
-                previousWidths[layer] = width; previousLifts[layer] = lift;
+                var action=body.Log[i].action;
+                if(action==null||action.tissueId!=layerIds[4]||(action.verb!="grasp"&&action.verb!="retract")||action.coordinateFrame!="registered_torso_m"||!transform.parent)continue;
+                Vector3 local=transform.InverseTransformPoint(transform.parent.TransformPoint(new Vector3(action.position.x,action.position.y,action.position.z)));
+                if(OpenSurgeryStroke.Finite(local)){tentCenter=new Vector2(local.x,local.y);hasTentPoint=true;}
             }
+            lastBodyLog=body.Log.Count;
+            if(!hasTentPoint)tentCenter=incisionCenter;
+            bool skinFrameChanged=SkinFrameChanged();
+            bool frameChanged=(incisionCenter-previousCenter).sqrMagnitude>1e-10f||(incisionAxis-previousAxis).sqrMagnitude>1e-10f||
+                Mathf.Abs(halfLength-previousLength)>1e-5f||(tentCenter-previousTent).sqrMagnitude>1e-10f;
+            // Each intact layer is the floor of the preceding aperture. Opened layers
+            // become local lips, exposing the next material. There is no full-size coupon.
+            for(int layer=0;layer<5;layer++)
+            {
+                string id=layerIds[layer];bool closed=body.Get(id,"closed")>0;
+                bool opened=body.Get(id,"opened")>0&&!closed;
+                float width=opened?Mathf.Max(.002f,parentWidth-(layer==0?0:.003f)):0;
+                if(layer==3&&opened)width=Mathf.Min(parentWidth-.002f,Mathf.Max(.002f,retraction));
+                if(layer==0)width=skinOpened?parentWidth:0;
+                float lift=layer==4&&!closed&&body.Get(id,"tented")>0?Mathf.Clamp((float)body.Get(id,"liftMm")*.001f,0,.025f):0;
+                visibleLayers[layer]=exposed;
+                float outer=layer==0?parentWidth+.007f:parentWidth;
+                bool changed=frameChanged||(layer==0&&skinFrameChanged)||Mathf.Abs(previousWidths[layer]-width)>1e-5f||Mathf.Abs(previousLifts[layer]-lift)>1e-5f||Mathf.Abs(previousOuterWidths[layer]-outer)>1e-5f;
+                for(int side=0;side<2;side++)
+                {
+                    if(layerObjects[layer,side].activeSelf!=exposed)layerObjects[layer,side].SetActive(exposed);
+                    if(changed)Shape(lips[layer,side],layer,side,width,lift,outer);
+                }
+                previousWidths[layer]=width;previousLifts[layer]=lift;previousOuterWidths[layer]=outer;
+                parentWidth=width;exposed=exposed&&opened&&width>0;
+            }
+            // 'exposed' now includes the peritoneum's actual opened/not-closed fact.
+            if(cavity.activeSelf!=exposed)cavity.SetActive(exposed);
+            if(exposed&&(frameChanged||Mathf.Abs(previousCavityWidth-parentWidth)>1e-5f))ShapeCavity(parentWidth);
+            previousCavityWidth=parentWidth;
+            previousCenter=incisionCenter;previousAxis=incisionAxis;previousLength=halfLength;previousTent=tentCenter;
+            PublishOpening();
             marked = body.Get(layerIds[0],"marked") > 0 && body.Get(layerIds[0],"closed") == 0;
-            mark.enabled = marked && mark.positionCount >= 2;
+            mark.enabled = marked && !skinOpened && mark.positionCount >= 2;
             bool poorMark = body.Get(layerIds[0],"markErrorMm") > 20 || body.Get(layerIds[0],"markAngleDegrees") > 25;
             inkMaterial.color = poorMark ? new Color(1,.55f,.06f) : new Color(.2f,.05f,.55f);
             bool answered = false;
             foreach (var choice in decisionChoices) if (body.Get(decisionTissueId,"decision_"+choice) > 0) answered = true;
-            showDecision = decisionChoices.Length > 0 && body.Get(decisionTissueId,"delivered") > 0 && body.Get(decisionTissueId,"removed") == 0 && !answered;
+            showDecision = skinOpened && decisionChoices.Length > 0 && body.Get(decisionTissueId,"delivered") > 0 && body.Get(decisionTissueId,"removed") == 0 && !answered;
             decisions.SetActive(showDecision);
         }
         public string DecisionAt(Vector3 localPoint)
@@ -116,39 +238,79 @@ namespace Scalpal.Surgery
                 if (candidate.gameObject.activeSelf && Vector3.Distance(localPoint, transform.InverseTransformPoint(candidate.position)) < .009f) return candidate.name;
             return "";
         }
-        void Shape(Mesh mesh, int layer, int side, float width, float lift)
+        public bool IsLayerVisible(int layer)=>layer>=0&&layer<visibleLayers.Length&&visibleLayers[layer]&&RenderingWound;
+        void Shape(Mesh mesh,int layer,int side,float width,float lift,float outerWidth)
         {
-            const int segments = 64, rows = 5;
-            var vertices = new Vector3[(segments+1)*rows]; var uv = new Vector2[vertices.Length];
-            var triangles = new List<int>(segments*(rows-1)*6); float sign = side == 0 ? -1 : 1;
-            float thickness = layer == 1 ? .007f : .003f;
-            for (int i = 0; i <= segments; i++)
+            // 64 x 5 compatibility layout; a thin incision-local rim replaces the old
+            // 120 x 90 mm slab. Closed current layers fill only their parent's aperture.
+            const int segments=64,rows=5;
+            var vertices=new Vector3[(segments+1)*rows];var uv=new Vector2[vertices.Length];
+            var triangles=new List<int>(segments*(rows-1)*6);float sign=side==0?-1:1;
+            float extent=halfLength+(layer==0?.002f:0),halfOuter=Mathf.Max(0,outerWidth)*.5f;
+            Vector2 across=new Vector2(-incisionAxis.y,incisionAxis.x);
+            float thickness=layer==0?.002f:layer==1?.009f:layer==2?.003f:layer==3?.006f:.0007f;
+            for(int i=0;i<=segments;i++)
             {
-                float x = Mathf.Lerp(-.06f,.06f,i/(float)segments);
-                float arch = Mathf.Sqrt(Mathf.Max(0,1-x*x/(.04f*.04f)));
-                float edge = width*.5f*arch;
-                float outer = .045f*Mathf.Sqrt(Mathf.Max(.08f,1-Mathf.Pow(x/.064f,8)));
-                // Rounded wound edges, with a small original lobulated fat contour. The outer
-                // coupon remains closed beyond the measured teaching incision's end points.
-                float lobule = layer == 1 && width > 0 ? Mathf.Sin(i*1.75f)*.00065f*arch : 0;
-                float z = depths[layer]-lift*arch;
-                float bevel = width > 0 ? arch*.0013f : 0;
-                vertices[i*rows] = new Vector3(x,sign*(edge+lobule),z+thickness);
-                vertices[i*rows+1] = new Vector3(x,sign*(edge+lobule),z);
-                vertices[i*rows+2] = new Vector3(x,sign*(edge+.003f*arch+lobule),z-bevel);
-                vertices[i*rows+3] = new Vector3(x,sign*Mathf.Lerp(edge,outer,.35f),depths[layer]-.0007f*arch);
-                vertices[i*rows+4] = new Vector3(x,sign*outer,depths[layer]);
-                for (int j=0;j<rows;j++) uv[i*rows+j] = new Vector2(i/(float)segments,j/(float)(rows-1));
-                if (i < segments) for(int j=0;j<rows-1;j++)
+                float t=i/(float)segments,x=Mathf.Lerp(-extent,extent,t),arch=Mathf.Sqrt(Mathf.Max(0,1-x*x/(extent*extent)));
+                float innerArch=layer==0?Mathf.Sqrt(Mathf.Max(0,1-x*x/(halfLength*halfLength))):arch;
+                float edge=width*.5f*innerArch,outer=Mathf.Max(edge,halfOuter*arch);
+                for(int row=0;row<rows;row++)
                 {
-                    int a=i*rows+j, b=a+rows, c=b+1, d=a+1;
-                    // One consistently oriented face per surface. Reversed triangles sharing
-                    // vertices cancel normals and create the bright broken ribbon artifact.
-                    if(side==1) triangles.AddRange(new[]{a,c,b,a,d,c});
-                    else triangles.AddRange(new[]{a,b,c,a,c,d});
+                    float y=row<2?edge:Mathf.Lerp(edge,outer,(row-1)/3f);
+                    Vector2 q=incisionCenter+incisionAxis*x+across*(sign*y);
+                    float z=depths[layer]-.00045f;
+                    if(row==0)z+=width>0?thickness:0;
+                    if(row==2&&width>0)z-=arch*.0008f;
+                    // Fat has visible original lobules, fascia/muscle retain aligned
+                    // fiber relief, and membrane tenting affects a 12 mm local patch.
+                    float relief=layer==1?Mathf.Sin(x*750)*Mathf.Sin(y*610)*.0007f:
+                        layer==2?Mathf.Sin(y*2200)*.00010f:layer==3?Mathf.Sin(y*1400)*.0003f:0;
+                    if(row>0)z-=relief*arch;
+                    if(layer==4&&lift>0)z-=lift*Mathf.Exp(-(q-tentCenter).sqrMagnitude/(.012f*.012f));
+                    // Only the outer skin rim joins the curved visible patient. Its inner
+                    // incision edge and all deeper layers stay in the registered mechanics
+                    // frame, so projection cannot introduce a floor across the opening.
+                    if(layer==0&&row>=2)z+=SkinDepth(q)*(row-1)/3f;
+                    vertices[i*rows+row]=new Vector3(q.x,q.y,z);
+                    uv[i*rows+row]=new Vector2(q.x,q.y);
+                }
+                if(i<segments)for(int row=0;row<rows-1;row++)
+                {
+                    int a=i*rows+row,b=a+rows,c=b+1,d=a+1;
+                    if(side==1)triangles.AddRange(new[]{a,c,b,a,d,c});else triangles.AddRange(new[]{a,b,c,a,c,d});
                 }
             }
-            mesh.Clear(); mesh.vertices=vertices; mesh.uv=uv; mesh.SetTriangles(triangles,0); mesh.RecalculateNormals(); mesh.RecalculateBounds();
+            mesh.Clear();mesh.vertices=vertices;mesh.uv=uv;mesh.SetTriangles(triangles,0);mesh.RecalculateNormals();mesh.RecalculateTangents();mesh.RecalculateBounds();
+        }
+        void ShapeCavity(float width)
+        {
+            // Concave lining: almost-vertical sides leave authored organs readable;
+            // its closed bowl bottom is behind the surgical field, never a tissue floor.
+            const int segments=64,rings=8;
+            var vertices=new Vector3[1+rings*(segments+1)];var uv=new Vector2[vertices.Length];
+            var triangles=new List<int>(segments*3+(rings-1)*segments*6);
+            Vector2 across=new Vector2(-incisionAxis.y,incisionAxis.x);
+            vertices[0]=new Vector3(incisionCenter.x,incisionCenter.y,.12f);uv[0]=incisionCenter;
+            for(int ring=0;ring<rings;ring++)
+            {
+                float radius=(ring+1)/(float)rings;
+                float z=.12f-(.12f-.028f)*Mathf.Pow(radius,6);
+                for(int i=0;i<=segments;i++)
+                {
+                    float angle=2*Mathf.PI*i/segments;
+                    Vector2 q=incisionCenter+incisionAxis*(halfLength*radius*Mathf.Cos(angle))+across*(width*.5f*radius*Mathf.Sin(angle));
+                    int at=1+ring*(segments+1)+i;vertices[at]=new Vector3(q.x,q.y,z);uv[at]=q;
+                    if(i==segments)continue;
+                    if(ring==0)triangles.AddRange(new[]{0,at+1,at});
+                    else
+                    {
+                        int a=at-(segments+1),b=at,c=b+1,d=a+1;
+                        triangles.AddRange(new[]{a,c,b,a,d,c});
+                    }
+                }
+            }
+            cavityMesh.Clear();cavityMesh.vertices=vertices;cavityMesh.uv=uv;cavityMesh.SetTriangles(triangles,0);
+            cavityMesh.RecalculateNormals();cavityMesh.RecalculateTangents();cavityMesh.RecalculateBounds();
         }
         // Only transient objects created by this view are released. Never delete an imported or
         // serialized asset if a caller accidentally supplies one during an Editor audit.

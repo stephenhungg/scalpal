@@ -22,6 +22,9 @@ namespace Scalpal.Surgery
         GameObject pool;
         Material material;
         float snapshotClock;
+        // Pause simulation/interaction independently of drawing existing blood during inspection.
+        // A lost patient registration still hides the field; it never deletes accumulated fluid.
+        public Func<bool> PresentationVisible;
         readonly Dictionary<InstrumentBehaviour,float> suctionTimes = new Dictionary<InstrumentBehaviour,float>();
         public double PoolMl { get; private set; }
         // The visible pool follows the reducer's poolMl (BodyState), eased so its 1 Hz fluid snapshots do not jump.
@@ -76,7 +79,7 @@ namespace Scalpal.Surgery
         public void Simulate(float seconds)
         {
             if (!input || !input.Ready || !float.IsFinite(seconds) || seconds <= 0 || seconds > .1f)
-            { if(pool)pool.SetActive(false); suctionTimes.Clear(); return; }
+            { if(pool)pool.SetActive(PresentationVisible!=null&&PresentationVisible()&&ShownPoolMl>.001); suctionTimes.Clear(); return; }
             var rig = GetComponent<NativeCaseSession>()?.workbench;
             foreach(var tool in rig ? rig.tools : Array.Empty<InstrumentBehaviour>())
             {

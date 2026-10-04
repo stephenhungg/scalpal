@@ -256,6 +256,14 @@ namespace Scalpal.Surgery.Editor
                 !s.mistakes.Contains("lift_first") && s.volume.Wall.Volume.CutFacesForMaterial("peritoneum") > 0,
                 label + ": a nick through the actually lifted membrane is a tented opening");
             s.Park(s.forceps);
+            int persistentCuts=s.volume.Wall.Volume.CutFaceCount;
+            int persistentTopology=s.volume.Wall.Volume.TopologyRevision;
+            s.gate=false;s.Step(3);
+            Require(s.volume.Wall.Volume.CutFaceCount==persistentCuts&&s.volume.Wall.Volume.TopologyRevision==persistentTopology,
+                label+": temporary interaction/registration loss never heals fractured wall topology");
+            s.gate=true;s.Step(3);
+            Require(s.volume.Wall.Volume.CutFaceCount==persistentCuts&&s.Fact("skin","opened")==1&&s.Fact("peritoneum","opened")==1,
+                label+": returning to practice restores the same cuts and body opening history");
             return ((float)s.Fact("muscle", "splitWidthMm"), lift, (float)split.action.angleDegrees);
         }
 

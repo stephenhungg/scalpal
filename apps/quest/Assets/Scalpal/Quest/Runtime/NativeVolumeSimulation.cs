@@ -50,6 +50,9 @@ namespace Scalpal.Quest
         double nextTiming;
         float peakFrameMs;
         public VolumetricTissue Wall {get;private set;}
+        // A measured-fact wound presenter may replace the draw of the physics coupon.
+        // This never disables its solver, collision/contact surface or topology evidence.
+        public Func<bool> PhysicsSurfaceVisible;
         public float LastSolverMilliseconds {get;private set;}
         public float LastSurfaceMilliseconds {get;private set;}
         // Triangle points are Wall-local material metres: source atlas for the legacy coupon, wound-local for the open wall.
@@ -253,6 +256,8 @@ namespace Scalpal.Quest
             bool valid=isActiveAndEnabled&&ready!=null&&ready()&&seconds>0&&!float.IsNaN(seconds)&&!float.IsInfinity(seconds);
             if(valid&&openLayers)valid=ValidLayerFrame(out _);
             Wall.SetVisible(valid);
+            var surfaceRenderer=Wall.GetComponent<MeshRenderer>();
+            if(surfaceRenderer)surfaceRenderer.forceRenderingOff=PhysicsSurfaceVisible!=null&&!PhysicsSurfaceVisible();
             if(!valid){ClearTransient();return;}
             Matrix4x4 current=Wall.transform.localToWorldMatrix;
             if(frameValid&&current!=lastFrame)ClearTransient(); // A registration/origin change cannot become a knife sweep.

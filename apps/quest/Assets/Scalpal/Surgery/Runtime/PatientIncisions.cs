@@ -1,20 +1,22 @@
 using System;
 using System.Collections.Generic;
+using Scalpal.Anatomy;
+using Scalpal.Exercises.Engine;
 using Scalpal.Instruments;
 using UnityEngine;
 
 namespace Scalpal.Surgery
 {
     // Visible incisions where a triggered blade meets the VR patient's skin outside the surgical field (inside it
-    // the open wall and the wound view own the incision). A fixed ring of stroke segments in registered torso
+    // the open wall and the wound view own the incision). Bounded persistent stroke segments in registered torso
     // metres feeds Scalpal/PatientSkin, which draws the parted cut, its reddened margin and ooze running downhill.
     // Presentation only: segments come from tracked blade poses on the skin collider and wetness from the
     // interaction's region injury facts. Nothing here is scored or sent to the coach. AR has no virtual body.
     public sealed class PatientIncisions : MonoBehaviour
     {
         public const int Capacity = 64;
-        // Authored look, not measured tissue behaviour: sample spacing, how long an unbled cut oozes, and the trickle.
-        public const float SpacingMeters = .004f, OozeSeconds = 45, TrickleMetersPerSecond = .005f, MaxTrickleMeters = .05f;
+        // Authored look, not measured tissue behaviour. No wound/stain expiry within an attempt.
+        public const float SpacingMeters = .004f, TrickleMetersPerSecond = .005f, MaxTrickleMeters = .05f;
         public struct Segment
         {
             public Vector3 start, end, normal; // torso metres; normal is the skin's outward normal
@@ -34,12 +36,17 @@ namespace Scalpal.Surgery
         OpenBodyInteraction input;
         Transform torso, wound;
         Collider skin;
+        OpenWoundView fieldView;
         Func<bool> virtualBody;
         int head, count, strokeIds;
+        BodyState attemptBody;
+        bool initialized;
+        // Registration/privacy may hide presentation without clearing accepted attempt history.
+        public Func<bool> PresentationVisible;
         public int Count => count;
         // Ring slot order; the shader does not care which segment is oldest.
         public Segment this[int index] => ring[index];
-        public bool Visible => torso && (virtualBody == null || virtualBody());
+        public bool Visible => torso && (virtualBody == null || virtualBody()) && (PresentationVisible == null || PresentationVisible());
         public static float ShaderCount => Shader.GetGlobalFloat(CountId);
         public static Vector4[] ShaderStarts => Shader.GetGlobalVectorArray(StartsId);
         public static Vector4[] ShaderEnds => Shader.GetGlobalVectorArray(EndsId);
@@ -47,10 +54,15 @@ namespace Scalpal.Surgery
         // skin: the patient's outward-wound collision copy of the rendered body; virtualBody: false in AR.
         public void Initialize(OpenBodyInteraction interaction, Transform torsoFrame, Transform woundFrame, Collider patientSkin, Func<bool> showsVirtualBody)
         {
+            var binding = interaction ? interaction.GetComponentInParent<AnatomyExerciseBinding>() : null;
+            var nextBody = binding ? binding.Body : null;
+            bool fresh = !initialized || !ReferenceEquals(attemptBody, nextBody) || input != interaction || torso != torsoFrame;
             if (input) input.BladeOutsideField -= Blade;
             input = interaction; torso = torsoFrame; wound = woundFrame; skin = patientSkin; virtualBody = showsVirtualBody;
+            attemptBody = nextBody; initialized = true;
+            fieldView = wound ? wound.GetComponent<OpenWoundView>() : null;
             if (input) input.BladeOutsideField += Blade;
-            Clear();
+            if (fresh) Clear(); else Feed();
         }
         // A new attempt starts with unbroken skin.
         public void Clear()
@@ -79,8 +91,17 @@ namespace Scalpal.Surgery
             Vector3 tip = tool.actionPoint.position, along = tip - tool.gripAnchor.position;
             float reach = along.magnitude;
             if (!OpenSurgeryStroke.Finite(tip) || reach < .01f || !skin.Raycast(new Ray(tool.gripAnchor.position, along / reach), out var hit, reach)) return;
-            // Inside the wound's 160 x 100 mm window the skin is cut away and the open wall owns the incision.
-            if (wound) { Vector3 field = wound.InverseTransformPoint(hit.point); if (Mathf.Abs(field.x) <= .08f && Mathf.Abs(field.y) <= .05f) return; }
+            // Only the actual live incision aperture belongs to the wound presenter. The former
+            // rectangle swallowed nearby punctures even though opaque patient skin was still visible.
+            if (fieldView && fieldView.RenderingWound)
+            {
+                var opening = fieldView.SkinOpeningLocal; var axis = fieldView.IncisionAxisLocal;
+                Vector3 field = wound.InverseTransformPoint(hit.point);
+                var delta = new Vector2(field.x-opening.x, field.y-opening.y);
+                float alongAperture = Vector2.Dot(delta,axis)/Mathf.Max(opening.z,.001f);
+                float across = Vector2.Dot(delta,new Vector2(-axis.y,axis.x))/Mathf.Max(opening.w,.001f);
+                if (alongAperture*alongAperture+across*across <= 1 && field.z >= -.012f && field.z <= .045f) return;
+            }
             float depth = Mathf.Max(0, Vector3.Dot(hit.point - tip, hit.normal));
             Vector3 local = torso.InverseTransformPoint(hit.point), normal = torso.InverseTransformDirection(hit.normal).normalized;
             string region = OpenBodyInteraction.BodyRegion(torso.InverseTransformPoint(tip));
@@ -100,6 +121,9 @@ namespace Scalpal.Surgery
         }
         void Add(Stroke stroke, Vector3 start, Vector3 end, Vector3 normal, string region)
         {
+            // The fixed shader budget must not look like spontaneous healing: retain existing wounds when
+            // full. A subsequent decal/atlas backend can add detail beyond this explicit presentation cap.
+            if (count == Capacity) return;
             ring[head] = new Segment { start = start, end = end, normal = normal, depth = stroke.depth, region = region, stroke = stroke.id, wet = true };
             head = (head + 1) % Capacity; count = Mathf.Min(count + 1, Capacity);
             // Deeper and longer strokes part wider; every segment of this stroke follows its length.
@@ -114,14 +138,15 @@ namespace Scalpal.Surgery
             lifted.Clear();
             foreach (var pair in strokes) if (!pair.Value.sampled) lifted.Add(pair.Key); else pair.Value.sampled = false;
             foreach (var tool in lifted) strokes.Remove(tool);
-            if (float.IsFinite(seconds) && seconds > 0 && seconds <= .1f)
+            if (Visible && input && input.Ready && float.IsFinite(seconds) && seconds > 0 && seconds <= .1f)
                 for (int i = 0; i < count; i++)
                 {
                     ref var segment = ref ring[i];
                     segment.age += seconds;
-                    // A cut in an injured region oozes until the region is controlled; elsewhere it stops on its own.
+                    // Accepted control dries a regional cut; neither control nor time heals the incision or
+                    // removes its stain. Unclassified cosmetic cuts have no accepted control fact or timeout.
                     bool bleeding = segment.region != "" && input && input.IsRegionInjured(segment.region);
-                    segment.wet = segment.region != "" ? bleeding : segment.age < OozeSeconds;
+                    if (segment.region != "") segment.wet = bleeding;
                     if (!segment.wet) continue;
                     float cap = MaxTrickleMeters * (.35f + .65f * Mathf.Clamp01(segment.depth / .006f));
                     segment.trickle = Mathf.Min(cap, segment.trickle + seconds * TrickleMetersPerSecond * (bleeding ? 2 : 1));
