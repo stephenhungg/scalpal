@@ -49,7 +49,7 @@ The surgery owner should bind these APIs in the existing `OpenBodyInteraction` p
 4. Map layer fracture facts into the existing authored body outcomes without creating a second reducer or advancing a step directly. Body exposure, injury rules and finish/grade remain with the surgery engine.
 5. Keep authored thresholds explicit. These APIs do not replace organ mobilization. Merged `952cef8` adds a separate scene-authored rigid cecum-group mobilization with a 200 mm tether; `02a7791` validates delivery against actual scene geometry. That extends the 18.1 mm local cage rather than awarding delivery from raw tool motion. It remains an uncalibrated teaching constraint, not reviewed mesenteric mechanics.
 
-Current Surgery still uses static wall contact planes, controller-derived wall lift/spread, and a semantic wound view. Shipping these tissue interfaces does not establish that all those consumers are coupled yet. Its preexisting local-distance-versus-AR-scale assessment mismatch also remains until the owner consumes physical world-unit measurements consistently.
+Surgery now consumes these interfaces (see the open wall coupling checkpoint in [surgery procedure](surgery-procedure.md)): layer contact, material grips, accepted lift, paired split and cut fracture facts drive `OpenBodyInteraction`, and it emits world-unit measurements. The semantic wound view remains a separate teaching overlay. Because fracture follows the 20 mm cells, two grips on one tetrahedron (for example both on the x = 0 cell boundary at the wound centre) cannot be split apart. Its preexisting local-distance-versus-AR-scale assessment mismatch also remains until the owner consumes physical world-unit measurements consistently.
 
 ## One bleeding ledger
 
