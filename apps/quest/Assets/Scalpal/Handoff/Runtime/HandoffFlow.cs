@@ -326,34 +326,21 @@ namespace Scalpal.Handoff
             if (surgery.CoachPrepared && Time.unscaledTime >= nextCoachRetry) { nextCoachRetry = Time.unscaledTime + 10; surgery.ReconnectTimeOutVoice(); }
             if (!surgery.CoachPrepared && Time.unscaledTime >= nextCoachRetry)
             { nextCoachRetry = Time.unscaledTime + 10; coachTried |= surgery.PrepareTimeOut(); }
-            string voice = surgery.voice.Status == "error" ? "Voice unavailable. Continue with captions." : surgery.CoachPrepared ? "Jarvis: Scrubbed in with you. Confirm the patient, procedure and site. Hold Y to talk to me." : "Connecting Jarvis. Captions and authored local scoring are available if the coach is offline.";
-            string body = "Patient: " + Ticket.scorecard.patientName + "\nProcedure: " + Ticket.procedureTitle + "\nSite: " + Ticket.scorecard.site + "\nUrgency: " + Ticket.verifiedCase.urgency + "\n" + RiskText(Ticket.scorecard) +
-                "\n" + voice + "\nMistakes are expected; this is practice." + (HandoffRun.Preflight.learnerCaptureConsented ? "\nYour controller motion while marking the incision trains the simulated robot." : "");
-            var risks = ReviewRisks(Ticket.scorecard);
-            if (Ticket.patientConfirmed && Ticket.procedureConfirmed && Ticket.siteConfirmed && !Ticket.risksConfirmed && risks.Length > 0)
+            // No Time-Out panel: it gated the demo without adding anything. The checklist is confirmed from the
+            // interview (risks the learner actually asked about count as planned for) and practice starts as soon as
+            // the coach is ready (or captions-only when it cannot connect).
+            if (!Ticket.AllConfirmed)
             {
-                int index = Mathf.Clamp(Ticket.riskReviewIndex, 0, risks.Length - 1); var risk = risks[index];
-                Show("TIME-OUT · Risk " + (index + 1) + " of " + risks.Length, "Patient-specific concern: " + risk.label + " (" + StatusText(risk.status) + ")\n" + risk.detail +
-                    "\nPlan for it only if your surgical plan addresses this risk.\n" + body, new[] { "Plan for: " + risk.label, "Not addressed", "Virtual OR", ReturnLabel }, i =>
-                    {
-                        if (i == 2) { SwitchToVirtual(); return; } if (i == 3) { BackToExplore(); return; }
-                        ReviewRisk(index, i == 0);
-                    }, new[] { true, true, Ticket.presentationMode != "virtual", true });
+                Ticket.patientConfirmed = Ticket.procedureConfirmed = Ticket.siteConfirmed = true;
+                Ticket.antibioticsReviewed = Ticket.imagingReviewed = Ticket.risksConfirmed = true;
+                foreach (var risk in ReviewRisks(Ticket.scorecard))
+                    if (risk.status == "found" && !Ticket.confirmedRiskTypes.Contains(risk.type)) Ticket.confirmedRiskTypes.Add(risk.type);
             }
-            else if (Ticket.AllConfirmed)
-                Show("TIME-OUT · Ready", body + "\n" + failure, new[] { "Begin practice", "Change to virtual OR", ReturnLabel }, i => { if (i == 0) StartCoroutine(ConfirmTimeOut()); else if (i == 1) SwitchToVirtual(); else BackToExplore(); }, new[] { !surgery.Busy && (surgery.CoachPrepared || coachTried && surgery.CaptionFallbackAllowed), Ticket.presentationMode != "virtual", true });
-            else
-            {
-                string label = !Ticket.patientConfirmed ? "Confirm patient" : !Ticket.procedureConfirmed ? "Confirm procedure" : !Ticket.siteConfirmed ? "Confirm site" : !Ticket.risksConfirmed ? "Acknowledge found and missed risks" : !Ticket.antibioticsReviewed ? "Review antibiotic prophylaxis (simulation)" : "Review imaging (simulation)";
-                Show("TIME-OUT", body, new[] { label, "Virtual OR", ReturnLabel }, i =>
-                {
-                    if (i == 1) { SwitchToVirtual(); return; } if (i == 2) { BackToExplore(); return; }
-                    if (!Ticket.patientConfirmed) Ticket.patientConfirmed = true; else if (!Ticket.procedureConfirmed) Ticket.procedureConfirmed = true;
-                    else if (!Ticket.siteConfirmed) Ticket.siteConfirmed = true; else if (!Ticket.risksConfirmed) Ticket.risksConfirmed = true;
-                    else if (!Ticket.antibioticsReviewed) Ticket.antibioticsReviewed = true; else Ticket.imagingReviewed = true;
-                }, new[] { true, Ticket.presentationMode != "virtual", true });
-            }
+            card.Hide();
+            bool ready = !surgery.Busy && (surgery.CoachPrepared || coachTried && surgery.CaptionFallbackAllowed);
+            if (ready && !loading && isActiveAndEnabled && Time.unscaledTime >= nextAutoStart) { nextAutoStart = Time.unscaledTime + 2; StartCoroutine(ConfirmTimeOut()); }
         }
+        float nextAutoStart;
         void ReviewRisk(int index, bool confirmed)
         {
             var risks = ReviewRisks(Ticket.scorecard);

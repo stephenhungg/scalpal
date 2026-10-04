@@ -199,17 +199,11 @@ namespace Scalpal.Handoff.Editor
             ticket.scorecard.carryoverItems = new[] {
                 new EncounterCarryoverItem { flagId = "f1", type = "bleeding", label = "On apixaban", status = "found", detail = "Anticoagulant" },
                 new EncounterCarryoverItem { flagId = "f2", type = "allergy", label = "Penicillin allergy", status = "missed", detail = "Prophylaxis choice" } };
-            ticket.patientConfirmed = ticket.procedureConfirmed = ticket.siteConfirmed = true;
             ReadyForTimeOut(flow, native);
             Call(flow, "TimeOut");
-            Assert(Heading(card) == "TIME-OUT · Risk 1 of 2" && Actions(card)[0] == "Plan for: On apixaban" && Actions(card)[1] == "Not addressed",
-                "each office risk gets its own confirm-or-skip decision (heading was " + Heading(card) + ")");
-            Select(card, 0); Call(flow, "TimeOut");
-            Assert(Heading(card) == "TIME-OUT · Risk 2 of 2" && !ticket.risksConfirmed, "second risk is reviewed separately");
-            Select(card, 1); Call(flow, "TimeOut");
-            Assert(ticket.risksConfirmed, "risk review completes after the last decision");
-            for (int i = 0; i < 2; i++) { Select(card, 0); Call(flow, "TimeOut"); }
-            Assert(ticket.AllConfirmed && Heading(card) == "TIME-OUT · Ready", "remaining rows complete the Time-Out");
+            // No Time-Out panel: the checklist completes itself, and only risks the learner asked about in the office count.
+            Assert(ticket.AllConfirmed && !card.Visible, "Time-Out completes without a panel");
+            Assert(ticket.confirmedRiskTypes.SequenceEqual(new[] { "bleeding" }), "only the risk the learner found in the office is planned for");
             var routine = (IEnumerator)Call(flow, "ConfirmTimeOut");
             Assert(routine.MoveNext() && routine.Current is IEnumerator, "Time-Out posts the review");
             string body = Field<string>(routine.Current, "body");

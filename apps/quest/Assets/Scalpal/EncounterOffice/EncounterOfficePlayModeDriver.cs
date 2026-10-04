@@ -220,31 +220,17 @@ namespace Scalpal.EncounterOffice.Editor
             }
             yield return Wait(() => surgery.CoachPrepared && !surgery.Busy && FlowPhase == "timeout",
                 "actual Time-Out creates coach before practice", 30);
-            Check(!surgery.Practicing && !surgery.exercise.CanScore && !ticket.AllConfirmed, "practice remains gated before six Time-Out confirmations");
-            foreach (var label in new[] { "Confirm patient", "Confirm procedure", "Confirm site" }) yield return SelectCard("TIME-OUT", label);
-            // Each office risk is an individual decision; plan for the first and leave the rest unaddressed so the
-            // real preop-check must report them missed (a review that always passes would prove nothing).
+            // No Time-Out panel: the checklist completes itself and practice starts once the coach is ready.
             var risks = HandoffFlow.ReviewRisks(ticket.scorecard);
-            Check(risks.Length > 0, "the scored patient carries at least one typed office risk into Time-Out");
-            string planned = risks.Length > 1 ? risks[0].type : null;
-            var skipped = risks.Where(risk => risk.type != planned).Select(risk => risk.type).ToArray();
-            for (int i = 0; i < risks.Length; i++)
-            {
-                if (risks[i].type == planned) yield return SelectCard("TIME-OUT · Risk " + (i + 1) + " of", "Plan for: " + risks[i].label, 0);
-                else yield return SelectCard("TIME-OUT · Risk " + (i + 1) + " of", "Not addressed", 1);
-            }
-            Check(ticket.risksConfirmed && ticket.confirmedRiskTypes.SequenceEqual(planned == null ? new string[0] : new[] { planned }),
-                "only the risk the learner planned for is recorded as confirmed");
-            foreach (var label in new[] { "Review antibiotic prophylaxis (simulation)", "Review imaging (simulation)" }) yield return SelectCard("TIME-OUT", label);
-            Check(ticket.AllConfirmed && !ticket.practiceStarted, "actual Time-Out card callbacks complete review without starting scoring");
-            yield return SelectCard("TIME-OUT · Ready", "Begin practice");
+            var found = risks.Where(risk => risk.status == "found").Select(risk => risk.type).ToArray();
+            var skipped = risks.Where(risk => risk.status != "found").Select(risk => risk.type).ToArray();
             yield return Wait(() => surgery.Practicing && surgery.exercise.CanScore && surgery.exercise.CoachMatches && surgery.coach.Connected,
                 "actual ConfirmTimeOut POST and coach relay synchronize practice", 30);
             Check(ticket.timeOutConfirmed && ticket.preopResult != null && ticket.preopResult.patientId == jonah.patientId,
                 "actual preop-check response belongs to the reviewed patient");
-            Check(!ticket.preopResult.passed && skipped.All(type => ticket.preopResult.missed.Any(item => item.type == type))
-                && (planned == null || ticket.preopResult.caught.Any(item => item.type == planned)),
-                "actual preop-check scores the skipped office risk as missed and the planned one as caught");
+            Check((skipped.Length == 0 || !ticket.preopResult.passed) && skipped.All(type => ticket.preopResult.missed.Any(item => item.type == type))
+                && found.All(type => ticket.preopResult.caught.Any(item => item.type == type)),
+                "actual preop-check scores office risks the learner missed as missed and the ones they asked about as caught");
             yield return Wait(() => surgery.voice.Status == "error", "disabled fixture voice transport fails Connect safely before microphone permission");
             Check(!surgery.voice.Connected, "simulated unavailable provider never opens conversation or headset microphone");
             yield return Frames(20); yield return ReadFixture();
