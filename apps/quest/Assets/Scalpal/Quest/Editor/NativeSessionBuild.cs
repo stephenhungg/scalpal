@@ -47,7 +47,8 @@ namespace Scalpal.Quest.Editor
             room.transform.position += delta;
             var mannequin = patient.GetComponentsInChildren<Renderer>(true).Single();
             var patientBounds = mannequin.bounds;
-            mannequin.sharedMaterials = mannequin.sharedMaterials.Select(_ => PatientGhost()).ToArray();
+            // The VR patient reads as solid skin; it is hidden in AR, where only the anatomy overlay is drawn.
+            mannequin.sharedMaterials = mannequin.sharedMaterials.Select(_ => PatientSkin()).ToArray();
             PrefabUtility.RecordPrefabInstancePropertyModifications(mannequin);
             var unbound = patient.transform.Find("AnatomyRoot_Unbound");
             if (unbound) UnityEngine.Object.DestroyImmediate(unbound.gameObject);
@@ -204,7 +205,7 @@ namespace Scalpal.Quest.Editor
             return bundle;
         }
 
-        static Material PatientGhost() => Material("AuthoredPatientGhost", new Color(0.65f, 0.5f, 0.4f, 0.13f), true);
+        static Material PatientSkin() => Material("AuthoredPatientSkin", new Color(0.65f, 0.5f, 0.4f, 1f), false);
         static Material PortMaterial() => Material("AuthoredPortSite", new Color(0.2f, 0.7f, 0.85f), false);
 
         static Material Material(string name, Color color, bool transparent)
@@ -407,6 +408,7 @@ namespace Scalpal.Quest.Editor
             NativeBodyAtlasValidation.Run();
             NativeBodyRegistrationValidation.Run();
             NativeOperatingRoomModeValidation.Run();
+            NativeOperatingRoomPhysicsValidation.Run();
             Scalpal.Instruments.Editor.InstrumentRuntimeValidation.Run();
             NativeProcedureInputValidation.Run();
             NativeInteriorContactValidation.Run();
