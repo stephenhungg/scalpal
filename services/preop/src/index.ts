@@ -8,5 +8,5 @@ export default createApp({
     // Optional ck_test_ sandbox key: enables real Connect admissions. Without it, demo records only.
     apiKey: process.env.FINCHNODE_API_KEY || undefined,
   }),
-  elevenLabs: { apiKey: process.env.ELEVENLABS_API_KEY ?? "", agentId: process.env.ELEVENLABS_AGENT_ID ?? "", voiceId: process.env.JARVIS_VOICE_ID ?? "" },
+  elevenLabs: { apiKey: process.env.ELEVENLABS_API_KEY ?? "", agentId: process.env.ELEVENLABS_AGENT_ID ?? "", voiceId: process.env.JARVIS_VOICE_ID ?? "", patientAgentId: process.env.PATIENT_AGENT_ID ?? "" },
 });

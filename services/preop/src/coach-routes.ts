@@ -19,7 +19,7 @@ export interface CoachRouteOptions {
   now: () => Date;
   stuckPolicy?: StuckPolicy;
   tickMs?: number; // 0 disables the background stuck timer (tests call tick directly)
-  elevenLabs?: { apiKey: string; agentId: string; voiceId?: string };
+  elevenLabs?: { apiKey: string; agentId: string; voiceId?: string; patientAgentId?: string };
   reflex?: ReflexAudio; // injectable for tests; built from elevenLabs when omitted
   toolAckWaitMs?: number; // how long a highlight tool waits for the headset ack (tests shorten it)
 }
@@ -341,18 +341,20 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
     );
   }
 
+  // ?agent=patient returns the patient-interview agent instead of Jarvis.
   app.get("/jarvis/connection", async (c) => {
     const el = options.elevenLabs;
-    if (!el?.agentId) {
-      return bad(c, 503, "jarvis_unconfigured", "Set ELEVENLABS_AGENT_ID (and ELEVENLABS_API_KEY for a private agent), then run npm run jarvis:setup.", [{ id: "home", label: "Home", method: "GET", route: "/" }]);
+    const agentId = c.req.query("agent") === "patient" ? el?.patientAgentId : el?.agentId;
+    if (!el || !agentId) {
+      return bad(c, 503, "jarvis_unconfigured", "Set ELEVENLABS_AGENT_ID and PATIENT_AGENT_ID (and ELEVENLABS_API_KEY for private agents), then run npm run jarvis:setup.", [{ id: "home", label: "Home", method: "GET", route: "/" }]);
     }
-    if (!el.apiKey) return c.json({ mode: "public", agentId: el.agentId, signedUrl: "", actions: [] });
-    const res = await fetch(`https://api.elevenlabs.io/v1/convai/conversation/get-signed-url?agent_id=${encodeURIComponent(el.agentId)}`, {
+    if (!el.apiKey) return c.json({ mode: "public", agentId, signedUrl: "", actions: [] });
+    const res = await fetch(`https://api.elevenlabs.io/v1/convai/conversation/get-signed-url?agent_id=${encodeURIComponent(agentId)}`, {
       headers: { "xi-api-key": el.apiKey },
     }).catch(() => null);
     if (!res?.ok) return bad(c, 503, "elevenlabs_unreachable", `ElevenLabs signed URL request failed${res ? ` (${res.status})` : ""}.`, [{ id: "home", label: "Home", method: "GET", route: "/" }]);
     const { signed_url } = (await res.json()) as { signed_url: string };
-    return c.json({ mode: "signed", agentId: el.agentId, signedUrl: signed_url, actions: [] });
+    return c.json({ mode: "signed", agentId, signedUrl: signed_url, actions: [] });
   });
 }
 

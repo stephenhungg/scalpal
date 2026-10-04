@@ -7,6 +7,7 @@ import { buildBrief, DISCLAIMER } from "./brief.js";
 import { buildCase, routes, scorePreopCheck, unavailableCase } from "./case-builder.js";
 import type { StuckPolicy } from "./coach.js";
 import { registerCoachRoutes } from "./coach-routes.js";
+import { registerEncounterRoutes } from "./encounter-routes.js";
 import type { ReflexAudio } from "./reflex.js";
 import { FinchNodeError, createFinchNodeClient, type FinchNodeClient } from "./finchnode.js";
 import type { Action, AdmissionStatus, DataGap, Scenario, SandboxSession, SurgicalCase } from "./types.js";
@@ -19,7 +20,7 @@ export interface AppOptions {
   simulateAdmissions?: boolean;
   coachTickMs?: number;
   stuckPolicy?: StuckPolicy;
-  elevenLabs?: { apiKey: string; agentId: string; voiceId?: string };
+  elevenLabs?: { apiKey: string; agentId: string; voiceId?: string; patientAgentId?: string };
   reflex?: ReflexAudio;
   toolAckWaitMs?: number;
 }
@@ -442,6 +443,16 @@ export function createApp(options: AppOptions = {}) {
       nextStepId: step.next,
       say: [step.instruction, ...notes, next ? `Next up: ${next.title.toLowerCase()}.` : "That's the last step."].join(" "),
     });
+  });
+
+  registerEncounterRoutes(app, {
+    now,
+    loadCase: async (id) => {
+      const target = await resolve(id);
+      return target ? caseOrUnavailable(target.subject, target.scenarioId) : null;
+    },
+    // Sandbox patients use the encounter authored for the demo patient their scenario mirrors.
+    planSubjectFor: async (kase) => (await scenarios()).find((s) => s.id === kase.scenarioId)?.subject ?? kase.patientId,
   });
 
   registerCoachRoutes(app, {
