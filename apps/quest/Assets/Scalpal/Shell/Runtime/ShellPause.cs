@@ -134,7 +134,11 @@ namespace Scalpal.Shell
             else
             {
                 ShellView.Button(panel,"Resume",new Vector3(0,.05f,-.014f),new Vector2(.66f,.075f),Resume,true,true);
-                ShellView.Button(panel,ShellTransition.Busy?"Back after loading":"Back to explore",new Vector3(0,-.06f,-.014f),new Vector2(.66f,.075f),()=>{confirming=true;BuildMenu();},!ShellTransition.Busy);
+                // On the explore grid "Back to explore" goes nowhere: offer the home screen instead (none on the home screen).
+                var hub = FindFirstObjectByType<HubController>();
+                if (hub && hub.isActiveAndEnabled)
+                { if (hub.Exploring) ShellView.Button(panel,"Back to home",new Vector3(0,-.06f,-.014f),new Vector2(.66f,.075f),()=>{Resume(); if (!IsPaused) hub.Home();}); }
+                else ShellView.Button(panel,ShellTransition.Busy?"Back after loading":"Back to explore",new Vector3(0,-.06f,-.014f),new Vector2(.66f,.075f),()=>{confirming=true;BuildMenu();},!ShellTransition.Busy);
                 ShellView.Button(panel,"Recenter",new Vector3(0,-.17f,-.014f),new Vector2(.66f,.075f),Recenter);
                 var office = FindFirstObjectByType<NativeEncounterSession>();
                 if (office && office.State != null && office.State.phase == "interview")

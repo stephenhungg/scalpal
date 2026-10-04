@@ -136,6 +136,8 @@ namespace Scalpal.Shell
             else if(route=="/patients")catalogDeadline=Time.unscaledTime+Mathf.Max(1,seconds);
         }
         public void Enter() { Initialize(); Exploring=true; launch.gameObject.SetActive(false); explore.gameObject.SetActive(true); }
+        // Back to the launch screen (Scalpal. + Start) from the explore grid.
+        public void Home() { Initialize(); Exploring=false; explore.gameObject.SetActive(false); launch.gameObject.SetActive(true); }
         public void Reload()
         {
             if(!service || Transitioning) return;
