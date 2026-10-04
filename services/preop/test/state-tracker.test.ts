@@ -49,10 +49,10 @@ describe("salient state card", () => {
     s.receive({ type: "instrument", instrumentId: "skin_marker", hand: "right", held: true });
     s.receive({ type: "contact", instrumentId: "skin_marker", structureId: "skin" });
     const card = renderContext(s.snapshot());
-    expect(card).toMatch(/Still needed: skin: NOT yet incision line marked; skin: mark distance from McBurney's point not measured yet, needs at most 20 mm/);
+    expect(card).toMatch(/Still needed: skin: NOT yet incision line marked; skin: mark distance from McBurney.s point not measured yet, needs at most 20 mm; skin: mark length not measured yet, needs 50 to 80 mm;/);
     expect(card).toMatch(/In hand: right .* \(tip on the skin\)/);
     expect(card).not.toMatch(/Body facts:/);
     s.receive({ type: "surgery", evidence: bodyAction("mark", "skin", { actionId: "short-mark", instrumentId: "skin_marker", lengthMm: 30, distanceMm: 5 }) }, { eventId: "short-mark" });
-    expect(renderContext(s.snapshot())).toMatch(/mark length is 30 mm, needs at least 50 mm/);
+    expect(renderContext(s.snapshot())).toMatch(/mark length is 30 mm, needs 50 to 80 mm/);
   });
 });

@@ -1020,9 +1020,21 @@ const FACT_LABELS: Record<string, [string, string]> = {
 
 // Each predicate of a milestone that the body state does not yet satisfy, in words.
 export function unmetPredicates(body: BodyState, predicates: BodyPredicate[], name: (id: string) => string): string[] {
-  return predicates
-    .filter((p) => !body.test(p))
+  const unmet = predicates.filter((p) => !body.test(p));
+  // A fact bounded on both sides (mark length 50 to 80 mm) reads as one range, said once.
+  const range = (p: BodyPredicate) => predicates.find((q) => q !== p && q.tissueId === p.tissueId && q.fact === p.fact && q.op !== p.op && q.op !== "eq");
+  return unmet
+    .filter((p) => !(p.op === "lte" && range(p) && unmet.includes(range(p)!)))
     .map((p) => {
+      const other = range(p);
+      if (other && p.op !== "eq") {
+        const [label, unit] = FACT_LABELS[p.fact] ?? [p.fact, ""];
+        const lo = p.op === "gte" ? p.value : other.value;
+        const hi = p.op === "lte" ? p.value : other.value;
+        const has = body.facts.has(`${p.tissueId}:${p.fact}`);
+        const u = unit ? ` ${unit}` : "";
+        return `${p.tissueId ? `${name(p.tissueId).toLowerCase()}: ` : ""}${label} ${has ? `is ${Math.round(body.get(p.tissueId, p.fact) * 100) / 100}${u}` : "not measured yet"}, needs ${lo} to ${hi}${u}`;
+      }
       const [label, unit] = FACT_LABELS[p.fact] ?? [p.fact.replace(/([A-Z])/g, " $1").toLowerCase(), ""];
       const who = p.tissueId ? `${name(p.tissueId).toLowerCase()}: ` : "";
       const has = body.facts.has(`${p.tissueId}:${p.fact}`);

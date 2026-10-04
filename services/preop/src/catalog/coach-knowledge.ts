@@ -11,10 +11,10 @@ export interface StructureFacts {
 
 export const STRUCTURE_FACTS: Record<string, StructureFacts> = {
   abdominal_wall: {
-    what: "Layers from outside in: skin, fat, anterior rectus sheath or linea alba, rectus muscle, posterior sheath and transversalis fascia, preperitoneal fat, peritoneum.",
-    where: "The front of the abdomen between the ribs and the pelvis.",
-    supply: "Superior and inferior epigastric arteries, which run behind the rectus muscles.",
-    why: "Trocars placed through the rectus can tear the inferior epigastric vessels. Place lateral ports under direct vision and transilluminate when possible.",
+    what: "Layers from outside in. In the midline: skin, fat, linea alba or rectus sheath and rectus muscle, transversalis fascia, preperitoneal fat, peritoneum. At McBurney's point, lateral to the rectus: skin, fat, external oblique aponeurosis, internal oblique, transversus abdominis, transversalis fascia, peritoneum.",
+    where: "The front of the abdomen between the ribs and the pelvis. McBurney's point is one third of the way from the right anterior superior iliac spine to the umbilicus.",
+    supply: "Superior and inferior epigastric arteries behind the rectus; the deep circumflex iliac and lower intercostal vessels laterally.",
+    why: "In an open appendectomy the oblique and transversus muscles are split along their fibers, not cut, which keeps their nerves and strength. Trocars through the rectus can tear the inferior epigastric vessels.",
   },
   umbilicus: {
     what: "Scar of the umbilical cord, where all fascial layers fuse into the thinnest point of the abdominal wall.",
