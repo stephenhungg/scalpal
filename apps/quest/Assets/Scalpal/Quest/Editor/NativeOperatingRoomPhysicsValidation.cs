@@ -207,6 +207,32 @@ namespace Scalpal.Quest.Editor
             return "dropRestOffsetsM=" + string.Join(",", report);
         }
 
+        // The scope's view appears on a gaze-following panel only while it is held with the trigger down.
+        static void ScopePanel(LaparoscopeView scope, NativeCaseSession session)
+        {
+            var instrument = scope.GetComponent<InstrumentBehaviour>();
+            void Hold(bool held, float trigger)
+            {
+                foreach (var (name, value) in new (string, object)[] { ("Held", held), ("TrackingValid", held), ("Activation", trigger) })
+                    typeof(InstrumentBehaviour).GetProperty(name).GetSetMethod(true).Invoke(instrument, new[] { value });
+                typeof(LaparoscopeView).GetMethod("LateUpdate", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).Invoke(scope, null);
+            }
+            var head = session.workbench.headCamera; string priorTag = head.tag; head.tag = "MainCamera";
+            try
+            {
+                Hold(true, 0);
+                Assert(!scope.PanelShown, "holding the scope without the trigger shows no camera panel");
+                Hold(true, 1);
+                var offset = scope.ViewPanel ? scope.ViewPanel.transform.position - head.transform.position : Vector3.zero;
+                Assert(scope.PanelShown && offset.magnitude < .8f && Vector3.Dot(offset.normalized, head.transform.forward) > .7f,
+                    "trigger down shows the scope view on a panel in front of the learner's gaze");
+                Assert(scope.ViewPanel.GetComponentsInChildren<Collider>(true).Length == 0, "the scope panel is never a pointer or tool target");
+                Hold(false, 0);
+                Assert(!scope.PanelShown, "releasing the scope hides the camera panel");
+            }
+            finally { Hold(false, 0); head.tag = priorTag; }
+        }
+
         // The authored dark instrument table every tool starts on (a scene root, separate from the rig).
         static Collider InstrumentTable() => UnityEngine.SceneManagement.SceneManager.GetActiveScene().GetRootGameObjects()
             .Single(root => root.name == "Workbench").GetComponent<Collider>();
@@ -224,12 +250,13 @@ namespace Scalpal.Quest.Editor
             var active = session.workbench.tools.Where(tool => tool && tool.gameObject.activeInHierarchy).ToArray();
             Assert(active.Select(tool => tool.instrumentId).OrderBy(id => id).SequenceEqual(OpenSurgerySession.OpenToolSet.OrderBy(id => id)),
                 "only the open expected-path tools are active: " + string.Join(",", active.Select(tool => tool.instrumentId)));
-            Assert(active.Any(tool => BodyState.ToolVerbs[tool.instrumentId][0] == "clamp"), "a clamp remains for region-injury control");
-            var scopes = session.workbench.tools.Where(tool => tool).Select(tool => tool.GetComponent<LaparoscopeView>()).Where(scope => scope).ToArray();
-            Assert(scopes.Length > 0 && scopes.All(scope => !scope.isActiveAndEnabled && scope.monitor && !scope.monitor.gameObject.activeInHierarchy),
-                "the keyhole laparoscope and its floating view monitor are hidden in the open case");
+            Assert(active.Any(tool => BodyState.ToolVerbs.TryGetValue(tool.instrumentId, out var verbs) && verbs[0] == "clamp"), "a clamp remains for region-injury control");
+            var scopes = session.workbench.tools.Where(tool => tool && tool.gameObject.activeInHierarchy).Select(tool => tool.GetComponent<LaparoscopeView>()).Where(scope => scope).ToArray();
+            Assert(scopes.Length == 1 && scopes[0].followView && scopes[0].monitor && !scopes[0].monitor.gameObject.activeInHierarchy,
+                "the camera scope is on the stand and its fixed floating monitor is hidden in the open case");
             Assert(!UnityEngine.Object.FindObjectsByType<Camera>(FindObjectsInactive.Exclude, FindObjectsSortMode.None)
-                .Any(camera => camera.enabled && camera.targetTexture && camera.name == "VirtualLaparoscopeCamera"), "no laparoscope camera renders in the open case");
+                .Any(camera => camera.enabled && camera.targetTexture && camera.name == "VirtualLaparoscopeCamera"), "no laparoscope camera renders until the scope is triggered");
+            ScopePanel(scopes[0], session);
             var hand = session.workbench.inputs[0].GetComponent<InstrumentInteractor>();
             foreach (var hidden in session.workbench.tools.Where(tool => tool && !tool.gameObject.activeInHierarchy))
             {
@@ -256,7 +283,19 @@ namespace Scalpal.Quest.Editor
                 farthest = Mathf.Max(farthest, reach);
                 Assert(reach <= .6f, $"{tool.name} is within 0.6 m of the learner at the patient's right side ({reach:F2} m)");
             }
-            return $"openToolsOnStand={active.Length} farthestReachM={farthest:F2}";
+            // AR hides the theatre, so the tools need their own visible, solid stand; the extra table stays hidden.
+            view.passthrough = true; view.Apply();
+            typeof(OpenSurgerySession).GetMethod("ApplyOpenToolSet", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).Invoke(adapter, null);
+            typeof(OpenSurgerySession).GetMethod("Update", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).Invoke(adapter, null);
+            var arStand = UnityEngine.SceneManagement.SceneManager.GetActiveScene().GetRootGameObjects().FirstOrDefault(root => root.name == "ArInstrumentStand");
+            Assert(!InstrumentTable().gameObject.activeInHierarchy, "the separate tool table is hidden in AR too");
+            Assert(arStand && arStand.GetComponent<BoxCollider>() && arStand.GetComponent<BoxCollider>().enabled && arStand.GetComponentsInChildren<Renderer>().Length >= 2,
+                "AR gets a visible, solid instrument stand for the tools");
+            Physics.SyncTransforms();
+            var arTop = arStand.GetComponent<BoxCollider>().bounds.max.y;
+            Assert(active.All(tool => Mathf.Abs(tool.gripAnchor.position.y - arTop) < .1f), "AR tools rest on the AR stand");
+            view.passthrough = false; view.Apply();
+            return $"openToolsOnStand={active.Length} farthestReachM={farthest:F2} arStand=true";
         }
 
         // The learner touches the patient they see. In the expected first state (nothing marked or opened) a held
