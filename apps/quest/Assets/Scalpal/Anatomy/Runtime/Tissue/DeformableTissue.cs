@@ -11,9 +11,14 @@ namespace Scalpal.Anatomy.Tissue
         MeshCollider contact;
         Mesh source, dynamicMesh;
         Vector3[] rest, deformed;
+        int[] surfaceTriangles;
         bool dirty;
         // Read-only source asset reference; contact reads vertices without modifying it.
         public Mesh SourceMesh => source;
+        // Owned raw-coordinate buffers. Internal consumers must never mutate these arrays.
+        internal Vector3[] SurfaceVertices => deformed;
+        internal Vector3[] RestVertices => rest;
+        internal int[] SurfaceTriangles => surfaceTriangles;
         public float SourceUnitScale { get; private set; } = 1;
         // FBX-local coordinates may have an import scale (e.g.100). Cage positions always use source-body meters.
         public Vector3 ToMeters(Vector3 rawPoint) => rawPoint * SourceUnitScale;
@@ -25,19 +30,22 @@ namespace Scalpal.Anatomy.Tissue
             dirty = true; return true;
         }
         internal void CommitContact(Vector3[] candidate) { Cage.CommitContact(candidate); dirty = true; }
-        public bool Initialize(TissuePreset preset, float sourceUnitsToMeters = 1)
+        public bool Initialize(TissuePreset preset, float sourceUnitsToMeters = 1, Vector3? posteriorAxis = null)
         {
             if (float.IsNaN(sourceUnitsToMeters) || float.IsInfinity(sourceUnitsToMeters) || sourceUnitsToMeters <= 0) return false;
-            if (Cage != null) return Mathf.Approximately(SourceUnitScale, sourceUnitsToMeters);
+            var axis=posteriorAxis??Vector3.forward;
+            if(!TissueCage.Finite(axis)||axis.sqrMagnitude<1e-10f)return false;
+            axis.Normalize();
+            if (Cage != null) return Mathf.Approximately(SourceUnitScale, sourceUnitsToMeters)&&Vector3.Dot(Cage.PosteriorAxis,axis)>.99999f;
             filter = GetComponent<MeshFilter>(); contact = GetComponent<MeshCollider>();
             // Contact and rendered surface must agree. Never leave a static scoring surface behind.
             if (!filter || !contact || !filter.sharedMesh || !filter.sharedMesh.isReadable ||
                 filter.sharedMesh.vertexCount > 8000 || filter.sharedMesh.triangles.Length > 9000) return false;
             source = filter.sharedMesh;
-            try { Cage = new TissueCage(new Bounds(source.bounds.center * sourceUnitsToMeters, source.bounds.size * sourceUnitsToMeters), preset); }
+            try { Cage = new TissueCage(new Bounds(source.bounds.center * sourceUnitsToMeters, source.bounds.size * sourceUnitsToMeters), preset,axis); }
             catch (ArgumentException) { return false; }
             SourceUnitScale = sourceUnitsToMeters;
-            rest = source.vertices; deformed = new Vector3[rest.Length];
+            rest = source.vertices; surfaceTriangles = source.triangles; deformed = (Vector3[])rest.Clone();
             dynamicMesh = Instantiate(source); dynamicMesh.name = source.name + "_RuntimeTissue"; dynamicMesh.MarkDynamic();
             filter.sharedMesh = dynamicMesh; contact.sharedMesh = dynamicMesh;
             return true;
@@ -71,7 +79,7 @@ namespace Scalpal.Anatomy.Tissue
             if (filter) filter.sharedMesh = source;
             if (contact) contact.sharedMesh = source;
             if (dynamicMesh) { if (Application.isPlaying) Destroy(dynamicMesh); else DestroyImmediate(dynamicMesh); }
-            dynamicMesh = null; Cage = null; rest = deformed = null; dirty = false; SourceUnitScale = 1;
+            dynamicMesh = null; Cage = null; rest = deformed = null; surfaceTriangles = null; dirty = false; SourceUnitScale = 1;
         }
     }
 }

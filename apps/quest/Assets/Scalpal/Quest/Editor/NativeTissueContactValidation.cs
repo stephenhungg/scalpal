@@ -23,7 +23,7 @@ namespace Scalpal.Quest.Editor
                 Assert(Signed(cage.Rest)*Signed(cage.Positions)>0,"contact never inverts material cells");
             }
             for(int i=0;i<8;i++)Assert(TissueCage.Finite(cage.Positions[i])&&Vector3.Distance(cage.Positions[i],cage.Rest[i])<=cage.Preset.maxDisplacement+.00001f,"contact displacement is finite and bounded in source meters");
-            for(int i=4;i<8;i++)Assert(cage.Positions[i]==cage.Rest[i],"posterior attachments remain fixed");
+            for(int i=0;i<8;i++)if(cage.IsPinned(i))Assert(cage.Positions[i]==cage.Rest[i],"posterior attachments remain fixed");
         }
         [MenuItem("Scalpal/Quest/Validate Tissue Contact")]
         public static void Run()
@@ -86,12 +86,49 @@ namespace Scalpal.Quest.Editor
                 foreach(var body in root.GetComponentsInChildren<DeformableTissue>(true))body.RestoreSource();
                 UnityEngine.Object.DestroyImmediate(root);if(sourceA)UnityEngine.Object.DestroyImmediate(sourceA);if(sourceB)UnityEngine.Object.DestroyImmediate(sourceB);
             }
+            ValidateContactVelocityAndMotion();
             ValidateTerminalCaps();
             ValidateSmallGeometry();
             ValidateAuthoredAttachments();
             AuditNativeMeshes();
             Debug.Log("SCALPAL_NATIVE_TISSUE_CONTACT_VALIDATION_OK checks="+checks+" synthetic surface probes/atomic two-way correction; no physical organ or headset evidence");
         }
+        static void ValidateContactVelocityAndMotion()
+        {
+            var cage=new TissueCage(new Bounds(Vector3.zero,new Vector3(.04f,.04f,.04f)),TissuePreset.Bowel);
+            var velocity=(Vector3[])typeof(TissueCage).GetField("velocity",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic).GetValue(cage);
+            velocity[0]=new Vector3(-.1f,.05f,.03f);velocity[1]=new Vector3(.07f,.08f,.09f);
+            Assert(cage.ApplyContact(cage.Rest[0],Vector3.right*.0001f),"velocity regression applies real safe contact correction");
+            Assert(cage.Velocity(0).x==0&&Mathf.Abs(cage.Velocity(0).y-.05f)<1e-7f&&Mathf.Abs(cage.Velocity(0).z-.03f)<1e-7f,"contact removes closing velocity but preserves tangential motion");
+            Assert(cage.Velocity(1)==new Vector3(.07f,.08f,.09f),"contact cannot zero untouched-node velocity");
+            var root=new GameObject("ContinuousSampledContactRegression");Mesh ma=null,mb=null;
+            try
+            {
+                var a=Body(root,"MovingA",out ma);var b=Body(root,"MovingB",out mb);
+                a.transform.localPosition=new Vector3(-.019f,0,0);b.transform.localPosition=new Vector3(.019f,.005f,-.005f);
+                using var solver=new TissueContactSolver();solver.Initialize(new[]{a,b});
+                float before=solver.Measure(true);
+                for(int tick=0;tick<45;tick++)
+                {
+                    a.Step(1f/90,Vector3.zero);b.Step(1f/90,Vector3.zero);solver.Solve(true);
+                }
+                Assert(solver.AppliedConstraints>1,"a substep projects multiple real penetrating surface probes instead of one deepest point");
+                Assert(solver.MaximumResidualPenetrationMeters<before*.8f,"sampled residual decreases despite intervening elastic return every90Hz substep");
+                float settled=solver.MaximumResidualPenetrationMeters;
+                Assert(a.Cage.BeginHandle(a.Cage.Rest[0]),"moving-contact fixture acquires actual cage handle");
+                for(int tick=0;tick<30;tick++)
+                {
+                    var target=a.Cage.Rest[0]+Vector3.right*Mathf.Min(.006f,tick*.03f/90);
+                    a.Step(1f/90,target);b.Step(1f/90,Vector3.zero);solver.Solve(true);
+                    Positive(a.Cage);Positive(b.Cage);
+                    Assert(solver.MaximumResidualPenetrationMeters<before,"3cm/s grasp does not outrun contact back to initial penetration");
+                }
+                Debug.Log($"SCALPAL_NATIVE_CONTACT_MOTION beforeMm={before*1000:F3} settledMm={settled*1000:F3} movingMm={solver.MaximumResidualPenetrationMeters*1000:F3} constraints={solver.AppliedConstraints} synthetic=true questTimingMeasured=false");
+            }
+            finally
+            {foreach(var tissue in root.GetComponentsInChildren<DeformableTissue>(true))tissue.RestoreSource();UnityEngine.Object.DestroyImmediate(root);if(ma)UnityEngine.Object.DestroyImmediate(ma);if(mb)UnityEngine.Object.DestroyImmediate(mb);}
+        }
+
         static void ValidateTerminalCaps()
         {
             var root=new GameObject("SyntheticTerminalLoopContactProxy");var meshes=new List<Mesh>();var tissues=new List<DeformableTissue>();
@@ -179,7 +216,7 @@ namespace Scalpal.Quest.Editor
                 solver.Initialize(new[]{a,b});Assert(solver.SupportedBodies==2,"small closed geometry is supported independently of cap repair");
                 Assert(solver.Measure(true)>0,"tiny world triangle normals expose actual sampled overlap instead of silently skipping all triangles");
                 var beforeA=Copy(a.Cage);var beforeB=Copy(b.Cage);solver.Solve(true);
-                Assert(solver.AppliedPairs+solver.RejectedPairs==1,"tiny surface contact is evaluated, with pinned or inverting response explicitly rejected");
+                Assert(solver.AppliedPairs<=1&&solver.RejectedPairs<=1&&solver.AppliedPairs+solver.RejectedPairs>=1,"tiny pair evaluates all samples and reports unsafe pinned/inverting constraints even when other samples apply");
                 if(solver.AppliedPairs==1)Assert(Motion(beforeA,a.Cage)>0&&Motion(beforeB,b.Cage)>0,"accepted tiny contact corrects both bodies");
                 else Assert(Motion(beforeA,a.Cage)==0&&Motion(beforeB,b.Cage)==0,"unsafe tiny contact rolls back both bodies atomically");
                 Positive(a.Cage);Positive(b.Cage);
@@ -258,7 +295,8 @@ namespace Scalpal.Quest.Editor
                 using var acceleration=new TissueSurfaceBvh(source,triangles,points.Length);
                 for(int pose=0;pose<3;pose++)
                 {
-                    if(pose==1)Assert(tissue.ApplyContact(tissue.Cage.Rest[0],new Vector3(.0002f,-.0001f,-.0002f)),"BVH fixture genuinely deforms current cage");
+                    int movable=0;while(tissue.Cage.IsPinned(movable))movable++;
+                    if(pose==1)Assert(tissue.ApplyContact(tissue.Cage.Rest[movable],new Vector3(.0002f,-.0001f,-.0002f)),"BVH fixture genuinely deforms current cage");
                     var rotation=pose==2?Quaternion.Euler(23,41,-17):Quaternion.identity;
                     for(int i=0;i<source.Length;i++)world[i]=rotation*tissue.ToMeters(tissue.DeformSurfacePoint(source[i]))*1.3f+new Vector3(.2f,-.1f,.3f);
                     for(int i=0;i<points.Length;i++)
@@ -316,7 +354,8 @@ namespace Scalpal.Quest.Editor
                     var body=clone.GetComponent<DeformableTissue>()??clone.AddComponent<DeformableTissue>();
                     var factor=sourcePart.transform.lossyScale/session.anatomy.transform.lossyScale.x;
                     Assert(factor.x>0&&Mathf.Abs(factor.x-factor.y)<factor.x*.001f&&Mathf.Abs(factor.x-factor.z)<factor.x*.001f,"actual native FBX source units are uniform: "+ids[i]);
-                    Assert(body.Initialize(presets[i],factor.x),"actual source binds metric deformation cage: "+ids[i]);tissues.Add(body);
+                    var posterior=clone.transform.InverseTransformDirection(root.transform.TransformDirection(Vector3.forward));
+                    Assert(body.Initialize(presets[i],factor.x,posterior),"actual source binds metric deformation cage and transformed posterior attachments: "+ids[i]);tissues.Add(body);
                 }
                 using var solver=new TissueContactSolver();solver.Initialize(tissues);
                 Assert(solver.SurfaceReports.Count==3,"every native target receives explicit contact support report");

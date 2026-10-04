@@ -17,6 +17,8 @@ namespace Scalpal.Anatomy.Tissue
         public int AppliedPairs { get; private set; }
         public int RejectedPairs { get; private set; }
         public int TriangleQueries { get; private set; }
+        public int AppliedConstraints { get; private set; }
+        readonly Contact[] contactBuffer = new Contact[MaximumProbes*2];
         // Opt-in attachment mode reports excess beyond each authored probe allowance; default reports geometric overlap.
         public float MaximumResidualPenetrationMeters { get; private set; }
         public float MaximumExcessResidualMeters => MaximumResidualPenetrationMeters;
@@ -155,30 +157,47 @@ namespace Scalpal.Anatomy.Tissue
                 if(body.ready)ActiveBodies++;
                 if(body.ready)MaximumSamplingGapMeters=Mathf.Max(MaximumSamplingGapMeters,(body.sourceGap+2*body.tissue.Cage.Preset.maxDisplacement)*body.scale);
             }
-            for(int a=0;a<bodies.Count;a++)for(int b=a+1;b<bodies.Count;b++)
+            int appliedMask=0,rejectedMask=0;
+            // Project every penetrating sample, after each 90 Hz elastic substep. Two
+            // bounded passes revisit the deformed surfaces; pins and displacement caps
+            // still fail closed. This is sampled positional contact, not complete CCD.
+            for(int iteration=0;iteration<2;iteration++)
             {
-                var first=bodies[a];var second=bodies[b];if(!first.ready||!second.ready||!first.bounds.Intersects(second.bounds))continue;
-                var contact=Deepest(first,second);
-                if(contact.depth<=0)continue;
-                float distance=Mathf.Min(contact.depth,MaximumCorrectionMeters,Mathf.Min(first.scale,second.scale)*.004f);
-                Vector3 move=contact.normal*distance;
-                if(contact.a.tissue.Cage.TryContactCandidate(contact.a.tissue.ToMeters(contact.restA),contact.a.tissue.ToMeters(contact.a.tissue.transform.InverseTransformVector(move*.5f)),out var candidateA)
-                    &&contact.b.tissue.Cage.TryContactCandidate(contact.b.tissue.ToMeters(contact.restB),contact.b.tissue.ToMeters(contact.b.tissue.transform.InverseTransformVector(-move*.5f)),out var candidateB))
+                int before=AppliedConstraints,pair=0;
+                MaximumResidualPenetrationMeters=0;
+                for(int a=0;a<bodies.Count;a++)for(int b=a+1;b<bodies.Count;b++,pair++)
                 {
-                    // Both candidates validate before either mutates positions; never partially invert one body.
-                    contact.a.tissue.CommitContact(candidateA);contact.b.tissue.CommitContact(candidateB);AppliedPairs++;
-                    Refresh(first);Refresh(second);
+                    var first=bodies[a];var second=bodies[b];if(!first.ready||!second.ready||!first.bounds.Intersects(second.bounds))continue;
+                    int count=0;Gather(first,second,ref count);Gather(second,first,ref count);
+                    for(int i=0;i<count;i++)
+                    {
+                        var contact=contactBuffer[i];MaximumResidualPenetrationMeters=Mathf.Max(MaximumResidualPenetrationMeters,Residual(contact));
+                        float distance=Mathf.Min(contact.depth*.5f,MaximumCorrectionMeters,Mathf.Min(first.scale,second.scale)*.004f);
+                        Vector3 move=contact.normal*distance;
+                        if(contact.a.tissue.Cage.TryContactCandidate(contact.a.tissue.ToMeters(contact.restA),contact.a.tissue.ToMeters(contact.a.tissue.transform.InverseTransformVector(move*.5f)),out var candidateA)
+                            &&contact.b.tissue.Cage.TryContactCandidate(contact.b.tissue.ToMeters(contact.restB),contact.b.tissue.ToMeters(contact.b.tissue.transform.InverseTransformVector(-move*.5f)),out var candidateB))
+                        {
+                            contact.a.tissue.CommitContact(candidateA);contact.b.tissue.CommitContact(candidateB);appliedMask|=1<<pair;AppliedConstraints++;
+                        }
+                        else rejectedMask|=1<<pair;
+                    }
+                    if(count>0){Refresh(first);Refresh(second);}
                 }
-                else RejectedPairs++;
+                if(AppliedConstraints==before)break;
             }
-            for(int a=0;a<bodies.Count;a++)for(int b=a+1;b<bodies.Count;b++)
-                if(bodies[a].ready&&bodies[b].ready&&bodies[a].bounds.Intersects(bodies[b].bounds))
-                    MaximumResidualPenetrationMeters=Mathf.Max(MaximumResidualPenetrationMeters,Residual(Deepest(bodies[a],bodies[b])));
+            for(int pair=0;pair<3;pair++){if((appliedMask&(1<<pair))!=0)AppliedPairs++;if((rejectedMask&(1<<pair))!=0)RejectedPairs++;}
+            if(AppliedConstraints>0)
+            {
+                MaximumResidualPenetrationMeters=0;
+                for(int a=0;a<bodies.Count;a++)for(int b=a+1;b<bodies.Count;b++)
+                    if(bodies[a].ready&&bodies[b].ready&&bodies[a].bounds.Intersects(bodies[b].bounds))
+                        MaximumResidualPenetrationMeters=Mathf.Max(MaximumResidualPenetrationMeters,Residual(Deepest(bodies[a],bodies[b])));
+            }
             Status=ActiveBodies!=bodies.Count?"Some contact bodies inactive, hidden or in an unsupported transform":
                 RejectedPairs>0?"Sampled contact unresolved: pinned, capped or unsafe correction":"Sampled contact evaluated; unsampled intersections remain possible";
         }
         public void Dispose() { foreach(var body in bodies)body.acceleration?.Dispose(); bodies.Clear(); SupportedBodies=0; }
-        void ResetStatistics(){ActiveBodies=AppliedPairs=RejectedPairs=TriangleQueries=0;MaximumResidualPenetrationMeters=MaximumSamplingGapMeters=0;MaximumAuthoredOverlapMeters=0;}
+        void ResetStatistics(){ActiveBodies=AppliedPairs=RejectedPairs=TriangleQueries=AppliedConstraints=0;MaximumResidualPenetrationMeters=MaximumSamplingGapMeters=0;MaximumAuthoredOverlapMeters=0;}
         float Residual(Contact contact)=>Mathf.Max(0,contact.depth-(PreservesAuthoredRestOverlap?0:ContactPaddingMeters));
         // These fixed per-probe source-frame allowances preserve authored embedded attachments.
         // They are not inferred anatomical constraints and do not exempt an entire pair from contact.
@@ -229,19 +248,26 @@ namespace Scalpal.Anatomy.Tissue
         {
             var result=default(Contact);ProbeAgainst(a,b,ref result);ProbeAgainst(b,a,ref result);return result;
         }
+        void Gather(Body from,Body target,ref int count)
+        {
+            from.authoredAllowances.TryGetValue(target,out var allowances);QueryBatch(from,target);
+            for(int i=0;i<from.probes.Length;i++)if(ReadContact(from,target,i,allowances,out var contact))contactBuffer[count++]=contact;
+        }
         void ProbeAgainst(Body from,Body target,ref Contact deepest)
         {
-            from.authoredAllowances.TryGetValue(target,out var allowances);
-            QueryBatch(from,target);
+            from.authoredAllowances.TryGetValue(target,out var allowances);QueryBatch(from,target);
             for(int i=0;i<from.probes.Length;i++)
-            {
-                var probe=from.probes[i];
-                if(!target.bounds.Contains(WorldProbe(from,probe))||!QuerySurface(target,i,out float penetration,out var normal,out var rest))continue;
-                float padding=PreservesAuthoredRestOverlap?from.sourcePadding*from.scale:ContactPaddingMeters;
-                float depth=penetration+padding;
-                if(PreservesAuthoredRestOverlap&&allowances!=null)depth-=allowances[i]*from.scale;
-                if(depth>deepest.depth+(PreservesAuthoredRestOverlap?1e-6f:1e-7f))deepest=new Contact {a=from,b=target,restA=probe.rest,restB=rest,normal=normal,depth=depth};
-            }
+                if(ReadContact(from,target,i,allowances,out var contact)&&contact.depth>deepest.depth)deepest=contact;
+        }
+        bool ReadContact(Body from,Body target,int i,float[] allowances,out Contact contact)
+        {
+            contact=default;var probe=from.probes[i];
+            if(!target.bounds.Contains(WorldProbe(from,probe))||!QuerySurface(target,i,out float penetration,out var normal,out var rest))return false;
+            float padding=PreservesAuthoredRestOverlap?from.sourcePadding*from.scale:ContactPaddingMeters;
+            float depth=penetration+padding;
+            if(PreservesAuthoredRestOverlap&&allowances!=null)depth-=allowances[i]*from.scale;
+            if(depth<=(PreservesAuthoredRestOverlap?1e-6f:1e-7f))return false;
+            contact=new Contact {a=from,b=target,restA=probe.rest,restB=rest,normal=normal,depth=depth};return true;
         }
         void QueryBatch(Body from,Body target)
         {

@@ -10,7 +10,9 @@ namespace Scalpal.Anatomy.Tissue
         public readonly Vector3[] Rest = new Vector3[8];
         public readonly Vector3[] Positions = new Vector3[8];
         readonly Vector3[] previous = new Vector3[8], velocity = new Vector3[8];
-        readonly float[] weights = new float[8];
+        readonly float[] weights = new float[8], contactInfluence = new float[8];
+        readonly Vector3[] contactCandidate = new Vector3[8];
+        public Vector3 Velocity(int node) => velocity[node];
         readonly int[] edgeA = new int[28], edgeB = new int[28];
         readonly float[] lengths = new float[28], edgeLambda = new float[28];
         // Five tetrahedra partition a box. Signed orientation is retained.
@@ -18,21 +20,34 @@ namespace Scalpal.Anatomy.Tissue
         readonly float[] volumes = new float[5];
         readonly Bounds bounds;
         public readonly TissuePreset Preset;
+        public readonly Vector3 PosteriorAxis;
+        public bool IsPinned(int node) => weights[node]==0;
         public int Handle { get; private set; } = -1;
         public float MaxDisplacement { get; private set; }
 
-        public TissueCage(Bounds sourceBounds, TissuePreset preset)
+        public TissueCage(Bounds sourceBounds, TissuePreset preset, Vector3? posteriorAxis = null)
         {
             if (!Finite(sourceBounds.center) || !Finite(sourceBounds.size) || sourceBounds.size.x <= 0 || sourceBounds.size.y <= 0 || sourceBounds.size.z <= 0)
                 throw new ArgumentException("A tissue cage requires finite three-dimensional geometry.");
             bounds = sourceBounds; Preset = preset;
+            PosteriorAxis=posteriorAxis??Vector3.forward;
+            if(!Finite(PosteriorAxis)||PosteriorAxis.sqrMagnitude<1e-10f)throw new ArgumentException("Posterior attachment axis must be finite and nonzero.");
+            PosteriorAxis=PosteriorAxis.normalized;
             for (int i = 0; i < 8; i++)
             {
                 Rest[i] = new Vector3((i & 1) == 0 ? bounds.min.x : bounds.max.x,
                     (i & 2) == 0 ? bounds.min.y : bounds.max.y, (i & 4) == 0 ? bounds.min.z : bounds.max.z);
-                // Posterior face attachment is an authored constraint, not detected mesentery.
-                weights[i] = (i & 4) == 0 ? 1 : 0;
+                weights[i] = 1;
             }
+            // Choose the four most posterior corners in the ANATOMY frame, transformed
+            // by the caller into this part's local frame. FBX node rotations are real.
+            var attachmentOrder=new int[8];for(int i=0;i<8;i++)attachmentOrder[i]=i;
+            Array.Sort(attachmentOrder,(a,b)=>
+            {
+                int order=Vector3.Dot(Rest[b]-bounds.center,PosteriorAxis).CompareTo(Vector3.Dot(Rest[a]-bounds.center,PosteriorAxis));
+                return order!=0?order:b.CompareTo(a);
+            });
+            for(int i=0;i<4;i++)weights[attachmentOrder[i]]=0;
             int edge = 0;
             for (int a = 0; a < 8; a++) for (int b = a + 1; b < 8; b++)
             { edgeA[edge] = a; edgeB[edge] = b; lengths[edge++] = Vector3.Distance(Rest[a], Rest[b]); }
@@ -142,14 +157,14 @@ namespace Scalpal.Anatomy.Tissue
             if (!Finite(point) || !Finite(correction) || correction.sqrMagnitude < 1e-14f || correction.magnitude > .005f) return false;
             Vector3 u = new Vector3(Mathf.InverseLerp(bounds.min.x,bounds.max.x,point.x),
                 Mathf.InverseLerp(bounds.min.y,bounds.max.y,point.y),Mathf.InverseLerp(bounds.min.z,bounds.max.z,point.z));
-            var influence = new float[8]; float denominator = 0;
+            var influence = contactInfluence; float denominator = 0;
             for (int i=0;i<8;i++)
             {
                 influence[i] = ((i&1)==0?1-u.x:u.x)*((i&2)==0?1-u.y:u.y)*((i&4)==0?1-u.z:u.z);
                 denominator += weights[i]*influence[i]*influence[i];
             }
             if (denominator < .00001f) return false;
-            candidate = (Vector3[])Positions.Clone();
+            candidate = contactCandidate; Array.Copy(Positions,candidate,8);
             for (int i=0;i<8;i++)
             {
                 if (weights[i] == 0) continue;
@@ -166,7 +181,18 @@ namespace Scalpal.Anatomy.Tissue
         }
         internal void CommitContact(Vector3[] candidate)
         {
-            Array.Copy(candidate,Positions,8); Array.Copy(candidate,previous,8); Array.Clear(velocity,0,8);
+            // Preserve tangential motion and untouched-node velocity. Remove only the
+            // closing component at corrected nodes, rather than damping the whole cage.
+            for(int i=0;i<8;i++)
+            {
+                var delta=candidate[i]-Positions[i];float length=delta.magnitude;
+                if(length>1e-8f)
+                {
+                    var normal=delta/length;float closing=Vector3.Dot(velocity[i],normal);
+                    if(closing<0)velocity[i]-=normal*closing;
+                }
+                Positions[i]=candidate[i];previous[i]=candidate[i];
+            }
             MaxDisplacement=0;
             for(int i=0;i<8;i++) MaxDisplacement=Mathf.Max(MaxDisplacement,Vector3.Distance(Positions[i],Rest[i]));
         }
