@@ -409,6 +409,7 @@ namespace Scalpal.Quest.Editor
             NativeBodyRegistrationValidation.Run();
             NativeOperatingRoomModeValidation.Run();
             NativeOperatingRoomPhysicsValidation.Run();
+            NativeLocomotionValidation.Run();
             Scalpal.Instruments.Editor.InstrumentRuntimeValidation.Run();
             NativeProcedureInputValidation.Run();
             NativeInteriorContactValidation.Run();

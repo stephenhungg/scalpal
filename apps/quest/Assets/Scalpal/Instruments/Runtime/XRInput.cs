@@ -28,6 +28,13 @@ namespace Scalpal.Instruments
         public static float Grip(XRNode node) => Source.Grip(node);
         public static float Trigger(XRNode node) => Source.Trigger(node);
         public static bool Button(XRNode node, XRInputButton button) => Source.Button(node, button);
+        // Thumbstick, outside IXRInputSource so existing fixtures stay valid; tests may replace it.
+        public static System.Func<XRNode, Vector2> StickSource { get; set; } = node =>
+        {
+            InputDevices.GetDeviceAtXRNode(node).TryGetFeatureValue(CommonUsages.primary2DAxis, out Vector2 value);
+            return value;
+        };
+        public static Vector2 Stick(XRNode node) => StickSource(node);
 
         sealed class UnityXRInputSource : IXRInputSource
         {

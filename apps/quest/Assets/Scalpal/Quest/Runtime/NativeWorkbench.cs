@@ -19,6 +19,9 @@ namespace Scalpal.Quest
         public Vector3 initialHeadFloorPosition = new Vector3(0, 0, -0.5f);
         public bool externalSessionControls;
         public NativePresentation presentation;
+        // Full-VR locomotion: left stick walks along the gaze, right stick snap-turns. Off in passthrough,
+        // where moving the origin would slide the anatomy off the registered patient.
+        public float moveSpeed = 1.2f, snapDegrees = 30, roamRadius = 3f;
         public bool IsReady { get; private set; }
         public event Action ToolsReset;
         public event Action RetryRequested;
@@ -103,6 +106,7 @@ namespace Scalpal.Quest
             bool valid = running && floor && aligned && headTracked && focused && !paused
                 && (!presentation || presentation.Ready);
             Gate(valid);
+            if (valid && !(presentation && presentation.passthrough)) Locomote(Time.deltaTime);
             bool reset = XRInput.Button(XRNode.RightHand, XRInputButton.Primary);
             bool retry = XRInput.Button(XRNode.LeftHand, XRInputButton.Menu);
             HandleSessionButtons(reset, retry);
@@ -114,6 +118,30 @@ namespace Scalpal.Quest
                 Debug.Log("SCALPAL_NATIVE_STATUS " + state);
                 if (status && !externalSessionControls) status.text = "Scalpal | Native tool test\nGrip: pick up / release   Trigger: use tool\nA: reset tools and practice patch\n" + (valid ? "Tracking ready" : "Paused: waiting for valid XR tracking") + "   Effects: " + effects;
                 frames = 0; sampleStart = Time.unscaledTime; nextStatus = Time.unscaledTime + 2;
+            }
+        }
+
+        bool turnArmed = true;
+        public void Locomote(float deltaTime)
+        {
+            var move = XRInput.Stick(XRNode.LeftHand);
+            if (move.sqrMagnitude > .04f)
+            {
+                var forward = Vector3.ProjectOnPlane(headCamera.transform.forward, Vector3.up).normalized;
+                var right = Vector3.Cross(Vector3.up, forward);
+                var next = trackingOrigin.position + (forward * move.y + right * move.x) * (moveSpeed * deltaTime);
+                // Keep the head inside the room around the start pose (never walk through the walls).
+                var head = headCamera.transform.position - trackingOrigin.position + next;
+                var offset = Vector3.ProjectOnPlane(head - initialHeadFloorPosition, Vector3.up);
+                if (offset.magnitude > roamRadius) next -= offset - offset.normalized * roamRadius;
+                trackingOrigin.position = next;
+            }
+            float turn = XRInput.Stick(XRNode.RightHand).x;
+            if (Mathf.Abs(turn) < .3f) turnArmed = true;
+            else if (turnArmed && Mathf.Abs(turn) > .7f)
+            {
+                turnArmed = false;
+                trackingOrigin.RotateAround(headCamera.transform.position, Vector3.up, Mathf.Sign(turn) * snapDegrees);
             }
         }
 
