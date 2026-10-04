@@ -35,6 +35,16 @@ export function loadConfig() {
   if (storageDriver !== 'local' && storageDriver !== 's3') {
     throw new Error(`STORAGE_DRIVER must be 'local' or 's3'`);
   }
+  const spacetimeToken = optional('SPACETIMEDB_TOKEN');
+  if (process.env.NODE_ENV === 'production' && !spacetimeToken) {
+    // The token file does not survive a container restart (Fly/Docker), so a
+    // missing token means a fresh, unregistered identity on every boot.
+    throw new Error(
+      'SPACETIMEDB_TOKEN is required when NODE_ENV=production: without it every restart ' +
+        'connects as a new identity that is not a registered service. Set it as a secret ' +
+        '(e.g. `fly secrets set SPACETIMEDB_TOKEN=...`) using a token registered with add_service_identity.'
+    );
+  }
   return {
     port,
     publicBaseUrl: env('PUBLIC_BASE_URL', `http://localhost:${port}`).replace(/\/$/, ''),
@@ -47,7 +57,7 @@ export function loadConfig() {
       uri: env('SPACETIMEDB_URI', 'ws://127.0.0.1:3000'),
       database: env('SPACETIMEDB_DB', 'scalpal'),
       /** Token for a service identity. If unset, a token is created and saved. */
-      token: optional('SPACETIMEDB_TOKEN'),
+      token: spacetimeToken,
       tokenFile: env('SPACETIMEDB_TOKEN_FILE', '.gateway-token'),
     },
 

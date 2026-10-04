@@ -1,5 +1,7 @@
 # Fly.io config for the Scalpal gateway. Secrets are set with `fly secrets`,
 # never in this file. Deploy from services/api: fly deploy
+# Required secret: SPACETIMEDB_TOKEN (a registered service identity). With
+# NODE_ENV=production the gateway refuses to start without it.
 app = "scalpal-gateway"
 primary_region = "ord"
 

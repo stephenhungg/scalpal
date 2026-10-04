@@ -24,7 +24,7 @@ npm run build && npm start  # bundled (esbuild) production build
 npm run worker:synthetic  # synthetic motion worker (labelled output; not reconstruction)
 ```
 
-On first start without `SPACETIMEDB_TOKEN`, the gateway creates an identity, saves its token to `.gateway-token`, and logs the `spacetime call … add_service_identity` command that registers it. In production, store that token as a secret.
+On first start without `SPACETIMEDB_TOKEN`, the gateway creates an identity, saves its token to `.gateway-token`, and logs the `spacetime call … add_service_identity` command that registers it. In production, store that token as a secret: with `NODE_ENV=production` (the Docker image and `fly.toml`) the gateway refuses to start without `SPACETIMEDB_TOKEN`, because the token file does not survive a container restart.
 
 `GET /healthz` reports database connection, service registration, storage driver and which providers are configured.
 
