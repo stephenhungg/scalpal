@@ -101,6 +101,12 @@ Target for the [latest experience flow](current-direction.md#latest-experience-f
 
 The operating room offers AR on a real reclining participant or full VR, so MediaPipe body registration is main-path for AR; see the body registration section below. Registration robustness gaps are listed in the audit (grace period on single bad frames, freshness window, stuck in-flight observation).
 
+### Structured office carryover
+
+The handoff service change was audited against main `35bd49d` (including the merged `814e551` producers), after fetching the office/Jarvis and companion branch refs. `GET /encounters/:id/score` now adds patient identity, procedure site, urgency and `carryoverItems`. Each item links a real chart flag to authored case considerations and explicit office history/test evidence. `found` means that evidence was covered, not that the risk was resolved; `missed` means it was not covered; age-only flags are `chart_only`. Existing deterministic scores and prose `carryover()` are unchanged.
+
+The real fixture HTTP regression follows a wrong procedure through scoring, fetches the correct procedure and structured risks, and creates a matching virtual coach with `encounterId`; its prompt includes the office carryover. The current coach route accepts an unrelated encounter ID but excludes its context, so the native handoff must perform its explicit scored/patient/procedure verification before creating the coach. After the latest merge, preop passed **230 tests (2 provider skips)** and `npm run typecheck`. This is local HTTP/component evidence, not provider or headset evidence.
+
 ## Where the Current Code Routes
 
 ### Case selection, practice and Jarvis

@@ -9,6 +9,7 @@ import {
   type TestId,
 } from "./catalog/encounters.js";
 import type { SurgicalCase } from "./types.js";
+import { buildCarryoverItems, type CarryoverItem, procedureSite } from "./encounter-carryover.js";
 
 // One pre-op encounter: a 1-on-1 interview with the patient (or a parent), then a case presentation to
 // the attending, then a deterministic score. The patient agent can only learn its own facts through
@@ -91,6 +92,11 @@ const FLAG_SURFACED_BY: Record<string, string[]> = {
 };
 
 export interface Scorecard {
+  patientId: string;
+  patientName: string;
+  urgency: Encounter["urgency"];
+  site: string;
+  carryoverItems: CarryoverItem[];
   total: number;
   max: number;
   grade: string;
@@ -405,6 +411,11 @@ export class EncounterSession {
     ].filter(Boolean);
 
     return {
+      patientId: this.kase.patientId,
+      patientName: this.encounter.persona.patientName,
+      urgency: e.urgency,
+      site: procedureSite(this.kase.procedureId),
+      carryoverItems: buildCarryoverItems(this.kase, [...this.history.keys()], this.tests.filter((id) => Boolean(e.tests[id]))),
       total,
       max: 100,
       grade,
