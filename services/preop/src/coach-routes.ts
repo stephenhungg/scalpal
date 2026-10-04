@@ -13,6 +13,7 @@ import { ReflexAudio } from "./reflex.js";
 import { openBodySimulation, restampForBody } from "./open-body-sim.js";
 import { REGION_IDS, type RegionId } from "./patient-condition.js";
 import type { Baseline } from "./physiology.js";
+import { plausibleBaseline } from "./chart-vitals.js";
 import { NO_REALTIME, type RealtimeBridge, type RealtimeSink } from "./realtime-bridge.js";
 import { buildSystemPrompt, firstMessage } from "./coach-prompt.js";
 import { createContextFeed, type ContextFeed } from "./jarvis/context-feed.js";
@@ -40,7 +41,7 @@ export interface CoachRouteOptions {
   watchMs?: number; // minimum gap between background scene summaries (0 disables watching)
   detector?: FrameDetector | null; // real-camera instrument and hand boxes (services/vision); null when not running
   // Baseline vitals for a case from the patient's chart (VR, and AR until the Presage baseline is captured).
-  baselineFor?: (kase: SurgicalCase) => Promise<{ baseline: Baseline; weightKg: number; spo2: number | null } | null>;
+  baselineFor?: (kase: SurgicalCase) => Promise<{ baseline: Baseline; weightKg: number; spo2: number | null; mlPerKg?: number } | null>;
   vitalsUrl?: string; // services/vitals (Presage); POST /baseline/capture at Time-Out in AR
 }
 
@@ -162,7 +163,7 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
     const sid = `coach-${crypto.randomUUID().replaceAll("-", "").slice(0, 16)}`;
     const session = new CoachSession(sid, kase, options.now, options.stuckPolicy, mode);
     const chart = await options.baselineFor?.(kase).catch(() => null);
-    if (chart) session.setBaseline(chart.baseline, { weightKg: chart.weightKg, spo2: chart.spo2, quiet: true });
+    if (chart) session.setBaseline(chart.baseline, { weightKg: chart.weightKg, spo2: chart.spo2, mlPerKg: chart.mlPerKg, quiet: true });
     forwardLogs(session);
     // Office to operating room: the scored encounter for this patient informs the surgery coaching.
     const office = typeof encounterId === "string" ? options.encounterFor?.(encounterId) : null;
@@ -510,12 +511,14 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
     const b = (await body(c)).baseline as Record<string, unknown> | undefined;
     const ok = (x: unknown) => typeof x === "number" && Number.isFinite(x) && x > 0 && x < 400;
     let baseline: Baseline | null = null;
-    if (b && ok(b.hr) && ok(b.rr) && ok(b.sys) && ok(b.dia)) {
+    if (b && ok(b.hr) && ok(b.rr) && ok(b.sys) && ok(b.dia) && plausibleBaseline(b as { hr: number; rr: number; sys: number; dia: number })) {
       baseline = { hr: b.hr as number, rr: b.rr as number, sys: b.sys as number, dia: b.dia as number, source: typeof b.source === "string" ? b.source.slice(0, 20) : "measured" };
     } else if (options.vitalsUrl) {
       const res = await fetch(`${options.vitalsUrl.replace(/\/$/, "")}/baseline/capture`, { method: "POST", signal: AbortSignal.timeout(4000) }).catch(() => null);
       const j = res?.ok ? ((await res.json().catch(() => null)) as Record<string, unknown> | null) : null;
-      if (j && ok(j.hr) && ok(j.rr) && ok(j.sys) && ok(j.dia)) baseline = { hr: j.hr as number, rr: j.rr as number, sys: j.sys as number, dia: j.dia as number, source: typeof j.source === "string" ? j.source : "measured" };
+      // Presage measures heart and breathing rate only; blood pressure stays as charted (its sys/dia are authored).
+      const current = s.condition.currentBaseline;
+      if (j && ok(j.hr) && ok(j.rr)) baseline = { hr: j.hr as number, rr: j.rr as number, sys: current.sys, dia: current.dia, source: typeof j.source === "string" ? j.source : "measured", bpSource: current.source ?? "authored" };
       else return bad(c, 503, "vitals_unavailable", "The vitals service did not return a baseline; the chart baseline stays.", coachActions(s.id));
     } else {
       return bad(c, 400, "invalid_baseline", 'Send {"baseline": {"hr", "rr", "sys", "dia", "source"}} or set VITALS_URL for Presage capture.', coachActions(s.id));

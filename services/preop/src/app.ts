@@ -541,7 +541,7 @@ export function createApp(options: AppOptions = {}) {
       const record = await client.getRecord(kase.patientId).catch(() => null);
       if (!record) return null;
       const chart = chartBaseline((record.data as { vitals?: never[] } | undefined)?.vitals ?? [], kase.patient.age);
-      return { baseline: chart.baseline, weightKg: chart.weightKg, spo2: chart.spo2 };
+      return { baseline: chart.baseline, weightKg: chart.weightKg, spo2: chart.spo2, mlPerKg: chart.mlPerKg };
     },
     vision: options.vision ?? null,
     watchMs: options.watchMs,

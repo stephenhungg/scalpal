@@ -2,7 +2,7 @@ import { STEP_COACHING, STRUCTURE_FACTS } from "./catalog/coach-knowledge.js";
 import { INSTRUMENTS_BY_ID } from "./catalog/instruments.js";
 import type { BodyGrade } from "./open-body-grade.js";
 import { StepEngine, perfectEvents, type EngineEvent } from "./engine.js";
-import type { BodyAction, BodyPredicate, BodyState } from "./open-body.js";
+import { bodyAction, isBodyTelemetry, type BodyAction, type BodyPredicate, type BodyState } from "./open-body.js";
 import { CLASS_LINES, DEATH_LINE, PatientCondition, REGIONS, type ConditionView, type RegionId } from "./patient-condition.js";
 import type { Baseline } from "./physiology.js";
 import type { ProcedureStep, Severity, StepAction, SurgicalCase } from "./types.js";
@@ -515,10 +515,11 @@ export class CoachSession {
     const achieved = new Set(this.engine.completedMilestones);
     this.engine.handle(event);
     if (body.log.length === count) return { accepted: false, reason: "invalid: body action rejected", alerts: [] };
-    this.inputCount++;
+    if (!isBodyTelemetry(event.evidence)) this.inputCount++;
     const record = body.log.at(-1)!;
     const alerts: CoachAlert[] = [];
-    this.note(describeBodyAction(event.evidence, record.outcomes, (id) => this.name(id), (id) => this.instrumentName(id)));
+    // Assistant ticks and fluid snapshots are telemetry, not learner actions: keep them out of the history Jarvis reads.
+    if (!isBodyTelemetry(event.evidence)) this.note(describeBodyAction(event.evidence, record.outcomes, (id) => this.name(id), (id) => this.instrumentName(id)));
     for (const m of this.engine.mistakes.slice(mistakeCount)) {
       this.mistakes.push({ stepId: previous?.id ?? "", mistakeId: m.id, severity: m.severity, structure: m.structure, feedback: m.feedback, at: this.clock().toISOString() });
       const urgent = m.severity === "high";
@@ -644,7 +645,7 @@ export class CoachSession {
   }
 
   // quiet: at session creation, before anyone listens, so the state version does not move.
-  setBaseline(baseline: Baseline, opts: { weightKg?: number; spo2?: number | null; quiet?: boolean } = {}) {
+  setBaseline(baseline: Baseline, opts: { weightKg?: number; spo2?: number | null; mlPerKg?: number; quiet?: boolean } = {}) {
     this.condition.setBaseline(baseline, opts);
     this.note(`Vitals baseline set from ${baseline.source ?? "authored"} values: HR ${baseline.hr}, BP ${baseline.sys}/${baseline.dia}, RR ${baseline.rr}.`);
     if (!opts.quiet) this.changed([]);
@@ -652,11 +653,22 @@ export class CoachSession {
 
   // Laptop demo only: with no headset sending 1 Hz ticks, the coach sends the body reducer's tick itself
   // while something bleeds, so blood loss grows in real time.
+  private lastSimTickMs = 0;
+
   private advanceSimulatedBleeding() {
     const body = this.engine.body;
-    if (!body || this.condition.died || !this.bleeds.size) return;
+    const now = this.ms();
+    if (!body || this.condition.died || !this.bleeds.size) {
+      this.lastSimTickMs = now;
+      return;
+    }
+    // One headset second per elapsed clock second, however often tick() is called.
+    if (!this.lastSimTickMs) this.lastSimTickMs = now;
+    if (now - this.lastSimTickMs < 1000) return;
+    this.lastSimTickMs += 1000 * Math.floor((now - this.lastSimTickMs) / 1000);
     const lastT = body.log.at(-1)?.action.timeMs ?? 0;
-    const evidence = { actionId: `coach-tick-${lastT + 1000}`, instrumentId: "assistant", instrumentInstanceId: "", secondaryInstanceId: "", verb: "tick", tissueId: body.tissues[0]?.id ?? "skin", layer: body.tissues[0]?.layer ?? "skin", coordinateFrame: "registered_torso_m", timeMs: lastT + 1000, position: { x: 0, y: 0, z: 0 }, registered: true, speedMps: 0, forceProxy: 0, distanceMm: 0, lengthMm: 0, angleDegrees: 0, depthMm: 0, durationMs: 0, separationMm: 0, choice: "" } as BodyAction;
+    const tissue = body.tissues[0]?.id ?? "skin";
+    const evidence = bodyAction("tick", tissue, { actionId: `coach-tick-${lastT + 1000}`, instrumentId: "assistant", instrumentInstanceId: "", layer: body.tissues[0]?.layer ?? tissue, timeMs: lastT + 1000 });
     this.handle({ type: "surgery", evidence });
   }
 
@@ -669,10 +681,12 @@ export class CoachSession {
       this.changed(alerts);
       return { accepted: true, reason: "", alerts };
     }
-    const { first } = this.condition.injure(e.region);
+    if (!this.trackingValid) return { accepted: false, reason: "tracking_invalid", alerts: [] };
+    if (this.condition.view().outcome.result !== "in_progress") return { accepted: false, reason: "case_ended", alerts: [] };
+    const { first, rebled } = this.condition.injure(e.region);
     this.note(`${this.instrumentName(e.instrumentId)} cut the ${def.label}, outside the surgical field.`);
     this.mistakes.push({ stepId: this.engine.current?.id ?? "", mistakeId: `region_${e.region}`, severity: def.critical ? "high" : "moderate", structure: e.region, feedback: def.alarm, at: this.clock().toISOString() });
-    const alerts = first ? [this.alert("region_injury", "urgent", def.alarm, [], "", `region.${e.region}`)] : [];
+    const alerts = first || rebled ? [this.alert("region_injury", "urgent", def.alarm, [], "", `region.${e.region}`)] : [];
     this.changed(alerts);
     return { accepted: true, reason: "", alerts };
   }
@@ -681,8 +695,13 @@ export class CoachSession {
   private conditionAlerts(): CoachAlert[] {
     let rate = 0;
     for (const r of this.bleeds.values()) rate += r;
+    if (!this.bleeds.size) this.lastSimTickMs = this.ms(); // simulated bleeding time starts when a bleed does
     this.condition.setBodyBleeding(this.bloodLossMl, rate);
-    if (this.done) this.condition.markCompleted();
+    if (this.done) {
+      const all = this.kase.procedure.steps.every((st) => this.engine.completedMilestones.has(st.id) || this.completed.some((c) => c.stepId === st.id));
+      if (all) this.condition.markCompleted();
+      else this.condition.markEnded("ended before the case goals were reached");
+    }
     const out: CoachAlert[] = [];
     for (const c of this.condition.update()) {
       if (c.kind === "died") {
@@ -698,7 +717,7 @@ export class CoachSession {
   }
 
   private stuckLevel(): number {
-    if (this.done || !this.trackingValid) return 0;
+    if (this.done || !this.trackingValid || this.condition.died) return 0;
     const idle = (this.ms() - this.lastProgressAt) / 1000;
     let level = 0;
     for (let i = 0; i < this.policy.seconds.length; i++) {
@@ -720,6 +739,7 @@ export class CoachSession {
 
   // Learner asked for help: deliver the next tier immediately.
   requestHint(): { tier: number; say: string; highlight: string[] } {
+    if (this.condition.died) return { tier: 0, say: "The patient died, so the case is over. There is no next step.", highlight: [] };
     const step = this.engine.current;
     if (!step) return { tier: 0, say: "The procedure is complete. Nothing left to do.", highlight: [] };
     this.tier = Math.min(this.policy.seconds.length, this.tier + 1);
@@ -941,10 +961,11 @@ export class CoachSession {
       achievedMilestones: [...this.engine.completedMilestones],
       orderDeviations: [...this.engine.orderDeviations],
       decisionPrompts: (procedure.openBody?.decisions ?? []).map(({ id, prompt, choices }) => ({ id, prompt, choices })),
+      // A milestone undone later (a new bleed after securing the mesoappendix) is current again, not done.
       checklist: procedure.steps.map((st) => ({
         id: st.id,
         title: st.title,
-        done: this.engine.completedMilestones.has(st.id) || this.completed.some((c) => c.stepId === st.id),
+        done: st.id !== step?.id && (this.engine.completedMilestones.has(st.id) || this.completed.some((c) => c.stepId === st.id)),
         current: st.id === step?.id,
       })),
       condition: this.condition.view(),
@@ -1214,6 +1235,7 @@ export function renderContext(s: CoachSnapshot): string {
       `[LIVE SURGERY STATE v${s.version}] ${s.procedureTitle} for ${s.patientLabel}: THE PATIENT DIED (simulated). Cause: ${s.condition.outcome.cause}.`,
       `The case is over; no further actions count. Tell the learner plainly what happened and what would have prevented it, then stop.`,
       `Last events: ${s.timeline.slice(-5).map((t) => t.text).join(" ")}`,
+      ...(s.activeBleeds.length || s.condition.regions.some((r) => r.bleeding) ? [`Still bleeding at death: ${[...s.activeBleeds.map((b) => b.structure.name), ...s.condition.regions.filter((r) => r.bleeding).map((r) => r.label)].join(", ")}.`] : []),
     ].join("\n");
   }
   const st = s.step;
@@ -1228,7 +1250,7 @@ export function renderContext(s: CoachSnapshot): string {
   ];
   if (s.openBody) {
     lines.push("Open body: expected order is guidance, never an action gate. Only report measured facts and detected guardrails.");
-    lines.push(`Achieved milestones: ${s.achievedMilestones.join(", ") || "none"}. Expected-order deviations: ${s.orderDeviations.join(", ") || "none"}.`);
+    lines.push(`Achieved milestones: ${s.achievedMilestones.filter((id) => id !== st.id).join(", ") || "none"}. Expected-order deviations: ${s.orderDeviations.join(", ") || "none"}.`);
     // Only what the current milestone still needs (Still needed above); the full fact table is in get_surgery_state.
     for (const d of s.decisionPrompts) lines.push(`Authored decision ${d.id}: ${d.prompt} Choices: ${d.choices.join(", ")}.`);
   }
@@ -1244,7 +1266,7 @@ export function renderContext(s: CoachSnapshot): string {
   if (s.scene.summary) lines.push(`In view (${s.scene.source || "camera"}): ${s.scene.summary}`);
   if (s.focusStructure.id) lines.push(`Learner is looking at: ${s.focusStructure.name}.`);
   const v = s.condition.vitals;
-  lines.push(`Vitals (simulated from ${s.condition.baselineSource} baseline): HR ${v.hr}, BP ${v.sys}/${v.dia}, RR ${v.rr}${v.spo2 >= 0 ? `, SpO2 ${v.spo2}%` : ""}. Simulated blood loss ${v.bloodLossPct}% of volume (class ${v.hemorrhageClass}).${v.hemorrhageClass >= 3 ? " DETERIORATING: bleeding control comes before anything else." : ""}`);
+  lines.push(`Vitals (simulated; baseline ${s.condition.baselineSource === "measured" ? "measured from the real volunteer at the Time-Out with Presage, the changes are simulated" : s.condition.baselineSource === "demo" ? "from the Presage demo feed, not a real measurement" : `${s.condition.baselineSource} values`}): HR ${v.hr}, BP ${v.sys}/${v.dia}, RR ${v.rr}${v.spo2 >= 0 ? `, SpO2 ${v.spo2}%` : ""}. Simulated blood loss ${v.bloodLossPct}% of volume (class ${v.hemorrhageClass}).${v.hemorrhageClass >= 3 ? " DETERIORATING: bleeding control comes before anything else." : ""}`);
   const injuries = s.condition.regions;
   if (injuries.length) lines.push(`Injuries outside the surgical field: ${injuries.map((r) => `${r.label}${r.bleeding ? " (bleeding)" : ""}`).join(", ")}.`);
   if (s.held.length) lines.push(`In hand: ${s.held.map((h) => `${h.hand} ${h.name}${h.touching.id ? ` (tip on the ${h.touching.name.toLowerCase()})` : ""}`).join("; ")}.`);

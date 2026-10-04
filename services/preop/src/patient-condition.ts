@@ -47,7 +47,7 @@ export interface ConditionView {
   weightKg: number;
   rawBloodLossMl: number; // body reducer plus regions, unscaled
   regions: RegionInjury[];
-  outcome: { result: "in_progress" | "completed" | "died"; cause: string; at: string };
+  outcome: { result: "in_progress" | "completed" | "ended" | "died"; cause: string; at: string }; // ended: finished early without reaching the goals
 }
 
 export type ConditionChange = { kind: "class"; from: number; to: 1 | 2 | 3 | 4 } | { kind: "died"; cause: string };
@@ -56,6 +56,7 @@ export class PatientCondition {
   private baseline: Baseline = AUTHORED_BASELINE;
   private spo2Baseline: number | null = null;
   private weightKg = 70;
+  private mlPerKg = 70; // estimated blood volume: 70 ml/kg adult, 80 ml/kg child
   private regions = new Map<RegionId, RegionInjury>();
   private regionLostMl = 0;
   private lastMs: number | null = null; // set on first use: the owner's clock may not exist yet at construction
@@ -68,12 +69,17 @@ export class PatientCondition {
     private readonly scale = DEMO_HEMORRHAGE_SCALE,
   ) {}
 
+  get currentBaseline(): Baseline {
+    return { ...this.baseline };
+  }
+
   get died() {
     return this.outcome.result === "died";
   }
 
-  setBaseline(baseline: Baseline, opts: { weightKg?: number; spo2?: number | null } = {}) {
+  setBaseline(baseline: Baseline, opts: { weightKg?: number; spo2?: number | null; mlPerKg?: number } = {}) {
     this.baseline = baseline;
+    if (opts.mlPerKg && opts.mlPerKg > 0) this.mlPerKg = opts.mlPerKg;
     if (opts.weightKg && opts.weightKg > 0) this.weightKg = opts.weightKg;
     if (opts.spo2 !== undefined) this.spo2Baseline = opts.spo2;
   }
@@ -87,17 +93,23 @@ export class PatientCondition {
     if (this.outcome.result === "in_progress") this.outcome = { result: "completed", cause: "", at: new Date(this.clock()).toISOString() };
   }
 
+  markEnded(reason: string) {
+    if (this.outcome.result === "in_progress") this.outcome = { result: "ended", cause: reason, at: new Date(this.clock()).toISOString() };
+  }
+
   // A cutting tool hit a region outside the surgical field. Returns false when the region was already injured.
-  injure(region: RegionId): { first: boolean; catastrophic: boolean } {
+  // first: a new injury; rebled: a region whose bleeding was controlled is cut again. Both deserve an alarm.
+  injure(region: RegionId): { first: boolean; rebled: boolean; catastrophic: boolean } {
     this.advance();
     const def = REGIONS[region];
     const existing = this.regions.get(region);
     if (existing) {
-      if (!existing.bleeding && def.rawBleedMlPerMin > 0) existing.bleeding = true;
-      return { first: false, catastrophic: def.catastrophic };
+      const rebled = !existing.bleeding && def.rawBleedMlPerMin > 0;
+      if (rebled) existing.bleeding = true;
+      return { first: false, rebled, catastrophic: def.catastrophic };
     }
     this.regions.set(region, { region, label: def.label, bleeding: def.rawBleedMlPerMin > 0, rawBleedMlPerMin: def.rawBleedMlPerMin, at: this.clock() });
-    return { first: true, catastrophic: def.catastrophic };
+    return { first: true, rebled: false, catastrophic: def.catastrophic };
   }
 
   control(region: RegionId): boolean {
@@ -126,7 +138,7 @@ export class PatientCondition {
     const critical = [...this.regions.values()].some((r) => REGIONS[r.region].critical);
     const v = monitorVitals({
       baseline: this.baseline,
-      weightKg: this.weightKg,
+      weightKg: (this.weightKg * this.mlPerKg) / 70, // the shared model assumes 70 ml/kg
       bloodLostMl: (this.body.lostMl + this.regionLostMl) * this.scale,
       bleedMlPerMin: (this.body.bleedMlPerMin + this.regionRate()) * this.scale,
       criticalInjury: critical,
@@ -148,7 +160,10 @@ export class PatientCondition {
       if (v.hemorrhageClass > this.lastClass) changes.push({ kind: "class", from: this.lastClass, to: v.hemorrhageClass });
       this.lastClass = v.hemorrhageClass;
     }
-    const cause = catastrophic ? `catastrophic injury to the ${catastrophic.label}` : v.bloodLossPct >= DEATH_LOSS_PCT ? `hemorrhage (${Math.round(v.bloodLossPct)}% of blood volume, simulated)` : "";
+    // Death uses the blood actually lost, not the model's look-ahead for active bleeding, so a fresh bleed
+    // gives the learner time to react before it can kill.
+    const lostPct = (((this.body.lostMl + this.regionLostMl) * this.scale) / (this.mlPerKg * this.weightKg)) * 100;
+    const cause = catastrophic ? `catastrophic injury to the ${catastrophic.label}` : lostPct >= DEATH_LOSS_PCT ? `hemorrhage (${Math.round(lostPct)}% of blood volume lost, simulated)` : "";
     if (cause) {
       this.outcome = { result: "died", cause, at: new Date(this.clock()).toISOString() };
       changes.push({ kind: "died", cause });

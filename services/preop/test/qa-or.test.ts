@@ -1,3 +1,4 @@
+import { PatientCondition } from "../src/patient-condition.js";
 import { describe, expect, it, vi } from "vitest";
 import { createApp } from "../src/app.js";
 import { buildCase } from "../src/case-builder.js";
@@ -100,7 +101,7 @@ describe("1. ideal open appendectomy", () => {
     expect(r.unsafe).toEqual([]);
   });
 
-  it.skip("BUG: a learner who ends early with finish is reported as outcome completed", async () => {
+  it("FIXED: a learner who ends early with finish is reported as outcome completed", async () => {
     // conditionAlerts() calls condition.markCompleted() whenever engine.completed, and a finish event sets
     // engine.current = null, so an abandoned attempt (bodyGrade.complete false) reports outcome "completed".
     const r = rig();
@@ -272,7 +273,7 @@ describe("3. death", () => {
     expect(r.unsafe).toEqual([]);
   });
 
-  it.skip("BUG: no stall hints after the patient died (alerts poll keeps escalating)", async () => {
+  it("FIXED: no stall hints after the patient died (alerts poll keeps escalating)", async () => {
     // Repro: kill the patient (cut_head), then poll GET /alerts as the native Quest does while the coach
     // clock moves. stuckLevel() ignores the outcome, so 'stuck' hints keep arriving for a dead patient.
     const r = rig();
@@ -284,7 +285,7 @@ describe("3. death", () => {
     expect(after.map((a) => a.kind)).toEqual([]);
   });
 
-  it.skip("BUG: hint requests after death are not answered as if the case were live", async () => {
+  it("FIXED: hint requests after death are not answered as if the case were live", async () => {
     const r = rig();
     const { sid } = await r.create(PRIYA);
     await r.events(sid, { type: "injury", region: "head", instrumentId: "scalpel" });
@@ -313,7 +314,7 @@ describe("3. death", () => {
     }
   });
 
-  it.skip("BUG: a neck cut kills a child instantly from the bleed-rate lookahead, with zero blood actually lost", async () => {
+  it("FIXED: a neck cut kills a child instantly from the bleed-rate lookahead, with zero blood actually lost", async () => {
     // Repro: Theo (26.8 kg), {type: injury, region: neck}. monitorVitals() adds 0.5 min of the scaled bleed rate
     // (300 x 8 x 0.5 = 1200 ml) to the loss, which is 64% of a 1876 ml EBV, and PatientCondition.update() uses
     // that lookahead percentage for the 50% death threshold. Outcome "died" with cause "hemorrhage (64% ...)"
@@ -399,7 +400,7 @@ describe("4. region injuries", () => {
     expect(r.unsafe).toEqual([]);
   });
 
-  it.skip("BUG: re-cutting a controlled region restarts its bleeding without any alarm", async () => {
+  it("FIXED: re-cutting a controlled region restarts its bleeding without any alarm", async () => {
     // Repro: injure neck, control it, injure neck again. PatientCondition.injure() sets bleeding=true again
     // but returns first:false, so handleInjury() emits no region alarm; the neck silently bleeds again.
     const r = rig();
@@ -411,7 +412,7 @@ describe("4. region injuries", () => {
     expect(again.json.alerts.map((a: Json) => a.kind)).toContain("region_injury");
   });
 
-  it.skip("BUG: injury while tracking is invalid should be refused like body actions (scoring paused)", async () => {
+  it("FIXED: injury while tracking is invalid should be refused like body actions (scoring paused)", async () => {
     // AGENTS.md / operation-flow.md: an invalid fit hides the anatomy and pauses scoring. Body actions are
     // refused with tracking_invalid, but handle() routes injury events before the tracking check, so a
     // region hit computed against an invalid body fit is scored (high-severity mistake) and can kill.
@@ -445,18 +446,22 @@ describe("5. baselines", () => {
     expect(cond(theo.created)).toMatchObject({ weightKg: 26.8, vitals: { spo2: 97, rr: 22 } });
   });
 
-  it.skip("BUG: a weight charted in pounds is read as kilograms", () => {
+  it("FIXED: a weight charted in pounds is read as kilograms", () => {
     // patient-demo-messy-coding charts "Body weight" 168 [lb_av]; chartBaseline ignores the unit -> 168 kg
     // (EBV 11.8 L instead of about 5.3 L, so she would take more than twice as long to bleed out).
     const c = chartBaseline((fixture("patient-demo-messy-coding") as any).data.vitals, 63);
     expect(c.weightKg).toBeCloseTo(76.2, 0);
   });
 
-  it.skip("BUG (doc mismatch): a child's blood volume uses 70 ml/kg, docs say about 80 ml/kg", () => {
+  it("FIXED (doc mismatch): a child's blood volume uses 70 ml/kg, docs say about 80 ml/kg", () => {
     // docs/operation-flow.md "Vitals": about 70 ml/kg adult, 80 ml/kg child. physiology.ts (and the .mjs)
     // use 70 for everyone. Repro: Theo (26.8 kg), body loss 10 ml raw (x8 = 80 ml) -> expect pct 80/2144.
-    const v = monitorVitals({ weightKg: 26.8, bloodLostMl: 80 });
-    expect(v.bloodLossPct).toBeCloseTo((80 / (80 * 26.8)) * 100, 1);
+    // Fixed in the coach's condition layer (the shared model stays at 70 ml/kg and gets a scaled weight).
+    const c = new PatientCondition(() => 0, 1);
+    c.setBaseline({ hr: 90, rr: 20, sys: 105, dia: 65, source: "chart" }, { weightKg: 26.8, mlPerKg: 80 });
+    c.setBodyBleeding(80, 0);
+    expect(c.view().vitals.bloodLossPct).toBeCloseTo((80 / (80 * 26.8)) * 100, 1);
+    expect(chartBaseline([], 8).mlPerKg).toBe(80);
   });
 
   it("AR Time-Out baseline: direct body sets it and labels it; junk is rejected and leaves the chart baseline", async () => {
@@ -481,7 +486,7 @@ describe("5. baselines", () => {
     expect(ctx).toMatch(/Vitals \(simulated[^)]*measured[^)]*\): HR 64, BP 117\/74, RR 13\./);
   });
 
-  it.skip("BUG (low): implausible baselines (diastolic above systolic) are accepted", async () => {
+  it("FIXED (low): implausible baselines (diastolic above systolic) are accepted", async () => {
     const r = rig();
     const { sid } = await r.create(PRIYA, "mixed_reality");
     const res = await r.req("POST", `/coach/sessions/${sid}/vitals/baseline`, { baseline: { hr: 70, rr: 12, sys: 60, dia: 140 } });
@@ -517,7 +522,7 @@ describe.skipIf(!VITALS)("5b. AR Time-Out against the real vitals service (demo 
     expect((await r.state(sid)).context).toMatch(/Vitals \(simulated[^)]*demo[^)]*\):/);
   });
 
-  it.skip("BUG: Presage capture replaces the charted blood pressure with authored 118/76 labeled as demo/measured", async () => {
+  it("FIXED: Presage capture replaces the charted blood pressure with authored 118/76 labeled as demo/measured", async () => {
     // services/vitals baselineFrom() only measures HR and RR and fills sys/dia from AUTHORED_BASELINE, but
     // the coach adopts all four under one source label. Priya's charted 121/78 becomes 118/76 "(demo)" in
     // demo mode and "(measured)" live, which breaks the honesty rule (authored values shown as measured).
@@ -610,7 +615,7 @@ describe("7. laptop sim buttons on an open-body session", () => {
     }
   });
 
-  it.skip("BUG (low): two sim actions in the same wall-clock millisecond collide and the second is dropped", async () => {
+  it("FIXED (low): two sim actions in the same wall-clock millisecond collide and the second is dropped", async () => {
     // openBodySimulation() builds actionId `sim-${kind}-${Date.now()}-${n}` from the wall clock (not the injected
     // clock). Two "mistake" clicks within 1 ms reuse the id; the second is rejected as a duplicate silently.
     const spy = vi.spyOn(Date, "now").mockReturnValue(1_700_000_000_000);
@@ -639,7 +644,7 @@ describe("7. laptop sim buttons on an open-body session", () => {
     expect(r.unsafe).toEqual([]);
   });
 
-  it.skip("BUG (high for the laptop demo): a simulated session never advances bleeding on tick", async () => {
+  it("FIXED (high for the laptop demo): a simulated session never advances bleeding on tick", async () => {
     // Repro: 5x complete_step, bleed, then poll GET /alerts 10 times with the clock moving 1 s each time.
     // Expected blood loss +20 ml (2 ml/s); actual +0. CoachSession.advanceSimulatedBleeding() builds the
     // assistant tick BodyAction without bloodLostMl, poolMl and flowMlPerSecond (hidden by "as BodyAction"),
@@ -653,7 +658,7 @@ describe("7. laptop sim buttons on an open-body session", () => {
     expect((await r.state(sid)).snapshot.bloodLossMl).toBe(lost0 + 20);
   });
 
-  it.skip("BUG (latent, masked by the bug above): simulated bleeding time follows tick() calls, not the clock", async () => {
+  it("FIXED (latent, masked by the bug above): simulated bleeding time follows tick() calls, not the clock", async () => {
     // advanceSimulatedBleeding() always adds one headset second per tick() call. tick() runs from the SSE
     // ticker and from every GET /alerts poll, so a fast poller (or SSE plus a poller) bleeds faster than
     // real time. Repro once ticks work: poll /alerts 10 times without moving the clock; loss should not grow.
@@ -691,7 +696,7 @@ describe("8. Jarvis context", () => {
     }
   });
 
-  it.skip("BUG: a milestone undone by a new bleed is shown both done and current, and still claimed as achieved", async () => {
+  it("FIXED: a milestone undone by a new bleed is shown both done and current, and still claimed as achieved", async () => {
     // Repro: complete through divide_mesoappendix, then cut the mesoappendix again at its base (distanceMm 0,
     // proximal to the ties at 5 and 15). activeBleeds becomes 1, the divide_mesoappendix predicates fail
     // and the engine moves current back to it, but completedMilestones is sticky: checklist shows
@@ -705,7 +710,7 @@ describe("8. Jarvis context", () => {
     expect(item.done && item.current).toBe(false);
   });
 
-  it.skip("BUG (low): headset 1 Hz ticks flood the timeline Jarvis sees", async () => {
+  it("FIXED (low): headset 1 Hz ticks flood the timeline Jarvis sees", async () => {
     // Repro: 10 headset ticks while bleeding. Each tick is a 'surgery' event handled like a learner action:
     // inputCount++, and the timeline / lastEvent get "Assistant: tick on the skin." every second, pushing the
     // real actions out of the 8-line "Recent" context within 8 s of bleeding.

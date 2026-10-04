@@ -74,7 +74,7 @@ describe("operating room condition over HTTP", () => {
     expect(created.snapshot.condition.baselineSource).toMatch(/chart/);
     expect(created.snapshot.condition.vitals.sys).toBe(121);
     expect(created.snapshot.checklist[0]).toMatchObject({ id: "mark_incision", done: false, current: true });
-    expect(created.context).toMatch(/Vitals \(simulated from chart/);
+    expect(created.context).toMatch(/Vitals \(simulated; baseline chart/);
 
     const cut = await req("POST", `/coach/sessions/${sid}/events`, { event: { type: "injury", region: "neck", instrumentId: "scalpel" } });
     expect(cut.json.accepted ?? true).toBeTruthy();

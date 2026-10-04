@@ -9,6 +9,7 @@ export interface Baseline {
   sys: number;
   dia: number;
   source?: string; // "measured" (Presage, AR), "demo", "chart" (VR), "authored"
+  bpSource?: string; // where systolic/diastolic came from when it differs (Presage measures only HR and RR)
 }
 
 export interface MonitorVitals {
