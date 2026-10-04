@@ -14,6 +14,7 @@ import jsonschema
 import numpy as np
 import pytest
 
+from scalpal_motion import gateway_worker
 from scalpal_motion.gateway_worker import run_worker
 from scalpal_motion.retarget import retarget_frames
 from scalpal_motion.synthetic import make_synthetic
@@ -26,8 +27,11 @@ SAMPLE_HAND = Path.home() / "dev/third_party/dex-retargeting/example/vector_reta
 class FakeGateway:
     """One queued job; records heartbeats, uploads, completion, and failure."""
 
-    def __init__(self, clip: Path, stale_heartbeat: bool = False, config_version: str = "motion-v1"):
+    def __init__(self, clip: Path, stale_heartbeat: bool = False, config_version: str = "motion-v1",
+                 fail_drops: int = 0, input_meta: dict | None = None):
         self.clip, self.stale_heartbeat = clip, stale_heartbeat
+        self.fail_drops = fail_drops  # drop this many /fail requests without answering
+        self.fail_attempts = 0
         self.claimed = False
         self.heartbeats, self.registered, self.uploaded = [], {}, {}
         self.completed = self.failed = None
@@ -76,7 +80,8 @@ class FakeGateway:
                                 "configVersion": config_version, "leaseMs": 3000},
                         "inputs": [{"role": "input", "artifactId": "art_clip", "kind": "raw_clip",
                                     "filename": "clip.mp4", "contentType": "video/mp4",
-                                    "download": {"url": "/files/clip", "method": "GET", "headers": {}}}],
+                                    "download": {"url": "/files/clip", "method": "GET", "headers": {}},
+                                    **(input_meta or {})}],
                         "endpoints": {k: f"{base}/{k}" for k in ("heartbeat", "outputs", "complete", "fail")},
                     })
                 if self.path == f"{base}/heartbeat":
@@ -93,6 +98,10 @@ class FakeGateway:
                     gw.completed = body
                     return self._json(200, {})
                 if self.path == f"{base}/fail":
+                    gw.fail_attempts += 1
+                    if gw.fail_attempts <= gw.fail_drops:
+                        self.close_connection = True  # network error: no response at all
+                        return
                     gw.failed = body
                     return self._json(200, {})
                 self._json(404, {})
@@ -170,3 +179,65 @@ def test_unsupported_config_fails_before_downloading_or_inference(tmp_path):
     assert gw.failed["retryable"] is False
     assert gw.failed["error"] == "unsupported motion configVersion; expected motion-v1"
     assert not gw.heartbeats
+
+
+@pytest.fixture
+def no_backoff(monkeypatch):
+    monkeypatch.setattr(gateway_worker, "FAIL_REPORT_BACKOFF_S", (0, 0, 0))
+
+
+def test_fail_report_retries_through_network_errors(tmp_path, no_backoff):
+    # M1: a gateway blip while reporting a failure must not lose the report.
+    gw = FakeGateway(_blank_clip(tmp_path / "blank.mp4"), fail_drops=2)
+    try:
+        run_worker(gw.url, "tok", once=True, log=lambda *_: None)
+    finally:
+        gw.close()
+    assert gw.fail_attempts == 3
+    assert gw.failed["retryable"] is False and "no right hand" in gw.failed["error"]
+
+
+def test_unreportable_failure_does_not_kill_the_worker(tmp_path, no_backoff):
+    # M1: if the gateway stays unreachable, log it and return; the lease sweep
+    # requeues the run.
+    gw = FakeGateway(_blank_clip(tmp_path / "blank.mp4"), fail_drops=1000)
+    logs = []
+    try:
+        run_worker(gw.url, "tok", once=True, log=logs.append)
+    finally:
+        gw.close()
+    assert gw.failed is None
+    assert gw.fail_attempts == len(gateway_worker.FAIL_REPORT_BACKOFF_S) + 1
+    assert any("could not report failure" in line for line in logs)
+
+
+class _StopLoop(BaseException):
+    """Ends run_worker's infinite loop from a test (Exception would be caught)."""
+
+
+def test_unexpected_handler_crash_keeps_polling(monkeypatch):
+    # M1: any exception from one job is logged and the loop polls again.
+    replies = iter([(200, {"job": {"jobId": "job_1", "run": 1}})])
+    polls = []
+
+    class Gw:
+        def __init__(self, url, token):
+            self.url = url
+
+        def call(self, path, body=None):
+            polls.append(path)
+            try:
+                return next(replies)
+            except StopIteration:
+                raise _StopLoop from None
+
+    def crash(*_a, **_k):
+        raise RuntimeError("handler bug")
+
+    monkeypatch.setattr(gateway_worker, "Gateway", Gw)
+    monkeypatch.setattr(gateway_worker, "process_claim", crash)
+    logs = []
+    with pytest.raises(_StopLoop):
+        run_worker("http://gateway.test", "tok", log=logs.append)
+    assert polls == ["/v1/worker/claim", "/v1/worker/claim"], "the loop must survive the crash"
+    assert any("handler bug" in line for line in logs)
