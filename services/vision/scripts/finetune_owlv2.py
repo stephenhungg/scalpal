@@ -39,7 +39,7 @@ from PIL import Image
 from scipy.optimize import linear_sum_assignment
 from transformers import Owlv2ForObjectDetection, Owlv2Processor
 
-from scalpal_vision.detector import owlv2_pixels
+from scalpal_vision.detector import OWLV2_NATIVE, OWLV2_SIZE, owlv2_pixels
 
 REPO = "google/owlv2-base-patch16-ensemble"
 
@@ -83,8 +83,9 @@ def focal(logits: torch.Tensor, targets: torch.Tensor, alpha=0.25, gamma=2.0) ->
 
 
 class Runner:
-    def __init__(self, device: str, prompts: list[str], weights: str | None = None):
+    def __init__(self, device: str, prompts: list[str], weights: str | None = None, size: int = OWLV2_SIZE):
         self.device = device
+        self.size = size
         self.processor = Owlv2Processor.from_pretrained(REPO)
         self.model = Owlv2ForObjectDetection.from_pretrained(weights or REPO).to(device)
         tokens = self.processor.tokenizer(prompts, padding="max_length", max_length=16, truncation=True, return_tensors="pt")
@@ -92,10 +93,10 @@ class Runner:
 
     def pixels(self, record: dict) -> torch.Tensor:
         image = Image.open(record["image"]).convert("RGB")
-        return owlv2_pixels(image).to(self.device)
+        return owlv2_pixels(image, self.size).to(self.device)
 
     def forward(self, pixel_values: torch.Tensor):
-        return self.model(pixel_values=pixel_values, **self.text)
+        return self.model(pixel_values=pixel_values, **self.text, interpolate_pos_encoding=self.size != OWLV2_NATIVE)
 
     @torch.inference_mode()
     def evaluate(self, records: list[dict]) -> dict:
@@ -196,13 +197,14 @@ def main() -> None:
     parser.add_argument("--out", type=Path, default=Path("runs/owlv2-synth"))
     parser.add_argument("--save", action="store_true", help="also save the fine-tuned weights")
     parser.add_argument("--seed", type=int, default=817)
+    parser.add_argument("--size", type=int, default=OWLV2_SIZE, help="input size; match the service's --size")
     args = parser.parse_args()
     random.seed(args.seed)
     torch.manual_seed(args.seed)
     prompts = json.loads((args.data / "prompts.json").read_text())["prompts"]
     train, test = load(args.data / "train.jsonl"), load(args.data / "test.jsonl")
-    runner = Runner(args.device, prompts)
-    report = {"device": args.device, "train_images": len(train), "test_images": len(test), "epochs": args.epochs, "lr": args.lr}
+    runner = Runner(args.device, prompts, size=args.size)
+    report = {"device": args.device, "size": args.size, "train_images": len(train), "test_images": len(test), "epochs": args.epochs, "lr": args.lr}
     report["zero_shot_test"] = runner.evaluate(test)
     print("zero-shot test:", report["zero_shot_test"], flush=True)
     start = time.perf_counter()

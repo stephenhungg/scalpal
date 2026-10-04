@@ -83,7 +83,9 @@ def nms(detections: list[RawDetection], threshold: float = 0.5) -> list[RawDetec
     return kept
 
 
-OWLV2_SIZE = 960
+OWLV2_NATIVE = 960
+# 768 measured 2x faster than native 960 on an M2 with similar results on the benchmark images.
+OWLV2_SIZE = 768
 CLIP_MEAN = (0.48145466, 0.4578275, 0.40821073)
 CLIP_STD = (0.26862954, 0.26130258, 0.27577711)
 
@@ -91,7 +93,7 @@ CLIP_STD = (0.26862954, 0.26130258, 0.27577711)
 def owlv2_pixels(image: Image.Image, size: int = OWLV2_SIZE):
     """OWLv2 preprocessing without the slow scipy path in transformers' Owlv2ImageProcessor.
 
-    Same steps: scale to [0, 1], pad bottom/right to a square with 0.5, resize to 960,
+    Same steps: scale to [0, 1], pad bottom/right to a square with 0.5, resize to `size`,
     normalize with CLIP mean/std. Measured max per-pixel difference from the reference
     processor is reported in README.md.
     """
@@ -118,8 +120,8 @@ class Owlv2Backend:
         self.device = device
         self.repo = weights or repo
         self.processor = Owlv2Processor.from_pretrained(repo)
-        # Native resolution is 960 (60 x 60 patches). Smaller sizes interpolate the position
-        # embeddings: faster, but small objects get fewer patches.
+        # Native resolution is 960 (60 x 60 patches). Other sizes interpolate the position
+        # embeddings: smaller is faster, but small objects get fewer patches.
         size = size or OWLV2_SIZE
         if size % 16:
             raise ValueError("OWLv2 input size must be a multiple of 16")
@@ -148,7 +150,7 @@ class Owlv2Backend:
                 pixel_values=pixel,
                 input_ids=text["input_ids"],
                 attention_mask=text["attention_mask"],
-                interpolate_pos_encoding=self.size != OWLV2_SIZE,
+                interpolate_pos_encoding=self.size != OWLV2_NATIVE,
             )
         # OWLv2 pads the image to a square at the bottom/right, so boxes are relative to
         # the padded square. Scale by the long side, then clamp in normalize_box.
