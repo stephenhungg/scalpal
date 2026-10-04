@@ -24,7 +24,7 @@ namespace Scalpal.Surgery
         AnatomyPart pulsedPart;
         int generation;
         float captionUntil;
-        bool warningPlaying;
+        bool warningPlaying, safetyPlaying;
         public string LastCaption { get; private set; } = "";
 
         public void Initialize(CoachRelay source, AnatomyExerciseBinding binding, QuestJarvisVoice jarvis = null, TextMesh text = null)
@@ -44,25 +44,35 @@ namespace Scalpal.Surgery
         }
 
         // Old-step guidance cannot reappear after progress, retry, or registration loss.
-        public static bool Relevant(CoachAlertDto alert, string currentStep, bool registrationValid, bool completed)
+        // activeBleed reads the latest local body state; null when the case has no body.
+        public static bool Relevant(CoachAlertDto alert, string currentStep, bool registrationValid, bool completed, Func<string, bool> activeBleed = null)
         {
             if (alert == null || string.IsNullOrEmpty(alert.say)) return false;
             if (alert.kind == "tracking_lost") return !registrationValid;
             if (alert.kind == "tracking_restored") return registrationValid;
             if (alert.kind == "case_complete") return completed;
             if (!registrationValid || completed) return false;
+            // Mirrors services/preop/src/jarvis/arbiter.js: a bleeding alert is stale once the latest state
+            // no longer lists that structure as an active bleed.
+            if (alert.kind == "bleeding")
+                return activeBleed == null || (alert.highlight != null && alert.highlight.Length > 0 && activeBleed(alert.highlight[0]));
             // Body consequences are independent of the next suggested milestone.
-            if (alert.kind == "mistake" || alert.kind == "bleeding" || alert.kind == "bleeding_controlled") return true;
+            if (alert.kind == "mistake" || alert.kind == "bleeding_controlled") return true;
             return string.IsNullOrEmpty(alert.stepId) || alert.stepId == currentStep;
         }
 
         bool Relevant(CoachAlertDto alert) => relay && relay.IsSynchronized && exercise &&
-            Relevant(alert, exercise.Current?.id ?? "", exercise.anatomy && exercise.anatomy.RegistrationValid, exercise.Completed);
+            Relevant(alert, exercise.Current?.id ?? "", exercise.anatomy && exercise.anatomy.RegistrationValid, exercise.Completed,
+                exercise.Body == null ? (Func<string, bool>)null : id => exercise.Body.Get(id, "bleeding") > 0);
+
+        // Only a safety warning may cut off Jarvis mid-turn; other warnings wait for the turn to end.
+        public static bool InterruptsAgent(CoachAlertDto alert) => alert != null && alert.tier == "warning" &&
+            (alert.kind == "mistake" || alert.kind == "bleeding" || alert.kind == "tracking_lost");
 
         void Receive(CoachAlertDto alert)
         {
             if (!isActiveAndEnabled || !Relevant(alert)) return;
-            if (alert.tier == "warning")
+            if (InterruptsAgent(alert))
             {
                 StopPlayback(); queued.Clear();
                 if (voice && voice.CoachSessionId == relay.SessionId) voice.InterruptPlayback();
@@ -76,7 +86,7 @@ namespace Scalpal.Surgery
 
         void Update()
         {
-            if (playback != null && voice && relay && voice.CoachSessionId == relay.SessionId) voice.InterruptPlayback();
+            if (playback != null && safetyPlaying && voice && relay && voice.CoachSessionId == relay.SessionId) voice.InterruptPlayback();
             if (caption && Time.unscaledTime >= captionUntil) caption.text = "";
             if (playback != null || !relay || !relay.IsSynchronized) return;
             // A conversational turn finishes before a caution; urgent clips interrupt above.
@@ -118,7 +128,7 @@ namespace Scalpal.Surgery
         {
             // Yield once so even a caption-only response clears the caller's coroutine handle.
             yield return null;
-            warningPlaying = alert.tier == "warning";
+            warningPlaying = alert.tier == "warning"; safetyPlaying = InterruptsAgent(alert);
             if (relay && relay.TryReflexUrl(alert.reflexRoute, out string url))
             {
                 for (int attempt = 0; attempt < 3 && epoch == generation && Relevant(alert); attempt++)
@@ -191,7 +201,7 @@ namespace Scalpal.Surgery
         {
             if (speaker) { speaker.Stop(); speaker.clip = null; }
             if (activeClip) Release(activeClip);
-            activeClip = null; warningPlaying = false; playback = null;
+            activeClip = null; warningPlaying = safetyPlaying = false; playback = null;
         }
         void StopPlayback() { if (playback != null) StopCoroutine(playback); FinishPlayback(); }
         void Failed(string reason) => ResetDelivery();
