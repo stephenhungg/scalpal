@@ -854,7 +854,8 @@ export function renderContext(s: CoachSnapshot): string {
   lines.push(`Time on step ${s.secondsOnStep}s, ${s.secondsSinceProgress}s since progress, ${s.offTargetAttempts} off-target attempts. Coaching level: ${s.stuckLabel} (hint tier ${s.hintTier}).`);
   const recent = s.recentMistakes.filter((m) => m.stepId === st.id);
   if (recent.length) lines.push(`Mistakes this step: ${recent.map((m) => m.feedback).join(" ")}`);
-  lines.push(`If asked what to do: ${s.guidance.say}`);
+  // Hints go through get_hint so the tier escalates; this line only tells Jarvis where coaching stands.
+  lines.push(`Coaching: hint tier ${s.hintTier} of 3 used on this step. If the learner asks what to do, call get_hint.`);
   if (st.nextTitle) lines.push(`After this: ${st.nextTitle}.`);
   return lines.join("\n");
 }
