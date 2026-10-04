@@ -459,7 +459,7 @@ namespace Scalpal.Exercises.Coach
             if (current == null || string.IsNullOrEmpty(current.sessionId) || current.patientId != patientId
                 || (!string.IsNullOrEmpty(expectedProcedureId) && current.procedureId != expectedProcedureId))
             {
-                FailSync("no matching live Jarvis session for this patient and procedure; start it on the laptop");
+                FailSync("no matching live Scalpal session for this patient and procedure; start it on the laptop");
                 yield break;
             }
             yield return AdoptKnown(current.sessionId, patientId, current.procedureId, expectedCaseId, expectedMode, expectedInitialStepId, request);
@@ -486,7 +486,7 @@ namespace Scalpal.Exercises.Coach
                 || string.IsNullOrEmpty(snapshot.step?.id)
                 || (!string.IsNullOrEmpty(initialStepId) && snapshot.step.id != initialStepId))
             {
-                FailSync("Jarvis session does not match this untouched case, presentation mode and initial step; start a new session");
+                FailSync("Scalpal session does not match this untouched case, presentation mode and initial step; start a new session");
                 yield break;
             }
             // Highlight/tracking operations may increment version while eventCount remains zero.

@@ -253,7 +253,7 @@ namespace Scalpal.Quest.Editor
             var shownText=FindObjectsByType<TextMesh>(FindObjectsSortMode.None).Cast<Component>().Concat(FindObjectsByType<TMPro.TMP_Text>(FindObjectsSortMode.None))
                 .Where(text=>text.gameObject.activeInHierarchy&&text.GetComponent<Renderer>()&&text.GetComponent<Renderer>().enabled)
                 .Where(text=>!LearnerTextRoots.Any(root=>text.GetComponentsInParent<Transform>(true).Any(parent=>parent.name==root))).Select(text=>text.name).ToArray();
-            Check(shownText.Length==0,"practice view shows only the checklist, Jarvis line, monitor and on-demand labels; extra world text: "+string.Join(", ",shownText));
+            Check(shownText.Length==0,"practice view shows only the checklist, Scalpal line, monitor and on-demand labels; extra world text: "+string.Join(", ",shownText));
             string mrCoachId=session.exercise.explicitCoachSessionId;
             yield return CoachMode("mixed_reality");
             Check(!session.TrySelectOperatingRoomMode("virtual",out modeReason)&&!string.IsNullOrEmpty(modeReason)&&session.Practicing&&session.presentation.passthrough&&session.realtime.AttemptId==attempt,

@@ -99,7 +99,7 @@ namespace Scalpal.EncounterOffice
         public static bool ToolAllowed(string role, string phase, string tool) =>
             role == "patient" && phase == "interview" && (tool == "answer" || tool == "examine" || tool == "order_test") ||
             role == "attending" && (tool == "get_encounter_summary" || phase == "attending" && tool == "record_assessment");
-        public const string AttendingLabel = "Jarvis · Attending", LearnerLabel = "You";
+        public const string AttendingLabel = "Scalpal · Attending", LearnerLabel = "You";
         // The patient agent and Jarvis are separate voices; every line names who actually said it.
         public static string SpeakerLabel(EncounterState state, string role)
         {

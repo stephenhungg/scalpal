@@ -103,7 +103,7 @@ namespace Scalpal.Surgery.Editor
                 Assert(nurse.outcome == "applied" && nurse.reason == null && nurse.acknowledgements == 1, "handInstrument resolves applied exactly once: " + nurse.outcome + "/" + nurse.acknowledgements);
                 Assert(rightGrip.HeldInstrument == hemostat && hemostat.Held && hemostat.transform.parent == right.transform, "the hemostat is in the right hand");
                 Assert(hint.Text == "Hemostat · from nurse", "a tiny attribution cue at the hand: " + hint.Text);
-                Assert(Results().Count == 0, "a nurse's command answers no Jarvis tool call");
+                Assert(Results().Count == 0, "a nurse's command answers no Scalpal tool call");
 
                 // 2. Rejections carry the voice tool's reasons back to the shared row.
                 var already = Deliver(Row("nurse-hand-0002", "handInstrument", "hemostat", 1, "operator"));
@@ -120,7 +120,7 @@ namespace Scalpal.Surgery.Editor
                 // 3. Jarvis acts through the same reducer: swap_instrument becomes a requestCommand row, nothing moves until
                 // that row comes back through the subscription, and the tool call answers with the command's outcome.
                 var swap = Jarvis("swap_instrument", "{\"instrument\":\"scalpel\",\"hand\":\"left\"}");
-                Assert(requests.Count == 1, "a paired Jarvis swap writes one requestCommand");
+                Assert(requests.Count == 1, "a paired Scalpal swap writes one requestCommand");
                 var sent = requests[0];
                 Assert(sent.CommandId.StartsWith("jarvis-", StringComparison.Ordinal) && sent.SessionId == "session-or" && sent.Action == "handInstrument"
                     && sent.TargetId == "scalpel" && sent.ArgNumber == 0 && sent.ArgBool == null && sent.ExpectedStepVersion == 3, "requestCommand carries handInstrument scalpel left at the observed step version");
@@ -129,10 +129,10 @@ namespace Scalpal.Surgery.Editor
                 Pump(Time.realtimeSinceStartup);
                 Assert(outgoing.IsEmpty, "a committed, still-pending command keeps the tool call waiting");
                 var own = Deliver(Row(sent.CommandId, "handInstrument", "scalpel", 0, "headset"));
-                Assert(own.outcome == "applied" && own.acknowledgements == 1 && leftGrip.HeldInstrument == scalpel, "Jarvis's row applies through the shared path");
+                Assert(own.outcome == "applied" && own.acknowledgements == 1 && leftGrip.HeldInstrument == scalpel, "Scalpal's row applies through the shared path");
                 var answer = Resolved(swap, "swap_instrument via SpacetimeDB");
                 Assert(!answer.is_error && answer.result == "ok: scalpel in left hand", "the tool call answers with the applied command: " + answer.result);
-                Assert(hint.Text == "Scalpel · from Scalpal", "Jarvis's hand-over is attributed to Scalpal: " + hint.Text);
+                Assert(hint.Text == "Scalpel · from Scalpal", "Scalpal's hand-over is attributed to Scalpal: " + hint.Text);
 
                 // A rejected Jarvis command answers the tool call with the rejection.
                 var twice = Jarvis("swap_instrument", "{\"instrument\":\"scalpel\",\"hand\":\"left\"}");
@@ -165,9 +165,9 @@ namespace Scalpal.Surgery.Editor
                 var unpaired = Jarvis("swap_instrument", "{\"instrument\":\"babcock\",\"hand\":\"right\"}");
                 var unpairedAnswer = Resolved(unpaired, "unpaired");
                 Assert(requests.Count == 5 && !unpairedAnswer.is_error && unpairedAnswer.result == "ok: babcock in right hand" && rightGrip.HeldInstrument == babcock,
-                    "unpaired, Jarvis applies locally without a shared request: " + unpairedAnswer.result);
+                    "unpaired, Scalpal applies locally without a shared request: " + unpairedAnswer.result);
 
-                Debug.Log("SCALPAL_SHARED_INSTRUMENT_COMMAND_VALIDATION_OK handInstrument/highlightInstrument rows applied or rejected once with voice reasons and hand attribution; Jarvis tools via requestCommand resolve from the command; refused/silent/undelivered/unpaired fall back; stub bridge, no headset");
+                Debug.Log("SCALPAL_SHARED_INSTRUMENT_COMMAND_VALIDATION_OK handInstrument/highlightInstrument rows applied or rejected once with voice reasons and hand attribution; Scalpal tools via requestCommand resolve from the command; refused/silent/undelivered/unpaired fall back; stub bridge, no headset");
             }
             finally { UnityEngine.Object.DestroyImmediate(fixture); }
         }

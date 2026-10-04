@@ -111,7 +111,7 @@ namespace Scalpal.Quest
         public bool SwapInstrument(string instrument, string hand, out string result, string from = null)
         {
             string id = InstrumentId(instrument), name = id.Replace('_', ' ');
-            if (!Practicing) { result = Phase == "Practicing" ? "failed: practice is paused" : "failed: not practicing yet; finish the briefing and Time-Out first"; return false; }
+            if (!Practicing) { result = Phase == "Practicing" ? "failed: practice is paused" : "failed: not practicing yet; finish the briefing first"; return false; }
             if (!Hands(out var left, out var right)) { result = "failed: hands not tracked"; return false; }
             hand = (hand ?? "").Trim().ToLowerInvariant();
             bool either = hand != "left" && hand != "right";

@@ -99,8 +99,8 @@ namespace Scalpal.Shell.Editor
             var expected = new[] {
                 (DialogueSpeaker.Patient, "Priya Ramaswamy", "Priya Ramaswamy · Patient"),
                 (DialogueSpeaker.Parent, "Laura Abernathy", "Laura Abernathy · Parent"),
-                (DialogueSpeaker.Attending, "", "Jarvis · Attending"),
-                (DialogueSpeaker.Coach, "", "Jarvis · Coach"),
+                (DialogueSpeaker.Attending, "", "Scalpal · Attending"),
+                (DialogueSpeaker.Coach, "", "Scalpal · Coach"),
                 (DialogueSpeaker.You, "", "You") };
             foreach (var (speaker, name, label) in expected)
             {
@@ -229,17 +229,17 @@ namespace Scalpal.Shell.Editor
                 Call(voice, "Handle", "{\"type\":\"user_transcript\",\"user_transcription_event\":{\"user_transcript\":\"Is this the appendix?\"}}");
                 Update(feed);
                 Check(box.Speaker == DialogueSpeaker.You && box.SpeakerLabel == "You" && box.FullText == "Is this the appendix?", "OR learner transcript arrives as You");
-                Check(box.Indicator == DialogueIndicator.Thinking, "OR shows Jarvis thinking after the learner speaks");
+                Check(box.Indicator == DialogueIndicator.Thinking, "OR shows Scalpal thinking after the learner speaks");
                 Call(voice, "Handle", "{\"type\":\"agent_response\",\"agent_response_event\":{\"agent_response\":\"Yes. Trace the taenia coli down to its base before you clamp anything.\"}}");
                 Call(voice, "SetMode", "speaking"); Update(feed); box.Tick(.2f);
-                Check(box.SpeakerLabel == "Jarvis · Coach" && box.Typing && box.Indicator != DialogueIndicator.Thinking, "OR agent transcript arrives as Jarvis · Coach and types while speaking");
+                Check(box.SpeakerLabel == "Scalpal · Coach" && box.Typing && box.Indicator != DialogueIndicator.Thinking, "OR agent transcript arrives as Scalpal · Coach and types while speaking");
                 Call(voice, "SetMode", "listening"); Update(feed);
                 Check(!box.Typing, "OR speech end completes the line");
                 var coach = root.AddComponent<OpenSurgeryCoach>();
                 typeof(DialogueFeed).GetField("nextCoachLookup", Private).SetValue(feed, 0f); Update(feed);
                 int captionsBefore = UnityEngine.Object.FindObjectsByType<TextMesh>(FindObjectsInactive.Include, FindObjectsSortMode.None).Count(t => t.name == "Open surgery coach caption");
                 Call(coach, "Show", new CoachAlertDto { kind = "mistake", tier = "warning", say = "Stop. That is the ileum, not the appendix." });
-                Check(box.SpeakerLabel == "Jarvis · Coach" && box.FullText.StartsWith("Stop.", StringComparison.Ordinal) && coach.LastCaption.StartsWith("Stop.", StringComparison.Ordinal), "authored coach caption arrives as Jarvis · Coach");
+                Check(box.SpeakerLabel == "Scalpal · Coach" && box.FullText.StartsWith("Stop.", StringComparison.Ordinal) && coach.LastCaption.StartsWith("Stop.", StringComparison.Ordinal), "authored coach caption arrives as Scalpal · Coach");
                 Check(UnityEngine.Object.FindObjectsByType<TextMesh>(FindObjectsInactive.Include, FindObjectsSortMode.None).Count(t => t.name == "Open surgery coach caption") == captionsBefore, "coach draws no duplicate head-locked caption while the box presents it");
                 box.CompleteLine(); typeof(DialogueFeed).GetField("awaitingUntil", Private).SetValue(feed, 0f);
                 Update(feed); box.Tick(Frame);

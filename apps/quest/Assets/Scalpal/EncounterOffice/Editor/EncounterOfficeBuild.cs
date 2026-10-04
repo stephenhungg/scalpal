@@ -72,7 +72,7 @@ namespace Scalpal.EncounterOffice.Editor
             ui.suggestions = Button(left,ui,"Suggestions","suggestions","",0,.05f,.90f);
             Button(left,ui,"Back","previous","",-.36f,-.32f,.18f); Button(left,ui,"More","next","",-.17f,-.32f,.18f);
             Button(left,ui,"Voice","voice","",.07f,-.32f,.28f); Button(left,ui,"Stop","stop","",.335f,-.32f,.21f);
-            Button(left,ui,"Present to Jarvis","attending","",-.115f,-.42f,.67f); Button(left,ui,"Refresh","refresh","",.345f,-.42f,.21f);
+            Button(left,ui,"Present to Scalpal","attending","",-.115f,-.42f,.67f); Button(left,ui,"Refresh","refresh","",.345f,-.42f,.21f);
             Text(right,"FindingsTitle","Your findings",new Vector3(-.45f,.53f,-.026f),.034f);
             ui.chart = Text(right,"Chart","No examinations performed.",new Vector3(-.45f,.455f,-.026f),.024f);
             Button(right,ui,"Back","chart_previous","",-.345f,-.095f,.21f); Button(right,ui,"More","chart_next","",-.115f,-.095f,.21f); Button(right,ui,"Findings / score","chart_toggle","",.235f,-.095f,.43f);

@@ -123,9 +123,9 @@ namespace Scalpal.Quest.Editor
             session.voice.ForgetSaid();
             session.voice.RememberSaid("Scrubbed in with you."); session.voice.RememberSaid("Scrubbed in with you."); session.voice.RememberSaid("Stop. Bleeding from the appendicular artery.");
             for (int i = 0; i < 12; i++) session.voice.RememberSaid("line " + i);
-            Assert(session.voice.RecentLines.Count == 8 && session.voice.RecentLines[7] == "line 11", "Jarvis keeps his most recent lines, without consecutive duplicates");
+            Assert(session.voice.RecentLines.Count == 8 && session.voice.RecentLines[7] == "line 11", "Scalpal keeps his most recent lines, without consecutive duplicates");
             string resumed = NativeCaseSession.ReconnectContext("STATE", session.voice.RecentLines);
-            Assert(resumed.StartsWith("STATE") && resumed.Contains("line 11") && resumed.Contains("Do not greet again"), "a reconnect tells Jarvis what he already said");
+            Assert(resumed.StartsWith("STATE") && resumed.Contains("line 11") && resumed.Contains("Do not greet again"), "a reconnect tells Scalpal what he already said");
             Assert(NativeCaseSession.ReconnectContext("STATE", new string[0]) == "STATE", "a first connect carries only the state");
             session.voice.ForgetSaid();
             // One voice at a time: while a clip plays the agent's buffered reply is held, then plays in order.
@@ -141,9 +141,9 @@ namespace Scalpal.Quest.Editor
             // Push to talk: Jarvis must hear silence unless the learner holds Y, so table talk never triggers replies.
             session.PushToTalk(false);
             Assert(session.voice.MicrophoneMuted && Scalpal.Voice.QuestJarvisVoice.EncodeMicrophonePcm(new[] { .5f, -.5f }, 1, session.voice.MicrophoneMuted).All(b => b == 0),
-                "Jarvis receives only silence while push-to-talk is released");
+                "Scalpal receives only silence while push-to-talk is released");
             session.PushToTalk(true);
-            Assert(!session.voice.MicrophoneMuted, "holding push-to-talk opens the microphone to Jarvis");
+            Assert(!session.voice.MicrophoneMuted, "holding push-to-talk opens the microphone to Scalpal");
             session.PushToTalk(false);
             Assert(session.exercise.Submit(CaseEvent.PlacePort("umbilical"), out var accepted, out reason) && accepted.advanced,
                 "positive control: real authored umbilical placement advances");

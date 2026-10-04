@@ -14,7 +14,7 @@ namespace Scalpal.Anatomy
     {
         public AnatomyController anatomy;
         public CoachRelay coach;
-        [Tooltip("Live mode pauses input until a fresh matching Jarvis session is synchronized. Off runs locally.")]
+        [Tooltip("Live mode pauses input until a fresh matching Scalpal session is synchronized. Off runs locally.")]
         public bool requireCoachSynchronization;
         [Tooltip("Explicit fresh coach session created for the selected case. Blank retains the legacy current-session lookup.")]
         public string explicitCoachSessionId = "";

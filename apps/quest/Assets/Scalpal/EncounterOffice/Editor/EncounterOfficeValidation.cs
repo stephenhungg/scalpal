@@ -87,7 +87,7 @@ namespace Scalpal.EncounterOffice.Editor
             // Without a patient the room shows only the picker: patient list, paging and reload.
             Check(panel.PickerConsole.gameObject.activeSelf&&!panel.FindingsConsole.gameObject.activeSelf&&!panel.assessment.gameObject.activeSelf&&!panel.keyboard.gameObject.activeSelf
                 &&buttons.Where(button=>button.gameObject.activeInHierarchy).All(button=>!EncounterOfficePanel.Retired(button.command,button.argument)),"the picker is the only console before an interview; findings, assessment, keyboard and retired controls are hidden");
-            Check(buttons.Any(button=>button.command=="attending")&&!buttons.Any(button=>(button.command=="attending"||button.command=="voice"||button.command=="stop"||button.command=="refresh")&&button.gameObject.activeInHierarchy),"Present to Jarvis, Voice, Stop and Refresh are gone from the room");
+            Check(buttons.Any(button=>button.command=="attending")&&!buttons.Any(button=>(button.command=="attending"||button.command=="voice"||button.command=="stop"||button.command=="refresh")&&button.gameObject.activeInHierarchy),"Present to Scalpal, Voice, Stop and Refresh are gone from the room");
             panel.Act("attending","");Check(session.State==null,"a retired attending command does nothing");
             Check(buttons.Any(button=>button.command=="page"&&button.argument=="patients")&&!buttons.Any(button=>button.command=="patient"&&(button.argument==EncounterContract.FemalePatientId||button.argument==EncounterContract.MalePatientId)),"patient picker uses the service list instead of fixed demo identity buttons");
             Check(File.Exists(EncounterOfficeBuild.SurgeryScenePath),"the existing native surgery scene is present");
@@ -545,7 +545,7 @@ namespace Scalpal.EncounterOffice.Editor
             var theo=new EncounterState{patientName="Theo Abernathy",speaker="parent",speakerName="Laura Abernathy"};
             string[] labels={EncounterContract.SpeakerLabel(state,"patient"),EncounterContract.SpeakerLabel(theo,"patient"),EncounterContract.LearnerLabel};
             Check(labels.SequenceEqual(new[]{"Priya Ramaswamy · Patient","Laura Abernathy · Parent of Theo","You"}),"patient, parent and learner lines carry distinct speaker labels");
-            Check(labels.All(label=>!EncounterOfficePanel.ResponseHeader(label,0).Contains("Jarvis")),"no office line is labelled Jarvis");
+            Check(labels.All(label=>!EncounterOfficePanel.ResponseHeader(label,0).Contains("Scalpal")),"no office line is labelled Scalpal");
         }
         // Authored answers for fixture runs: the committed interview content, never sent by the client.
         [Serializable] sealed class AuthoredChoice { public string key, grade; public AuthoredFinding finding; }
@@ -610,7 +610,7 @@ namespace Scalpal.EncounterOffice.Editor
                     var mouth=liveVoice.Speaker;
                     Check(mouth&&mouth==seated.MouthSource&&mouth.transform.IsChildOf(seated.Speaker.transform)&&mouth.transform.parent.name=="JawPivot"&&mouth.spatialBlend==1&&!mouth.mute&&mouth.volume>0&&mouth.enabled&&mouth.gameObject.activeInHierarchy,"patient voice AudioSource is a spatial, audible source at the speaking avatar's mouth: "+entry.patientId);
                     string label=EncounterContract.SpeakerLabel(session.State,"patient");
-                    Check(session.LastSpeaker==label&&!label.Contains("Jarvis")&&!label.Contains("/")&&label.StartsWith(parent?session.State.speakerName:session.State.patientName,StringComparison.Ordinal),"opening line is labelled with the actual patient or parent speaker: "+entry.patientId);
+                    Check(session.LastSpeaker==label&&!label.Contains("Scalpal")&&!label.Contains("/")&&label.StartsWith(parent?session.State.speakerName:session.State.patientName,StringComparison.Ordinal),"opening line is labelled with the actual patient or parent speaker: "+entry.patientId);
                     patientLabels.Add(label);
                     if(entry.patientId=="patient-demo-pediatric-asthma")Check(label=="Laura Abernathy · Parent of Theo","Theo's interview is labelled as coming from his mother Laura");
                 }
@@ -655,7 +655,7 @@ namespace Scalpal.EncounterOffice.Editor
                 var init=JsonUtility.FromJson<VoiceInit>((string)Call(voice,"BuildInitiation","patient"));
                 Check(init.conversation_config_override.agent.prompt.prompt=="server prompt"&&init.conversation_config_override.agent.first_message=="server opening"&&init.conversation_config_override.tts.voice_id=="patient-voice"&&init.dynamic_variables.encounter_id==session.State.encounterId&&init.dynamic_variables.mode=="patient","the patient agent starts with the interview's prompt, opening line and voice overrides");
                 // No attending connection, encounter or Jarvis route is attempted anywhere in the office.
-                Check(all.Count>40&&!all.Any(exchange=>exchange.path.Contains("/attending")||exchange.path.StartsWith("/encounters",StringComparison.Ordinal)||exchange.path.StartsWith("/jarvis",StringComparison.Ordinal)),"the office never calls /encounters, an attending route or a Jarvis connection ("+all.Count+" exchanges)");
+                Check(all.Count>40&&!all.Any(exchange=>exchange.path.Contains("/attending")||exchange.path.StartsWith("/encounters",StringComparison.Ordinal)||exchange.path.StartsWith("/jarvis",StringComparison.Ordinal)),"the office never calls /encounters, an attending route or a Scalpal connection ("+all.Count+" exchanges)");
             }
             finally
             {

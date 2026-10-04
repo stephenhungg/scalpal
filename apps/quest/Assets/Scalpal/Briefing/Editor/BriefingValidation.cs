@@ -100,7 +100,7 @@ namespace Scalpal.Briefing.Editor
             foreach (var step in steps)
             {
                 var clip = BriefingVoice.Find(step);
-                Check(clip && clip.length > .5f, "bundled Jarvis clip rendered from the exact line: " + step.id);
+                Check(clip && clip.length > .5f, "bundled Scalpal clip rendered from the exact line: " + step.id);
                 if (!clip) continue;
                 total += Mathf.Max(BriefingDirector.MinimumStepSeconds, clip.length + BriefingDirector.ClipTailSeconds);
                 var importer = (AudioImporter)AssetImporter.GetAtPath(AssetDatabase.GetAssetPath(clip));

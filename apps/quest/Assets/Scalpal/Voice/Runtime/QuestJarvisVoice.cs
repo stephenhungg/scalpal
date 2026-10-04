@@ -291,7 +291,7 @@ namespace Scalpal.Voice
             if (connection == null || !connection.ok)
             {
                 string code = connection?.error?.code ?? "service_unreachable";
-                Fail("Jarvis connection unavailable (" + code + "); check the existing voice service configuration.");
+                Fail("Scalpal connection unavailable (" + code + "); check the existing voice service configuration.");
                 yield break;
             }
             if (encounterMode && connection.role != encounterRole)
@@ -379,7 +379,7 @@ namespace Scalpal.Voice
                         do
                         {
                             result = await connection.Socket.ReceiveAsync(new ArraySegment<byte>(bytes), connection.Cancel.Token).ConfigureAwait(false);
-                            if (result.MessageType == WebSocketMessageType.Close) { connection.Error = "Jarvis ended the voice connection."; return; }
+                            if (result.MessageType == WebSocketMessageType.Close) { connection.Error = "Scalpal ended the voice connection."; return; }
                             if (result.MessageType != WebSocketMessageType.Text) throw new InvalidDataException();
                             message.Write(bytes, 0, result.Count);
                             if (message.Length > 2 * 1024 * 1024) throw new InvalidDataException();
@@ -438,7 +438,7 @@ namespace Scalpal.Voice
             if (connection == null) return;
             if (!string.IsNullOrEmpty(connection.Error)) { Fail(connection.Error); return; }
             if (Status == "connecting" && Time.realtimeSinceStartup - connectionStarted > 20)
-            { Fail("Timed out waiting for Jarvis audio negotiation."); return; }
+            { Fail("Timed out waiting for Scalpal audio negotiation."); return; }
             for (int i = 0; i < 32 && connection.Incoming.TryDequeue(out var json); i++)
             {
                 try { Handle(json); }
@@ -460,7 +460,7 @@ namespace Scalpal.Voice
                 case "conversation_initiation_metadata":
                     var meta = message.conversation_initiation_metadata_event;
                     if (meta == null || !TryPcmRate(meta.user_input_audio_format, out microphoneRate) || !TryPcmRate(meta.agent_output_audio_format, out outputRate))
-                    { Fail("Jarvis requires unsupported audio encoding; native transport supports PCM16 only."); return; }
+                    { Fail("Scalpal requires unsupported audio encoding; native transport supports PCM16 only."); return; }
                     StartAudio();
                     if (active != null) { SetStatus("connected"); SendContext(initialContext); }
                     break;
@@ -516,7 +516,7 @@ namespace Scalpal.Voice
                     StartCoroutine(ExecuteTool(tool, generation, ExtractObject(json, "parameters")));
                     break;
                 case "client_error": case "error": case "guardrail_triggered":
-                    Fail("Jarvis reported a conversation error or guardrail stop.");
+                    Fail("Scalpal reported a conversation error or guardrail stop.");
                     break;
             }
         }
@@ -541,7 +541,7 @@ namespace Scalpal.Voice
             if (speaker == null) speaker = gameObject.AddComponent<AudioSource>();
             speaker.playOnAwake = false;
             speaker.loop = true;
-            playbackClip = AudioClip.Create("Jarvis streamed PCM", outputRate, 1, outputRate, true, ReadAudio);
+            playbackClip = AudioClip.Create("Scalpal streamed PCM", outputRate, 1, outputRate, true, ReadAudio);
             speaker.clip = playbackClip;
             speaker.Play();
         }

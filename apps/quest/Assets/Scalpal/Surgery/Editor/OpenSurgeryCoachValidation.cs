@@ -69,9 +69,9 @@ namespace Scalpal.Surgery.Editor
                 bleeding.Clear();
                 Assert(!OpenSurgeryCoach.Relevant(bleed, "mark", true, false, bleeding.Contains), "queued bleeding alert is dropped once that bleed is controlled");
                 Assert(OpenSurgeryCoach.InterruptsAgent(bleed) && OpenSurgeryCoach.InterruptsAgent(new CoachAlertDto { kind = "mistake", tier = "warning" }),
-                    "safety warnings may interrupt Jarvis");
+                    "safety warnings may interrupt Scalpal");
                 Assert(!OpenSurgeryCoach.InterruptsAgent(new CoachAlertDto { kind = "stuck", tier = "warning" }) &&
-                    !OpenSurgeryCoach.InterruptsAgent(new CoachAlertDto { kind = "step_complete", tier = "caution" }), "non-safety alerts never interrupt Jarvis");
+                    !OpenSurgeryCoach.InterruptsAgent(new CoachAlertDto { kind = "step_complete", tier = "caution" }), "non-safety alerts never interrupt Scalpal");
                 // Jarvis must not talk constantly: a burst of the same caution plays once, and cautions are spaced out.
                 var paced = new System.Collections.Generic.Queue<CoachAlertDto>();
                 for (int i = 0; i < 6; i++) OpenSurgeryCoach.Enqueue(paced, new CoachAlertDto { kind = "stuck", say = "hint " + i, tier = "caution" });

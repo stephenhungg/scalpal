@@ -430,7 +430,7 @@ namespace Scalpal.Quest
                 : HasHandoff ? "Scrubbed in with you. Time-out done. Let's begin with the first step." : "";
             if (HasHandoff)
             {
-                busy = false; Message = "Jarvis ready. Confirm the Time-Out rows.";
+                busy = false; Message = "Scalpal ready.";
                 ConnectVoice(); yield break;
             }
             BeginReviewedPractice();
@@ -637,7 +637,7 @@ namespace Scalpal.Quest
                     if (Phase == "Practicing" && RegistrationReady) { practicePaused = false; applied = true; } break;
                 case "handInstrument": case "highlightInstrument": SharedInstrumentCommand(command); return;
                 case "requestHint":
-                    realtime.ResolveCommand(command, "unavailable", "Coach hints are available through native Jarvis; async hint confirmation is not implemented"); return;
+                    realtime.ResolveCommand(command, "unavailable", "Coach hints are available through native Scalpal; async hint confirmation is not implemented"); return;
             }
             Publish(); realtime.ResolveCommand(command, applied ? "applied" : "rejected", applied ? null : reason);
         }

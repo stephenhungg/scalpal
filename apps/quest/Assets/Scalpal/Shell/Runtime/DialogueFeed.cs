@@ -185,7 +185,7 @@ namespace Scalpal.Shell
         void UpdateSurgeryIndicator()
         {
             // The OR microphone is open; listening is a passive hint that never summons the box.
-            if (Time.unscaledTime < awaitingUntil && Voice && Voice.Mode != "speaking") box.SetIndicator(DialogueIndicator.Thinking, "Jarvis", true);
+            if (Time.unscaledTime < awaitingUntil && Voice && Voice.Mode != "speaking") box.SetIndicator(DialogueIndicator.Thinking, "Scalpal", true);
             else if (Voice && Voice.Connected && Voice.Mode == "listening") box.SetIndicator(DialogueIndicator.Listening, "", false);
             else box.SetIndicator(DialogueIndicator.None);
         }

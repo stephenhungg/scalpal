@@ -99,8 +99,8 @@ namespace Scalpal.Shell
             switch (speaker)
             {
                 case DialogueSpeaker.You: return "You";
-                case DialogueSpeaker.Attending: return "Jarvis · Attending";
-                case DialogueSpeaker.Coach: return "Jarvis · Coach";
+                case DialogueSpeaker.Attending: return "Scalpal · Attending";
+                case DialogueSpeaker.Coach: return "Scalpal · Coach";
                 case DialogueSpeaker.Parent: return string.IsNullOrWhiteSpace(name) ? "Parent" : name.Trim() + " · Parent";
                 default: return string.IsNullOrWhiteSpace(name) ? "Patient" : name.Trim() + " · Patient";
             }
@@ -458,7 +458,7 @@ namespace Scalpal.Shell
         {
             Speaker = speaker; SpeakerLabel = Label(speaker, name); roleColor = RoleColor(speaker);
             nameText.text = SpeakerLabel;
-            string source = speaker == DialogueSpeaker.Attending || speaker == DialogueSpeaker.Coach ? "Jarvis" : speaker == DialogueSpeaker.You ? "You" : name;
+            string source = speaker == DialogueSpeaker.Attending || speaker == DialogueSpeaker.Coach ? "Scalpal" : speaker == DialogueSpeaker.You ? "You" : name;
             initial.text = string.IsNullOrWhiteSpace(source) ? "·" : char.ToUpperInvariant(source.Trim()[0]).ToString();
             ApplyColors();
         }
