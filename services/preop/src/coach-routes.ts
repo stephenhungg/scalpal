@@ -4,7 +4,7 @@ import { streamSSE } from "hono/streaming";
 import { ANATOMY, ANATOMY_BY_ID } from "./catalog/anatomy.js";
 import { STRUCTURE_FACTS } from "./catalog/coach-knowledge.js";
 import { INSTRUMENTS_BY_ID } from "./catalog/instruments.js";
-import { CoachSession, PRESENTATION_MODES, contextKey, reflexLines, renderContext, type CoachEvent, type StuckPolicy } from "./coach.js";
+import { CoachSession, PRESENTATION_MODES, bleedingStructures, contextKey, reflexLines, renderContext, type CoachEvent, type StuckPolicy } from "./coach.js";
 import { explainStructure, runTool } from "./coach-tools.js";
 import { ReflexAudio } from "./reflex.js";
 import { NO_REALTIME, type RealtimeBridge, type RealtimeSink } from "./realtime-bridge.js";
@@ -332,11 +332,21 @@ export function registerCoachRoutes(app: Hono, options: CoachRouteOptions) {
       case "tracking_lost":
         events = [{ type: "tracking", valid: false }];
         break;
+      case "bleed":
+      case "stop_bleed": {
+        // Open (or control) a bleed in the vessel nearest this step: a step target first, else any case vessel.
+        const vessels = bleedingStructures(s.kase).map((v) => v.id);
+        const step = s.engine.current;
+        const vessel = vessels.find((v) => step?.targets.includes(v)) ?? vessels.find((v) => step?.mistakes.some((m) => m.structure === v)) ?? vessels[0];
+        const total = s.snapshot().bloodLossMl;
+        events = vessel ? [{ type: "bleeding", structureId: vessel, active: kind === "bleed", rateMlPerMin: kind === "bleed" ? 45 : 0, totalMl: total + (kind === "bleed" ? 20 : 35) }] : [];
+        break;
+      }
       case "tracking_restored":
         events = [{ type: "tracking", valid: true }];
         break;
       default:
-        return bad(c, 400, "invalid_simulation", "kind must be correct_action, complete_step, mistake, wrong_instrument, off_target, look_at_danger, tracking_lost, or tracking_restored.", coachActions(s.id));
+        return bad(c, 400, "invalid_simulation", "kind must be correct_action, complete_step, mistake, wrong_instrument, off_target, look_at_danger, tracking_lost, tracking_restored, bleed, or stop_bleed.", coachActions(s.id));
     }
     const results = [...stepResults, ...events.map((e) => s.handle(e))];
     const snapshot = s.snapshot();
@@ -435,8 +445,15 @@ function parseEvent(e: unknown): CoachEvent | string {
       return str("structureId") === "" ? { type: "focus", structureId: "" } : id("structureId") || { type: "focus", structureId: str("structureId") };
     case "tracking":
       return typeof ev.valid === "boolean" ? { type: "tracking", valid: ev.valid } : "tracking needs a boolean valid";
+    case "bleeding": {
+      const num = (k: string) => (typeof ev[k] === "number" && Number.isFinite(ev[k]) && (ev[k] as number) >= 0 ? (ev[k] as number) : null);
+      if (typeof ev.active !== "boolean") return "bleeding needs a boolean active";
+      const rate = num("rateMlPerMin"), total = num("totalMl");
+      if (rate == null || total == null) return "bleeding needs non-negative rateMlPerMin and totalMl";
+      return id("structureId") || { type: "bleeding", structureId: str("structureId"), active: ev.active, rateMlPerMin: rate, totalMl: total };
+    }
     default:
-      return "type must be place_port, touch, identify, confirm, focus, or tracking";
+      return "type must be place_port, touch, identify, confirm, focus, tracking, or bleeding";
   }
 }
 
