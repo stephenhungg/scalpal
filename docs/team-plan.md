@@ -1,5 +1,7 @@
 # Repository Structure and Four-Person Work Split
 
+> **Scope notice:** the current product flow is the [latest experience flow](current-direction.md#latest-experience-flow): launch → explore patients → diagnosis office → full-VR surgery → required robot replay. Mixed reality with a real participant, conversational selection and the rotating preview are off the main path. Where this document disagrees, current direction wins.
+
 > Implementation update: team feature branches now contain component code. Read the [system integration map](system-integration.md) for audited commits, actual routes, missing adapters and verification. The plan below describes intended responsibilities, not proof of a connected deployment.
 
 > Current scope: Solana and monetary completion rewards are removed. Nathan now owns the companion website + SpacetimeDB/routing lane, and Matthew continues his Jarvis work. Read [current direction](current-direction.md) and [Nathan's implementation plan](nathan-plan.md) before older design notes.
@@ -8,7 +10,7 @@ Updated October 3, 2026. This is an ownership plan and folder scaffold, not a ru
 
 ## First Shared Outcome
 
-Build one connected session: choose one supported exercise with Jarvis and a 3D preview, practice with generic anatomy fitted to a real participant, receive feedback, and process a short passthrough recording into a simulated articulated robot-hand replay. Nathan's companion website shows the session live and follows shared state and processing results.
+Build one connected session: choose a FinchNode patient on the explore page, diagnose them in the full-VR office with the voice patient and the Jarvis attending, perform the matching surgery on a virtual patient in the full-VR operating room, receive feedback, and process a short passthrough recording into a simulated articulated robot-hand replay. Nathan's companion website shows the session live and follows shared state and processing results.
 
 Keep two paths distinct while integrating them: the educational result and the quality of the motion contribution. A completed lesson can produce an unusable clip. Robot replay is the immediate goal; policy training is later.
 
@@ -58,7 +60,7 @@ Choose the actual motion module layout, web stack, and SpacetimeDB module langua
 | Person | Owns | Primary paths | First tangible result |
 | --- | --- | --- | --- |
 | Stephen (`stephenhungg`) | Quest runtime, capture, body registration, final integration | `apps/quest/` runtime/capture/registration, bootstrap scene, Unity settings; `scripts/` | App runs on Quest; explicit short recording with documented metadata; separately, torso debug points and honest valid/uncertain state |
-| Matthew (`MatthewKim323`) | Anatomy experience, exercise content, Jarvis behavior/client | Quest experience/voice/exercise code and prefabs; `assets/anatomy/` | One 3D selection preview plus validated voice actions and an authored practice/result flow |
+| Matthew (`MatthewKim323`) | Anatomy experience, exercise content, Jarvis behavior/client | Quest experience/voice/exercise code and prefabs; `assets/anatomy/` | Authored diagnosis encounters plus validated voice actions and an authored practice/result flow |
 | Silas (`silaswu4`) | Video inference, robot retargeting, simulation/replay; main project website and the companion's visual design | `services/motion/`, `assets/robots/`; companion styling (`apps/companion/src/styles.css`, component/page markup) | A supplied clip produces estimates and a derived replay on one articulated robot hand, with invalid segments reported |
 | Nathan (GitHub identity not confirmed) | Companion website, SpacetimeDB, storage/worker/provider routing | `apps/companion/`, `services/realtime/`, `services/api/` | Two authorized clients share session state; a separate live feed shows the composited headset view; artifact/job results reach the viewer |
 
@@ -77,7 +79,7 @@ For the Unity project:
 - Stephen exposes current mode, registration quality, recording state, and validated session events through an agreed interface. Matthew consumes those signals instead of reading capture internals.
 - Neither the companion nor the voice bridge bypasses the headset's registration validity or authored exercise transitions.
 
-Use focused branches for each lane; Nathan's example is `nathan/companion-realtime`. Preserve teammates' existing branches rather than requiring a rename. Open focused pull requests into `main`; keep independent feature work off the shared branch. Changes to contracts and global Unity files need coordination with the merge owner. Do not rely on CODEOWNERS enforcement unless it is separately configured.
+Work directly on `main`: pull before starting work, make small focused commits, push to `main`, and never force-push (see [AGENTS.md](../AGENTS.md)). Preserve teammates' existing branches rather than requiring a rename. Changes to contracts and global Unity files need coordination with the merge owner. Do not rely on CODEOWNERS enforcement unless it is separately configured.
 
 ## Interfaces to Agree Before Coding Across Lanes
 
@@ -111,7 +113,7 @@ Use one fixed exercise, artifact, processor configuration, and robot version for
 
 ### Checkpoint 3: Rehearse the Real Journey
 
-Run a full physical-headset session: conversation/preview → confirmed fit → practice/capture → feedback → video-derived replay, while an authorized website viewer watches the session. Check voice/camera failure, invalid tracking, media interruption, failed reconstruction, reconnect, and obsolete worker results without corrupting the current attempt.
+Run a full physical-headset session: launch → explore → diagnosis office → full-VR surgery/capture → feedback → video-derived replay, while an authorized website viewer watches the session. Check voice/camera failure, invalid tracking, media interruption, failed reconstruction, reconnect, and obsolete worker results without corrupting the current attempt.
 
 Complete consecutive sessions before adding more procedures. Keep immediate replay evidence separate from later robot-training claims. See [implementation plan](implementation-plan.md) for verification scope and [hardware baseline](hardware-baseline.md) for measured starting conditions.
 
@@ -121,11 +123,11 @@ These are task briefs for teammates to give their own agents. They are not messa
 
 ### Stephen: Quest Foundation
 
-Read `AGENTS.md`, current direction, the hardware baseline, team plan, and integration contracts. Work within Quest runtime/capture/registration and the assigned bootstrap/settings files. Establish the native app and a short raw passthrough capture with documented metadata, then test torso registration separately. Coordinate the capture manifest with Silas, session events and the composited mirror source with Nathan, and experience state with Matthew. Preserve honest uncertainty and verify on the physical headset. Do not take over Jarvis or the robot pipeline.
+Read `AGENTS.md`, current direction, the hardware baseline, team plan, and integration contracts. Work within Quest runtime/capture/registration and the assigned bootstrap/settings files. Establish the native app and a short raw passthrough capture with documented metadata, and the launch → explore → office → OR scene flow. Torso registration is off the main path. Coordinate the capture manifest with Silas, session events and the composited mirror source with Nathan, and experience state with Matthew. Preserve honest uncertainty and verify on the physical headset. Do not take over Jarvis or the robot pipeline.
 
 ### Matthew: Experience and Coach
 
-Continue Matthew's existing Jarvis work with context about organs and exercise state. Read current direction and coordinate supported action requests/results with Stephen and Nathan. The earlier anatomy-experience split includes a rotating selection preview and authored practice/result flow; agree those assets/tasks with the team rather than duplicating an existing implementation. Nathan supplies backend/companion integration and scoped provider support where needed. Do not change capture/registration internals, bootstrap scenes, or global Unity configuration without coordination.
+Continue Matthew's existing Jarvis work with context about organs and exercise state. Read current direction and coordinate supported action requests/results with Stephen and Nathan. The current split covers authored diagnosis encounters (patient and attending) and the authored practice/result flow; the rotating selection preview is superseded; agree those assets/tasks with the team rather than duplicating an existing implementation. Nathan supplies backend/companion integration and scoped provider support where needed. Do not change capture/registration internals, bootstrap scenes, or global Unity configuration without coordination.
 
 ### Silas: Video to Robot
 
