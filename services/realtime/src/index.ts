@@ -1007,7 +1007,7 @@ export const requestCommand = spacetimedb.reducer(
   },
   (ctx, a) => {
     const instrument = INSTRUMENT_ACTIONS.includes(a.action);
-    const role = requireRole(ctx, a.sessionId, instrument ? ['coach', 'operator', 'viewer'] : ['coach', 'operator']);
+    const role = requireRole(ctx, a.sessionId, instrument ? ['coach', 'operator', 'viewer', 'headset'] : ['coach', 'operator']);
     checkId(a.commandId, 'commandId');
     const existing = ctx.db.command.commandId.find(a.commandId);
     if (existing) {
