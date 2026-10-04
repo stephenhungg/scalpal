@@ -120,9 +120,11 @@ export class RealtimeBridge implements RealtimeSink {
   async join(code: string): Promise<string> {
     const conn = this.conn;
     if (!conn || !this.ready) throw new Error("realtime database not connected");
+    // The same identity can already coach older sessions; bind to the membership this join created.
+    const before = new Set([...conn.db.myMemberships.iter()].filter((x) => x.role === "coach").map((x) => x.sessionId));
     await conn.reducers.joinSession({ code: code.trim().toUpperCase(), displayName: "Jarvis" });
     for (let i = 0; i < 100; i++) {
-      const m = [...conn.db.myMemberships.iter()].find((x) => x.role === "coach");
+      const m = [...conn.db.myMemberships.iter()].find((x) => x.role === "coach" && !before.has(x.sessionId));
       if (m) {
         this.sessionId = m.sessionId;
         this.log("bound to session", this.sessionId);
@@ -131,7 +133,7 @@ export class RealtimeBridge implements RealtimeSink {
       }
       await wait(30);
     }
-    throw new Error("joined, but no coach membership appeared");
+    throw new Error("no new coach membership appeared (already joined this session? bind it by id instead)");
   }
 
   // Bind to a session this identity is already a coach member of (after a restart).
