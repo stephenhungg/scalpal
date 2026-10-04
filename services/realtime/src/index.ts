@@ -2009,7 +2009,8 @@ export const myRtcSignals = spacetimedb.view(
 // patient-condition.ts), detects death and logs class changes to sim_log.
 
 const PATIENT_TICK_MICROS = 1_000_000n;
-const BASELINE_SOURCES = ['chart', 'measured', 'demo', 'authored'];
+/** e.g. 'chart', 'chart+authored', 'measured', 'demo', 'authored' */
+const BASELINE_SOURCE = /^[a-z0-9+_-]{1,24}$/;
 const END_RESULTS = ['completed', 'ended'];
 const MAX_BLEEDS = 32;
 const PHYSIOLOGY_LOG_SOURCE = 'spacetimedb-physiology';
@@ -2165,7 +2166,7 @@ export const startPatientCondition = spacetimedb.reducer(
     requireRole(ctx, a.sessionId, ['coach', 'operator']);
     activeSession(ctx, a.sessionId);
     checkText(a.coachSessionId, 'coachSessionId', 120);
-    oneOf(a.baselineSource, BASELINE_SOURCES, 'baselineSource');
+    if (!BASELINE_SOURCE.test(a.baselineSource)) fail('invalid baselineSource');
     finite(a.baselineHr, 'baselineHr', 20, 250);
     finite(a.baselineRr, 'baselineRr', 4, 80);
     finite(a.baselineSys, 'baselineSys', 40, 260);
@@ -2217,7 +2218,7 @@ export const setPatientBaseline = spacetimedb.reducer(
   { sessionId: t.string(), baselineHr: t.f64(), baselineRr: t.f64(), baselineSys: t.f64(), baselineDia: t.f64(), baselineSource: t.string() },
   (ctx, a) => {
     const row = conditionFor(ctx, a.sessionId);
-    oneOf(a.baselineSource, BASELINE_SOURCES, 'baselineSource');
+    if (!BASELINE_SOURCE.test(a.baselineSource)) fail('invalid baselineSource');
     finite(a.baselineHr, 'baselineHr', 20, 250);
     finite(a.baselineRr, 'baselineRr', 4, 80);
     finite(a.baselineSys, 'baselineSys', 40, 260);
