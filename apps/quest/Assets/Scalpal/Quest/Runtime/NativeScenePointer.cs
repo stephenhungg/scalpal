@@ -155,9 +155,10 @@ namespace Scalpal.Quest
                 view.root.transform.SetParent(transform,false);
                 view.box=new GameObject("SceneBounds").AddComponent<LineRenderer>(); view.box.transform.SetParent(view.root.transform,false);
                 view.box.useWorldSpace=true; view.box.positionCount=EdgeWalk.Length; view.box.startWidth=view.box.endWidth=.001f;
-                view.box.sharedMaterial=ScalpalBrand.Active.ray; view.box.startColor=view.box.endColor=ScalpalBrand.Ink;
+                view.box.sharedMaterial=ScalpalBrand.Active.ray; view.box.startColor=view.box.endColor=ScalpalBrand.SurgicalGreen;
                 view.box.shadowCastingMode=UnityEngine.Rendering.ShadowCastingMode.Off; view.box.receiveShadows=false;
                 view.label=ScalpalBrand.Active.Text(view.root.transform,"SceneIdentityLabel","",ScalpalTextRole.Label,Vector3.zero,.024f,.5f,.07f,TextAnchor.MiddleCenter);
+                view.label.color=ScalpalBrand.SurgicalGreen;
                 view.fit=view.label.GetComponent<ScalpalTextFit>();
             }
             view.root.SetActive(true); view.visible=true; view.hit=hit;

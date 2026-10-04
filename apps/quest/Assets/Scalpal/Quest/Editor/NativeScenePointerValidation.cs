@@ -180,6 +180,8 @@ namespace Scalpal.Quest.Editor
             var expanded=hit.worldBounds;expanded.Expand(.002f);
             foreach(var vertex in mesh.vertices)Require(expanded.Contains(part.transform.TransformPoint(vertex)),"box encloses every actual transformed imported vertex");
             var box=pointer.BoxVisual(hand);Require(box&&box.useWorldSpace&&box.positionCount==16,"actual box visual draws all twelve edges in world coordinates");
+            Require(box.startColor==ScalpalBrand.SurgicalGreen&&box.endColor==ScalpalBrand.SurgicalGreen&&pointer.LabelVisual(hand).color==ScalpalBrand.SurgicalGreen
+                &&pointer.LabelVisual(hand).font==ScalpalBrand.Active.label,"pointing box and its name are surgical green in the brand label font");
             for(int i=0;i<box.positionCount;i++)
             {
                 var corner=box.GetPosition(i);var min=expanded.min;var max=expanded.max;
