@@ -142,6 +142,12 @@ def cmd_send_controller(args: argparse.Namespace) -> None:
     run_controller_sender(args.host, args.port, args.source, args.seed)
 
 
+def cmd_export_lerobot(args: argparse.Namespace) -> None:
+    from .export import export_lerobot
+
+    print(json.dumps(export_lerobot(Path(args.attempts), Path(args.out), success_only=args.success_only, fmt=args.format)))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="scalpal-motion", description=__doc__)
     sub = parser.add_subparsers(required=True)
@@ -225,6 +231,13 @@ def main() -> None:
     p.add_argument("--port", type=int, default=9124)
     p.add_argument("--seed", type=int, default=0)
     p.set_defaults(func=cmd_send_controller)
+
+    p = sub.add_parser("export-lerobot", help="saved teleop attempts -> LeRobot-style dataset folder (v2.1 layout)")
+    p.add_argument("attempts", nargs="?", default=str(MOTION_ROOT / "out" / "teleop"), help="folder of teleop attempt .json files")
+    p.add_argument("--out", default=str(MOTION_ROOT / "out" / "lerobot" / "scalpal_robot_hand"))
+    p.add_argument("--success-only", action="store_true", help="keep only attempts that placed the handle")
+    p.add_argument("--format", choices=["parquet", "jsonl"], default=None, help="default: parquet when pyarrow is installed, else jsonl")
+    p.set_defaults(func=cmd_export_lerobot)
 
     args = parser.parse_args()
     if getattr(args, "video", None) and args.func is cmd_run and args.out is None:
