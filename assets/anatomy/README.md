@@ -39,6 +39,7 @@ Run `python3 scripts/anatomy/fetch.py` from the repository. It validates the tra
 Sources:
 
 - Z-Anatomy Unity FBX exports: https://github.com/LluisV/Z-Anatomy, revision `6c7f9016bd5899ac8edafd31b9900c151df42ed6`. Credit Lluis Vinent, Z-Anatomy, and BodyParts3D / DBCLS. Source project declares CC BY-SA 4.0; upstream model credits include component-specific terms. Preserved notices are in `attribution/`.
+- Briefing atlas (`apps/quest/Assets/Scalpal/Briefing/Models/briefing_atlas.fbx`, built by `scripts/anatomy/export_briefing_atlas.py`): cropped, merged and decimated from the Z-Anatomy originals above under the same credits and CC BY-SA 4.0 terms; its fat and peritoneum shells are synthetic.
 - Human Reference Atlas male heart, liver, and blood vasculature, release 2.5 high-resolution GLBs: https://github.com/cns-iu/hra-organ-gallery-in-vr, revision `92dc604271f1a3e92cc2ce598405ada2daeb9460`. Credit Human Reference Atlas / HuBMAP, the contributing model authors, and the NLM Visible Human Project. Source catalog: https://humanatlas.io/3d-reference-library. Original GLBs are in `originals/`; these files contain exporter metadata but no embedded author attribution.
 
 Different atlas sources are not spatially interchangeable. Full-body layers share the Z-Anatomy source frame. HRA detail models are separate inspection assets and must not be automatically attached to the participant torso.
