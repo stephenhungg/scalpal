@@ -63,7 +63,8 @@ namespace Scalpal.Quest.Editor
                 foreach(var row in checklist.Rows)
                     Require(row.Title==procedure.steps.Single(step=>step.id==row.Id).title&&!row.Completed,"fresh rows use actual authored titles and unmet body facts");
                 Require(checklist.VisualRoot.GetComponentsInChildren<Collider>(true).Length==0,"guidance has no colliders to block or consume tool input");
-                Require(checklist.VisualRoot.GetComponentsInChildren<TextMeshPro>(true).Single(text=>text.name=="ChecklistGuidance").text==NativeProcedureChecklist.GuidanceCaption,"caption explicitly preserves any-tool/action freedom");
+                Require(checklist.VisualRoot.GetComponentsInChildren<TextMeshPro>(true).Select(text=>text.name).SequenceEqual(new[]{"ChecklistTitle"}.Concat(checklist.Rows.Select(row=>"ChecklistRow_"+row.Id))),
+                    "learner checklist shows only the procedure title and its steps, with no legend or explanatory caption");
                 AssertReadability(checklist,rig.headCamera.transform);
 
                 // Closure is a later goal accepted by the actual body reducer without
@@ -100,7 +101,7 @@ namespace Scalpal.Quest.Editor
                 var changed=procedure.openBody.milestones.Single(m=>m.id=="divide_mesoappendix");
                 Require(changed.predicates.Any(predicate=>!runner.Body.Test(predicate))&&runner.Body.Get("","activeBleeds")>0
                     &&runner.Current.id=="divide_mesoappendix","live body/current guidance still reports the new unmet safety condition");
-                Require(checklist.VisualRoot.GetComponentsInChildren<TextMeshPro>(true).Single(text=>text.name=="ChecklistHistoryLabel").text=="x = completed | > = current guidance","done and current guidance markers are explicitly labeled");
+                Require(checklist.VisualRoot.GetComponentsInChildren<TextMeshPro>(true).Single(text=>text.name=="ChecklistRow_divide_mesoappendix").text.StartsWith("[>] ",StringComparison.Ordinal),"the current step is marked in its own row");
                 AssertReadability(checklist,rig.headCamera.transform);
 
                 void Hidden(Action invalidate,Action restore,string message)

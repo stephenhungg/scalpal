@@ -156,6 +156,9 @@ namespace Scalpal.Quest.Editor
             workbench.status.transform.position = new Vector3(-0.15f, 1.65f, 0.3f);
             workbench.status.characterSize = 0.012f;
             workbench.status.text = "Scalpal | Appendectomy rehearsal\nReview the case and confirm selection\nGrip: pick up   Trigger: use   B: review / confirm\nX: identify   Y: voice   A: reset tools   Left menu: retry";
+            // Diagnostic status stays bound for the session (still written each frame) but is never shown in the
+            // learner's OR. The learner sees the checklist, Jarvis's line and the vitals monitor.
+            workbench.status.gameObject.SetActive(false);
 
             // AnatomyPart captures these enabled flags as authored defaults at runtime Awake.
             // The practice controller then hides geometry until its explicit validity gate opens.
@@ -280,6 +283,7 @@ namespace Scalpal.Quest.Editor
                 || session.status != session.workbench.status || session.exercise.presentationMode != "mixed_reality" || !session.exercise.requireCoachSynchronization
                 || !session.workbench.externalSessionControls)
                 throw new InvalidOperationException("Native case/coach/preview bindings are inconsistent.");
+            ValidateLearnerText(roots);
             if (roots.SelectMany(root => root.GetComponentsInChildren<AnatomyExerciseBinding>(true)).Count() != 1
                 || roots.SelectMany(root => root.GetComponentsInChildren<AnatomyController>(true)).Count() != 3
                 || roots.SelectMany(root => root.GetComponentsInChildren<CoachRelay>(true)).Count() != 1)
@@ -327,6 +331,17 @@ namespace Scalpal.Quest.Editor
                 throw new InvalidOperationException("Unexpected whole-body/detail atlas dependency in the native session.");
             Debug.Log("SCALPAL_NATIVE_SESSION_SCENE_VALIDATED tools=15 controllers=2 practiceParts=9 practiceTriangles=93399 overviewParts=81 overviewTriangles=120125 ports=3 initialValidity=false "
                 + "sourceBounds=" + MeshBounds(session.anatomy.gameObject));
+        }
+
+        // The OR scene carries no always-on world text. Learner text is spawned only by the checklist (top-left),
+        // Jarvis's dialogue line, the vitals monitor, the pointing label and the flow cards, each gated by its owner.
+        public static void ValidateLearnerText(GameObject[] roots)
+        {
+            var shown = roots.SelectMany(root => root.GetComponentsInChildren<TextMesh>(false).Cast<Component>()
+                    .Concat(root.GetComponentsInChildren<TMPro.TMP_Text>(false)))
+                .Where(text => text.gameObject.activeInHierarchy && text.GetComponent<Renderer>() && text.GetComponent<Renderer>().enabled).Select(text => text.name).ToArray();
+            if (shown.Length != 0)
+                throw new InvalidOperationException("Learner OR view shows debug/status world text: " + string.Join(", ", shown));
         }
 
         static void ValidatePresentation(NativeCaseSession session)

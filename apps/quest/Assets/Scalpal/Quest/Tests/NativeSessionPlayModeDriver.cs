@@ -113,6 +113,7 @@ namespace Scalpal.Quest.Editor
         {
             if(type==LogType.Exception&&stack.Contains("Scalpal"))runtimeException=message;
         }
+        static readonly string[] LearnerTextRoots={"ProcedureChecklistGuidance","SimulatedPatientMonitor","SceneIdentityPointer","DialogueBox","OpenSurgeryDecisionPanel","HandoffCard(Clone)"};
         void Check(bool valid,string detail)
         {
             checks++;if(!valid)throw new InvalidOperationException("Play Mode failed: "+detail);
@@ -248,6 +249,11 @@ namespace Scalpal.Quest.Editor
             yield return Button();
             yield return Wait(()=>session.Practicing&&session.exercise.CanScore,"real B confirmation starts synchronized registered MR practice",20);
             Check(session.exercise.Body==null,"legacy port case is not routed into an empty deserialized open-body model");
+            yield return Frames();
+            var shownText=FindObjectsByType<TextMesh>(FindObjectsSortMode.None).Cast<Component>().Concat(FindObjectsByType<TMPro.TMP_Text>(FindObjectsSortMode.None))
+                .Where(text=>text.gameObject.activeInHierarchy&&text.GetComponent<Renderer>()&&text.GetComponent<Renderer>().enabled)
+                .Where(text=>!LearnerTextRoots.Any(root=>text.GetComponentsInParent<Transform>(true).Any(parent=>parent.name==root))).Select(text=>text.name).ToArray();
+            Check(shownText.Length==0,"practice view shows only the checklist, Jarvis line, monitor and on-demand labels; extra world text: "+string.Join(", ",shownText));
             string mrCoachId=session.exercise.explicitCoachSessionId;
             yield return CoachMode("mixed_reality");
             Check(!session.TrySelectOperatingRoomMode("virtual",out modeReason)&&!string.IsNullOrEmpty(modeReason)&&session.Practicing&&session.presentation.passthrough&&session.realtime.AttemptId==attempt,
