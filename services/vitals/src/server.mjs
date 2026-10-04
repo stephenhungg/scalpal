@@ -14,7 +14,7 @@ import { startDemo } from "./demo.mjs";
 import { budget } from "./quota.mjs";
 import { AUTHORED_BASELINE, baselineFrom, display, monitorVitals } from "./physiology.mjs";
 
-const PORT = Number(process.env.PORT || 8790);
+const PORT = Number(process.env.PORT || 8791);
 const key = process.env.PRESAGE_API_KEY?.trim();
 // Quota guard: the key has a fixed budget of live measurement minutes, so live mode needs an
 // explicit PRESAGE_LIVE=1, stops itself after PRESAGE_LIVE_MINUTES, and is refused once the
