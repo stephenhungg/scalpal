@@ -1,0 +1,78 @@
+---
+title: "Author a case"
+description: "Create, check and install a case package with the authoring-scalpal-cases skill."
+---
+
+The repo ships an agent skill at `.claude/skills/authoring-scalpal-cases`. Claude Code picks it up automatically when you ask for a new case, or you can call it with `/authoring-scalpal-cases`. It includes a command-line tool that imports the preop service's own validators, so a package that passes `check` passes the same rules the app enforces.
+
+## Ask an agent
+
+```text
+Make a Scalpal case for patient-demo-001 as an open appendectomy. Keep her penicillin allergy and metformin in the story.
+```
+
+The agent follows the skill: it reads the chart, starts from a template, writes the package, runs `check` until it's clean, and reports what it verified.
+
+## Or do it by hand
+
+<Steps>
+  <Step title="Set up">
+    ```sh
+    cd services/preop && npm ci
+    T=../../.claude/skills/authoring-scalpal-cases/scripts/scalpal-case.mts
+    ```
+  </Step>
+  <Step title="Pick a patient">
+    ```sh
+    npx tsx $T list                    # every subject, its procedure, headset or interview-only
+    npx tsx $T chart patient-demo-001  # the chart: age, meds, allergies, flags, gaps
+    ```
+  </Step>
+  <Step title="Start from a template">
+    ```sh
+    npx tsx $T export patient-demo-multi-source ./my-case
+    ```
+    Exports a complete, passing case as a package. The skill also bundles one at `assets/example-priya/`.
+  </Step>
+  <Step title="Write the package">
+    Edit `case.json` (plan and encounter) and the three files in `content/`. See [package format](/cases/package-format) and [writing the interview](/cases/interview).
+  </Step>
+  <Step title="Check it">
+    ```sh
+    npx tsx $T check ./my-case
+    ```
+    Runs the catalog validator, builds the case from the chart, validates the interview, checks chart-risk coverage, persona against chart, diagnosis leaks, voices and more. Fix every error. Read every warning.
+  </Step>
+  <Step title="Trial it">
+    ```sh
+    npx tsx $T trial ./my-case
+    ```
+    Installs the package into a throwaway git worktree, runs the whole preop test suite, and lists anything that breaks. Re-planning an existing patient often breaks a test written for their old case; update that test as part of your change.
+  </Step>
+  <Step title="Install it">
+    ```sh
+    npx tsx $T install ./my-case          # dry run: lists the files it would write
+    npx tsx $T install ./my-case --write  # writes catalogs, content, QA list, fixture
+    ```
+  </Step>
+  <Step title="Run the gates">
+    ```sh
+    npx tsx $T gates
+    ```
+    Catalog validation, typecheck, the full test suite, Unity id generation, the offline bundle export, and the C# playthrough when the .NET SDK is installed.
+  </Step>
+</Steps>
+
+## Tool reference
+
+| Command | What it does |
+| --- | --- |
+| `list` | Every FinchNode subject with its plan, procedure, and whether it plays in the headset |
+| `chart <subject>` | The brief Scalpal builds: age, sex, chart lines, flags, gaps |
+| `export <subject> <dir>` | An existing case as a package |
+| `check <dir>` | Validate a package without touching the repo |
+| `trial <dir>` | Install into a throwaway worktree and run every preop test there |
+| `install <dir> [--write] [--force]` | Dry run by default. `--force` only alongside the code change an error asks for |
+| `gates [--skip-unity]` | Run the repo gates in order and summarize |
+
+The tool never calls FinchNode or any model provider. Charts come from the recorded fixtures in `services/preop/test/fixtures`.

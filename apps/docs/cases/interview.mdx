@@ -1,0 +1,62 @@
+---
+title: "Writing the interview"
+description: "The voiced patient, the what-next rounds, scoring and the rules every case follows."
+---
+
+The office is a one-to-one interview. The patient (or a parent, for a child) speaks; after each turn the learner picks the next clinician move from four choices. The same rounds run in the same order every time, so scores compare across runs. Scalpal isn't in the office; it reads the result in the operating room.
+
+## Shape
+
+Seven to nine rounds, in this order:
+
+| Stage | Rounds | Typical weight |
+| --- | --- | --- |
+| History | 3 or 4 | 8 to 10 each |
+| Exam | 1 or 2 | 7 to 10 |
+| Tests | 1 | 12 to 17 |
+| Diagnosis | 1 | 18 to 20 |
+| Plan | 1 | 14 to 15 |
+
+Weights add up to exactly 100. A correct pick earns the full weight, a partial pick half.
+
+## Writing good rounds
+
+The rounds follow NBME item-writing rules.
+
+- **One best answer.** A skilled learner reading only the situation should be able to name the right move before seeing the options.
+- **Same kind of options.** All history questions, or all exam moves, or all diagnoses, or all plans. Every distractor is a mistake learners really make: anchoring, skipping a safety check, imaging first, wrong timing.
+- **No giveaways.** No "none of the above", no "except", no absolutes, and the right answer isn't the longest or most specific.
+- **At most one partial.** Reasonable but not best.
+- **Vary the letter.** At least three different correct letters across the rounds.
+- **Feedback for every choice.** One sentence on why it's right or wrong for this patient.
+- **A natural reply for every choice.** The `patientCue` is what the patient says back, from their own facts. Wrong picks still get an honest, confused or pushing-back answer.
+- **Findings on screen, not in the patient's mouth.** Exam and test picks carry a `finding`; the patient only reacts to how it feels.
+
+Use SOCRATES for the pain story (site, onset, character, radiation, associated symptoms, timing, what makes it better or worse, severity) and SAMPLE for the pre-op essentials, especially the last time they ate or drank.
+
+## The diagnosis and plan rounds
+
+The diagnosis round's correct answer is the case diagnosis; the partial is a close neighbor (for example perforated versus uncomplicated); the wrong answers come from the differential. The plan round's correct answer is the case's procedure with the right urgency and the safety specifics the chart demands, like a latex-free room or a penicillin-free antibiotic. The surgery never changes based on the learner's pick: a wrong plan shows a challenge card and a consequence card, then the learner operates on the authored procedure.
+
+## Chart risks must be elicitable
+
+Each choice lists what it `covers`: history topics, exam maneuvers and tests. Every chart risk has to be covered by a correct pick, or the Time-Out chip for it can never turn green. The `check` command tells you exactly which cover a missing risk needs.
+
+## The patient
+
+`patient.md` is the only thing the voice knows. It must never name or hint at today's diagnosis or procedure; `check` rejects those words unless a doctor told the patient about them in the past. Replies are one to three short spoken sentences. If asked something the file doesn't cover, the patient says they aren't sure.
+
+Every premade voice is already in use. A new patient needs a new voice key, or an update to the test that pins the shared voices.
+
+## Rules the checker enforces
+
+- Persona name, age and sex match the chart exactly.
+- The persona's character has no chart facts in it.
+- The opener and chief complaint don't give away the diagnosis.
+- History mentions every charted allergy and drug.
+- Every exam and test rubric item has an authored finding.
+- Correct exam and test picks carry a finding.
+- Every chart risk is covered by a correct pick.
+- `patient.md` has no diagnosis or procedure words.
+- The encounter's urgency equals the plan's.
+- No em or en dashes anywhere.

@@ -1,0 +1,343 @@
+{
+  "schema": "scalpal.case-package.v1",
+  "subject": "patient-demo-multi-source",
+  "scenarioId": "multi-source-overlap",
+  "title": "Priya Ramaswamy: Acute appendicitis",
+  "notes": "Exported from the repo as a starting template. Edit, then run check.",
+  "plan": {
+    "procedureId": "open_appendectomy",
+    "urgency": "urgent",
+    "indication": "Acute appendicitis",
+    "presentation": "One day of right lower quadrant pain with rebound tenderness and a temperature of 37.9 C. CT shows an 11 mm appendix with periappendiceal fat stranding and no abscess.",
+    "chartNotes": [
+      {
+        "text": "Her records come from two health systems that disagree in places.",
+        "minSources": 2
+      }
+    ]
+  },
+  "encounter": {
+    "planSubject": "patient-demo-multi-source",
+    "persona": {
+      "speaker": "patient",
+      "name": "Priya Ramaswamy",
+      "patientName": "Priya Ramaswamy",
+      "age": 40,
+      "sex": "female",
+      "voiceKey": "adult_female",
+      "demeanor": "An accountant, articulate and a little anxious. Lies still because moving hurts. Answers directly, sometimes asks what a medical term means.",
+      "character": "You're a senior accountant at a property-management company, and quarter-end next week is on your mind. Your husband Arjun, a high-school chemistry teacher, drove you in; your daughter Meera is eleven. You run a slow 5K on Saturdays and bake banana bread on Sundays. You're clear, organized, a bit formal, and polite: you say 'sorry' when you wince, often start with 'Honestly,' and ask 'What does that mean?' for any medical word. You never exaggerate or minimize. You're anxious, tired after a bad night, and trying to be a good patient. If the doctor sounds sure something needs doing, you say 'Okay. Okay.' and then ask practical things: how long, when you can get back to work, who picks up Meera. At first you wondered if it was something you ate at the office.",
+      "opener": "Hi, sorry, I'm trying not to move much. My stomach has been killing me since yesterday."
+    },
+    "history": {
+      "chief_complaint": "My stomach really hurts, down on the right side.",
+      "onset": "It started yesterday morning, around nine. It came on slowly, not all at once.",
+      "location": "Right now it's low on the right side, about here.",
+      "migration": "It actually started around my belly button, kind of dull. By the afternoon it moved down to the right and got sharper.",
+      "character": "It's constant and sharp now. It never fully goes away.",
+      "severity": "Maybe a seven out of ten. The car ride over was awful, every bump hurt.",
+      "aggravating_relieving": "Moving, coughing, and bumps make it worse. Lying still helps a little. I took ibuprofen last night and it barely touched it.",
+      "nausea_vomiting": "I've been nauseous since the pain started, but I haven't thrown up.",
+      "appetite": "I haven't wanted to eat anything since yesterday.",
+      "fever": "I felt hot and had chills last night. I didn't check my temperature.",
+      "bowel": "My last bowel movement was yesterday morning and it was normal. No diarrhea, no blood.",
+      "urinary": "No burning or blood when I pee. Maybe going a little more often, I'm not sure.",
+      "menstrual_pregnancy": "My last period was about two weeks ago, it was normal. I don't think I'm pregnant, but I'm not on any birth control right now.",
+      "last_meal": "I had a small dinner at around seven last night, just soup. Only water since then, last sip about two hours ago.",
+      "past_medical": "I have an underactive thyroid. I get migraines a few times a month when work is busy, but this is nothing like them. And my blood count was low last year, they said low iron, so a blood doctor put me on iron pills.",
+      "past_surgical": "No surgeries. I've never been operated on.",
+      "medications": "A small thyroid pill every morning, levothyroxine, the low dose. I took it this morning with a sip of water. Sumatriptan when a migraine starts, but I haven't needed it this week. And an iron pill, ferrous sulfate, most days. Honestly I skip some because it upsets my stomach. I took ibuprofen last night for this.",
+      "allergies": "Latex. Latex gloves give me an itchy red rash on my hands, it shows up the day after. No swelling or trouble breathing. No medicine allergies that I know of. My regular doctor's office might still say no allergies, I'm not sure it got to everyone.",
+      "social": "I'm an accountant. I don't smoke, I have a glass of wine on weekends.",
+      "family": "Nothing like this in my family that I know of.",
+      "recent_illness": "No, I haven't been sick lately."
+    },
+    "exam": {
+      "general_appearance": {
+        "reaction": "",
+        "finding": "Uncomfortable, lying still with knees slightly bent, avoids moving."
+      },
+      "vitals": {
+        "reaction": "",
+        "finding": "Temperature 37.9 C, heart rate 98, blood pressure 124/78, respiratory rate 16, oxygen saturation 99% on room air."
+      },
+      "abdomen_inspection": {
+        "reaction": "",
+        "finding": "Flat abdomen, no scars, no distension."
+      },
+      "abdomen_palpation": {
+        "reaction": "Ow! Yes, right there, that's the spot.",
+        "finding": "Tender in the right lower quadrant with voluntary guarding. Left side soft and nontender."
+      },
+      "mcburney_point": {
+        "reaction": "Ah, yes, that's exactly where it hurts.",
+        "finding": "Maximal tenderness at McBurney's point."
+      },
+      "rebound": {
+        "reaction": "Ow, letting go was worse than pushing!",
+        "finding": "Rebound tenderness in the right lower quadrant."
+      },
+      "guarding_rigidity": {
+        "reaction": "I'm tensing up, sorry, I can't help it.",
+        "finding": "Voluntary guarding in the right lower quadrant, no generalized rigidity."
+      },
+      "rovsing": {
+        "reaction": "Wait, pushing on the left made my right side hurt.",
+        "finding": "Positive Rovsing sign."
+      },
+      "psoas": {
+        "reaction": "That pulls on the right side a bit.",
+        "finding": "Mildly positive right psoas sign."
+      },
+      "obturator": {
+        "reaction": "That's fine, it doesn't really hurt.",
+        "finding": "Negative obturator sign."
+      },
+      "murphy": {
+        "reaction": "No, that's okay up there.",
+        "finding": "Negative Murphy sign, no right upper quadrant tenderness."
+      },
+      "cva_tenderness": {
+        "reaction": "No, my back is fine.",
+        "finding": "No costovertebral angle tenderness."
+      },
+      "chest_lungs": {
+        "reaction": "",
+        "finding": "Lungs clear to auscultation."
+      },
+      "pelvic": {
+        "reaction": "Okay, that's uncomfortable but not the bad pain.",
+        "finding": "No cervical motion tenderness, no adnexal mass or tenderness, no discharge."
+      }
+    },
+    "tests": {
+      "cbc": {
+        "result": "White count 13.1 with 82% neutrophils. Hemoglobin 11.6 (low, consistent with her known iron deficiency). Platelets 280.",
+        "abnormal": true
+      },
+      "crp": {
+        "result": "CRP 48 mg/L (elevated).",
+        "abnormal": true
+      },
+      "bmp": {
+        "result": "Sodium 138, potassium 4.1, creatinine 0.8, glucose 96. Normal kidney function.",
+        "abnormal": false
+      },
+      "lactate": {
+        "result": "Lactate 1.2 (normal).",
+        "abnormal": false
+      },
+      "lipase": {
+        "result": "Lipase 32 (normal).",
+        "abnormal": false
+      },
+      "urinalysis": {
+        "result": "No blood, no leukocyte esterase, no nitrites. Normal.",
+        "abnormal": false
+      },
+      "pregnancy_test": {
+        "result": "Serum beta-hCG negative.",
+        "abnormal": false
+      },
+      "ultrasound": {
+        "result": "Appendix not clearly visualized. No free fluid. Ovaries normal with normal flow.",
+        "abnormal": false
+      },
+      "ct_abdomen_pelvis": {
+        "result": "Dilated 11 mm appendix with periappendiceal fat stranding. No abscess, no free air.",
+        "abnormal": true
+      },
+      "type_and_screen": {
+        "result": "Type O positive, antibody screen negative.",
+        "abnormal": false
+      }
+    },
+    "diagnosis": {
+      "label": "Acute appendicitis",
+      "keywords": [
+        [
+          "appendicitis",
+          "appendix"
+        ]
+      ]
+    },
+    "procedureKeywords": [
+      [
+        "appendectomy",
+        "appendicectomy",
+        "remove the appendix",
+        "take out the appendix",
+        "take the appendix out"
+      ]
+    ],
+    "urgency": "urgent",
+    "differential": [
+      {
+        "id": "ectopic",
+        "label": "Ectopic pregnancy",
+        "keywords": [
+          "ectopic"
+        ]
+      },
+      {
+        "id": "torsion",
+        "label": "Ovarian torsion",
+        "keywords": [
+          "torsion",
+          "ovarian"
+        ]
+      },
+      {
+        "id": "cyst",
+        "label": "Ruptured ovarian cyst",
+        "keywords": [
+          "cyst"
+        ]
+      },
+      {
+        "id": "pid",
+        "label": "Pelvic inflammatory disease or tubo-ovarian abscess",
+        "keywords": [
+          "pid",
+          "pelvic inflammatory",
+          "tubo"
+        ]
+      },
+      {
+        "id": "stone",
+        "label": "Ureteric stone",
+        "keywords": [
+          "stone",
+          "kidney",
+          "renal colic",
+          "ureter"
+        ]
+      },
+      {
+        "id": "uti",
+        "label": "Urinary tract infection or pyelonephritis",
+        "keywords": [
+          "uti",
+          "urinary",
+          "pyelo"
+        ]
+      },
+      {
+        "id": "crohns",
+        "label": "Crohn's disease or terminal ileitis",
+        "keywords": [
+          "crohn",
+          "ileitis",
+          "ibd"
+        ]
+      },
+      {
+        "id": "adenitis",
+        "label": "Mesenteric adenitis",
+        "keywords": [
+          "adenitis",
+          "lymph"
+        ]
+      }
+    ],
+    "critical": [
+      {
+        "kind": "history",
+        "id": "allergies",
+        "why": "She has a latex allergy (a contact rash from gloves, low criticality on her chart). The room, gloves, and catheters must still be latex free."
+      },
+      {
+        "kind": "history",
+        "id": "menstrual_pregnancy",
+        "why": "A woman of reproductive age with right lower quadrant pain needs pregnancy excluded: ectopic pregnancy is the can't-miss diagnosis."
+      },
+      {
+        "kind": "test",
+        "id": "pregnancy_test",
+        "why": "History alone does not exclude pregnancy. Order a beta-hCG before imaging and surgery."
+      },
+      {
+        "kind": "history",
+        "id": "last_meal",
+        "why": "Last oral intake sets anesthesia timing and aspiration risk."
+      }
+    ],
+    "expected": [
+      {
+        "kind": "history",
+        "id": "onset",
+        "why": "Timing separates early appendicitis from perforation."
+      },
+      {
+        "kind": "history",
+        "id": "migration",
+        "why": "Pain that starts at the umbilicus and moves to the right lower quadrant is the classic appendicitis pattern."
+      },
+      {
+        "kind": "history",
+        "id": "nausea_vomiting",
+        "why": "Anorexia and nausea after the pain starts support appendicitis."
+      },
+      {
+        "kind": "history",
+        "id": "fever",
+        "why": "Fever points to inflammation and, when high, to perforation."
+      },
+      {
+        "kind": "history",
+        "id": "bowel",
+        "why": "Diarrhea or blood suggests gastroenteritis or colitis instead."
+      },
+      {
+        "kind": "history",
+        "id": "urinary",
+        "why": "Urinary symptoms point to infection or a stone."
+      },
+      {
+        "kind": "history",
+        "id": "past_surgical",
+        "why": "A prior appendectomy rules the diagnosis out."
+      },
+      {
+        "kind": "history",
+        "id": "medications",
+        "why": "Anticoagulants, steroids, and other drugs change the plan."
+      },
+      {
+        "kind": "exam",
+        "id": "vitals",
+        "why": "Tachycardia and fever set urgency and flag sepsis."
+      },
+      {
+        "kind": "exam",
+        "id": "abdomen_palpation",
+        "why": "Localized right lower quadrant tenderness is the key finding."
+      },
+      {
+        "kind": "exam",
+        "id": "rebound",
+        "why": "Rebound tenderness signals peritoneal irritation."
+      },
+      {
+        "kind": "test",
+        "id": "cbc",
+        "why": "Leukocytosis supports the diagnosis and the Alvarado score."
+      },
+      {
+        "kind": "test",
+        "id": "urinalysis",
+        "why": "Rules out urinary infection and stones."
+      },
+      {
+        "kind": "history",
+        "id": "past_medical",
+        "why": "Her anemia lowers her tolerance for blood loss."
+      },
+      {
+        "kind": "test",
+        "id": "ct_abdomen_pelvis",
+        "why": "In an adult with an equivocal ultrasound, CT confirms the diagnosis."
+      }
+    ]
+  }
+}
