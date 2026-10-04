@@ -25,13 +25,13 @@ flowchart LR
   subgraph Sources["Sources"]
     Nurse["Scrub nurse<br/>(browser)"]
     Data["FinchNode charts<br/>Presage vitals"]
-    Voice["ElevenLabs<br/>Jarvis + patient voices"]
+    Voice["ElevenLabs<br/>Scalpal + patient voices"]
   end
 
   STDB[("SpacetimeDB<br/>session · command<br/>patient_condition · sim_log<br/>coach_message · robot_result<br/>⏱ 1 Hz patient tick")]
 
   subgraph Intelligence["Intelligence"]
-    Coach["Coach service · Jarvis<br/>Node :8787"]
+    Coach["Coach service · Scalpal<br/>Node :8787"]
     Robot["Robot learner<br/>MuJoCo · Panda + Shadow hand"]
   end
   subgraph Observers["Observers"]
