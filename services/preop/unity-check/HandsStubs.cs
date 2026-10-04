@@ -11,6 +11,7 @@ namespace UnityEngine
     public struct Quaternion
     {
         public float x, y, z, w;
+        public static Quaternion operator *(Quaternion a, Quaternion b) => default;
     }
 
     public struct Pose

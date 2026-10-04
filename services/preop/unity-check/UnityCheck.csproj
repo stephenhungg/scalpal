@@ -22,6 +22,9 @@
     <!-- Hand module, compiled with SCALPAL_HANDS as it is in a Quest project with Inference Engine and MRUK. -->
     <Compile Include="../../../apps/quest/Assets/Scalpal/Hands/**/*.cs" />
     <Compile Include="HandsStubs.cs" />
+    <!-- Controller motion capture; main's instrument input is stubbed in RoboticsStubs.cs. -->
+    <Compile Include="../../../apps/quest/Assets/Scalpal/Robotics/**/*.cs" />
+    <Compile Include="RoboticsStubs.cs" />
     <Compile Include="UnityEngineStubs.cs" />
     <Compile Include="Program.cs" />
   </ItemGroup>

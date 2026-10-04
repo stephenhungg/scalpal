@@ -10,6 +10,7 @@ namespace UnityEngine
         public string name { get; set; }
         public static T Instantiate<T>(T original) where T : Object => original;
         public static T FindFirstObjectByType<T>() where T : Object => null;
+        public static T[] FindObjectsByType<T>(FindObjectsSortMode sortMode) where T : Object => new T[0];
         public static implicit operator bool(Object exists) => !ReferenceEquals(exists, null);
         public static void Destroy(Object obj) { }
     }
@@ -45,6 +46,8 @@ namespace UnityEngine
         public Vector3 position { get; set; }
         public Vector3 localScale { get; set; }
         public Vector3 InverseTransformPoint(Vector3 position) => position;
+        public Vector3 TransformPoint(Vector3 position) => position;
+        public Quaternion rotation { get; set; }
         public void Rotate(Vector3 axis, float angle, Space relativeTo) { }
         public Vector3 localPosition { get; set; }
         public Transform parent => null;
