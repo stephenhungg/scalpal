@@ -18,7 +18,7 @@ namespace Scalpal.Recap
         public ScalpalPointerHand Pointer(int hand) => pointers[hand];
         bool focused = true, paused;
         void OnEnable() => Application.onBeforeRender += Pose;
-        void OnDisable() { Application.onBeforeRender -= Pose; foreach (var pointer in pointers) pointer.Clear(); controller.SetTalkHeld(false); }
+        void OnDisable() { Application.onBeforeRender -= Pose; foreach (var pointer in pointers) pointer.Clear(); }
         void OnDestroy() { foreach (var pointer in pointers) pointer.Destroy(); }
         void Pose() { Track(XRNode.Head, head); Track(XRNode.LeftHand, left); Track(XRNode.RightHand, right); }
         static bool Track(XRNode node, Transform target)
@@ -33,28 +33,21 @@ namespace Scalpal.Recap
             foreach (var input in inputs) if (input.running && input.GetTrackingOriginMode() != TrackingOriginModeFlags.Floor) input.TrySetTrackingOriginMode(TrackingOriginModeFlags.Floor);
             Pose();
             StepPointers();
-            controller.SetTalkHeld(focused && !paused && (Grip(XRNode.LeftHand) || Grip(XRNode.RightHand)));
 #if UNITY_EDITOR
             if (Mouse.current?.leftButton.wasPressedThisFrame == true && Camera.main)
             {
                 var ray=Camera.main.ScreenPointToRay(Mouse.current.position.ReadValue());
-                if(Physics.Raycast(ray,out var hit,8)) { var b=hit.collider.GetComponent<RecapButton>(); b?.Highlight(hit.point); b?.Press(); }
+                if(Physics.Raycast(ray,out var hit,8)) { var b=hit.collider.GetComponent<RecapButton>(); b?.Highlight(); b?.Press(); }
             }
-            if (Keyboard.current?.spaceKey.isPressed == true) controller.SetTalkHeld(true);
 #endif
         }
-        /// <summary>Aim-pose rays; trigger/pinch press once, and the clip scrubber follows a held trigger.</summary>
+        /// <summary>Aim-pose rays; trigger/pinch presses once.</summary>
         public void StepPointers()
         {
             bool ready = focused && !paused && origin;
-            foreach (var pointer in pointers)
-            {
-                var pressed = pointer.Step(origin, ready, origin, collider => collider.GetComponent<RecapButton>());
-                if (pressed == null && pointer.HeldOnTarget && pointer.Hovered is RecapButton held && held.action == "scrub") held.Press();
-            }
+            foreach (var pointer in pointers) pointer.Step(origin, ready, origin, collider => collider.GetComponent<RecapButton>());
         }
-        bool Grip(XRNode node) { var d=InputDevices.GetDeviceAtXRNode(node); return d.TryGetFeatureValue(CommonUsages.isTracked,out var tracked)&&tracked&&d.TryGetFeatureValue(CommonUsages.gripButton,out var grip)&&grip; }
-        void OnApplicationFocus(bool value){focused=value;if(!value){foreach(var pointer in pointers)pointer.Clear();controller.SetTalkHeld(false);}}
-        void OnApplicationPause(bool value){paused=value;if(value){foreach(var pointer in pointers)pointer.Clear();controller.SetTalkHeld(false);}}
+        void OnApplicationFocus(bool value){focused=value;if(!value)foreach(var pointer in pointers)pointer.Clear();}
+        void OnApplicationPause(bool value){paused=value;if(value)foreach(var pointer in pointers)pointer.Clear();}
     }
 }
