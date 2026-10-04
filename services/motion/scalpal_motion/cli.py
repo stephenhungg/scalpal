@@ -137,11 +137,28 @@ def cmd_learn(args: argparse.Namespace) -> None:
         paths = [Path(p) for p in args.motion] or [ev.SAMPLE_MOTION]
         ev.stage_extract(paths)
     if args.stage in ("sweep", "all"):
-        ev.stage_sweep([int(n) for n in args.n.split(",")], args.seeds, args.budget, args.steps, args.workers, tag)
+        ev.stage_sweep([int(n) for n in args.n.split(",")], args.seeds, args.budget, args.steps, args.workers, tag,
+                       teleop=Path(args.teleop) if args.teleop else None)
     if args.stage in ("report", "all"):
         ev.stage_report(tag)
     if args.stage in ("video", "all"):
         ev.stage_video(args.video_n or max(int(n) for n in args.n.split(",")), tag=tag)
+
+
+def cmd_teleop(args: argparse.Namespace) -> None:
+    from .teleop import TELEOP_DIR, run_teleop
+
+    if args.record and not args.consented:
+        raise SystemExit("--record saves the participant's motion; pass --consented once they agreed")
+    out = Path(args.record) if args.record else (TELEOP_DIR if args.consented else None)
+    episodes = run_teleop(args.port, args.hand, out, show=not args.headless, max_seconds=args.seconds, seed=args.seed)
+    print(json.dumps({"attempts": len(episodes), "successes": sum(e.success for e in episodes), "saved_to": str(out) if out else None}))
+
+
+def cmd_send_controller(args: argparse.Namespace) -> None:
+    from .teleop import run_controller_sender
+
+    run_controller_sender(args.host, args.port, args.source, args.seed)
 
 
 def main() -> None:
@@ -229,7 +246,25 @@ def main() -> None:
     p.add_argument("--workers", type=int, default=8)
     p.add_argument("--video-n", type=int, default=None)
     p.add_argument("--tag", default="", help="suffix for results/chart/video files (e.g. _smoke)")
+    p.add_argument("--teleop", default=None, help="sweep: folder of teleop episodes (scalpal-motion teleop --record) as the human demos")
     p.set_defaults(func=cmd_learn)
+
+    p = sub.add_parser("teleop", help="Quest controller drives the simulated robot hand (physics on); saves each attempt")
+    p.add_argument("--port", type=int, default=9124)
+    p.add_argument("--hand", choices=["right", "left"], default="right")
+    p.add_argument("--record", default=None, help="save attempts here (default out/teleop when --consented)")
+    p.add_argument("--consented", action="store_true", help="the operator confirmed the participant agreed to recording")
+    p.add_argument("--headless", action="store_true", help="no window (checks)")
+    p.add_argument("--seconds", type=float, default=None, help="stop after this many seconds")
+    p.add_argument("--seed", type=int, default=0)
+    p.set_defaults(func=cmd_teleop)
+
+    p = sub.add_parser("send-controller", help="stand-in headset: replay controller frames.jsonl, or a scripted reach-and-place")
+    p.add_argument("source", nargs="?", default=None, help="controller frames.jsonl; omit for a scripted demo")
+    p.add_argument("--host", default="127.0.0.1")
+    p.add_argument("--port", type=int, default=9124)
+    p.add_argument("--seed", type=int, default=0)
+    p.set_defaults(func=cmd_send_controller)
 
     args = parser.parse_args()
     if getattr(args, "video", None) and args.func is cmd_run and args.out is None:

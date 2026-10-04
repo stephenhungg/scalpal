@@ -34,7 +34,32 @@ uv run scalpal-motion run clip.mp4 --hand Right --smooth 0.3
 
 `run` writes `hand_track.json`, `motion.json`, and `replay.mp4` (H.264, plays in browsers when ffmpeg is installed) (source clip with landmarks next to the robot). Inputs are assumed unmirrored, like Quest passthrough. Pass `--mirrored` for selfie footage, since MediaPipe's handedness label assumes a mirrored image. Smoothing is off by default. With `--smooth`, the low-pass filter resets after every tracking gap. `out/` and `models/` are gitignored. Keep participant clips outside the repo.
 
-## Live Headset Mirror (MediaPipe joints from the Quest)
+## Quest Controllers Drive the Robot Hand (current demo path)
+
+Surgery in the headset is done with Quest controllers, so controller motion is the robot input. The Quest's `ControllerMotionCapture` (`apps/quest/Assets/Scalpal/Robotics`) streams `scalpal.controller_motion.v1` frames over UDP: each controller's tracked pose, grip, trigger, and held instrument.
+
+The mapping onto the floating Shadow hand of the instrument-transfer task (`learning/env.py`, physics on):
+- **Position:** controller position moves the grip point. The first tracked pose anchors to the hand's home.
+- **Yaw:** the controller's heading turns the hand.
+- **Fingers:** squeezing grip or trigger blends them from the open pre-shape to the grasp the learning experiment validated in physics.
+
+```sh
+uv run scalpal-motion teleop --consented          # window: robot hand follows the controller; each attempt saved to out/teleop
+uv run scalpal-motion send-controller             # stand-in headset: a scripted reach-and-place over UDP
+uv run scalpal-motion learn sweep --teleop out/teleop --n 1,5,10   # train and evaluate on the teleop demos
+```
+
+Successful attempts become training demos with a real wrist path and grip timing. The earlier experiment had to synthesize the wrist path because video never gave us one.
+
+Verified on an M2 MacBook:
+- **Network path:** a scripted controller reach-and-place sent over UDP placed the handle and saved the attempt.
+- **Without the network:** 5 of 5 scripted seeds placed the handle.
+- **Training data:** two such episodes, converted to demos, generated training data at 55% physics yield.
+- **Not yet run:** a real headset session. The capture compiles in the .NET check but has not run on a Quest.
+
+Lost tracking holds the last command instead of inventing motion. Recording requires `--consented`.
+
+## Live Headset Mirror (MediaPipe joints from the Quest; not in the current demo)
 
 The Quest hand module (`apps/quest/Assets/Scalpal/Hands`) runs MediaPipe's hand models on the headset and streams one `scalpal.hand_joints.v1` JSON datagram per camera frame over UDP. Three commands use that stream:
 

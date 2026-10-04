@@ -1,5 +1,7 @@
 # Hands: MediaPipe Joints From the Quest
 
+> **Not in the current demo.** Surgery in the headset uses Quest controllers, so the robot input is controller motion: see `apps/quest/Assets/Scalpal/Robotics` and `scalpal-motion teleop` in `services/motion`. This module stays as a verified option for camera-based hand tracking.
+
 Owner: Matthew.
 
 Live MediaPipe hand joints are the shared signal for three things:

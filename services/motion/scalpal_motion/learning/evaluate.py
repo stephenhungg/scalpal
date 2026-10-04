@@ -204,14 +204,21 @@ def load_profiles() -> list[dict]:
     return profiles
 
 
-def stage_sweep(ns: list[int], seeds: int, budget: int, steps: int, workers: int, tag: str = "") -> dict:
+def stage_sweep(ns: list[int], seeds: int, budget: int, steps: int, workers: int, tag: str = "", teleop: Path | None = None) -> dict:
     import torch
 
     from .policy import train
 
     WORK.mkdir(parents=True, exist_ok=True)
-    profiles = load_profiles()
-    all_demos = make_demos(profiles, max(ns), DEMO_SEED)
+    if teleop:
+        # Human demos recorded by Quest controller teleoperation: real wrist path and grip timing.
+        from ..teleop import load_teleop_demos
+
+        all_demos = load_teleop_demos(teleop)
+        ns = [n for n in ns if n <= len(all_demos)] or [len(all_demos)]
+        print(f"{len(all_demos)} successful teleop demos from {teleop}; sweeping N={ns}")
+    else:
+        all_demos = make_demos(load_profiles(), max(ns), DEMO_SEED)
     res_path = RESULTS / f"results{tag}.json"
     results = json.loads(res_path.read_text()) if res_path.exists() else {}
     results.setdefault("by_n", {})
