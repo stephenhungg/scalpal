@@ -44,7 +44,7 @@ namespace Scalpal.Shell
             if (fadeMaterial) Destroy(fadeMaterial);
             if (instance==this) { instance=null; Busy=false; selected=null; }
         }
-        public static bool SupportsPatient(string id) => id==EncounterContract.FemalePatientId || id==EncounterContract.MalePatientId;
+        public static bool SupportsPatient(string id) => EncounterContract.ValidPatientId(id);
         public static bool TryConsumeSelection(out SelectedPatient value)
         { value=selected; selected=null; return value!=null && SupportsPatient(value.patientId); }
         public static bool TryStageSelection(string patientId,string serviceUrl)

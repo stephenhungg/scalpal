@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Scalpal.EncounterOffice;
 using Scalpal.Exercises.Data;
 
 namespace Scalpal.Shell
@@ -145,9 +146,9 @@ namespace Scalpal.Shell
         }
 
         public SurgicalCase CaseFor(string patientId) => patientId != null && cases.TryGetValue(patientId, out var result) ? result : null;
-        // NativeEncounterSession currently accepts only the two adult office patients. Keep this
-        // separate from the eight authored service encounters until more native patients are verified.
-        public static bool HasNativeEncounter(string patientId) => patientId == "patient-demo-multi-source" || patientId == "patient-demo-sparse";
+        // Eligibility comes from the matching synthetic demo brief and the office's authoritative
+        // case lookup. Generic avatar availability does not restrict clinical encounter subjects.
+        public static bool HasNativeEncounter(string patientId) => EncounterContract.ValidPatientId(patientId);
         public static bool HasAuthoredEncounter(string patientId) => patientId != null && AuthoredIds.Contains(patientId);
         public static bool CanSelect(PatientListEntry patient) => patient != null && !string.IsNullOrEmpty(patient.patientId) &&
             (patient.status == "ready" || patient.status == "needs_review" || patient.status == "retry");

@@ -68,6 +68,9 @@ namespace Scalpal.Quest.Editor
                 var input = scoringRoot.AddComponent<NativeProcedureInput>();
                 Set(session, "input", input);
                 Set(session, "candidate", candidate);
+                // This inactive fixture bypasses LoadCase, which normally adopts the service identity.
+                SetProperty(session, "SelectedPatientId", candidate.patientId);
+                SetProperty(session, "SelectedProcedureId", candidate.procedureId);
                 Set(session, "previewScale", session.preview.transform.parent.localScale);
                 Set(session, "nextUi", float.PositiveInfinity);
                 Set(session, "nextContext", float.PositiveInfinity);

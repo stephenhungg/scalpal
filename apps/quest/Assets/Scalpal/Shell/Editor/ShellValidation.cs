@@ -45,9 +45,9 @@ namespace Scalpal.Shell.Editor
             var review = Entry(Male, "needs_review", "lap_cholecystectomy", "elective");
             var retry = Entry("patient-demo-rate-limited", "retry", "lap_appendectomy", "urgent");
             var blocked = Entry("patient-demo-consent-revoked", "blocked", "", "");
-            var unsupported = Entry("patient-validation-unauthored", "ready", "lap_cholecystectomy", "urgent");
+            var canonical = Entry("patient-validation-unauthored", "ready", "lap_cholecystectomy", "urgent");
             var pediatric = Entry("patient-demo-pediatric-asthma", "ready", "lap_appendectomy", "urgent");
-            model.ApplyPatients(new PatientList { patients = new[] { blocked, review, retry, ready, unsupported, pediatric } });
+            model.ApplyPatients(new PatientList { patients = new[] { blocked, review, retry, ready, canonical, pediatric } });
             Check(model.Patients.Take(3).All(p => p.status == "ready"), "ready cases sort before review, retry and blocked");
             Check(ExplorePatientModel.StatusLabel("ready") == "Ready" && ExplorePatientModel.StatusLabel("needs_review") == "Chart has gaps" && ExplorePatientModel.StatusLabel("blocked") == "Locked" && ExplorePatientModel.StatusLabel("retry") == "Try again", "all four service statuses have explicit human-readable text");
             Check(!model.Select(blocked.patientId) && !model.CanBegin, "blocked patient cannot select or begin");
@@ -65,10 +65,17 @@ namespace Scalpal.Shell.Editor
             Check(!model.CanBegin && !model.DetailLoading && model.DetailError.Contains("Try again"), "failed detail closes begin gate with retry explanation");
             model.Select(retry.patientId); model.ApplyBrief(Brief(retry.patientId));
             Check(!model.CanBegin, "retry state never begins an encounter from an old or cached chart");
-            model.Select(unsupported.patientId); model.ApplyBrief(Brief(unsupported.patientId));
-            Check(!model.CanBegin && !ExplorePatientModel.HasAuthoredEncounter(unsupported.patientId), "patient without authored interview cannot begin");
+            model.Select(canonical.patientId); model.ApplyBrief(Brief(canonical.patientId));
+            Check(model.CanBegin && !ExplorePatientModel.HasAuthoredEncounter(canonical.patientId), "matching synthetic canonical subject delegates authored interview eligibility to the authoritative office case lookup");
             model.Select(pediatric.patientId); model.ApplyBrief(Brief(pediatric.patientId));
-            Check(!model.CanBegin, "authored child case is gated while office has adult-only presentation");
+            Check(model.CanBegin, "authored child encounter remains available independently of adult avatar support");
+            foreach (var id in new string[] { null, "", "patient/invalid", "patient invalid" })
+            {
+                var malformed = new ExplorePatientModel();
+                malformed.ApplyPatients(new PatientList { patients = new[] { Entry(id, "ready", "lap_appendectomy", "urgent") } });
+                malformed.Select(id); malformed.ApplyBrief(Brief(id));
+                Check(!malformed.CanBegin && !ExplorePatientModel.HasNativeEncounter(id) && !ShellTransition.SupportsPatient(id), "malformed or missing subject cannot begin despite otherwise ready synthetic fixture: " + id);
+            }
             model.Select(Female); var missingPatient = Brief(Female); missingPatient.patient = null;
             Check(model.ApplyBrief(missingPatient) && model.SelectedBrief == null && !model.DetailLoading && !model.CanBegin && model.DetailError.Length > 0, "matching-ID brief with missing patient demographics is handled as a visible failure and cannot begin");
             model.Select(Female); var nonsynthetic = Brief(Female); nonsynthetic.synthetic = false; model.ApplyBrief(nonsynthetic);
@@ -130,7 +137,7 @@ namespace Scalpal.Shell.Editor
                 client.RequestFailedForRoute += (route, value) => failedRoute = route;
                 var getPatients = Send(client, "/patients"); getPatients.Run();
                 Check(getPatients.paths.SequenceEqual(new[] { "/patients" }) && patients?.patients?.Length == 12 && !client.IsOffline, "production client fetches all 12 scenario rows over actual HTTP");
-                Check(patients.patients.Count(patient => ExplorePatientModel.HasAuthoredEncounter(patient.patientId)) == 8 && patients.patients.Count(patient => ExplorePatientModel.HasNativeEncounter(patient.patientId)) == 2, "audited catalog distinguishes eight server-authored interviews from two implemented native-office presentations");
+                Check(patients.patients.Count(patient => ExplorePatientModel.HasAuthoredEncounter(patient.patientId)) == 8 && patients.patients.Count(patient => (patient.status == "ready" || patient.status == "needs_review") && ExplorePatientModel.HasNativeEncounter(patient.patientId)) == 8, "all eight available authored subjects pass native-office canonical acceptance");
                 foreach (var status in new[] { "ready", "needs_review", "blocked", "retry" })
                     Check(patients.patients.Any(p => p.status == status), "actual fixture returns renderable " + status + " status");
                 var getBundle = Send(client, "/unity/bundle"); getBundle.Run();
@@ -147,6 +154,15 @@ namespace Scalpal.Shell.Editor
                 Check(getBrief.paths.Single() == "/patients/" + Female + "/brief" && brief?.patientId == Female && brief.synthetic && brief.chart.Length > 0, "real brief carries matching synthetic identity and actual chart highlights");
                 Check(model.CanBegin && model.Name(model.Selected) == "Priya Ramaswamy" && liveHub.BeginButton && liveHub.BeginButton.interactable, "actual live brief callback renders supported adult detail and enables explicit Begin");
                 Check(ShellTransition.TryStageSelection(model.SelectedPatientId, client.BaseUrl) && ShellTransition.TryConsumeSelection(out var liveSelection) && liveSelection.patientId == Female && liveSelection.serviceUrl == endpoint, "live service UI selection stages the exact production office handoff identity");
+                var available = patients.patients.Where(patient => patient.status == "ready" || patient.status == "needs_review").ToArray();
+                Check(available.Length == 8, "live HTTP catalog exposes all eight available subjects for the explicit shell handoff");
+                foreach (var patient in available)
+                {
+                    Check(model.Select(patient.patientId), "every available live canonical subject can select detail: " + patient.patientId);
+                    Send(client, "/patients/" + patient.patientId + "/brief").Run();
+                    Check(model.CanBegin && model.SelectedBrief?.patientId == patient.patientId && liveHub.BeginButton.interactable, "matching real synthetic brief enables all available authored interviews: " + patient.patientId);
+                    Check(ShellTransition.TryStageSelection(patient.patientId, client.BaseUrl) && ShellTransition.TryConsumeSelection(out var handoff) && handoff.patientId == patient.patientId && handoff.serviceUrl == endpoint, "one-shot shell handoff preserves each available canonical subject: " + patient.patientId);
+                }
                 client.BriefLoaded -= liveHub.BriefLoaded;
                 string alias = patients.patients.Single(patient => patient.patientId == Female).scenarioId;
                 Check(alias == "multi-source-overlap", "brief scenario alias comes from actual catalog mapping");
@@ -229,10 +245,15 @@ namespace Scalpal.Shell.Editor
             blockedCard.Press();
             Check(!blockedCard.interactable && hub.Model.SelectedPatientId == Female && !hub.Transitioning, "locked card's actual press cannot replace selection or launch");
             Check(!hub.Select(blocked.patientId) && !hub.Begin(), "direct blocked selection and begin commands also fail closed");
-            var unsupported = hub.Model.Patients.First(patient => ExplorePatientModel.CanSelect(patient) && !ExplorePatientModel.HasNativeEncounter(patient.patientId) && patient.status != "retry");
-            Check(hub.Select(unsupported.patientId) && hub.BeginButton && !hub.BeginButton.interactable && hub.Model.AvailabilityReason == "Interview coming soon", "unsupported interview detail has explicit coming-soon reason and disabled Begin");
-            hub.BeginButton.Press();
-            Check(!hub.Begin() && !hub.Transitioning, "both UI press and direct Begin reject unsupported interview");
+            var available = hub.Model.Patients.Where(patient => patient.status == "ready" || patient.status == "needs_review").ToArray();
+            Check(available.Count(patient => ExplorePatientModel.HasAuthoredEncounter(patient.patientId)) == 8,
+                "cached offline grid retains all eight authored subjects even when a stale rate-limit status differs from the live list");
+            foreach (var patient in available)
+            {
+                Check(hub.Select(patient.patientId) && hub.Model.CanBegin && hub.BeginButton && !hub.BeginButton.interactable, "every available subject loads its matching offline chart while explicit network-only Begin remains disabled: " + patient.patientId);
+                hub.BeginButton.Press();
+                Check(!hub.Begin() && !hub.Transitioning, "offline browsing never transitions for an otherwise available canonical subject: " + patient.patientId);
+            }
             var appendixChip = hub.content.GetComponentsInChildren<ShellButton>(true).Single(button => button.label && button.label.text == "Appendix");
             appendixChip.Press();
             Check(hub.Model.VisiblePatients().All(patient => patient.procedureId == "lap_appendectomy") && hub.Model.ProcedureFilter == "lap_appendectomy", "actual procedure chip action filters rendered patient set");
@@ -241,7 +262,7 @@ namespace Scalpal.Shell.Editor
             Check(ShellTransition.TryStageSelection(hub.Model.SelectedPatientId, hub.service.BaseUrl), "the production Begin handoff contract accepts supported selected patient plus explicit endpoint");
             Check(ShellTransition.TryConsumeSelection(out var selected) && selected.patientId == Female && selected.serviceUrl == hub.service.BaseUrl, "office consumes exact selected patient and service endpoint once");
             Check(!ShellTransition.TryConsumeSelection(out _), "consumed selection cannot start a second encounter");
-            Check(!ShellTransition.TryStageSelection(unsupported.patientId, hub.service.BaseUrl) && !ShellTransition.TryStageSelection(Female, "file:///not-a-service"), "handoff rejects unsupported patients and non-HTTP service endpoints");
+            Check(!ShellTransition.TryStageSelection("patient/invalid", hub.service.BaseUrl) && !ShellTransition.TryStageSelection("", hub.service.BaseUrl) && !ShellTransition.TryStageSelection(Female, "file:///not-a-service"), "handoff rejects malformed or subjectless patient IDs and non-HTTP service endpoints");
             var position = hub.input.head.transform.position; var rotation = hub.input.head.transform.rotation;
             hub.input.Recenter();
             Check(hub.input.head.transform.position == position && hub.input.head.transform.rotation == rotation, "recenter moves presentation while preserving tracked camera pose");

@@ -20,7 +20,23 @@ namespace Scalpal.Shell.Editor
         const string Prefix = "ScalpalShellPlayValidation.";
         const string Female = "patient-demo-multi-source";
         const BindingFlags Private = BindingFlags.Instance | BindingFlags.NonPublic;
-        static ShellPlayModeValidation() { EditorApplication.update += Tick; }
+        static ShellPlayModeValidation()
+        {
+            EditorApplication.update += Tick;
+            SceneManager.sceneLoaded += DetachOfficePairingForHttpFixture;
+        }
+
+        // This gate owns only isolated HTTP, fades and pause/voice lifecycle. Detach before scene
+        // Start can reconnect the production bridge; shared-attempt validation runs separately.
+        static void DetachOfficePairingForHttpFixture(Scene scene, LoadSceneMode mode)
+        {
+            if (!SessionState.GetBool(Prefix + "active", false) || scene.name != "DiagnosisOffice") return;
+            var office = UnityEngine.Object.FindFirstObjectByType<NativeEncounterSession>();
+            if (!office) throw new InvalidOperationException("HTTP scene fixture has no office session.");
+            if (office.realtime) { office.realtime.autoConnect = false; office.realtime.enabled = false; }
+            office.realtime = null;
+            SessionState.SetBool(Prefix + "httpOnlyOffice", true);
+        }
 
         public static void Run()
         {
@@ -44,6 +60,7 @@ namespace Scalpal.Shell.Editor
                 SessionState.SetString(Prefix + "endpoint", endpoint);
                 SessionState.SetInt(Prefix + "checks", 0);
                 SessionState.SetInt(Prefix + "result", 1);
+                SessionState.SetBool(Prefix + "httpOnlyOffice", false);
                 SessionState.SetString(Prefix + "deadline", DateTime.UtcNow.AddSeconds(60).Ticks.ToString());
                 SessionState.SetString(Prefix + "stage", "launch");
                 SessionState.SetBool(Prefix + "active", true);
@@ -107,6 +124,7 @@ namespace Scalpal.Shell.Editor
                         var office = UnityEngine.Object.FindFirstObjectByType<NativeEncounterSession>();
                         if (!office || office.State == null) return;
                         Check(string.IsNullOrEmpty(ShellTransition.LastError), "asynchronous office handoff completed without transition error");
+                        Check(SessionState.GetBool(Prefix + "httpOnlyOffice", false)&&office.realtime==null,"isolated HTTP fixture explicitly disables office pairing; this gate does not validate a shared attempt");
                         Check(office.baseUrl == endpoint && office.State.patientId == Female && !string.IsNullOrEmpty(office.State.encounterId) && office.State.phase == "interview", "loaded office creates actual authoritative encounter for exact selected patient and endpoint");
                         Check(!ShellTransition.TryConsumeSelection(out _), "scene activation consumed the selected-patient handoff exactly once");
                         var pause = ShellPause.Instance;
@@ -125,7 +143,7 @@ namespace Scalpal.Shell.Editor
                         if (SceneManager.GetActiveScene().name != "Launch" || ShellTransition.Busy || !hub || !hub.Exploring) return;
                         Check(hub.Model.Selected == null && !hub.Transitioning && Mathf.Approximately(Time.timeScale, 1), "confirmed return opens fresh Explore with no prior patient selected");
                         Check(UnityEngine.Object.FindFirstObjectByType<NativeEncounterSession>() == null, "office encounter component is unloaded after Back to Explore");
-                        UnityEngine.Debug.Log("SCALPAL_SHELL_PLAY_VERIFY_OK checks=" + SessionState.GetInt(Prefix + "checks", 0) + " actualAsyncSceneLoad=true actualEncounterPost=true provider=false headset=false");
+                        UnityEngine.Debug.Log("SCALPAL_SHELL_PLAY_VERIFY_OK checks=" + SessionState.GetInt(Prefix + "checks", 0) + " actualAsyncSceneLoad=true actualEncounterPost=true sharedAttempt=false isolatedHttpFixture=true provider=false headset=false");
                         Finish(0); break;
                 }
             }
